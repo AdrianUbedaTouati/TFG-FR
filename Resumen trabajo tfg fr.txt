@@ -65,3 +65,34 @@ Entraînement : early‑stopping, recherche d’hyperparamètres, cross‑valid
 Évaluation : comparaison avec modèles physiques (super‑ordinateur) et métriques spécifiques (MAE, F1 pluie/no‑pluie, etc.). Wilcoxon para comparar entre modelos
 
 Déploiement :  dashboard web pour la visualisation.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Tengo que realizar varios modelos sobre una IA meteorologica, ahora mismo me estoy enfocando en la normalizacion estoy haciendo un fichero con todos los tipos de normalizacion que me haran falta. Quiero realizar varios modelos con diferntes arquitecturas, LSTM Transformer etc... Y
