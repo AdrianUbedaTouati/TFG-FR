@@ -1,45 +1,149 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}MeteoIA - Predicción Meteorológica con IA{% endblock %}</title>
+    <title>{% block title %}MétéoIA - Prédiction Météorologique avec IA{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #6366f1;
+            --secondary-color: #8b5cf6;
+            --accent-color: #ec4899;
+            --dark-color: #1e1b4b;
+            --light-color: #f8fafc;
+        }
+        
         body {
+            font-family: 'Poppins', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            position: relative;
         }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320"><path fill="%23ffffff" fill-opacity="0.1" d="M0,96L48,106.7C96,117,192,139,288,138.7C384,139,480,117,576,117.3C672,117,768,139,864,144C960,149,1056,139,1152,122.7C1248,107,1344,85,1392,74.7L1440,64L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>') no-repeat bottom;
+            background-size: cover;
+            pointer-events: none;
+            opacity: 0.3;
+        }
+        
         .navbar {
             background: rgba(255, 255, 255, 0.1) !important;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(20px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
         }
-        .navbar-brand, .nav-link {
+        
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
             color: white !important;
         }
-        .main-content {
-            padding-top: 80px;
-            min-height: calc(100vh - 60px);
+        
+        .nav-link {
+            color: rgba(255, 255, 255, 0.9) !important;
+            font-weight: 500;
+            margin: 0 10px;
+            transition: all 0.3s ease;
+            border-radius: 20px;
+            padding: 8px 20px !important;
         }
+        
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white !important;
+        }
+        
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.3);
+            color: white !important;
+        }
+        
+        .main-content {
+            padding-top: 100px;
+            min-height: calc(100vh - 60px);
+            position: relative;
+            z-index: 1;
+        }
+        
         .card {
             background: rgba(255, 255, 255, 0.95);
             border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            border: none;
-        }
-        .btn-primary {
-            background: #667eea;
-            border: none;
-            border-radius: 30px;
-            font-weight: 600;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(10px);
             transition: all 0.3s ease;
         }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+        
+        .btn {
+            border-radius: 30px;
+            font-weight: 600;
+            padding: 10px 30px;
+            transition: all 0.3s ease;
+            border: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+        }
+        
         .btn-primary:hover {
-            background: #764ba2;
             transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .footer {
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 30px 0;
+            margin-top: 50px;
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .loading-spinner {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9999;
+        }
+        
+        .loading-spinner.active {
+            display: block;
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -48,7 +152,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
         <div class="container">
             <a class="navbar-brand" href="{% url 'home' %}">
-                <i class="bi bi-cloud-sun"></i> MeteoIA
+                <i class="bi bi-cloud-sun"></i> MétéoIA
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -56,13 +160,34 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'home' %}">Inicio</a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'home' %}">
+                            <i class="bi bi-house"></i> Accueil
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'dashboard' %}">Panel de Control</a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
+                            <i class="bi bi-speedometer2"></i> Tableau de Bord
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/admin/">Administración</a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'predictions' %}active{% endif %}" href="{% url 'predictions' %}">
+                            <i class="bi bi-clock-history"></i> Historique
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'models' %}active{% endif %}" href="{% url 'models' %}">
+                            <i class="bi bi-cpu"></i> Modèles
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'datasets' %}active{% endif %}" href="{% url 'datasets' %}">
+                            <i class="bi bi-database"></i> Datasets
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/admin/">
+                            <i class="bi bi-shield-lock"></i> Admin
+                        </a>
                     </li>
                 </ul>
             </div>
@@ -73,13 +198,43 @@
         {% block content %}{% endblock %}
     </div>
 
-    <footer class="text-center text-white py-4">
-        <div class="container">
-            <p>&copy; 2025 MeteoIA - Sistema de Predicción Meteorológica con Inteligencia Artificial</p>
+    <footer class="footer">
+        <div class="container text-center">
+            <p class="mb-0">&copy; 2025 MétéoIA - Système de Prédiction Météorologique avec Intelligence Artificielle</p>
+            <small>Développé avec <i class="bi bi-heart-fill text-danger"></i> pour des prédictions précises</small>
         </div>
     </footer>
 
+    <!-- Loading Spinner -->
+    <div class="loading-spinner">
+        <div class="spinner-border text-light" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">Chargement...</span>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        // Fonction pour afficher le spinner de chargement
+        function showLoading() {
+            document.querySelector('.loading-spinner').classList.add('active');
+        }
+        
+        function hideLoading() {
+            document.querySelector('.loading-spinner').classList.remove('active');
+        }
+        
+        // Fonction pour afficher des notifications
+        function showNotification(title, text, type = 'success') {
+            Swal.fire({
+                title: title,
+                text: text,
+                icon: type,
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#6366f1'
+            });
+        }
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

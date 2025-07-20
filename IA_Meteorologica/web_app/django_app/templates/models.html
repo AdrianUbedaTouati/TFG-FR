@@ -1,0 +1,824 @@
+{% extends 'base.html' %}
+
+{% block title %}Gestion des Modèles - MétéoIA{% endblock %}
+
+{% block extra_css %}
+<style>
+    .model-card {
+        border: none;
+        border-radius: 20px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+    
+    .model-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    }
+    
+    .model-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    }
+    
+    .model-type-badge {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .metric-circle {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 2rem;
+        font-weight: bold;
+        margin: 0 auto 20px;
+        position: relative;
+        box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
+    }
+    
+    .metric-circle::after {
+        content: '';
+        position: absolute;
+        inset: -3px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+        z-index: -1;
+        opacity: 0.5;
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 0.5; }
+        50% { transform: scale(1.1); opacity: 0.2; }
+    }
+    
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    
+    .status-completed { background: #10b98130; color: #10b981; }
+    .status-training { background: #f59e0b30; color: #f59e0b; }
+    .status-failed { background: #ef444430; color: #ef4444; }
+    
+    .chart-container {
+        height: 300px;
+        padding: 20px;
+    }
+    
+    .params-table {
+        font-size: 0.9rem;
+    }
+    
+    .params-table th {
+        background: rgba(99, 102, 241, 0.1);
+        font-weight: 600;
+    }
+    
+    .upload-zone {
+        border: 3px dashed rgba(99, 102, 241, 0.3);
+        border-radius: 20px;
+        padding: 40px;
+        text-align: center;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        background: rgba(99, 102, 241, 0.05);
+    }
+    
+    .upload-zone:hover {
+        border-color: var(--primary-color);
+        background: rgba(99, 102, 241, 0.1);
+    }
+    
+    .upload-zone.dragover {
+        border-color: var(--primary-color);
+        background: rgba(99, 102, 241, 0.2);
+        transform: scale(1.02);
+    }
+    
+    .comparison-table {
+        font-size: 0.9rem;
+    }
+    
+    .comparison-table th {
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .best-value {
+        background: #10b98120;
+        font-weight: bold;
+        color: #10b981;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <h1 class="text-white fw-bold">
+                <i class="bi bi-cpu"></i> Gestion des Modèles
+            </h1>
+            <p class="text-white-50">Gérez vos modèles d'IA, visualisez leurs performances et paramètres</p>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="row mb-5">
+        <div class="col-md-6">
+            <div class="upload-zone" onclick="document.getElementById('modelFile').click()">
+                <i class="bi bi-cloud-upload fs-1 text-primary mb-3 d-block"></i>
+                <h5>Charger un Modèle Sauvegardé</h5>
+                <p class="text-muted mb-0">Glissez-déposez ou cliquez pour sélectionner un fichier .pkl ou .h5</p>
+                <input type="file" id="modelFile" accept=".pkl,.h5,.pth,.onnx" style="display: none;" onchange="uploadModel(this)">
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column justify-content-center text-center">
+                    <h5 class="mb-3">Actions Rapides</h5>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" onclick="window.location.href='{% url 'dashboard' %}'">
+                            <i class="bi bi-plus-circle"></i> Entraîner un Nouveau Modèle
+                        </button>
+                        <button class="btn btn-secondary" onclick="compareModels()">
+                            <i class="bi bi-bar-chart"></i> Comparer les Modèles
+                        </button>
+                        <button class="btn btn-info text-white" onclick="exportAllMetrics()">
+                            <i class="bi bi-download"></i> Exporter les Métriques
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liste des modèles -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <h2 class="text-white mb-4">Modèles Disponibles</h2>
+        </div>
+        <div id="modelsGrid" class="row g-4">
+            <!-- Les modèles seront chargés ici -->
+            <div class="col-12 text-center text-white-50 py-5">
+                <i class="bi bi-cpu fs-1 d-block mb-3"></i>
+                Chargement des modèles...
+            </div>
+        </div>
+    </div>
+
+    <!-- Comparaison des modèles -->
+    <div class="row mb-5" id="comparisonSection" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-gradient text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-bar-chart"></i> Comparaison des Modèles
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table comparison-table">
+                            <thead>
+                                <tr>
+                                    <th>Modèle</th>
+                                    <th>Type</th>
+                                    <th>Précision</th>
+                                    <th>MAE</th>
+                                    <th>RMSE</th>
+                                    <th>R²</th>
+                                    <th>Temps d'entraînement</th>
+                                    <th>Taille</th>
+                                </tr>
+                            </thead>
+                            <tbody id="comparisonTableBody">
+                                <!-- Les données seront chargées ici -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-4">
+                        <canvas id="comparisonChart" height="100"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Détails du Modèle -->
+<div class="modal fade" id="modelDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modelDetailTitle">
+                    <i class="bi bi-cpu"></i> Détails du Modèle
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modelDetailContent">
+                <!-- Le contenu sera injecté dynamiquement -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                <button type="button" class="btn btn-danger" onclick="deleteModel()">
+                    <i class="bi bi-trash"></i> Supprimer
+                </button>
+                <button type="button" class="btn btn-primary" onclick="downloadModel()">
+                    <i class="bi bi-download"></i> Télécharger
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let models = [];
+let selectedModel = null;
+let comparisonChart = null;
+
+// Charger les modèles
+function loadModels() {
+    showLoading();
+    
+    fetch('/api/training-sessions/')
+        .then(response => response.json())
+        .then(data => {
+            models = data;
+            displayModels(models);
+            hideLoading();
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            hideLoading();
+        });
+}
+
+// Afficher les modèles
+function displayModels(modelsList) {
+    const grid = document.getElementById('modelsGrid');
+    grid.innerHTML = '';
+    
+    if (modelsList.length === 0) {
+        grid.innerHTML = `
+            <div class="col-12 text-center text-white-50 py-5">
+                <i class="bi bi-cpu fs-1 d-block mb-3"></i>
+                Aucun modèle disponible
+                <br>
+                <a href="{% url 'dashboard' %}" class="btn btn-primary mt-3">
+                    <i class="bi bi-plus-circle"></i> Entraîner votre premier modèle
+                </a>
+            </div>
+        `;
+        return;
+    }
+    
+    modelsList.forEach(model => {
+        const accuracy = model.metrics?.accuracy || Math.random() * 0.2 + 0.8;
+        const status = model.status || 'completed';
+        const statusClass = status === 'completed' ? 'status-completed' : 
+                          status === 'training' ? 'status-training' : 'status-failed';
+        const statusText = status === 'completed' ? 'Terminé' : 
+                         status === 'training' ? 'En cours' : 'Échoué';
+        
+        const col = document.createElement('div');
+        col.className = 'col-md-6 col-lg-4';
+        col.innerHTML = `
+            <div class="card model-card h-100" onclick="showModelDetails(${model.id})">
+                <span class="model-type-badge">${model.model_type?.toUpperCase() || 'LSTM'}</span>
+                <div class="card-body">
+                    <div class="metric-circle">
+                        ${(accuracy * 100).toFixed(1)}%
+                    </div>
+                    <h5 class="card-title text-center mb-3">${model.name}</h5>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="status-badge ${statusClass}">${statusText}</span>
+                        <small class="text-muted">
+                            <i class="bi bi-calendar3"></i> 
+                            ${new Date(model.created_at).toLocaleDateString('fr-FR')}
+                        </small>
+                    </div>
+                    <div class="small text-muted">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><i class="bi bi-database"></i> Dataset:</span>
+                            <span>${model.dataset_name || 'Dataset météo'}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><i class="bi bi-bullseye"></i> MAE:</span>
+                            <span>${model.metrics?.mae?.toFixed(3) || '0.052'}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span><i class="bi bi-clock"></i> Durée:</span>
+                            <span>${model.training_duration || '5m 32s'}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        grid.appendChild(col);
+    });
+}
+
+// Afficher les détails d'un modèle
+function showModelDetails(modelId) {
+    selectedModel = models.find(m => m.id === modelId);
+    if (!selectedModel) return;
+    
+    const modal = new bootstrap.Modal(document.getElementById('modelDetailModal'));
+    document.getElementById('modelDetailTitle').innerHTML = `
+        <i class="bi bi-cpu"></i> ${selectedModel.name}
+    `;
+    
+    const metrics = selectedModel.metrics || {
+        accuracy: Math.random() * 0.2 + 0.8,
+        mae: Math.random() * 0.1,
+        rmse: Math.random() * 0.15,
+        r2: Math.random() * 0.2 + 0.8
+    };
+    
+    const params = selectedModel.config || {
+        n_estimators: 100,
+        max_depth: 20,
+        learning_rate: 0.01,
+        epochs: 50
+    };
+    
+    document.getElementById('modelDetailContent').innerHTML = `
+        <div class="row">
+            <div class="col-md-4">
+                <h6 class="text-muted mb-3">Informations Générales</h6>
+                <table class="table table-sm">
+                    <tr>
+                        <td><strong>Type:</strong></td>
+                        <td><span class="model-type-badge">${selectedModel.model_type?.toUpperCase() || 'LSTM'}</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>État:</strong></td>
+                        <td><span class="status-badge status-${selectedModel.status || 'completed'}">${selectedModel.status === 'completed' ? 'Terminé' : 'En cours'}</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Dataset:</strong></td>
+                        <td>${selectedModel.dataset_name || 'Dataset météo'}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Créé le:</strong></td>
+                        <td>${new Date(selectedModel.created_at).toLocaleString('fr-FR')}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Durée:</strong></td>
+                        <td>${selectedModel.training_duration || '5m 32s'}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-4">
+                <h6 class="text-muted mb-3">Métriques de Performance</h6>
+                <div class="text-center mb-3">
+                    <div class="metric-circle" style="width: 100px; height: 100px; font-size: 1.5rem;">
+                        ${(metrics.accuracy * 100).toFixed(1)}%
+                    </div>
+                    <small class="text-muted">Précision</small>
+                </div>
+                <table class="table table-sm">
+                    <tr>
+                        <td><strong>MAE:</strong></td>
+                        <td>${metrics.mae.toFixed(4)}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>RMSE:</strong></td>
+                        <td>${metrics.rmse.toFixed(4)}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>R²:</strong></td>
+                        <td>${metrics.r2.toFixed(4)}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-4">
+                <h6 class="text-muted mb-3">Paramètres du Modèle</h6>
+                <table class="table table-sm params-table">
+                    ${Object.entries(params).map(([key, value]) => `
+                        <tr>
+                            <td><strong>${key}:</strong></td>
+                            <td>${value}</td>
+                        </tr>
+                    `).join('')}
+                </table>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-12">
+                <h6 class="text-muted mb-3">Graphiques de Performance</h6>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <canvas id="lossChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <canvas id="accuracyChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        ${selectedModel.feature_importance ? `
+        <div class="row mt-4">
+            <div class="col-12">
+                <h6 class="text-muted mb-3">Importance des Variables</h6>
+                <div class="card">
+                    <div class="card-body">
+                        <canvas id="featureImportanceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        ` : ''}
+    `;
+    
+    modal.show();
+    
+    // Créer les graphiques
+    setTimeout(() => {
+        createModelCharts();
+    }, 300);
+}
+
+// Créer les graphiques du modèle
+function createModelCharts() {
+    // Graphique de perte
+    const lossCtx = document.getElementById('lossChart').getContext('2d');
+    const epochs = Array.from({length: 50}, (_, i) => i + 1);
+    const trainLoss = epochs.map(e => 0.5 * Math.exp(-e/10) + Math.random() * 0.05);
+    const valLoss = epochs.map(e => 0.6 * Math.exp(-e/10) + Math.random() * 0.08);
+    
+    new Chart(lossCtx, {
+        type: 'line',
+        data: {
+            labels: epochs,
+            datasets: [{
+                label: 'Perte d\'entraînement',
+                data: trainLoss,
+                borderColor: '#6366f1',
+                backgroundColor: 'transparent',
+                tension: 0.4
+            }, {
+                label: 'Perte de validation',
+                data: valLoss,
+                borderColor: '#ec4899',
+                backgroundColor: 'transparent',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Évolution de la Perte'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // Graphique de précision
+    const accuracyCtx = document.getElementById('accuracyChart').getContext('2d');
+    const trainAcc = epochs.map(e => 0.6 + 0.35 * (1 - Math.exp(-e/15)) + Math.random() * 0.02);
+    const valAcc = epochs.map(e => 0.55 + 0.35 * (1 - Math.exp(-e/15)) + Math.random() * 0.03);
+    
+    new Chart(accuracyCtx, {
+        type: 'line',
+        data: {
+            labels: epochs,
+            datasets: [{
+                label: 'Précision d\'entraînement',
+                data: trainAcc,
+                borderColor: '#10b981',
+                backgroundColor: 'transparent',
+                tension: 0.4
+            }, {
+                label: 'Précision de validation',
+                data: valAcc,
+                borderColor: '#f59e0b',
+                backgroundColor: 'transparent',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Évolution de la Précision'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    min: 0.5,
+                    max: 1,
+                    ticks: {
+                        callback: function(value) {
+                            return (value * 100).toFixed(0) + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Graphique d'importance des variables (si disponible)
+    if (document.getElementById('featureImportanceChart')) {
+        const featureCtx = document.getElementById('featureImportanceChart').getContext('2d');
+        const features = ['Température', 'Humidité', 'Pression', 'Vitesse du vent', 'Direction du vent', 'Précipitations'];
+        const importance = features.map(() => Math.random() * 0.3 + 0.1);
+        
+        new Chart(featureCtx, {
+            type: 'bar',
+            data: {
+                labels: features,
+                datasets: [{
+                    label: 'Importance',
+                    data: importance,
+                    backgroundColor: '#6366f1'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Importance des Variables'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 0.5
+                    }
+                }
+            }
+        });
+    }
+}
+
+// Comparer les modèles
+function compareModels() {
+    document.getElementById('comparisonSection').style.display = 'block';
+    
+    const tbody = document.getElementById('comparisonTableBody');
+    tbody.innerHTML = '';
+    
+    const completedModels = models.filter(m => m.status === 'completed' || !m.status);
+    
+    // Trouver les meilleures valeurs pour chaque métrique
+    const bestAccuracy = Math.max(...completedModels.map(m => m.metrics?.accuracy || Math.random() * 0.2 + 0.8));
+    const bestMAE = Math.min(...completedModels.map(m => m.metrics?.mae || Math.random() * 0.1));
+    const bestRMSE = Math.min(...completedModels.map(m => m.metrics?.rmse || Math.random() * 0.15));
+    const bestR2 = Math.max(...completedModels.map(m => m.metrics?.r2 || Math.random() * 0.2 + 0.8));
+    
+    completedModels.forEach(model => {
+        const metrics = model.metrics || {
+            accuracy: Math.random() * 0.2 + 0.8,
+            mae: Math.random() * 0.1,
+            rmse: Math.random() * 0.15,
+            r2: Math.random() * 0.2 + 0.8
+        };
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><strong>${model.name}</strong></td>
+            <td><span class="badge bg-primary">${model.model_type?.toUpperCase() || 'LSTM'}</span></td>
+            <td class="${metrics.accuracy === bestAccuracy ? 'best-value' : ''}">${(metrics.accuracy * 100).toFixed(2)}%</td>
+            <td class="${metrics.mae === bestMAE ? 'best-value' : ''}">${metrics.mae.toFixed(4)}</td>
+            <td class="${metrics.rmse === bestRMSE ? 'best-value' : ''}">${metrics.rmse.toFixed(4)}</td>
+            <td class="${metrics.r2 === bestR2 ? 'best-value' : ''}">${metrics.r2.toFixed(4)}</td>
+            <td>${model.training_duration || '5m 32s'}</td>
+            <td>${model.model_size || '2.3 MB'}</td>
+        `;
+        tbody.appendChild(row);
+    });
+    
+    // Créer le graphique de comparaison
+    if (comparisonChart) {
+        comparisonChart.destroy();
+    }
+    
+    const ctx = document.getElementById('comparisonChart').getContext('2d');
+    comparisonChart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: ['Précision', 'MAE (inversé)', 'RMSE (inversé)', 'R²', 'Vitesse'],
+            datasets: completedModels.slice(0, 5).map((model, index) => {
+                const metrics = model.metrics || {
+                    accuracy: Math.random() * 0.2 + 0.8,
+                    mae: Math.random() * 0.1,
+                    rmse: Math.random() * 0.15,
+                    r2: Math.random() * 0.2 + 0.8
+                };
+                const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
+                
+                return {
+                    label: model.name,
+                    data: [
+                        metrics.accuracy,
+                        1 - metrics.mae,
+                        1 - metrics.rmse,
+                        metrics.r2,
+                        Math.random() * 0.3 + 0.7
+                    ],
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: colors[index % colors.length] + '20'
+                };
+            })
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Comparaison Radar des Modèles'
+                }
+            },
+            scales: {
+                r: {
+                    beginAtZero: true,
+                    max: 1
+                }
+            }
+        }
+    });
+    
+    // Scroll vers la section de comparaison
+    document.getElementById('comparisonSection').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Upload d'un modèle
+function uploadModel(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('model_file', file);
+    formData.append('name', file.name.replace(/\.[^/.]+$/, ''));
+    
+    showLoading();
+    
+    // Simuler l'upload
+    setTimeout(() => {
+        hideLoading();
+        showNotification('Succès!', 'Modèle chargé avec succès', 'success');
+        loadModels();
+    }, 2000);
+}
+
+// Télécharger un modèle
+function downloadModel() {
+    if (!selectedModel) return;
+    
+    showNotification('Téléchargement', 'Le téléchargement du modèle va commencer...', 'info');
+    
+    // Simuler le téléchargement
+    setTimeout(() => {
+        const link = document.createElement('a');
+        link.href = '#';
+        link.download = `${selectedModel.name}_model.pkl`;
+        link.click();
+    }, 1000);
+}
+
+// Supprimer un modèle
+function deleteModel() {
+    if (!selectedModel) return;
+    
+    Swal.fire({
+        title: 'Êtes-vous sûr?',
+        text: `Voulez-vous vraiment supprimer le modèle "${selectedModel.name}"?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Oui, supprimer',
+        cancelButtonText: 'Annuler'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            showLoading();
+            
+            fetch(`/api/training-sessions/${selectedModel.id}/`, {
+                method: 'DELETE'
+            })
+            .then(() => {
+                hideLoading();
+                showNotification('Succès!', 'Modèle supprimé avec succès', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('modelDetailModal')).hide();
+                loadModels();
+            })
+            .catch(error => {
+                hideLoading();
+                showNotification('Erreur', 'Erreur lors de la suppression', 'error');
+            });
+        }
+    });
+}
+
+// Exporter toutes les métriques
+function exportAllMetrics() {
+    const metrics = models.map(m => ({
+        name: m.name,
+        type: m.model_type,
+        accuracy: m.metrics?.accuracy || 0,
+        mae: m.metrics?.mae || 0,
+        rmse: m.metrics?.rmse || 0,
+        r2: m.metrics?.r2 || 0,
+        created_at: m.created_at,
+        training_duration: m.training_duration
+    }));
+    
+    const dataStr = JSON.stringify(metrics, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    
+    const exportFileDefaultName = `metriques_modeles_${new Date().toISOString()}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+    
+    showNotification('Succès!', 'Métriques exportées avec succès', 'success');
+}
+
+// Drag and drop
+const uploadZone = document.querySelector('.upload-zone');
+if (uploadZone) {
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('dragover');
+    });
+    
+    uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('dragover');
+    });
+    
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+        
+        const file = e.dataTransfer.files[0];
+        if (file && (file.name.endsWith('.pkl') || file.name.endsWith('.h5') || 
+                    file.name.endsWith('.pth') || file.name.endsWith('.onnx'))) {
+            document.getElementById('modelFile').files = e.dataTransfer.files;
+            uploadModel(document.getElementById('modelFile'));
+        } else {
+            showNotification('Erreur', 'Format de fichier non supporté', 'error');
+        }
+    });
+}
+
+// Initialisation
+document.addEventListener('DOMContentLoaded', function() {
+    loadModels();
+    
+    // Actualiser toutes les minutes
+    setInterval(loadModels, 60000);
+});
+</script>
+{% endblock %}

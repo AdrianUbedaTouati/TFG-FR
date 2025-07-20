@@ -7,6 +7,9 @@ from . import views
 urlpatterns = [
     path('', views.home, name='home'),
     path('dashboard/', views.dashboard, name='dashboard'),
+    path('predictions/', views.predictions, name='predictions'),
+    path('models/', views.models, name='models'),
+    path('datasets/', views.datasets, name='datasets'),
     path('admin/', admin.site.urls),
     path('api/', include('ml_trainer.urls')),
 ]

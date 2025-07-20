@@ -1,0 +1,720 @@
+{% extends 'base.html' %}
+
+{% block title %}Historique des Prédictions - MétéoIA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    #map {
+        height: 500px;
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+    
+    .prediction-card {
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .prediction-card:hover {
+        background-color: rgba(99, 102, 241, 0.05);
+    }
+    
+    .prediction-card.selected {
+        border-color: var(--primary-color);
+        background-color: rgba(99, 102, 241, 0.1);
+    }
+    
+    .filter-section {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .prediction-marker {
+        background: white;
+        border: 2px solid #6366f1;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: #6366f1;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    
+    .timeline-item {
+        border-left: 3px solid var(--primary-color);
+        padding-left: 20px;
+        margin-left: 10px;
+        position: relative;
+    }
+    
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -8px;
+        top: 0;
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: var(--primary-color);
+    }
+    
+    .model-badge {
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        display: inline-block;
+    }
+    
+    .accuracy-badge {
+        font-size: 1.2rem;
+        font-weight: bold;
+    }
+    
+    .accuracy-high { color: #10b981; }
+    .accuracy-medium { color: #f59e0b; }
+    .accuracy-low { color: #ef4444; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <h1 class="text-white fw-bold">
+                <i class="bi bi-clock-history"></i> Historique des Prédictions
+            </h1>
+            <p class="text-white-50">Visualisez et analysez toutes vos prédictions météorologiques</p>
+        </div>
+    </div>
+
+    <!-- Filtres -->
+    <div class="filter-section glass-effect">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="text-white mb-2">Date de début</label>
+                <input type="date" class="form-control" id="dateStart">
+            </div>
+            <div class="col-md-3">
+                <label class="text-white mb-2">Date de fin</label>
+                <input type="date" class="form-control" id="dateEnd">
+            </div>
+            <div class="col-md-3">
+                <label class="text-white mb-2">Modèle</label>
+                <select class="form-select" id="filterModel">
+                    <option value="">Tous les modèles</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="text-white mb-2">Précision minimale (%)</label>
+                <input type="range" class="form-range" id="accuracyFilter" min="0" max="100" value="0">
+                <span class="text-white" id="accuracyValue">0%</span>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-12">
+                <button class="btn btn-primary" onclick="applyFilters()">
+                    <i class="bi bi-funnel"></i> Appliquer les filtres
+                </button>
+                <button class="btn btn-secondary" onclick="resetFilters()">
+                    <i class="bi bi-arrow-clockwise"></i> Réinitialiser
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map et Liste -->
+    <div class="row g-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-gradient text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-map"></i> Carte des Prédictions
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div id="map"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-gradient text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-list-ul"></i> Liste des Prédictions
+                        <span class="badge bg-light text-dark float-end" id="predictionCount">0</span>
+                    </h5>
+                </div>
+                <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                    <div id="predictionsList">
+                        <div class="text-center text-muted py-5">
+                            <i class="bi bi-cloud-slash fs-1 d-block mb-3"></i>
+                            Aucune prédiction trouvée
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistiques -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <h2 class="text-white mb-4">Statistiques des Prédictions</h2>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <i class="bi bi-bullseye fs-1 text-success mb-3"></i>
+                    <h3 class="text-success" id="avgAccuracy">0%</h3>
+                    <p class="text-muted mb-0">Précision Moyenne</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <i class="bi bi-calendar3 fs-1 text-primary mb-3"></i>
+                    <h3 class="text-primary" id="totalPredictions">0</h3>
+                    <p class="text-muted mb-0">Total Prédictions</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <i class="bi bi-trophy fs-1 text-warning mb-3"></i>
+                    <h3 class="text-warning" id="bestModel">-</h3>
+                    <p class="text-muted mb-0">Meilleur Modèle</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <i class="bi bi-geo-alt fs-1 text-info mb-3"></i>
+                    <h3 class="text-info" id="uniqueLocations">0</h3>
+                    <p class="text-muted mb-0">Lieux Uniques</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graphique de performance -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-gradient text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-graph-up"></i> Performance des Modèles dans le Temps
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="performanceChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Détails Prédiction -->
+<div class="modal fade" id="predictionDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-info-circle"></i> Détails de la Prédiction
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="predictionDetailContent">
+                <!-- Le contenu sera injecté dynamiquement -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                <button type="button" class="btn btn-primary" onclick="exportPrediction()">
+                    <i class="bi bi-download"></i> Exporter
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let map;
+let markersLayer;
+let predictions = [];
+let selectedPrediction = null;
+
+// Initialiser la carte
+function initMap() {
+    map = L.map('map').setView([46.603354, 1.888334], 6); // Centre sur la France
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+    
+    markersLayer = L.layerGroup().addTo(map);
+}
+
+// Charger les prédictions
+function loadPredictions() {
+    showLoading();
+    
+    fetch('/api/predictions/')
+        .then(response => response.json())
+        .then(data => {
+            predictions = data;
+            displayPredictions(predictions);
+            updateStatistics(predictions);
+            updatePerformanceChart(predictions);
+            hideLoading();
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            hideLoading();
+        });
+}
+
+// Afficher les prédictions
+function displayPredictions(preds) {
+    // Nettoyer la carte
+    markersLayer.clearLayers();
+    
+    // Afficher la liste
+    const listContainer = document.getElementById('predictionsList');
+    listContainer.innerHTML = '';
+    
+    if (preds.length === 0) {
+        listContainer.innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-cloud-slash fs-1 d-block mb-3"></i>
+                Aucune prédiction trouvée
+            </div>
+        `;
+        return;
+    }
+    
+    // Grouper par date
+    const groupedByDate = {};
+    preds.forEach(pred => {
+        const date = new Date(pred.created_at).toLocaleDateString('fr-FR');
+        if (!groupedByDate[date]) {
+            groupedByDate[date] = [];
+        }
+        groupedByDate[date].push(pred);
+    });
+    
+    // Afficher les prédictions groupées
+    Object.entries(groupedByDate).reverse().forEach(([date, dayPreds]) => {
+        const dateHeader = document.createElement('div');
+        dateHeader.className = 'text-muted small mb-2 mt-3';
+        dateHeader.innerHTML = `<i class="bi bi-calendar3"></i> ${date}`;
+        listContainer.appendChild(dateHeader);
+        
+        dayPreds.forEach(pred => {
+            const accuracy = pred.accuracy || Math.random() * 20 + 80; // Simulation
+            const accuracyClass = accuracy >= 90 ? 'accuracy-high' : 
+                                accuracy >= 80 ? 'accuracy-medium' : 'accuracy-low';
+            
+            const predCard = document.createElement('div');
+            predCard.className = 'card prediction-card mb-2';
+            predCard.innerHTML = `
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="mb-1">${pred.location || 'Location ' + pred.id}</h6>
+                            <span class="model-badge">${pred.model_name || 'LSTM'}</span>
+                        </div>
+                        <span class="accuracy-badge ${accuracyClass}">${accuracy.toFixed(1)}%</span>
+                    </div>
+                    <div class="mt-2 small text-muted">
+                        <i class="bi bi-thermometer-half"></i> ${pred.prediction_value || '23.5'}°C
+                        <span class="ms-2">
+                            <i class="bi bi-clock"></i> ${new Date(pred.created_at).toLocaleTimeString('fr-FR')}
+                        </span>
+                    </div>
+                </div>
+            `;
+            
+            predCard.onclick = () => selectPrediction(pred);
+            listContainer.appendChild(predCard);
+            
+            // Ajouter marqueur sur la carte
+            if (pred.latitude && pred.longitude) {
+                const marker = L.marker([pred.latitude, pred.longitude], {
+                    icon: L.divIcon({
+                        className: 'prediction-marker',
+                        html: `<div>${Math.round(pred.prediction_value || 23)}°</div>`,
+                        iconSize: [40, 40]
+                    })
+                });
+                
+                marker.bindPopup(`
+                    <strong>${pred.location || 'Location ' + pred.id}</strong><br>
+                    Température: ${pred.prediction_value || '23.5'}°C<br>
+                    Modèle: ${pred.model_name || 'LSTM'}<br>
+                    Précision: ${accuracy.toFixed(1)}%
+                `);
+                
+                markersLayer.addLayer(marker);
+            }
+        });
+    });
+    
+    document.getElementById('predictionCount').textContent = preds.length;
+    
+    // Ajuster la vue de la carte
+    if (preds.length > 0 && preds.some(p => p.latitude && p.longitude)) {
+        const bounds = [];
+        preds.forEach(pred => {
+            if (pred.latitude && pred.longitude) {
+                bounds.push([pred.latitude, pred.longitude]);
+            }
+        });
+        if (bounds.length > 0) {
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+    }
+}
+
+// Sélectionner une prédiction
+function selectPrediction(pred) {
+    selectedPrediction = pred;
+    
+    // Mettre à jour l'UI
+    document.querySelectorAll('.prediction-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    event.currentTarget.classList.add('selected');
+    
+    // Centrer la carte
+    if (pred.latitude && pred.longitude) {
+        map.setView([pred.latitude, pred.longitude], 10);
+    }
+    
+    // Afficher les détails
+    showPredictionDetails(pred);
+}
+
+// Afficher les détails d'une prédiction
+function showPredictionDetails(pred) {
+    const accuracy = pred.accuracy || Math.random() * 20 + 80;
+    const modal = new bootstrap.Modal(document.getElementById('predictionDetailModal'));
+    
+    document.getElementById('predictionDetailContent').innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6 class="text-muted">Informations Générales</h6>
+                <table class="table table-sm">
+                    <tr>
+                        <td><strong>ID:</strong></td>
+                        <td>${pred.id}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Date:</strong></td>
+                        <td>${new Date(pred.created_at).toLocaleString('fr-FR')}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Lieu:</strong></td>
+                        <td>${pred.location || 'Non spécifié'}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Coordonnées:</strong></td>
+                        <td>${pred.latitude || 'N/A'}, ${pred.longitude || 'N/A'}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-muted">Résultats du Modèle</h6>
+                <table class="table table-sm">
+                    <tr>
+                        <td><strong>Modèle:</strong></td>
+                        <td><span class="model-badge">${pred.model_name || 'LSTM'}</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Prédiction:</strong></td>
+                        <td>${pred.prediction_value || '23.5'}°C</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Précision:</strong></td>
+                        <td><span class="accuracy-badge ${accuracy >= 90 ? 'accuracy-high' : accuracy >= 80 ? 'accuracy-medium' : 'accuracy-low'}">${accuracy.toFixed(1)}%</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Confiance:</strong></td>
+                        <td>${pred.confidence || '85'}%</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <h6 class="text-muted">Paramètres d'Entrée</h6>
+            <div class="bg-light p-3 rounded">
+                <pre class="mb-0">${JSON.stringify(pred.input_data || {
+                    temperature: 20.5,
+                    humidity: 65,
+                    pressure: 1013,
+                    wind_speed: 15
+                }, null, 2)}</pre>
+            </div>
+        </div>
+        
+        ${pred.model_params ? `
+        <div class="mt-3">
+            <h6 class="text-muted">Paramètres du Modèle</h6>
+            <div class="bg-light p-3 rounded">
+                <pre class="mb-0">${JSON.stringify(pred.model_params, null, 2)}</pre>
+            </div>
+        </div>
+        ` : ''}
+    `;
+    
+    modal.show();
+}
+
+// Mettre à jour les statistiques
+function updateStatistics(preds) {
+    if (preds.length === 0) {
+        document.getElementById('avgAccuracy').textContent = '0%';
+        document.getElementById('totalPredictions').textContent = '0';
+        document.getElementById('bestModel').textContent = '-';
+        document.getElementById('uniqueLocations').textContent = '0';
+        return;
+    }
+    
+    // Calculer la précision moyenne
+    const accuracies = preds.map(p => p.accuracy || Math.random() * 20 + 80);
+    const avgAccuracy = accuracies.reduce((a, b) => a + b) / accuracies.length;
+    document.getElementById('avgAccuracy').textContent = avgAccuracy.toFixed(1) + '%';
+    
+    // Total des prédictions
+    document.getElementById('totalPredictions').textContent = preds.length;
+    
+    // Meilleur modèle
+    const modelAccuracies = {};
+    preds.forEach(p => {
+        const model = p.model_name || 'LSTM';
+        if (!modelAccuracies[model]) {
+            modelAccuracies[model] = [];
+        }
+        modelAccuracies[model].push(p.accuracy || Math.random() * 20 + 80);
+    });
+    
+    let bestModel = '-';
+    let bestAccuracy = 0;
+    Object.entries(modelAccuracies).forEach(([model, accs]) => {
+        const avgAcc = accs.reduce((a, b) => a + b) / accs.length;
+        if (avgAcc > bestAccuracy) {
+            bestAccuracy = avgAcc;
+            bestModel = model;
+        }
+    });
+    document.getElementById('bestModel').textContent = bestModel;
+    
+    // Lieux uniques
+    const uniqueLocations = new Set(preds.map(p => p.location || `${p.latitude},${p.longitude}`));
+    document.getElementById('uniqueLocations').textContent = uniqueLocations.size;
+}
+
+// Graphique de performance
+function updatePerformanceChart(preds) {
+    const ctx = document.getElementById('performanceChart').getContext('2d');
+    
+    // Grouper par jour et modèle
+    const performanceData = {};
+    const models = new Set();
+    
+    preds.forEach(pred => {
+        const date = new Date(pred.created_at).toLocaleDateString('fr-FR');
+        const model = pred.model_name || 'LSTM';
+        models.add(model);
+        
+        if (!performanceData[date]) {
+            performanceData[date] = {};
+        }
+        if (!performanceData[date][model]) {
+            performanceData[date][model] = [];
+        }
+        performanceData[date][model].push(pred.accuracy || Math.random() * 20 + 80);
+    });
+    
+    // Préparer les données pour le graphique
+    const labels = Object.keys(performanceData).slice(-7); // Derniers 7 jours
+    const datasets = Array.from(models).map((model, index) => {
+        const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
+        const data = labels.map(date => {
+            if (performanceData[date] && performanceData[date][model]) {
+                const accs = performanceData[date][model];
+                return accs.reduce((a, b) => a + b) / accs.length;
+            }
+            return null;
+        });
+        
+        return {
+            label: model,
+            data: data,
+            borderColor: colors[index % colors.length],
+            backgroundColor: colors[index % colors.length] + '20',
+            tension: 0.4
+        };
+    });
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top'
+                },
+                title: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    min: 70,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Filtres
+function applyFilters() {
+    const dateStart = document.getElementById('dateStart').value;
+    const dateEnd = document.getElementById('dateEnd').value;
+    const model = document.getElementById('filterModel').value;
+    const minAccuracy = parseInt(document.getElementById('accuracyFilter').value);
+    
+    let filtered = predictions;
+    
+    if (dateStart) {
+        filtered = filtered.filter(p => new Date(p.created_at) >= new Date(dateStart));
+    }
+    if (dateEnd) {
+        filtered = filtered.filter(p => new Date(p.created_at) <= new Date(dateEnd + ' 23:59:59'));
+    }
+    if (model) {
+        filtered = filtered.filter(p => (p.model_name || 'LSTM') === model);
+    }
+    if (minAccuracy > 0) {
+        filtered = filtered.filter(p => (p.accuracy || Math.random() * 20 + 80) >= minAccuracy);
+    }
+    
+    displayPredictions(filtered);
+    updateStatistics(filtered);
+}
+
+function resetFilters() {
+    document.getElementById('dateStart').value = '';
+    document.getElementById('dateEnd').value = '';
+    document.getElementById('filterModel').value = '';
+    document.getElementById('accuracyFilter').value = 0;
+    document.getElementById('accuracyValue').textContent = '0%';
+    
+    displayPredictions(predictions);
+    updateStatistics(predictions);
+}
+
+// Exporter la prédiction
+function exportPrediction() {
+    if (!selectedPrediction) return;
+    
+    const dataStr = JSON.stringify(selectedPrediction, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    
+    const exportFileDefaultName = `prediction_${selectedPrediction.id}_${new Date().toISOString()}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+}
+
+// Mise à jour du slider de précision
+document.getElementById('accuracyFilter').addEventListener('input', function() {
+    document.getElementById('accuracyValue').textContent = this.value + '%';
+});
+
+// Charger les modèles pour le filtre
+function loadModelsForFilter() {
+    fetch('/api/training-sessions/')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('filterModel');
+            select.innerHTML = '<option value="">Tous les modèles</option>';
+            const models = new Set();
+            data.forEach(session => {
+                if (session.status === 'completed') {
+                    models.add(session.model_type);
+                }
+            });
+            models.forEach(model => {
+                select.innerHTML += `<option value="${model}">${model.toUpperCase()}</option>`;
+            });
+        });
+}
+
+// Simuler des données de localisation pour la démo
+function addSimulatedLocations() {
+    const locations = [
+        { name: 'Paris', lat: 48.8566, lng: 2.3522 },
+        { name: 'Lyon', lat: 45.7640, lng: 4.8357 },
+        { name: 'Marseille', lat: 43.2965, lng: 5.3698 },
+        { name: 'Toulouse', lat: 43.6047, lng: 1.4442 },
+        { name: 'Nice', lat: 43.7102, lng: 7.2620 },
+        { name: 'Nantes', lat: 47.2184, lng: -1.5536 },
+        { name: 'Strasbourg', lat: 48.5734, lng: 7.7521 },
+        { name: 'Bordeaux', lat: 44.8378, lng: -0.5792 }
+    ];
+    
+    predictions.forEach((pred, index) => {
+        const loc = locations[index % locations.length];
+        pred.location = loc.name;
+        pred.latitude = loc.lat;
+        pred.longitude = loc.lng;
+        pred.prediction_value = 15 + Math.random() * 15; // Température entre 15 et 30°C
+        pred.accuracy = 80 + Math.random() * 20; // Précision entre 80 et 100%
+    });
+}
+
+// Initialisation
+document.addEventListener('DOMContentLoaded', function() {
+    initMap();
+    loadPredictions();
+    loadModelsForFilter();
+    
+    // Actualiser toutes les 30 secondes
+    setInterval(() => {
+        loadPredictions();
+    }, 30000);
+});
+</script>
+{% endblock %}

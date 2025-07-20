@@ -1,115 +1,211 @@
 {% extends 'base.html' %}
 
-{% block title %}Panel de Control - MeteoIA{% endblock %}
+{% block title %}Tableau de Bord - MétéoIA{% endblock %}
 
 {% block extra_css %}
 <style>
-    .dashboard-card {
-        height: 100%;
-        transition: transform 0.3s ease;
+    .metric-card {
+        border: none;
+        border-radius: 20px;
+        overflow: hidden;
+        position: relative;
+        transition: all 0.3s ease;
     }
-    .dashboard-card:hover {
-        transform: translateY(-5px);
+    
+    .metric-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        opacity: 0;
+        transition: opacity 0.3s ease;
     }
+    
+    .metric-card:hover::before {
+        opacity: 0.1;
+    }
+    
+    .metric-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-bottom: 15px;
+    }
+    
     .metric-value {
         font-size: 2.5rem;
-        font-weight: bold;
-        color: #667eea;
+        font-weight: 700;
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
     }
+    
     .chart-container {
-        height: 300px;
+        height: 400px;
         padding: 20px;
     }
-    .action-btn {
-        width: 100%;
-        margin-bottom: 10px;
+    
+    .action-card {
+        border: 2px dashed rgba(99, 102, 241, 0.3);
+        background: rgba(99, 102, 241, 0.05);
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .action-card:hover {
+        border-color: var(--primary-color);
+        background: rgba(99, 102, 241, 0.1);
+        transform: translateY(-2px);
+    }
+    
+    .table-container {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    
+    .table-container::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .table-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    
+    .table-container::-webkit-scrollbar-thumb {
+        background: var(--primary-color);
+        border-radius: 10px;
+    }
+    
+    .progress-ring {
+        transform: rotate(-90deg);
+    }
+    
+    .progress-ring-circle {
+        stroke-dasharray: 282.6;
+        stroke-dashoffset: 282.6;
+        animation: progressAnimation 2s ease-out forwards;
+    }
+    
+    @keyframes progressAnimation {
+        to {
+            stroke-dashoffset: 70;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <div class="row mb-4">
+    <!-- Header -->
+    <div class="row mb-5">
         <div class="col-12">
-            <h1 class="text-white mb-4">
-                <i class="bi bi-speedometer2"></i> Panel de Control
+            <h1 class="text-white fw-bold">
+                <i class="bi bi-speedometer2"></i> Tableau de Bord
             </h1>
+            <p class="text-white-50">Bienvenue dans votre centre de contrôle météorologique</p>
         </div>
     </div>
 
-    <!-- Métricas principales -->
-    <div class="row mb-4">
+    <!-- Métriques principales -->
+    <div class="row g-4 mb-5">
         <div class="col-md-3">
-            <div class="card dashboard-card">
-                <div class="card-body text-center">
-                    <i class="bi bi-database-fill-up text-primary fs-1"></i>
-                    <h5 class="card-title mt-3">Datasets</h5>
-                    <p class="metric-value">0</p>
-                    <small class="text-muted">Conjuntos de datos cargados</small>
+            <div class="card metric-card">
+                <div class="card-body text-center p-4">
+                    <div class="metric-icon bg-primary bg-opacity-10 text-primary mx-auto">
+                        <i class="bi bi-database-fill-up"></i>
+                    </div>
+                    <h5 class="text-muted mb-2">Datasets</h5>
+                    <p class="metric-value mb-0" id="datasetsCount">0</p>
+                    <small class="text-muted">Jeux de données</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card dashboard-card">
-                <div class="card-body text-center">
-                    <i class="bi bi-cpu-fill text-success fs-1"></i>
-                    <h5 class="card-title mt-3">Modelos</h5>
-                    <p class="metric-value">0</p>
-                    <small class="text-muted">Modelos entrenados</small>
+            <div class="card metric-card">
+                <div class="card-body text-center p-4">
+                    <div class="metric-icon bg-success bg-opacity-10 text-success mx-auto">
+                        <i class="bi bi-cpu-fill"></i>
+                    </div>
+                    <h5 class="text-muted mb-2">Modèles</h5>
+                    <p class="metric-value mb-0" id="modelsCount">0</p>
+                    <small class="text-muted">Modèles entraînés</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card dashboard-card">
-                <div class="card-body text-center">
-                    <i class="bi bi-graph-up-arrow text-info fs-1"></i>
-                    <h5 class="card-title mt-3">Precisión</h5>
-                    <p class="metric-value">0%</p>
-                    <small class="text-muted">Precisión promedio</small>
+            <div class="card metric-card">
+                <div class="card-body text-center p-4">
+                    <div class="metric-icon bg-info bg-opacity-10 text-info mx-auto">
+                        <i class="bi bi-graph-up-arrow"></i>
+                    </div>
+                    <h5 class="text-muted mb-2">Précision</h5>
+                    <p class="metric-value mb-0" id="accuracyRate">0%</p>
+                    <small class="text-muted">Taux moyen</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card dashboard-card">
-                <div class="card-body text-center">
-                    <i class="bi bi-lightning-fill text-warning fs-1"></i>
-                    <h5 class="card-title mt-3">Predicciones</h5>
-                    <p class="metric-value">0</p>
-                    <small class="text-muted">Realizadas hoy</small>
+            <div class="card metric-card">
+                <div class="card-body text-center p-4">
+                    <div class="metric-icon bg-warning bg-opacity-10 text-warning mx-auto">
+                        <i class="bi bi-lightning-fill"></i>
+                    </div>
+                    <h5 class="text-muted mb-2">Prédictions</h5>
+                    <p class="metric-value mb-0" id="predictionsToday">0</p>
+                    <small class="text-muted">Aujourd'hui</small>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row">
-        <!-- Panel de acciones -->
+    <!-- Actions rapides -->
+    <div class="row g-4 mb-5">
+        <div class="col-12">
+            <h2 class="text-white mb-4">Actions Rapides</h2>
+        </div>
         <div class="col-md-4">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <i class="bi bi-gear-fill"></i> Acciones Rápidas
-                </div>
-                <div class="card-body">
-                    <button class="btn btn-primary action-btn" data-bs-toggle="modal" data-bs-target="#uploadDatasetModal">
-                        <i class="bi bi-upload"></i> Cargar Dataset
-                    </button>
-                    <button class="btn btn-success action-btn" data-bs-toggle="modal" data-bs-target="#trainModelModal">
-                        <i class="bi bi-play-fill"></i> Entrenar Modelo
-                    </button>
-                    <button class="btn btn-info action-btn" data-bs-toggle="modal" data-bs-target="#makePredictionModal">
-                        <i class="bi bi-cloud-fog2"></i> Hacer Predicción
-                    </button>
-                    <a href="/admin/" class="btn btn-secondary action-btn">
-                        <i class="bi bi-shield-lock"></i> Administración
-                    </a>
+            <div class="card action-card h-100" onclick="showUploadDatasetModal()">
+                <div class="card-body text-center p-5">
+                    <i class="bi bi-cloud-upload fs-1 text-primary mb-3"></i>
+                    <h4>Charger un Dataset</h4>
+                    <p class="text-muted mb-0">Importez vos données météorologiques</p>
                 </div>
             </div>
         </div>
+        <div class="col-md-4">
+            <div class="card action-card h-100" onclick="showTrainModelModal()">
+                <div class="card-body text-center p-5">
+                    <i class="bi bi-play-circle fs-1 text-success mb-3"></i>
+                    <h4>Entraîner un Modèle</h4>
+                    <p class="text-muted mb-0">Créez un nouveau modèle IA</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card action-card h-100" onclick="showPredictionModal()">
+                <div class="card-body text-center p-5">
+                    <i class="bi bi-cloud-fog2 fs-1 text-info mb-3"></i>
+                    <h4>Faire une Prédiction</h4>
+                    <p class="text-muted mb-0">Prédisez la météo</p>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        <!-- Gráficos -->
+    <!-- Graphiques et tableaux -->
+    <div class="row g-4">
         <div class="col-md-8">
             <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <i class="bi bi-bar-chart-fill"></i> Rendimiento del Modelo
+                <div class="card-header bg-gradient text-white">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart-line"></i> Performance des Modèles</h5>
                 </div>
                 <div class="card-body">
                     <div class="chart-container">
@@ -118,30 +214,45 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Tabla de modelos recientes -->
-    <div class="row mt-4">
-        <div class="col-12">
+        <div class="col-md-4">
             <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <i class="bi bi-clock-history"></i> Modelos Recientes
+                <div class="card-header bg-gradient text-white">
+                    <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Répartition des Modèles</h5>
                 </div>
                 <div class="card-body">
-                    <div class="table-responsive">
+                    <div class="chart-container">
+                        <canvas id="modelsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activité récente -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-gradient text-white">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Activité Récente</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-container">
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Nombre</th>
-                                    <th>Tipo</th>
-                                    <th>Precisión</th>
-                                    <th>Fecha</th>
-                                    <th>Acciones</th>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                    <th>État</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="activityTable">
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted">No hay modelos entrenados aún</td>
+                                    <td colspan="5" class="text-center text-muted py-5">
+                                        <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                        Aucune activité récente
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -152,100 +263,149 @@
     </div>
 </div>
 
-<!-- Modal Cargar Dataset -->
+<!-- Modal Charger Dataset -->
 <div class="modal fade" id="uploadDatasetModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Cargar Dataset</h5>
+                <h5 class="modal-title">
+                    <i class="bi bi-cloud-upload"></i> Charger un Dataset
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="uploadDatasetForm">
                     <div class="mb-3">
-                        <label for="datasetName" class="form-label">Nombre del Dataset</label>
-                        <input type="text" class="form-control" id="datasetName" required>
+                        <label for="datasetName" class="form-label">Nom du Dataset</label>
+                        <input type="text" class="form-control" id="datasetName" placeholder="Ex: Données météo 2024" required>
                     </div>
                     <div class="mb-3">
-                        <label for="datasetFile" class="form-label">Archivo CSV</label>
+                        <label for="datasetDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="datasetDescription" rows="3" placeholder="Décrivez votre dataset..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="datasetFile" class="form-label">Fichier CSV</label>
                         <input type="file" class="form-control" id="datasetFile" accept=".csv" required>
+                        <div class="form-text">Format accepté: CSV (max 50MB)</div>
+                    </div>
+                    <div id="uploadProgress" class="progress d-none mb-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="uploadDataset()">Cargar</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="uploadDataset()">
+                    <i class="bi bi-upload"></i> Charger
+                </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal Entrenar Modelo -->
+<!-- Modal Entraîner Modèle -->
 <div class="modal fade" id="trainModelModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Entrenar Nuevo Modelo</h5>
+                <h5 class="modal-title">
+                    <i class="bi bi-cpu"></i> Entraîner un Nouveau Modèle
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="trainModelForm">
-                    <div class="mb-3">
-                        <label for="modelName" class="form-label">Nombre del Modelo</label>
-                        <input type="text" class="form-control" id="modelName" required>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="modelName" class="form-label">Nom du Modèle</label>
+                                <input type="text" class="form-control" id="modelName" placeholder="Ex: Modèle Météo LSTM v2" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="modelType" class="form-label">Type de Modèle</label>
+                                <select class="form-select" id="modelType" required>
+                                    <option value="">Sélectionner...</option>
+                                    <option value="random_forest">Random Forest</option>
+                                    <option value="lstm">LSTM (Deep Learning)</option>
+                                    <option value="gru">GRU (Deep Learning)</option>
+                                    <option value="xgboost">XGBoost</option>
+                                    <option value="gradient_boosting">Gradient Boosting</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="dataset" class="form-label">Dataset</label>
+                                <select class="form-select" id="dataset" required>
+                                    <option value="">Sélectionner un dataset...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="targetColumn" class="form-label">Colonne Cible</label>
+                                <select class="form-select" id="targetColumn" required>
+                                    <option value="">Sélectionner la variable à prédire...</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="testSize" class="form-label">Taille du Test (%)</label>
+                                <input type="number" class="form-control" id="testSize" min="10" max="50" value="20" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="epochs" class="form-label">Époques (pour Deep Learning)</label>
+                                <input type="number" class="form-control" id="epochs" min="1" max="1000" value="50">
+                            </div>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label for="modelType" class="form-label">Tipo de Modelo</label>
-                        <select class="form-control" id="modelType" required>
-                            <option value="">Seleccionar...</option>
-                            <option value="random_forest">Random Forest</option>
-                            <option value="lstm">LSTM</option>
-                            <option value="gru">GRU</option>
-                            <option value="xgboost">XGBoost</option>
-                            <option value="gradient_boosting">Gradient Boosting</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="dataset" class="form-label">Dataset</label>
-                        <select class="form-control" id="dataset" required>
-                            <option value="">Seleccionar dataset...</option>
-                        </select>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> L'entraînement peut prendre plusieurs minutes selon la taille du dataset et le type de modèle.
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="trainModel()">Entrenar</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="trainModel()">
+                    <i class="bi bi-play-fill"></i> Lancer l'Entraînement
+                </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal Hacer Predicción -->
-<div class="modal fade" id="makePredictionModal" tabindex="-1">
-    <div class="modal-dialog">
+<!-- Modal Faire une Prédiction -->
+<div class="modal fade" id="predictionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Hacer Predicción</h5>
+                <h5 class="modal-title">
+                    <i class="bi bi-cloud-fog2"></i> Faire une Prédiction
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="predictionForm">
                     <div class="mb-3">
-                        <label for="predModel" class="form-label">Modelo</label>
-                        <select class="form-control" id="predModel" required>
-                            <option value="">Seleccionar modelo...</option>
+                        <label for="predModel" class="form-label">Modèle</label>
+                        <select class="form-select" id="predModel" required>
+                            <option value="">Sélectionner un modèle...</option>
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label for="predData" class="form-label">Datos de Entrada (JSON)</label>
-                        <textarea class="form-control" id="predData" rows="4" required></textarea>
+                        <label class="form-label">Données d'Entrée</label>
+                        <div id="inputFields" class="row g-3">
+                            <!-- Les champs seront générés dynamiquement -->
+                        </div>
+                    </div>
+                    <div id="predictionResult" class="alert alert-success d-none">
+                        <h5><i class="bi bi-check-circle"></i> Résultat de la Prédiction</h5>
+                        <div id="predictionValue"></div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="makePrediction()">Predecir</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                <button type="button" class="btn btn-primary" onclick="makePrediction()">
+                    <i class="bi bi-stars"></i> Prédire
+                </button>
             </div>
         </div>
     </div>
@@ -255,18 +415,19 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// Configuración del gráfico
-const ctx = document.getElementById('performanceChart').getContext('2d');
-const performanceChart = new Chart(ctx, {
+// Configuration des graphiques
+const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+const performanceChart = new Chart(performanceCtx, {
     type: 'line',
     data: {
-        labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'],
+        labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin'],
         datasets: [{
-            label: 'Precisión del Modelo',
-            data: [],
-            borderColor: '#667eea',
-            backgroundColor: 'rgba(102, 126, 234, 0.1)',
-            tension: 0.4
+            label: 'Précision (%)',
+            data: [88, 90, 89, 92, 94, 95],
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+            tension: 0.4,
+            fill: true
         }]
     },
     options: {
@@ -280,25 +441,100 @@ const performanceChart = new Chart(ctx, {
         scales: {
             y: {
                 beginAtZero: true,
-                max: 100
+                max: 100,
+                ticks: {
+                    callback: function(value) {
+                        return value + '%';
+                    }
+                }
             }
         }
     }
 });
 
-// Funciones para las acciones
-function uploadDataset() {
-    const name = document.getElementById('datasetName').value;
-    const file = document.getElementById('datasetFile').files[0];
-    
-    if (!name || !file) {
-        alert('Por favor complete todos los campos');
-        return;
+const modelsCtx = document.getElementById('modelsChart').getContext('2d');
+const modelsChart = new Chart(modelsCtx, {
+    type: 'doughnut',
+    data: {
+        labels: ['LSTM', 'Random Forest', 'XGBoost', 'GRU'],
+        datasets: [{
+            data: [30, 25, 25, 20],
+            backgroundColor: [
+                '#6366f1',
+                '#8b5cf6',
+                '#ec4899',
+                '#f59e0b'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
     }
-    
+});
+
+// Fonctions pour les modals
+function showUploadDatasetModal() {
+    const modal = new bootstrap.Modal(document.getElementById('uploadDatasetModal'));
+    modal.show();
+}
+
+function showTrainModelModal() {
+    loadDatasets();
+    const modal = new bootstrap.Modal(document.getElementById('trainModelModal'));
+    modal.show();
+}
+
+function showPredictionModal() {
+    loadModels();
+    const modal = new bootstrap.Modal(document.getElementById('predictionModal'));
+    modal.show();
+}
+
+// Charger les datasets
+function loadDatasets() {
+    fetch('/api/datasets/')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('dataset');
+            select.innerHTML = '<option value="">Sélectionner un dataset...</option>';
+            data.forEach(dataset => {
+                select.innerHTML += `<option value="${dataset.id}">${dataset.name}</option>`;
+            });
+        })
+        .catch(error => console.error('Erreur:', error));
+}
+
+// Charger les modèles
+function loadModels() {
+    fetch('/api/training-sessions/')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('predModel');
+            select.innerHTML = '<option value="">Sélectionner un modèle...</option>';
+            data.filter(session => session.status === 'completed').forEach(session => {
+                select.innerHTML += `<option value="${session.id}">${session.name} (${session.model_type})</option>`;
+            });
+        })
+        .catch(error => console.error('Erreur:', error));
+}
+
+// Upload dataset
+function uploadDataset() {
     const formData = new FormData();
-    formData.append('name', name);
-    formData.append('file', file);
+    formData.append('name', document.getElementById('datasetName').value);
+    formData.append('description', document.getElementById('datasetDescription').value);
+    formData.append('file', document.getElementById('datasetFile').files[0]);
+    
+    const progressBar = document.querySelector('#uploadProgress .progress-bar');
+    document.getElementById('uploadProgress').classList.remove('d-none');
+    
+    showLoading();
     
     fetch('/api/datasets/', {
         method: 'POST',
@@ -306,26 +542,149 @@ function uploadDataset() {
     })
     .then(response => response.json())
     .then(data => {
-        alert('Dataset cargado exitosamente');
-        location.reload();
+        hideLoading();
+        showNotification('Succès!', 'Dataset chargé avec succès', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('uploadDatasetModal')).hide();
+        updateDashboard();
     })
     .catch(error => {
-        alert('Error al cargar el dataset: ' + error);
+        hideLoading();
+        showNotification('Erreur', 'Erreur lors du chargement: ' + error, 'error');
     });
 }
 
+// Entraîner modèle
 function trainModel() {
-    alert('Función de entrenamiento en desarrollo');
+    const data = {
+        name: document.getElementById('modelName').value,
+        model_type: document.getElementById('modelType').value,
+        dataset: document.getElementById('dataset').value,
+        target_column: document.getElementById('targetColumn').value,
+        test_size: document.getElementById('testSize').value / 100,
+        config: {
+            epochs: document.getElementById('epochs').value
+        }
+    };
+    
+    showLoading();
+    
+    fetch('/api/training-sessions/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(session => {
+        // Lancer l'entraînement
+        return fetch(`/api/training-sessions/${session.id}/train/`, {
+            method: 'POST'
+        });
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        showNotification('Succès!', 'Entraînement lancé avec succès', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('trainModelModal')).hide();
+        updateDashboard();
+    })
+    .catch(error => {
+        hideLoading();
+        showNotification('Erreur', 'Erreur lors de l\'entraînement: ' + error, 'error');
+    });
 }
 
+// Faire une prédiction
 function makePrediction() {
-    alert('Función de predicción en desarrollo');
+    const modelId = document.getElementById('predModel').value;
+    const inputs = {};
+    
+    // Collecter les valeurs d'entrée
+    document.querySelectorAll('#inputFields input').forEach(input => {
+        inputs[input.name] = parseFloat(input.value);
+    });
+    
+    showLoading();
+    
+    fetch('/api/predict/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            model_id: modelId,
+            data: inputs
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        document.getElementById('predictionResult').classList.remove('d-none');
+        document.getElementById('predictionValue').innerHTML = `
+            <strong>Valeur prédite:</strong> ${data.prediction}<br>
+            <strong>Confiance:</strong> ${data.confidence || 'N/A'}%
+        `;
+    })
+    .catch(error => {
+        hideLoading();
+        showNotification('Erreur', 'Erreur lors de la prédiction: ' + error, 'error');
+    });
 }
 
-// Cargar datos iniciales
+// Mettre à jour le dashboard
+function updateDashboard() {
+    // Charger les statistiques
+    fetch('/api/datasets/')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('datasetsCount').textContent = data.length;
+        });
+    
+    fetch('/api/training-sessions/')
+        .then(response => response.json())
+        .then(data => {
+            const completed = data.filter(s => s.status === 'completed').length;
+            document.getElementById('modelsCount').textContent = completed;
+            
+            // Calculer la précision moyenne
+            const accuracies = data.filter(s => s.metrics && s.metrics.accuracy)
+                                 .map(s => s.metrics.accuracy);
+            if (accuracies.length > 0) {
+                const avgAccuracy = (accuracies.reduce((a, b) => a + b, 0) / accuracies.length * 100).toFixed(1);
+                document.getElementById('accuracyRate').textContent = avgAccuracy + '%';
+            }
+        });
+    
+    fetch('/api/predictions/')
+        .then(response => response.json())
+        .then(data => {
+            const today = new Date().toDateString();
+            const todayPredictions = data.filter(p => new Date(p.created_at).toDateString() === today).length;
+            document.getElementById('predictionsToday').textContent = todayPredictions;
+        });
+}
+
+// Charger les colonnes quand un dataset est sélectionné
+document.getElementById('dataset').addEventListener('change', function() {
+    const datasetId = this.value;
+    if (datasetId) {
+        fetch(`/api/datasets/${datasetId}/columns/`)
+            .then(response => response.json())
+            .then(columns => {
+                const select = document.getElementById('targetColumn');
+                select.innerHTML = '<option value="">Sélectionner la variable à prédire...</option>';
+                columns.forEach(column => {
+                    select.innerHTML += `<option value="${column}">${column}</option>`;
+                });
+            });
+    }
+});
+
+// Initialiser le dashboard
 document.addEventListener('DOMContentLoaded', function() {
-    // Aquí se cargarían los datos reales de la API
-    console.log('Dashboard cargado');
+    updateDashboard();
+    setInterval(updateDashboard, 30000); // Mise à jour toutes les 30 secondes
 });
 </script>
 {% endblock %}
