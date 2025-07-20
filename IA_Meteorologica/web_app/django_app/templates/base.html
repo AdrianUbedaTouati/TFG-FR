@@ -37,10 +37,10 @@
         }
         
         .navbar {
-            background: rgba(255, 255, 255, 0.1) !important;
+            background: rgba(30, 27, 75, 0.95) !important;
             backdrop-filter: blur(20px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
         }
         
         .navbar-brand {
@@ -69,7 +69,7 @@
         }
         
         .main-content {
-            padding-top: 100px;
+            padding-top: 120px;
             min-height: calc(100vh - 60px);
             position: relative;
             z-index: 1;
@@ -144,6 +144,79 @@
         
         .loading-spinner.active {
             display: block;
+        }
+        
+        /* Estilos mejorados para modales */
+        .modal-dialog {
+            margin-top: 100px;
+        }
+        
+        .modal-content {
+            background: white;
+            border: none;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 20px 20px 0 0;
+            border: none;
+        }
+        
+        .modal-header .btn-close {
+            filter: brightness(0) invert(1);
+            opacity: 0.8;
+        }
+        
+        .modal-header .btn-close:hover {
+            opacity: 1;
+        }
+        
+        .modal-body {
+            background: white;
+            color: #1e1b4b;
+        }
+        
+        .modal-footer {
+            background: #f8fafc;
+            border: none;
+            border-radius: 0 0 20px 20px;
+        }
+        
+        /* Asegurar que los textos en modales sean legibles */
+        .modal-body .form-label {
+            color: #1e1b4b;
+            font-weight: 600;
+        }
+        
+        .modal-body .form-control,
+        .modal-body .form-select {
+            background: white;
+            border: 2px solid #e5e7eb;
+            color: #1e1b4b;
+        }
+        
+        .modal-body .form-control:focus,
+        .modal-body .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+        }
+        
+        .modal-body .text-muted {
+            color: #6b7280 !important;
+        }
+        
+        /* Ajuste para modales grandes */
+        .modal-xl {
+            max-width: 90%;
+        }
+        
+        @media (max-width: 768px) {
+            .modal-dialog {
+                margin-top: 80px;
+            }
         }
     </style>
     {% block extra_css %}{% endblock %}

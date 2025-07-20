@@ -53,16 +53,31 @@
     }
     
     .action-card {
-        border: 2px dashed rgba(99, 102, 241, 0.3);
-        background: rgba(99, 102, 241, 0.05);
+        border: 2px solid rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.95);
         transition: all 0.3s ease;
         cursor: pointer;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     }
     
     .action-card:hover {
         border-color: var(--primary-color);
-        background: rgba(99, 102, 241, 0.1);
-        transform: translateY(-2px);
+        background: rgba(255, 255, 255, 1);
+        transform: translateY(-5px);
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+    }
+    
+    .action-card h4 {
+        color: #1e1b4b;
+        font-weight: 600;
+    }
+    
+    .action-card p {
+        color: #6b7280 !important;
+    }
+    
+    .action-card i {
+        color: var(--primary-color) !important;
     }
     
     .table-container {
@@ -98,6 +113,22 @@
         to {
             stroke-dashoffset: 70;
         }
+    }
+    
+    /* Estilos específicos para este dashboard */
+    .modal-body h6 {
+        color: #1e1b4b;
+        font-weight: 600;
+    }
+    
+    .modal-body .alert {
+        background: #e0e7ff;
+        border: 1px solid #c7d2fe;
+        color: #4338ca;
+    }
+    
+    .modal-body .alert i {
+        color: #4338ca;
     }
 </style>
 {% endblock %}
@@ -174,27 +205,27 @@
         <div class="col-md-4">
             <div class="card action-card h-100" onclick="showUploadDatasetModal()">
                 <div class="card-body text-center p-5">
-                    <i class="bi bi-cloud-upload fs-1 text-primary mb-3"></i>
+                    <i class="bi bi-cloud-upload fs-1 mb-3"></i>
                     <h4>Charger un Dataset</h4>
-                    <p class="text-muted mb-0">Importez vos données météorologiques</p>
+                    <p class="mb-0">Importez vos données météorologiques</p>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card action-card h-100" onclick="showTrainModelModal()">
                 <div class="card-body text-center p-5">
-                    <i class="bi bi-play-circle fs-1 text-success mb-3"></i>
+                    <i class="bi bi-play-circle fs-1 mb-3"></i>
                     <h4>Entraîner un Modèle</h4>
-                    <p class="text-muted mb-0">Créez un nouveau modèle IA</p>
+                    <p class="mb-0">Créez un nouveau modèle IA</p>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card action-card h-100" onclick="showPredictionModal()">
                 <div class="card-body text-center p-5">
-                    <i class="bi bi-cloud-fog2 fs-1 text-info mb-3"></i>
+                    <i class="bi bi-cloud-fog2 fs-1 mb-3"></i>
                     <h4>Faire une Prédiction</h4>
-                    <p class="text-muted mb-0">Prédisez la météo</p>
+                    <p class="mb-0">Prédisez la météo</p>
                 </div>
             </div>
         </div>
@@ -204,7 +235,7 @@
     <div class="row g-4">
         <div class="col-md-8">
             <div class="card">
-                <div class="card-header bg-gradient text-white">
+                <div class="card-header" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white;">
                     <h5 class="mb-0"><i class="bi bi-bar-chart-line"></i> Performance des Modèles</h5>
                 </div>
                 <div class="card-body">
@@ -216,7 +247,7 @@
         </div>
         <div class="col-md-4">
             <div class="card">
-                <div class="card-header bg-gradient text-white">
+                <div class="card-header" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white;">
                     <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Répartition des Modèles</h5>
                 </div>
                 <div class="card-body">
@@ -232,7 +263,7 @@
     <div class="row mt-5">
         <div class="col-12">
             <div class="card">
-                <div class="card-header bg-gradient text-white">
+                <div class="card-header" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white;">
                     <h5 class="mb-0"><i class="bi bi-clock-history"></i> Activité Récente</h5>
                 </div>
                 <div class="card-body">
@@ -268,7 +299,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">
+                <h5 class="modal-title text-white">
                     <i class="bi bi-cloud-upload"></i> Charger un Dataset
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -308,7 +339,7 @@
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">
+                <h5 class="modal-title text-white">
                     <i class="bi bi-cpu"></i> Entraîner un Nouveau Modèle
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -376,7 +407,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">
+                <h5 class="modal-title text-white">
                     <i class="bi bi-cloud-fog2"></i> Faire une Prédiction
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
