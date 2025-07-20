@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+
+{% block title %}Inicio - MeteoIA{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hero-section {
+        padding: 100px 0;
+        color: white;
+        text-align: center;
+    }
+    .weather-card {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 20px;
+        padding: 30px;
+        margin: 20px 0;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        transition: transform 0.3s ease;
+    }
+    .weather-card:hover {
+        transform: translateY(-5px);
+    }
+    .feature-icon {
+        font-size: 3rem;
+        color: #667eea;
+        margin-bottom: 20px;
+    }
+    .stats-section {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 50px 0;
+        margin-top: 50px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="hero-section">
+    <div class="container">
+        <h1 class="display-3 fw-bold mb-4">
+            <i class="bi bi-cloud-lightning-rain"></i>
+            Predicción Meteorológica con IA
+        </h1>
+        <p class="lead mb-5">
+            Sistema avanzado de predicción del tiempo utilizando redes neuronales y aprendizaje automático
+        </p>
+        <a href="{% url 'dashboard' %}" class="btn btn-primary btn-lg">
+            <i class="bi bi-speedometer2"></i> Ir al Panel de Control
+        </a>
+    </div>
+</section>
+
+<section id="features" class="container py-5">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="weather-card text-center">
+                <i class="bi bi-cpu feature-icon"></i>
+                <h3>Inteligencia Artificial</h3>
+                <p>Modelos de deep learning entrenados con datos históricos para predicciones precisas</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="weather-card text-center">
+                <i class="bi bi-graph-up feature-icon"></i>
+                <h3>Análisis en Tiempo Real</h3>
+                <p>Procesamiento instantáneo de datos meteorológicos para predicciones actualizadas</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="weather-card text-center">
+                <i class="bi bi-cloud-check feature-icon"></i>
+                <h3>Alta Precisión</h3>
+                <p>Algoritmos optimizados que ofrecen predicciones confiables y precisas</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="stats-section">
+    <div class="container text-center text-white">
+        <div class="row">
+            <div class="col-md-3">
+                <h2 class="display-4 fw-bold">95%</h2>
+                <p>Precisión</p>
+            </div>
+            <div class="col-md-3">
+                <h2 class="display-4 fw-bold">24/7</h2>
+                <p>Disponibilidad</p>
+            </div>
+            <div class="col-md-3">
+                <h2 class="display-4 fw-bold">10k+</h2>
+                <p>Datos Procesados</p>
+            </div>
+            <div class="col-md-3">
+                <h2 class="display-4 fw-bold">5</h2>
+                <p>Modelos IA</p>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
