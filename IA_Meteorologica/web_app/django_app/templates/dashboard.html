@@ -1,31 +1,41 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Tableau de Bord - MétéoIA{% endblock %}
 
 {% block extra_css %}
 <style>
     .metric-card {
-        border: none;
+        border: 1px solid rgba(0, 212, 255, 0.3);
         border-radius: 20px;
         overflow: hidden;
         position: relative;
         transition: all 0.3s ease;
+        background: rgba(10, 14, 39, 0.8);
+        backdrop-filter: blur(10px);
     }
     
     .metric-card::before {
         content: '';
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-        opacity: 0;
-        transition: opacity 0.3s ease;
+        top: -100%;
+        left: -100%;
+        width: 300%;
+        height: 300%;
+        background: linear-gradient(45deg, transparent, rgba(0, 212, 255, 0.3), transparent);
+        transform: rotate(45deg);
+        transition: all 0.5s;
     }
     
     .metric-card:hover::before {
-        opacity: 0.1;
+        top: -50%;
+        left: -50%;
+    }
+    
+    .metric-card:hover {
+        border-color: #00d4ff;
+        box-shadow: 0 10px 40px rgba(0, 212, 255, 0.3), var(--neon-glow);
+        transform: translateY(-5px);
     }
     
     .metric-icon {
@@ -37,14 +47,18 @@
         justify-content: center;
         font-size: 1.5rem;
         margin-bottom: 15px;
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 153, 255, 0.2));
+        border: 1px solid rgba(0, 212, 255, 0.5);
+        color: #00d4ff;
+        box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
     }
     
     .metric-value {
         font-size: 2.5rem;
         font-weight: 700;
-        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #00d4ff;
+        text-shadow: 0 0 20px rgba(0, 212, 255, 0.8);
+        letter-spacing: 2px;
     }
     
     .chart-container {
@@ -53,31 +67,62 @@
     }
     
     .action-card {
-        border: 2px solid rgba(255, 255, 255, 0.9);
-        background: rgba(255, 255, 255, 0.95);
+        border: 2px solid rgba(0, 212, 255, 0.3);
+        background: rgba(10, 14, 39, 0.8);
         transition: all 0.3s ease;
         cursor: pointer;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .action-card::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        background: radial-gradient(circle, rgba(0, 212, 255, 0.3) 0%, transparent 70%);
+        transform: translate(-50%, -50%);
+        transition: width 0.5s, height 0.5s;
+    }
+    
+    .action-card:hover::after {
+        width: 300px;
+        height: 300px;
     }
     
     .action-card:hover {
-        border-color: var(--primary-color);
-        background: rgba(255, 255, 255, 1);
-        transform: translateY(-5px);
-        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+        border-color: #00d4ff;
+        transform: translateY(-5px) scale(1.02);
+        box-shadow: 0 15px 40px rgba(0, 212, 255, 0.4), var(--neon-glow);
     }
     
     .action-card h4 {
-        color: #1e1b4b;
+        color: #00d4ff;
         font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
     }
     
     .action-card p {
-        color: #6b7280 !important;
+        color: rgba(240, 249, 255, 0.8) !important;
     }
     
     .action-card i {
-        color: var(--primary-color) !important;
+        color: #00d4ff !important;
+        font-size: 3rem;
+        margin-bottom: 20px;
+        display: block;
+        filter: drop-shadow(0 0 10px rgba(0, 212, 255, 0.8));
+        transition: all 0.3s ease;
+    }
+    
+    .action-card:hover i {
+        transform: scale(1.1) rotate(5deg);
+        filter: drop-shadow(0 0 20px rgba(0, 212, 255, 1));
     }
     
     .table-container {
@@ -150,48 +195,48 @@
         <div class="col-md-3">
             <div class="card metric-card">
                 <div class="card-body text-center p-4">
-                    <div class="metric-icon bg-primary bg-opacity-10 text-primary mx-auto">
+                    <div class="metric-icon mx-auto">
                         <i class="bi bi-database-fill-up"></i>
                     </div>
-                    <h5 class="text-muted mb-2">Datasets</h5>
+                    <h5 class="mb-2" style="color: rgba(240, 249, 255, 0.8);">Datasets</h5>
                     <p class="metric-value mb-0" id="datasetsCount">0</p>
-                    <small class="text-muted">Jeux de données</small>
+                    <small style="color: rgba(240, 249, 255, 0.6);">Jeux de données</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card metric-card">
                 <div class="card-body text-center p-4">
-                    <div class="metric-icon bg-success bg-opacity-10 text-success mx-auto">
+                    <div class="metric-icon mx-auto" style="background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 204, 102, 0.2)); border-color: rgba(0, 255, 136, 0.5); color: #00ff88; box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);">
                         <i class="bi bi-cpu-fill"></i>
                     </div>
-                    <h5 class="text-muted mb-2">Modèles</h5>
+                    <h5 class="mb-2" style="color: rgba(240, 249, 255, 0.8);">Modèles</h5>
                     <p class="metric-value mb-0" id="modelsCount">0</p>
-                    <small class="text-muted">Modèles entraînés</small>
+                    <small style="color: rgba(240, 249, 255, 0.6);">Modèles entraînés</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card metric-card">
                 <div class="card-body text-center p-4">
-                    <div class="metric-icon bg-info bg-opacity-10 text-info mx-auto">
+                    <div class="metric-icon mx-auto" style="background: linear-gradient(135deg, rgba(255, 0, 255, 0.2), rgba(204, 0, 204, 0.2)); border-color: rgba(255, 0, 255, 0.5); color: #ff00ff; box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);">
                         <i class="bi bi-graph-up-arrow"></i>
                     </div>
-                    <h5 class="text-muted mb-2">Précision</h5>
+                    <h5 class="mb-2" style="color: rgba(240, 249, 255, 0.8);">Précision</h5>
                     <p class="metric-value mb-0" id="accuracyRate">0%</p>
-                    <small class="text-muted">Taux moyen</small>
+                    <small style="color: rgba(240, 249, 255, 0.6);">Taux moyen</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card metric-card">
                 <div class="card-body text-center p-4">
-                    <div class="metric-icon bg-warning bg-opacity-10 text-warning mx-auto">
+                    <div class="metric-icon mx-auto" style="background: linear-gradient(135deg, rgba(255, 170, 0, 0.2), rgba(204, 136, 0, 0.2)); border-color: rgba(255, 170, 0, 0.5); color: #ffaa00; box-shadow: 0 0 20px rgba(255, 170, 0, 0.5);">
                         <i class="bi bi-lightning-fill"></i>
                     </div>
-                    <h5 class="text-muted mb-2">Prédictions</h5>
+                    <h5 class="mb-2" style="color: rgba(240, 249, 255, 0.8);">Prédictions</h5>
                     <p class="metric-value mb-0" id="predictionsToday">0</p>
-                    <small class="text-muted">Aujourd'hui</small>
+                    <small style="color: rgba(240, 249, 255, 0.6);">Aujourd'hui</small>
                 </div>
             </div>
         </div>
@@ -205,7 +250,7 @@
         <div class="col-md-4">
             <div class="card action-card h-100" onclick="showUploadDatasetModal()">
                 <div class="card-body text-center p-5">
-                    <i class="bi bi-cloud-upload fs-1 mb-3"></i>
+                    <i class="bi bi-cloud-upload"></i>
                     <h4>Charger un Dataset</h4>
                     <p class="mb-0">Importez vos données météorologiques</p>
                 </div>
@@ -214,7 +259,7 @@
         <div class="col-md-4">
             <div class="card action-card h-100" onclick="showTrainModelModal()">
                 <div class="card-body text-center p-5">
-                    <i class="bi bi-play-circle fs-1 mb-3"></i>
+                    <i class="bi bi-play-circle"></i>
                     <h4>Entraîner un Modèle</h4>
                     <p class="mb-0">Créez un nouveau modèle IA</p>
                 </div>
@@ -223,7 +268,7 @@
         <div class="col-md-4">
             <div class="card action-card h-100" onclick="showPredictionModal()">
                 <div class="card-body text-center p-5">
-                    <i class="bi bi-cloud-fog2 fs-1 mb-3"></i>
+                    <i class="bi bi-cloud-fog2"></i>
                     <h4>Faire une Prédiction</h4>
                     <p class="mb-0">Prédisez la météo</p>
                 </div>
@@ -235,7 +280,7 @@
     <div class="row g-4">
         <div class="col-md-8">
             <div class="card">
-                <div class="card-header" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white;">
+                <div class="card-header" style="background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 153, 255, 0.2)); color: #00d4ff; border-bottom: 1px solid rgba(0, 212, 255, 0.3); text-transform: uppercase; letter-spacing: 1px;">
                     <h5 class="mb-0"><i class="bi bi-bar-chart-line"></i> Performance des Modèles</h5>
                 </div>
                 <div class="card-body">
@@ -247,7 +292,7 @@
         </div>
         <div class="col-md-4">
             <div class="card">
-                <div class="card-header" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white;">
+                <div class="card-header" style="background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 153, 255, 0.2)); color: #00d4ff; border-bottom: 1px solid rgba(0, 212, 255, 0.3); text-transform: uppercase; letter-spacing: 1px;">
                     <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Répartition des Modèles</h5>
                 </div>
                 <div class="card-body">
@@ -263,7 +308,7 @@
     <div class="row mt-5">
         <div class="col-12">
             <div class="card">
-                <div class="card-header" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white;">
+                <div class="card-header" style="background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 153, 255, 0.2)); color: #00d4ff; border-bottom: 1px solid rgba(0, 212, 255, 0.3); text-transform: uppercase; letter-spacing: 1px;">
                     <h5 class="mb-0"><i class="bi bi-clock-history"></i> Activité Récente</h5>
                 </div>
                 <div class="card-body">
@@ -306,6 +351,7 @@
             </div>
             <div class="modal-body">
                 <form id="uploadDatasetForm">
+                    {% csrf_token %}
                     <div class="mb-3">
                         <label for="datasetName" class="form-label">Nom du Dataset</label>
                         <input type="text" class="form-control" id="datasetName" placeholder="Ex: Données météo 2024" required>
@@ -448,6 +494,10 @@
 <script>
 // Configuration des graphiques
 const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+const gradient = performanceCtx.createLinearGradient(0, 0, 0, 400);
+gradient.addColorStop(0, 'rgba(0, 212, 255, 0.5)');
+gradient.addColorStop(1, 'rgba(0, 212, 255, 0)');
+
 const performanceChart = new Chart(performanceCtx, {
     type: 'line',
     data: {
@@ -455,8 +505,14 @@ const performanceChart = new Chart(performanceCtx, {
         datasets: [{
             label: 'Précision (%)',
             data: [88, 90, 89, 92, 94, 95],
-            borderColor: '#6366f1',
-            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+            borderColor: '#00d4ff',
+            backgroundColor: gradient,
+            borderWidth: 3,
+            pointBackgroundColor: '#00d4ff',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            pointRadius: 6,
+            pointHoverRadius: 8,
             tension: 0.4,
             fill: true
         }]
@@ -466,17 +522,44 @@ const performanceChart = new Chart(performanceCtx, {
         maintainAspectRatio: false,
         plugins: {
             legend: {
-                display: true
+                display: true,
+                labels: {
+                    color: '#f0f9ff',
+                    font: {
+                        size: 14
+                    }
+                }
+            },
+            tooltip: {
+                backgroundColor: 'rgba(10, 14, 39, 0.9)',
+                titleColor: '#00d4ff',
+                bodyColor: '#f0f9ff',
+                borderColor: 'rgba(0, 212, 255, 0.5)',
+                borderWidth: 1
             }
         },
         scales: {
             y: {
                 beginAtZero: true,
                 max: 100,
+                grid: {
+                    color: 'rgba(0, 212, 255, 0.1)',
+                    borderColor: 'rgba(0, 212, 255, 0.3)'
+                },
                 ticks: {
+                    color: '#f0f9ff',
                     callback: function(value) {
                         return value + '%';
                     }
+                }
+            },
+            x: {
+                grid: {
+                    color: 'rgba(0, 212, 255, 0.1)',
+                    borderColor: 'rgba(0, 212, 255, 0.3)'
+                },
+                ticks: {
+                    color: '#f0f9ff'
                 }
             }
         }
@@ -491,11 +574,19 @@ const modelsChart = new Chart(modelsCtx, {
         datasets: [{
             data: [30, 25, 25, 20],
             backgroundColor: [
-                '#6366f1',
-                '#8b5cf6',
-                '#ec4899',
-                '#f59e0b'
-            ]
+                'rgba(0, 212, 255, 0.8)',
+                'rgba(0, 255, 136, 0.8)',
+                'rgba(255, 0, 255, 0.8)',
+                'rgba(255, 170, 0, 0.8)'
+            ],
+            borderColor: [
+                '#00d4ff',
+                '#00ff88',
+                '#ff00ff',
+                '#ffaa00'
+            ],
+            borderWidth: 2,
+            hoverBorderWidth: 3
         }]
     },
     options: {
@@ -503,15 +594,62 @@ const modelsChart = new Chart(modelsCtx, {
         maintainAspectRatio: false,
         plugins: {
             legend: {
-                position: 'bottom'
+                position: 'bottom',
+                labels: {
+                    color: '#f0f9ff',
+                    padding: 20,
+                    font: {
+                        size: 12
+                    }
+                }
+            },
+            tooltip: {
+                backgroundColor: 'rgba(10, 14, 39, 0.9)',
+                titleColor: '#00d4ff',
+                bodyColor: '#f0f9ff',
+                borderColor: 'rgba(0, 212, 255, 0.5)',
+                borderWidth: 1
             }
+        },
+        animation: {
+            animateRotate: true,
+            animateScale: true
         }
     }
 });
 
+// Function to get CSRF token from cookies
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
 // Fonctions pour les modals
 function showUploadDatasetModal() {
-    const modal = new bootstrap.Modal(document.getElementById('uploadDatasetModal'));
+    // Clean up any existing modals/backdrops first
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    
+    // Hide loading if it's stuck
+    hideLoading();
+    
+    const modalElement = document.getElementById('uploadDatasetModal');
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: 'static',
+        keyboard: true
+    });
     modal.show();
 }
 
@@ -557,30 +695,88 @@ function loadModels() {
 
 // Upload dataset
 function uploadDataset() {
+    // Validate inputs
+    const datasetName = document.getElementById('datasetName').value;
+    const datasetFile = document.getElementById('datasetFile').files[0];
+    
+    if (!datasetName || !datasetFile) {
+        showNotification('Erreur', 'Veuillez remplir tous les champs requis', 'error');
+        return;
+    }
+    
     const formData = new FormData();
-    formData.append('name', document.getElementById('datasetName').value);
-    formData.append('description', document.getElementById('datasetDescription').value);
-    formData.append('file', document.getElementById('datasetFile').files[0]);
+    formData.append('name', datasetName);
+    formData.append('file', datasetFile);
     
     const progressBar = document.querySelector('#uploadProgress .progress-bar');
     document.getElementById('uploadProgress').classList.remove('d-none');
     
     showLoading();
     
+    const csrfToken = getCookie('csrftoken');
+    
+    console.log('Uploading dataset:', datasetName);
+    console.log('File:', datasetFile.name, datasetFile.size, 'bytes');
+    console.log('CSRF Token:', csrfToken);
+    
     fetch('/api/datasets/', {
         method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken
+        },
         body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            return response.text().then(text => {
+                throw new Error(`HTTP error! status: ${response.status}, message: ${text}`);
+            });
+        }
+        return response.json();
+    })
     .then(data => {
         hideLoading();
+        document.getElementById('uploadProgress').classList.add('d-none');
+        progressBar.style.width = '0%';
+        
+        // Close modal properly
+        const modalElement = document.getElementById('uploadDatasetModal');
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) {
+            modal.hide();
+        }
+        
+        // Remove any remaining backdrop
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        
+        // Reset form
+        document.getElementById('uploadDatasetForm').reset();
+        
         showNotification('Succès!', 'Dataset chargé avec succès', 'success');
-        bootstrap.Modal.getInstance(document.getElementById('uploadDatasetModal')).hide();
         updateDashboard();
     })
     .catch(error => {
         hideLoading();
-        showNotification('Erreur', 'Erreur lors du chargement: ' + error, 'error');
+        document.getElementById('uploadProgress').classList.add('d-none');
+        progressBar.style.width = '0%';
+        
+        // Close modal properly on error
+        const modalElement = document.getElementById('uploadDatasetModal');
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) {
+            modal.hide();
+        }
+        
+        // Remove any remaining backdrop
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        
+        showNotification('Erreur', 'Erreur lors du chargement: ' + error.message, 'error');
     });
 }
 
@@ -716,6 +912,27 @@ document.getElementById('dataset').addEventListener('change', function() {
 document.addEventListener('DOMContentLoaded', function() {
     updateDashboard();
     setInterval(updateDashboard, 30000); // Mise à jour toutes les 30 secondes
+    
+    // Clean up modals on hide
+    const uploadModal = document.getElementById('uploadDatasetModal');
+    uploadModal.addEventListener('hidden.bs.modal', function () {
+        // Clean up any stuck overlays
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        hideLoading();
+        
+        // Reset form
+        document.getElementById('uploadDatasetForm').reset();
+        document.getElementById('uploadProgress').classList.add('d-none');
+        document.querySelector('#uploadProgress .progress-bar').style.width = '0%';
+    });
+    
+    // Also handle modal hide on backdrop click or ESC
+    uploadModal.addEventListener('hide.bs.modal', function () {
+        hideLoading();
+    });
 });
 </script>
 {% endblock %}
