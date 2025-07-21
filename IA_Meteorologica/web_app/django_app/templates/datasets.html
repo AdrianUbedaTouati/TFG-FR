@@ -695,14 +695,36 @@ function displayDatasetDetails(dataset, data) {
                                     badgeClass = 'warning';
                                     typeIcon = 'bi-calendar-date';
                                     displayType = 'Fecha/Hora';
-                                } else if (dtype.includes('object')) {
-                                    badgeClass = 'info';
-                                    typeIcon = 'bi-fonts';
-                                    displayType = 'Texto';
                                 } else if (dtype.includes('numeric (stored as text)')) {
                                     badgeClass = 'primary';
                                     typeIcon = 'bi-hash';
                                     displayType = 'Numérico (como texto)';
+                                } else if (dtype.includes('object (URL)')) {
+                                    badgeClass = 'info';
+                                    typeIcon = 'bi-link-45deg';
+                                    displayType = 'URL';
+                                } else if (dtype.includes('object (Email)')) {
+                                    badgeClass = 'info';
+                                    typeIcon = 'bi-envelope';
+                                    displayType = 'Email';
+                                } else if (dtype.includes('object (ID/Code)')) {
+                                    badgeClass = 'secondary';
+                                    typeIcon = 'bi-upc';
+                                    displayType = 'ID/Código';
+                                } else if (dtype.includes('object (Boolean text)')) {
+                                    badgeClass = 'danger';
+                                    typeIcon = 'bi-toggle-on';
+                                    displayType = 'Booleano (texto)';
+                                } else if (dtype.includes('object (')) {
+                                    // Extraer el tipo específico del paréntesis
+                                    const match = dtype.match(/object \(([^)]+)\)/);
+                                    badgeClass = 'info';
+                                    typeIcon = 'bi-box';
+                                    displayType = match ? match[1] : 'Objeto';
+                                } else if (dtype.includes('object')) {
+                                    badgeClass = 'info';
+                                    typeIcon = 'bi-fonts';
+                                    displayType = 'Texto';
                                 }
                                 
                                 return `
@@ -719,7 +741,11 @@ function displayDatasetDetails(dataset, data) {
                                         <td>${colStats.null_percentage ? colStats.null_percentage.toFixed(1) : '0'}%</td>
                                         <td>
                                             ${isNumeric ? 
-                                                `<small>μ=${colStats.mean?.toFixed(2) || 'N/A'}, σ=${colStats.std?.toFixed(2) || 'N/A'}</small>` : 
+                                                `<small>
+                                                    μ=${colStats.mean?.toFixed(2) || 'N/A'}, σ=${colStats.std?.toFixed(2) || 'N/A'}
+                                                    ${colStats.decimals_info ? `<br>Decimales: ${colStats.decimals_info.most_common_decimals || 0}` : ''}
+                                                    ${colStats.magnitude_info ? `<br>Magnitud: 10<sup>${colStats.magnitude_info.avg_magnitude}</sup>` : ''}
+                                                </small>` : 
                                                 `<small>${colStats.unique_count} valores únicos</small>`
                                             }
                                         </td>
@@ -1010,6 +1036,28 @@ function generateHistogram() {
         });
         
         // Mostrar estadísticas
+        let decimalInfo = '';
+        if (colStats.decimals_info) {
+            decimalInfo = `
+                <div class="col-md-4">
+                    <small class="text-muted">Decimales:</small><br>
+                    <strong>Común: ${colStats.decimals_info.most_common_decimals || 0}</strong><br>
+                    <small>Máx: ${colStats.decimals_info.max_decimals || 0}, Prom: ${colStats.decimals_info.avg_decimals?.toFixed(1) || 0}</small>
+                </div>
+            `;
+        }
+        
+        let magnitudeInfo = '';
+        if (colStats.magnitude_info) {
+            magnitudeInfo = `
+                <div class="col-md-4">
+                    <small class="text-muted">Orden de Magnitud:</small><br>
+                    <strong>10<sup>${colStats.magnitude_info.avg_magnitude}</sup></strong><br>
+                    <small>Rango: 10<sup>${colStats.magnitude_info.min_magnitude}</sup> a 10<sup>${colStats.magnitude_info.max_magnitude}</sup></small>
+                </div>
+            `;
+        }
+        
         document.getElementById('variableStats').innerHTML = `
             <div class="card bg-dark border-info">
                 <div class="card-body">
@@ -1046,6 +1094,12 @@ function generateHistogram() {
                             <strong>${colStats.max?.toFixed(2) || 'N/A'}</strong>
                         </div>
                     </div>
+                    ${decimalInfo || magnitudeInfo ? `
+                        <div class="row mt-3">
+                            ${decimalInfo}
+                            ${magnitudeInfo}
+                        </div>
+                    ` : ''}
                 </div>
             </div>
         `;
