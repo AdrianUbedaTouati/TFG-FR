@@ -585,8 +585,21 @@ function displayDatasetDetails(dataset, data) {
                                     <option value="">-- Seleccione una variable --</option>
                                     ${columns.map(col => {
                                         const colStats = stats[col] || {};
+                                        const dtype = colStats.dtype || 'unknown';
                                         const isNumeric = colStats.mean !== undefined;
-                                        return `<option value="${col}" data-numeric="${isNumeric}">${col} (${colStats.dtype || 'unknown'})</option>`;
+                                        
+                                        let typeLabel = dtype;
+                                        if (dtype.includes('int') || dtype.includes('float')) {
+                                            typeLabel = '📊 Numérico';
+                                        } else if (dtype.includes('datetime')) {
+                                            typeLabel = '📅 Fecha/Hora';
+                                        } else if (dtype.includes('numeric (stored as text)')) {
+                                            typeLabel = '🔢 Numérico (texto)';
+                                        } else if (dtype.includes('object')) {
+                                            typeLabel = '📝 Texto';
+                                        }
+                                        
+                                        return `<option value="${col}" data-numeric="${isNumeric}" data-dtype="${dtype}">${col} - ${typeLabel}</option>`;
                                     }).join('')}
                                 </select>
                             </div>
@@ -666,11 +679,41 @@ function displayDatasetDetails(dataset, data) {
                         <tbody>
                             ${columns.map(col => {
                                 const colStats = stats[col] || {};
+                                const dtype = colStats.dtype || 'unknown';
                                 const isNumeric = colStats.mean !== undefined;
+                                
+                                // Determinar el color y el icono según el tipo
+                                let badgeClass = 'secondary';
+                                let typeIcon = 'bi-question-circle';
+                                let displayType = dtype;
+                                
+                                if (dtype.includes('int') || dtype.includes('float')) {
+                                    badgeClass = 'success';
+                                    typeIcon = 'bi-123';
+                                    displayType = 'Numérico';
+                                } else if (dtype.includes('datetime')) {
+                                    badgeClass = 'warning';
+                                    typeIcon = 'bi-calendar-date';
+                                    displayType = 'Fecha/Hora';
+                                } else if (dtype.includes('object')) {
+                                    badgeClass = 'info';
+                                    typeIcon = 'bi-fonts';
+                                    displayType = 'Texto';
+                                } else if (dtype.includes('numeric (stored as text)')) {
+                                    badgeClass = 'primary';
+                                    typeIcon = 'bi-hash';
+                                    displayType = 'Numérico (como texto)';
+                                }
+                                
                                 return `
                                     <tr>
                                         <td><strong>${col}</strong></td>
-                                        <td><span class="badge bg-${isNumeric ? 'success' : 'info'}">${colStats.dtype || 'unknown'}</span></td>
+                                        <td>
+                                            <span class="badge bg-${badgeClass}">
+                                                <i class="bi ${typeIcon}"></i> ${displayType}
+                                            </span>
+                                            <small class="text-muted d-block">${dtype}</small>
+                                        </td>
                                         <td>${colStats.unique_count || 0}</td>
                                         <td>${colStats.null_count || 0}</td>
                                         <td>${colStats.null_percentage ? colStats.null_percentage.toFixed(1) : '0'}%</td>
@@ -1252,11 +1295,11 @@ function downloadDataset(datasetId) {
     const dataset = datasetId ? datasets.find(d => d.id === datasetId) : selectedDataset;
     if (!dataset) return;
     
-    // Por ahora, mostrar mensaje mientras se implementa el endpoint
-    showNotification('Info', 'La fonctionnalité de téléchargement sera bientôt disponible', 'info');
+    // Mostrar notificación de inicio de descarga
+    showNotification('Téléchargement', `Téléchargement de "${dataset.name}" en cours...`, 'info');
     
-    // Cuando el endpoint esté listo, usar:
-    // window.location.href = `/api/datasets/${dataset.id}/download/`;
+    // Descargar el archivo
+    window.location.href = `/api/datasets/${dataset.id}/download/`;
 }
 
 // Supprimer un dataset

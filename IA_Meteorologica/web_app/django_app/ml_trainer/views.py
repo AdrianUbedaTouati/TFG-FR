@@ -2,9 +2,11 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+from django.http import HttpResponse
 import pandas as pd
 import numpy as np
 import json
+import mimetypes
 from .models import Dataset, TrainingSession, WeatherPrediction, ModelType, NormalizationMethod, MetricType
 from .serializers import DatasetSerializer, TrainingSessionSerializer, WeatherPredictionSerializer
 from .ml_utils import get_model_config, get_normalization_methods, get_metrics, train_model, make_predictions
@@ -31,8 +33,34 @@ class DatasetColumnsView(APIView):
             # Análisis estadístico básico
             stats = {}
             for col in columns:
+                # Detectar el tipo real de datos
+                dtype_str = str(df[col].dtype)
+                
+                # Intentar detectar fechas si es object
+                if dtype_str == 'object':
+                    # Tomar muestra para analizar
+                    sample = df[col].dropna().head(100)
+                    if len(sample) > 0:
+                        # Intentar parsear como fecha
+                        try:
+                            pd.to_datetime(sample, errors='coerce')
+                            date_parsed = pd.to_datetime(sample, errors='coerce')
+                            # Si más del 80% se parsean como fechas, es probable que sea una columna de fechas
+                            if date_parsed.notna().sum() / len(sample) > 0.8:
+                                dtype_str = 'datetime'
+                        except:
+                            pass
+                        
+                        # Si no es fecha, verificar si es numérico almacenado como string
+                        try:
+                            numeric_parsed = pd.to_numeric(sample, errors='coerce')
+                            if numeric_parsed.notna().sum() / len(sample) > 0.8:
+                                dtype_str = 'numeric (stored as text)'
+                        except:
+                            pass
+                
                 col_stats = {
-                    'dtype': str(df[col].dtype),
+                    'dtype': dtype_str,
                     'null_count': int(df[col].isnull().sum()),
                     'null_percentage': float(df[col].isnull().sum() / len(df) * 100),
                     'unique_count': int(df[col].nunique()),
@@ -91,6 +119,31 @@ class DatasetColumnsView(APIView):
             return Response(
                 {'error': str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class DatasetDownloadView(APIView):
+    def get(self, request, pk):
+        dataset = get_object_or_404(Dataset, pk=pk)
+        
+        try:
+            # Leer el archivo CSV
+            file_path = dataset.file.path
+            
+            # Configurar la respuesta HTTP
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = f'attachment; filename="{dataset.name}.csv"'
+            
+            # Leer y escribir el archivo
+            with open(file_path, 'rb') as f:
+                response.write(f.read())
+            
+            return response
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Error al descargar el archivo: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
