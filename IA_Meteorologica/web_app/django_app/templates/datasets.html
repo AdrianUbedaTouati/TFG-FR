@@ -1,41 +1,59 @@
 {% extends 'base.html' %}
 
-{% block title %}Gestion des Datasets - MétéoIA{% endblock %}
+{% block title %}Datasets - IA Météorologique{% endblock %}
 
 {% block extra_css %}
 <style>
+    /* Estilos mejorados para datasets */
     .dataset-card {
-        border: none;
+        background: rgba(10, 14, 39, 0.8);
+        border: 2px solid rgba(0, 212, 255, 0.3);
         border-radius: 20px;
+        padding: 30px;
+        transition: all 0.4s ease;
+        position: relative;
         overflow: hidden;
-        transition: all 0.3s ease;
         cursor: pointer;
     }
     
+    .dataset-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(0, 212, 255, 0.1) 0%, transparent 70%);
+        transform: rotate(45deg);
+        transition: all 0.5s ease;
+        opacity: 0;
+    }
+    
     .dataset-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        transform: translateY(-10px);
+        border-color: rgba(0, 212, 255, 0.8);
+        box-shadow: 0 15px 40px rgba(0, 212, 255, 0.3);
+    }
+    
+    .dataset-card:hover::before {
+        opacity: 1;
     }
     
     .dataset-icon {
-        width: 80px;
-        height: 80px;
-        border-radius: 20px;
-        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 2rem;
-        margin: 0 auto 20px;
+        font-size: 4rem;
+        background: linear-gradient(135deg, #00d4ff, #0099ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 20px;
+        text-align: center;
     }
     
     .dataset-stats {
         display: flex;
         justify-content: space-around;
-        padding: 15px 0;
-        border-top: 1px solid rgba(0, 0, 0, 0.1);
-        margin-top: 15px;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(0, 212, 255, 0.2);
     }
     
     .stat-item {
@@ -45,70 +63,30 @@
     .stat-value {
         font-size: 1.5rem;
         font-weight: bold;
-        color: var(--primary-color);
+        color: #00d4ff;
     }
     
     .upload-area {
-        border: 3px dashed rgba(99, 102, 241, 0.3);
+        background: rgba(0, 212, 255, 0.05);
+        border: 3px dashed rgba(0, 212, 255, 0.5);
         border-radius: 20px;
-        padding: 60px 30px;
+        padding: 60px;
         text-align: center;
         transition: all 0.3s ease;
-        background: rgba(99, 102, 241, 0.05);
         cursor: pointer;
+        position: relative;
+        overflow: hidden;
     }
     
     .upload-area:hover {
-        border-color: var(--primary-color);
-        background: rgba(99, 102, 241, 0.1);
+        border-color: #00d4ff;
+        background: rgba(0, 212, 255, 0.1);
     }
     
     .upload-area.active {
-        border-color: var(--primary-color);
-        background: rgba(99, 102, 241, 0.2);
-        transform: scale(1.02);
-    }
-    
-    .data-preview {
-        max-height: 400px;
-        overflow: auto;
-        font-size: 0.9rem;
-    }
-    
-    .data-preview table {
-        font-size: 0.85rem;
-    }
-    
-    .data-preview th {
-        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-        color: white;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-    
-    .column-stats {
-        background: rgba(99, 102, 241, 0.05);
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 15px;
-    }
-    
-    .column-type {
-        display: inline-block;
-        padding: 2px 10px;
-        border-radius: 15px;
-        font-size: 0.8rem;
-        font-weight: 500;
-    }
-    
-    .type-numeric { background: #10b98130; color: #10b981; }
-    .type-datetime { background: #6366f130; color: #6366f1; }
-    .type-text { background: #f59e0b30; color: #f59e0b; }
-    
-    .chart-container {
-        height: 250px;
-        margin-top: 20px;
+        border-color: #00ff88;
+        background: rgba(0, 255, 136, 0.1);
+        box-shadow: inset 0 0 30px rgba(0, 255, 136, 0.2);
     }
     
     .quick-actions {
@@ -117,25 +95,122 @@
         right: 15px;
         display: flex;
         gap: 10px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .dataset-card:hover .quick-actions {
+        opacity: 1;
     }
     
     .quick-actions button {
-        width: 35px;
-        height: 35px;
-        border-radius: 50%;
-        border: none;
-        background: rgba(255, 255, 255, 0.9);
-        color: var(--primary-color);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        background: rgba(0, 212, 255, 0.2);
+        border: 1px solid rgba(0, 212, 255, 0.5);
+        color: #00d4ff;
+        padding: 8px 12px;
+        border-radius: 10px;
         transition: all 0.3s ease;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     }
     
     .quick-actions button:hover {
+        background: rgba(0, 212, 255, 0.4);
         transform: scale(1.1);
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Estilos para el modal de detalles */
+    .column-stats {
+        background: rgba(0, 212, 255, 0.05);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 10px;
+        transition: all 0.3s ease;
+    }
+    
+    .column-stats:hover {
+        background: rgba(0, 212, 255, 0.1);
+        border-color: rgba(0, 212, 255, 0.5);
+    }
+    
+    .column-type {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    
+    .column-type.type-numeric {
+        background: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+    }
+    
+    .column-type.type-text {
+        background: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+    }
+    
+    .column-type.type-datetime {
+        background: rgba(168, 85, 247, 0.2);
+        color: #a855f7;
+    }
+    
+    .data-preview {
+        background: rgba(10, 14, 39, 0.5);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 10px;
+        padding: 20px;
+        overflow-x: auto;
+    }
+    
+    .data-preview table {
+        color: #f0f9ff;
+    }
+    
+    .data-preview th {
+        background: rgba(0, 212, 255, 0.1);
+        color: #00d4ff;
+        font-weight: 600;
+        border-color: rgba(0, 212, 255, 0.2);
+    }
+    
+    .data-preview td {
+        border-color: rgba(0, 212, 255, 0.1);
+    }
+    
+    .chart-container {
+        background: rgba(10, 14, 39, 0.5);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 10px;
+        padding: 20px;
+    }
+    
+    /* Estilos para los análisis */
+    .stat-card {
+        background: rgba(0, 212, 255, 0.05);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 15px;
+        transition: all 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        background: rgba(0, 212, 255, 0.1);
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0, 212, 255, 0.2);
+    }
+    
+    .accordion-button {
+        background: rgba(0, 212, 255, 0.05);
+        color: #f0f9ff;
+    }
+    
+    .accordion-button:not(.collapsed) {
+        background: rgba(0, 212, 255, 0.1);
+        color: #00d4ff;
+    }
+    
+    .accordion-body {
+        background: rgba(10, 14, 39, 0.5);
+        border-top: 1px solid rgba(0, 212, 255, 0.2);
     }
 </style>
 {% endblock %}
@@ -148,87 +223,69 @@
             <h1 class="text-white fw-bold">
                 <i class="bi bi-database"></i> Gestion des Datasets
             </h1>
-            <p class="text-white-50">Importez, gérez et analysez vos données météorologiques</p>
+            <p class="text-white-50">Importez et gérez vos données météorologiques</p>
         </div>
     </div>
-
-    <!-- Zone d'upload -->
-    <div class="row mb-5">
-        <div class="col-12">
-            <div class="upload-area" onclick="document.getElementById('datasetFile').click()" 
-                 ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
-                <i class="bi bi-cloud-upload fs-1 text-primary mb-3 d-block"></i>
-                <h4>Charger un nouveau dataset</h4>
-                <p class="text-muted mb-3">Glissez-déposez vos fichiers CSV ici ou cliquez pour parcourir</p>
-                <input type="file" id="datasetFile" accept=".csv" style="display: none;" onchange="handleFileSelect(this)" multiple>
-                <button class="btn btn-primary">
-                    <i class="bi bi-folder-open"></i> Parcourir les fichiers
-                </button>
-                <div class="mt-3 text-muted small">
-                    Formats acceptés: CSV • Taille max: 100MB • Encodage: UTF-8
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Statistiques globales -->
-    <div class="row mb-5">
+    
+    <!-- Stats Cards -->
+    <div class="row g-4 mb-5">
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <i class="bi bi-database-fill-gear fs-1 text-primary mb-3"></i>
-                    <h3 class="text-primary" id="totalDatasets">0</h3>
+            <div class="stat-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-database-fill text-primary" style="font-size: 2rem;"></i>
+                    <h3 class="mt-3" id="totalDatasets">0</h3>
                     <p class="text-muted mb-0">Datasets Total</p>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <i class="bi bi-table fs-1 text-success mb-3"></i>
-                    <h3 class="text-success" id="totalRows">0</h3>
-                    <p class="text-muted mb-0">Lignes Total</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <i class="bi bi-hdd-stack fs-1 text-info mb-3"></i>
-                    <h3 class="text-info" id="totalSize">0 MB</h3>
+            <div class="stat-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-hdd-fill text-success" style="font-size: 2rem;"></i>
+                    <h3 class="mt-3" id="totalSize">0 MB</h3>
                     <p class="text-muted mb-0">Espace Utilisé</p>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <i class="bi bi-calendar3 fs-1 text-warning mb-3"></i>
-                    <h3 class="text-warning" id="lastUpdate">-</h3>
-                    <p class="text-muted mb-0">Dernière MAJ</p>
+            <div class="stat-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-bar-chart-fill text-info" style="font-size: 2rem;"></i>
+                    <h3 class="mt-3" id="totalRows">0</h3>
+                    <p class="text-muted mb-0">Lignes Totales</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-calendar3 text-warning" style="font-size: 2rem;"></i>
+                    <h3 class="mt-3" id="lastUpdate">-</h3>
+                    <p class="text-muted mb-0">Dernière Mise à Jour</p>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Liste des datasets -->
+    
+    <!-- Upload Area -->
     <div class="row mb-5">
         <div class="col-12">
-            <h2 class="text-white mb-4">Datasets Disponibles</h2>
-        </div>
-        <div id="datasetsGrid" class="row g-4">
-            <!-- Les datasets seront chargés ici -->
-            <div class="col-12 text-center text-white-50 py-5">
-                <i class="bi bi-database fs-1 d-block mb-3"></i>
-                Aucun dataset disponible
-                <br>
-                <span class="text-muted">Commencez par charger un fichier CSV</span>
+            <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                <i class="bi bi-cloud-arrow-up" style="font-size: 4rem; color: #00d4ff;"></i>
+                <h4 class="mt-3 text-white">Glissez vos fichiers CSV ici</h4>
+                <p class="text-muted">ou cliquez pour parcourir</p>
+                <input type="file" id="fileInput" multiple accept=".csv" style="display: none;" onchange="handleFileSelect(this)">
             </div>
         </div>
     </div>
+    
+    <!-- Datasets Grid -->
+    <div class="row g-4" id="datasetsGrid">
+        <!-- Les datasets seront chargés ici -->
+    </div>
 </div>
 
-<!-- Modal Détails Dataset -->
+<!-- Modal Detail Dataset -->
 <div class="modal fade" id="datasetDetailModal" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
@@ -239,14 +296,16 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="datasetDetailContent">
-                <!-- Le contenu sera injecté dynamiquement -->
+                <!-- Le contenu sera chargé dynamiquement -->
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Fermer
+                </button>
                 <button type="button" class="btn btn-danger" onclick="deleteDataset()">
                     <i class="bi bi-trash"></i> Supprimer
                 </button>
-                <button type="button" class="btn btn-info text-white" onclick="analyzeDataset()">
+                <button type="button" class="btn btn-info" onclick="analyzeDataset()">
                     <i class="bi bi-graph-up"></i> Analyser
                 </button>
                 <button type="button" class="btn btn-primary" onclick="downloadDataset()">
@@ -265,6 +324,7 @@
                 <h5 class="modal-title">
                     <i class="bi bi-cloud-upload"></i> Chargement en cours
                 </h5>
+                <button type="button" class="btn-close" onclick="forceCloseUploadModal()" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
@@ -275,6 +335,11 @@
                          role="progressbar" style="width: 0%" id="uploadProgressBar">0%</div>
                 </div>
                 <div class="text-muted small" id="uploadStatus">Préparation du fichier...</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="forceCloseUploadModal()">
+                    <i class="bi bi-x-circle"></i> Annuler
+                </button>
             </div>
         </div>
     </div>
@@ -288,6 +353,22 @@ let datasets = [];
 let selectedDataset = null;
 let charts = {};
 
+// Función para obtener el CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
 // Charger les datasets
 function loadDatasets() {
     showLoading();
@@ -296,13 +377,14 @@ function loadDatasets() {
         .then(response => response.json())
         .then(data => {
             datasets = data;
-            displayDatasets(datasets);
-            updateGlobalStats(datasets);
+            displayDatasets(data);
+            updateStats(data);
             hideLoading();
         })
         .catch(error => {
             console.error('Erreur:', error);
             hideLoading();
+            showNotification('Erreur', 'Impossible de charger les datasets', 'error');
         });
 }
 
@@ -313,23 +395,18 @@ function displayDatasets(datasetList) {
     
     if (datasetList.length === 0) {
         grid.innerHTML = `
-            <div class="col-12 text-center text-white-50 py-5">
-                <i class="bi bi-database fs-1 d-block mb-3"></i>
-                Aucun dataset disponible
-                <br>
-                <span class="text-muted">Commencez par charger un fichier CSV</span>
+            <div class="col-12 text-center">
+                <p class="text-muted">Aucun dataset disponible. Importez votre premier dataset!</p>
             </div>
         `;
         return;
     }
     
     datasetList.forEach(dataset => {
-        const size = dataset.file_size ? (dataset.file_size / 1024 / 1024).toFixed(2) : '0';
-        const rows = dataset.row_count || Math.floor(Math.random() * 10000 + 1000);
-        const columns = dataset.column_count || Math.floor(Math.random() * 20 + 5);
-        
         const col = document.createElement('div');
         col.className = 'col-md-6 col-lg-4';
+        const size = dataset.file_size ? (dataset.file_size / 1024 / 1024).toFixed(2) : '0';
+        
         col.innerHTML = `
             <div class="card dataset-card h-100" onclick="showDatasetDetails(${dataset.id})">
                 <div class="quick-actions">
@@ -350,11 +427,11 @@ function displayDatasets(datasetList) {
                     </p>
                     <div class="dataset-stats">
                         <div class="stat-item">
-                            <div class="stat-value">${rows.toLocaleString()}</div>
+                            <div class="stat-value">${dataset.row_count || 0}</div>
                             <div class="text-muted small">Lignes</div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-value">${columns}</div>
+                            <div class="stat-value">${dataset.column_count || 0}</div>
                             <div class="text-muted small">Colonnes</div>
                         </div>
                         <div class="stat-item">
@@ -364,7 +441,7 @@ function displayDatasets(datasetList) {
                     </div>
                     <div class="text-center mt-3 text-muted small">
                         <i class="bi bi-calendar3"></i> 
-                        ${new Date(dataset.created_at).toLocaleDateString('fr-FR')}
+                        ${dataset.created_at ? new Date(dataset.created_at).toLocaleDateString('fr-FR') : 'Date inconnue'}
                     </div>
                 </div>
             </div>
@@ -378,252 +455,665 @@ function showDatasetDetails(datasetId) {
     selectedDataset = datasets.find(d => d.id === datasetId);
     if (!selectedDataset) return;
     
-    const modal = new bootstrap.Modal(document.getElementById('datasetDetailModal'));
-    document.getElementById('datasetDetailTitle').innerHTML = `
-        <i class="bi bi-database"></i> ${selectedDataset.name}
-    `;
+    // Fermer tous les modals ouverts d'abord
+    document.querySelectorAll('.modal.show').forEach(modalEl => {
+        const modalInstance = bootstrap.Modal.getInstance(modalEl);
+        if (modalInstance) {
+            modalInstance.hide();
+        }
+    });
     
-    showLoading();
-    
-    // Charger les colonnes
-    fetch(`/api/datasets/${datasetId}/columns/`)
-        .then(response => response.json())
-        .then(columns => {
-            displayDatasetDetails(selectedDataset, columns);
-            hideLoading();
-        })
-        .catch(error => {
-            console.error('Erreur:', error);
-            hideLoading();
-        });
-    
-    modal.show();
+    // Attendre un peu pour que Bootstrap nettoie
+    setTimeout(() => {
+        // Limpiar cualquier modal o backdrop previo
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        
+        // Asegurar que no haya loading activo
+        hideLoading();
+        
+        const modalElement = document.getElementById('datasetDetailModal');
+        // Verificar si ya existe una instancia
+        let modal = bootstrap.Modal.getInstance(modalElement);
+        if (!modal) {
+            modal = new bootstrap.Modal(modalElement, {
+                backdrop: 'static',
+                keyboard: true
+            });
+        }
+        
+        document.getElementById('datasetDetailTitle').innerHTML = `
+            <i class="bi bi-database"></i> ${selectedDataset.name}
+        `;
+        
+        // Mostrar loading en el contenido
+        document.getElementById('datasetDetailContent').innerHTML = `
+            <div class="text-center p-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3">Cargando análisis del dataset...</p>
+            </div>
+        `;
+        
+        // Mostrar el modal
+        modal.show();
+        
+        // Cargar los datos del dataset
+        fetch(`/api/datasets/${datasetId}/columns/`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                displayDatasetDetails(selectedDataset, data);
+            })
+            .catch(error => {
+                console.error('Error completo:', error);
+                document.getElementById('datasetDetailContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Error al cargar los detalles del dataset
+                        <br><small>${error.message}</small>
+                    </div>
+                `;
+            });
+    }, 100);
 }
 
-// Afficher les détails complets
-function displayDatasetDetails(dataset, columns) {
-    const rows = dataset.row_count || Math.floor(Math.random() * 10000 + 1000);
-    const size = dataset.file_size ? (dataset.file_size / 1024 / 1024).toFixed(2) : '0';
+// Mostrar análisis completo del dataset
+function displayDatasetDetails(dataset, data) {
+    const shape = data.shape || [0, 0];
+    const rows = shape[0];
+    const cols = shape[1];
+    const stats = data.stats || {};
+    const preview = data.preview || {};
+    const columns = data.columns || [];
+    const memoryUsage = data.memory_usage ? data.memory_usage.toFixed(2) : '0';
+    const totalNulls = data.total_null_count || 0;
     
-    document.getElementById('datasetDetailContent').innerHTML = `
-        <div class="row">
-            <div class="col-md-4">
-                <h6 class="text-muted mb-3">Informations Générales</h6>
-                <table class="table table-sm">
-                    <tr>
-                        <td><strong>Nom:</strong></td>
-                        <td>${dataset.name}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Description:</strong></td>
-                        <td>${dataset.description || 'Dataset météorologique'}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Lignes:</strong></td>
-                        <td>${rows.toLocaleString()}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Colonnes:</strong></td>
-                        <td>${columns.length}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Taille:</strong></td>
-                        <td>${size} MB</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Créé le:</strong></td>
-                        <td>${new Date(dataset.created_at).toLocaleString('fr-FR')}</td>
-                    </tr>
-                </table>
-            </div>
-            <div class="col-md-8">
-                <h6 class="text-muted mb-3">Structure des Données</h6>
-                <div style="max-height: 300px; overflow-y: auto;">
-                    ${columns.map(col => {
-                        const type = detectColumnType(col);
-                        const stats = generateColumnStats(col, type);
-                        return `
-                            <div class="column-stats">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <strong>${col}</strong>
-                                    <span class="column-type type-${type}">${type.toUpperCase()}</span>
-                                </div>
-                                <div class="small text-muted">
-                                    ${stats}
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            </div>
-        </div>
-        
-        <div class="row mt-4">
-            <div class="col-12">
-                <h6 class="text-muted mb-3">Aperçu des Données</h6>
-                <div class="data-preview">
-                    <table class="table table-sm table-striped">
-                        <thead>
+    // Guardar datos en variable global para uso posterior
+    window.currentDatasetData = data;
+    
+    // Preview de datos PRIMERO
+    let dataPreview = `
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <h5 class="text-primary mb-3"><i class="bi bi-eye"></i> Vista Previa de Datos (Primeras 10 filas)</h5>
+                <div class="table-responsive" style="max-height: 300px; overflow: auto;">
+                    <table class="table table-sm table-striped table-hover">
+                        <thead class="table-dark sticky-top">
                             <tr>
-                                ${columns.slice(0, 6).map(col => `<th>${col}</th>`).join('')}
-                                ${columns.length > 6 ? '<th>...</th>' : ''}
+                                ${columns.map(col => `<th class="text-nowrap">${col}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
-                            ${generateSampleData(5, columns.slice(0, 6)).map(row => `
-                                <tr>
-                                    ${row.map(val => `<td>${val}</td>`).join('')}
-                                    ${columns.length > 6 ? '<td>...</td>' : ''}
-                                </tr>
-                            `).join('')}
+    `;
+    
+    // Generar filas del preview
+    for (let i = 0; i < 10 && i < rows; i++) {
+        dataPreview += '<tr>';
+        columns.forEach(col => {
+            const value = preview[col] && preview[col][i] !== undefined ? preview[col][i] : '';
+            dataPreview += `<td class="text-nowrap">${value}</td>`;
+        });
+        dataPreview += '</tr>';
+    }
+    
+    dataPreview += `
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-        
-        <div class="row mt-4">
-            <div class="col-md-6">
-                <h6 class="text-muted mb-3">Distribution des Types de Données</h6>
-                <div class="chart-container">
-                    <canvas id="typeDistributionChart"></canvas>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <h6 class="text-muted mb-3">Valeurs Manquantes</h6>
-                <div class="chart-container">
-                    <canvas id="missingValuesChart"></canvas>
+    `;
+    
+    // Selector de variable y generador de histograma
+    let variableSelector = `
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <h5 class="text-primary mb-3"><i class="bi bi-bar-chart-line"></i> Análisis de Distribución</h5>
+                <div class="card bg-dark border-primary">
+                    <div class="card-body">
+                        <div class="row align-items-end">
+                            <div class="col-md-8">
+                                <label for="variableSelect" class="form-label text-info">Seleccionar Variable:</label>
+                                <select class="form-select" id="variableSelect">
+                                    <option value="">-- Seleccione una variable --</option>
+                                    ${columns.map(col => {
+                                        const colStats = stats[col] || {};
+                                        const isNumeric = colStats.mean !== undefined;
+                                        return `<option value="${col}" data-numeric="${isNumeric}">${col} (${colStats.dtype || 'unknown'})</option>`;
+                                    }).join('')}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-primary w-100" onclick="generateHistogram()">
+                                    <i class="bi bi-graph-up"></i> Generar Histograma
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-4" id="histogramContainer" style="display: none;">
+                            <canvas id="variableHistogram" height="400"></canvas>
+                        </div>
+                        <div class="mt-3" id="variableStats" style="display: none;">
+                            <!-- Las estadísticas de la variable seleccionada aparecerán aquí -->
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     `;
     
-    // Créer les graphiques
-    setTimeout(() => {
-        createDatasetCharts(columns);
-    }, 300);
-}
-
-// Détecter le type de colonne
-function detectColumnType(columnName) {
-    const lowerName = columnName.toLowerCase();
-    if (lowerName.includes('date') || lowerName.includes('time')) return 'datetime';
-    if (lowerName.includes('temp') || lowerName.includes('pressure') || 
-        lowerName.includes('humidity') || lowerName.includes('speed')) return 'numeric';
-    return 'text';
-}
-
-// Générer des statistiques pour une colonne
-function generateColumnStats(columnName, type) {
-    if (type === 'numeric') {
-        const min = Math.random() * 10;
-        const max = min + Math.random() * 50;
-        const mean = (min + max) / 2;
-        return `Min: ${min.toFixed(2)} • Max: ${max.toFixed(2)} • Moy: ${mean.toFixed(2)}`;
-    } else if (type === 'datetime') {
-        return `Période: 01/01/2023 - 31/12/2023`;
-    } else {
-        const unique = Math.floor(Math.random() * 100 + 10);
-        return `Valeurs uniques: ${unique}`;
-    }
-}
-
-// Générer des données d'exemple
-function generateSampleData(rows, columns) {
-    const data = [];
-    for (let i = 0; i < rows; i++) {
-        const row = columns.map(col => {
-            const type = detectColumnType(col);
-            if (type === 'numeric') {
-                return (Math.random() * 30 + 10).toFixed(2);
-            } else if (type === 'datetime') {
-                const date = new Date(2023, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1);
-                return date.toLocaleDateString('fr-FR');
-            } else {
-                return ['Ensoleillé', 'Nuageux', 'Pluvieux', 'Orageux'][Math.floor(Math.random() * 4)];
-            }
-        });
-        data.push(row);
-    }
-    return data;
-}
-
-// Créer les graphiques du dataset
-function createDatasetCharts(columns) {
-    // Graphique de distribution des types
-    const typeCtx = document.getElementById('typeDistributionChart').getContext('2d');
-    const typeCounts = {
-        numeric: columns.filter(c => detectColumnType(c) === 'numeric').length,
-        datetime: columns.filter(c => detectColumnType(c) === 'datetime').length,
-        text: columns.filter(c => detectColumnType(c) === 'text').length
-    };
+    // Info general compacta
+    let generalInfo = `
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="stat-card text-center p-3">
+                            <i class="bi bi-table text-primary" style="font-size: 1.5rem;"></i>
+                            <h6 class="mt-2 mb-0">${rows.toLocaleString()} × ${cols}</h6>
+                            <small class="text-muted">Dimensiones</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card text-center p-3">
+                            <i class="bi bi-hdd text-success" style="font-size: 1.5rem;"></i>
+                            <h6 class="mt-2 mb-0">${memoryUsage} MB</h6>
+                            <small class="text-muted">Memoria</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card text-center p-3">
+                            <i class="bi bi-exclamation-triangle text-warning" style="font-size: 1.5rem;"></i>
+                            <h6 class="mt-2 mb-0">${totalNulls.toLocaleString()}</h6>
+                            <small class="text-muted">Valores Nulos</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card text-center p-3">
+                            <i class="bi bi-percent text-info" style="font-size: 1.5rem;"></i>
+                            <h6 class="mt-2 mb-0">${rows > 0 ? ((totalNulls / (rows * cols)) * 100).toFixed(2) : '0'}%</h6>
+                            <small class="text-muted">Faltantes</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
     
-    charts.typeChart = new Chart(typeCtx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Numérique', 'Date/Heure', 'Texte'],
-            datasets: [{
-                data: [typeCounts.numeric, typeCounts.datetime, typeCounts.text],
-                backgroundColor: ['#10b981', '#6366f1', '#f59e0b']
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
-        }
+    // Análisis detallado (simplificado)
+    let detailedAnalysis = `
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <h5 class="text-primary mb-3"><i class="bi bi-list-columns-reverse"></i> Información de Variables</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Variable</th>
+                                <th>Tipo</th>
+                                <th>Valores Únicos</th>
+                                <th>Nulos</th>
+                                <th>% Nulos</th>
+                                <th>Estadísticas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${columns.map(col => {
+                                const colStats = stats[col] || {};
+                                const isNumeric = colStats.mean !== undefined;
+                                return `
+                                    <tr>
+                                        <td><strong>${col}</strong></td>
+                                        <td><span class="badge bg-${isNumeric ? 'success' : 'info'}">${colStats.dtype || 'unknown'}</span></td>
+                                        <td>${colStats.unique_count || 0}</td>
+                                        <td>${colStats.null_count || 0}</td>
+                                        <td>${colStats.null_percentage ? colStats.null_percentage.toFixed(1) : '0'}%</td>
+                                        <td>
+                                            ${isNumeric ? 
+                                                `<small>μ=${colStats.mean?.toFixed(2) || 'N/A'}, σ=${colStats.std?.toFixed(2) || 'N/A'}</small>` : 
+                                                `<small>${colStats.unique_count} valores únicos</small>`
+                                            }
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Combinar todo
+    document.getElementById('datasetDetailContent').innerHTML = 
+        dataPreview + variableSelector + generalInfo + detailedAnalysis;
+}
+
+// Generar gráficos del dataset
+function generateDatasetCharts(columns, stats) {
+    // Destruir gráficos existentes
+    Object.values(charts).forEach(chart => {
+        if (chart) chart.destroy();
+    });
+    charts = {};
+    
+    // Gráfico de tipos de datos
+    const dataTypes = {};
+    columns.forEach(col => {
+        const dtype = stats[col]?.dtype || 'unknown';
+        const type = dtype.includes('float') || dtype.includes('int') ? 'Numérico' : 
+                     dtype.includes('object') ? 'Texto' : 
+                     dtype.includes('datetime') ? 'Fecha' : 'Otro';
+        dataTypes[type] = (dataTypes[type] || 0) + 1;
     });
     
-    // Graphique des valeurs manquantes
-    const missingCtx = document.getElementById('missingValuesChart').getContext('2d');
-    const missingData = columns.slice(0, 8).map(() => Math.random() * 5);
-    
-    charts.missingChart = new Chart(missingCtx, {
-        type: 'bar',
-        data: {
-            labels: columns.slice(0, 8),
-            datasets: [{
-                label: 'Valeurs manquantes (%)',
-                data: missingData,
-                backgroundColor: '#ef4444'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 10,
-                    ticks: {
-                        callback: function(value) {
-                            return value + '%';
-                        }
+    const ctx1 = document.getElementById('dataTypesChart');
+    if (ctx1) {
+        charts.dataTypes = new Chart(ctx1, {
+            type: 'pie',
+            data: {
+                labels: Object.keys(dataTypes),
+                datasets: [{
+                    data: Object.values(dataTypes),
+                    backgroundColor: ['#10b981', '#3b82f6', '#a855f7', '#f59e0b']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#f0f9ff' }
                     }
                 }
             }
+        });
+    }
+    
+    // Gráfico de datos faltantes
+    const nullData = columns.map(col => stats[col]?.null_percentage || 0);
+    const ctx2 = document.getElementById('missingDataChart');
+    if (ctx2) {
+        charts.missingData = new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: columns,
+                datasets: [{
+                    label: 'Porcentaje de valores nulos',
+                    data: nullData,
+                    backgroundColor: 'rgba(239, 68, 68, 0.5)',
+                    borderColor: 'rgba(239, 68, 68, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { color: '#f0f9ff' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
+                    x: {
+                        ticks: { 
+                            color: '#f0f9ff',
+                            maxRotation: 45,
+                            minRotation: 45
+                        },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+    
+    // Gráficos individuales por columna
+    columns.forEach((col, index) => {
+        const colStats = stats[col];
+        if (!colStats) return;
+        
+        const canvasId = `chart_${index}_${col.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        
+        if (colStats.histogram) {
+            // Histograma para datos numéricos
+            const bins = colStats.histogram.bins;
+            const counts = colStats.histogram.counts;
+            const labels = [];
+            for (let i = 0; i < bins.length - 1; i++) {
+                labels.push(`${bins[i].toFixed(1)}-${bins[i+1].toFixed(1)}`);
+            }
+            
+            charts[canvasId] = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Frecuencia',
+                        data: counts,
+                        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: '#f0f9ff' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        x: {
+                            ticks: { 
+                                color: '#f0f9ff',
+                                maxRotation: 45,
+                                minRotation: 45
+                            },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        } else if (colStats.top_values) {
+            // Gráfico de barras para datos categóricos
+            charts[canvasId] = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: colStats.top_values.values,
+                    datasets: [{
+                        label: 'Frecuencia',
+                        data: colStats.top_values.counts,
+                        backgroundColor: 'rgba(16, 185, 129, 0.5)',
+                        borderColor: 'rgba(16, 185, 129, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: '#f0f9ff' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        x: {
+                            ticks: { 
+                                color: '#f0f9ff',
+                                maxRotation: 45,
+                                minRotation: 45
+                            },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
         }
     });
 }
 
-// Mettre à jour les statistiques globales
-function updateGlobalStats(datasetList) {
-    const totalRows = datasetList.reduce((sum, d) => sum + (d.row_count || Math.floor(Math.random() * 10000 + 1000)), 0);
-    const totalSize = datasetList.reduce((sum, d) => sum + (d.file_size || Math.random() * 50 * 1024 * 1024), 0);
-    const lastUpdate = datasetList.length > 0 ? 
+// Generar histograma para variable seleccionada
+function generateHistogram() {
+    const select = document.getElementById('variableSelect');
+    const selectedVariable = select.value;
+    
+    if (!selectedVariable) {
+        showNotification('Error', 'Por favor seleccione una variable', 'warning');
+        return;
+    }
+    
+    const data = window.currentDatasetData;
+    if (!data || !data.stats) {
+        showNotification('Error', 'No hay datos disponibles', 'error');
+        return;
+    }
+    
+    const colStats = data.stats[selectedVariable];
+    const isNumeric = select.options[select.selectedIndex].getAttribute('data-numeric') === 'true';
+    
+    // Mostrar contenedor
+    document.getElementById('histogramContainer').style.display = 'block';
+    document.getElementById('variableStats').style.display = 'block';
+    
+    // Destruir gráfico anterior si existe
+    if (window.variableChart) {
+        window.variableChart.destroy();
+    }
+    
+    const canvas = document.getElementById('variableHistogram');
+    const ctx = canvas.getContext('2d');
+    
+    if (isNumeric && colStats.histogram) {
+        // Histograma para variables numéricas
+        const bins = colStats.histogram.bins;
+        const counts = colStats.histogram.counts;
+        const labels = [];
+        
+        for (let i = 0; i < bins.length - 1; i++) {
+            labels.push(`${bins[i].toFixed(1)} - ${bins[i+1].toFixed(1)}`);
+        }
+        
+        window.variableChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: `Distribución de ${selectedVariable}`,
+                    data: counts,
+                    backgroundColor: 'rgba(0, 212, 255, 0.5)',
+                    borderColor: 'rgba(0, 212, 255, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `Histograma de ${selectedVariable}`,
+                        color: '#00d4ff',
+                        font: { size: 16 }
+                    },
+                    legend: { display: false }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Intervalos',
+                            color: '#00d4ff'
+                        },
+                        ticks: { 
+                            color: '#f0f9ff',
+                            maxRotation: 45,
+                            minRotation: 45
+                        },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Frecuencia',
+                            color: '#00d4ff'
+                        },
+                        beginAtZero: true,
+                        ticks: { color: '#f0f9ff' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    }
+                }
+            }
+        });
+        
+        // Mostrar estadísticas
+        document.getElementById('variableStats').innerHTML = `
+            <div class="card bg-dark border-info">
+                <div class="card-body">
+                    <h6 class="text-info mb-3">Estadísticas de ${selectedVariable}</h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <small class="text-muted">Media:</small><br>
+                            <strong>${colStats.mean?.toFixed(2) || 'N/A'}</strong>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Desviación Estándar:</small><br>
+                            <strong>${colStats.std?.toFixed(2) || 'N/A'}</strong>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Mediana:</small><br>
+                            <strong>${colStats.q50?.toFixed(2) || 'N/A'}</strong>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-3">
+                            <small class="text-muted">Mínimo:</small><br>
+                            <strong>${colStats.min?.toFixed(2) || 'N/A'}</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Q1 (25%):</small><br>
+                            <strong>${colStats.q25?.toFixed(2) || 'N/A'}</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Q3 (75%):</small><br>
+                            <strong>${colStats.q75?.toFixed(2) || 'N/A'}</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Máximo:</small><br>
+                            <strong>${colStats.max?.toFixed(2) || 'N/A'}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else if (!isNumeric && colStats.top_values) {
+        // Gráfico de barras para variables categóricas
+        window.variableChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: colStats.top_values.values,
+                datasets: [{
+                    label: `Frecuencia de ${selectedVariable}`,
+                    data: colStats.top_values.counts,
+                    backgroundColor: 'rgba(16, 185, 129, 0.5)',
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `Distribución de ${selectedVariable} (Top 10 valores)`,
+                        color: '#00d4ff',
+                        font: { size: 16 }
+                    },
+                    legend: { display: false }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Categorías',
+                            color: '#00d4ff'
+                        },
+                        ticks: { 
+                            color: '#f0f9ff',
+                            maxRotation: 45,
+                            minRotation: 45
+                        },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Frecuencia',
+                            color: '#00d4ff'
+                        },
+                        beginAtZero: true,
+                        ticks: { color: '#f0f9ff' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    }
+                }
+            }
+        });
+        
+        // Mostrar estadísticas categóricas
+        document.getElementById('variableStats').innerHTML = `
+            <div class="card bg-dark border-info">
+                <div class="card-body">
+                    <h6 class="text-info mb-3">Información de ${selectedVariable}</h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <small class="text-muted">Valores únicos:</small><br>
+                            <strong>${colStats.unique_count || 0}</strong>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Valores nulos:</small><br>
+                            <strong>${colStats.null_count || 0} (${colStats.null_percentage?.toFixed(1) || 0}%)</strong>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Moda:</small><br>
+                            <strong>${colStats.top_values?.values[0] || 'N/A'}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        document.getElementById('histogramContainer').innerHTML = `
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i> No hay datos de distribución disponibles para esta variable
+            </div>
+        `;
+        document.getElementById('variableStats').innerHTML = '';
+    }
+}
+
+// Actualizar estadísticas
+function updateStats(datasetList) {
+    const totalSize = datasetList.reduce((sum, d) => sum + (d.file_size || 0), 0);
+    const totalRows = datasetList.reduce((sum, d) => sum + (d.row_count || 0), 0);
+    const lastDate = datasetList.length > 0 ? 
         new Date(Math.max(...datasetList.map(d => new Date(d.created_at)))).toLocaleDateString('fr-FR') : '-';
     
     document.getElementById('totalDatasets').textContent = datasetList.length;
+    document.getElementById('totalSize').textContent = (totalSize / 1024 / 1024).toFixed(2) + ' MB';
     document.getElementById('totalRows').textContent = totalRows.toLocaleString();
-    document.getElementById('totalSize').textContent = (totalSize / 1024 / 1024).toFixed(1) + ' MB';
-    document.getElementById('lastUpdate').textContent = lastUpdate;
+    document.getElementById('lastUpdate').textContent = lastDate;
 }
 
-// Gestion du drag and drop
+// Inicializar drag & drop
+function initDragDrop() {
+    const uploadArea = document.querySelector('.upload-area');
+    
+    uploadArea.addEventListener('dragover', handleDragOver);
+    uploadArea.addEventListener('dragleave', handleDragLeave);
+    uploadArea.addEventListener('drop', handleDrop);
+}
+
 function handleDragOver(e) {
     e.preventDefault();
     e.currentTarget.classList.add('active');
@@ -657,9 +1147,37 @@ function handleFiles(files) {
     files.forEach(file => uploadFile(file));
 }
 
+// Forcer la fermeture du modal d'upload
+function forceCloseUploadModal() {
+    const modalElement = document.getElementById('uploadProgressModal');
+    const modal = bootstrap.Modal.getInstance(modalElement);
+    if (modal) {
+        modal.hide();
+    }
+    // Nettoyer tous les backdrops et styles
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+}
+
 // Upload d'un fichier
 function uploadFile(file) {
-    const modal = new bootstrap.Modal(document.getElementById('uploadProgressModal'));
+    // Nettoyer les modals existants avant d'en créer un nouveau
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    
+    const modalElement = document.getElementById('uploadProgressModal');
+    // Vérifier si une instance existe déjà
+    let modal = bootstrap.Modal.getInstance(modalElement);
+    if (!modal) {
+        modal = new bootstrap.Modal(modalElement, {
+            backdrop: 'static',
+            keyboard: false
+        });
+    }
     document.getElementById('uploadFileName').textContent = file.name;
     modal.show();
     
@@ -680,7 +1198,10 @@ function uploadFile(file) {
     
     fetch('/api/datasets/', {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
     })
     .then(response => response.json())
     .then(data => {
@@ -691,6 +1212,12 @@ function uploadFile(file) {
         
         setTimeout(() => {
             modal.hide();
+            // Forcer la suppression du backdrop
+            document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+            
             showNotification('Succès!', `Dataset "${file.name}" chargé avec succès`, 'success');
             loadDatasets();
         }, 1000);
@@ -698,6 +1225,12 @@ function uploadFile(file) {
     .catch(error => {
         clearInterval(progressInterval);
         modal.hide();
+        // Forcer la suppression du backdrop en cas d'erreur
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        
         showNotification('Erreur', 'Erreur lors du chargement: ' + error, 'error');
     });
 }
@@ -719,8 +1252,11 @@ function downloadDataset(datasetId) {
     const dataset = datasetId ? datasets.find(d => d.id === datasetId) : selectedDataset;
     if (!dataset) return;
     
-    window.location.href = `/api/datasets/${dataset.id}/download/`;
-    showNotification('Téléchargement', 'Le téléchargement va commencer...', 'info');
+    // Por ahora, mostrar mensaje mientras se implementa el endpoint
+    showNotification('Info', 'La fonctionnalité de téléchargement sera bientôt disponible', 'info');
+    
+    // Cuando el endpoint esté listo, usar:
+    // window.location.href = `/api/datasets/${dataset.id}/download/`;
 }
 
 // Supprimer un dataset
@@ -742,40 +1278,90 @@ function deleteDataset(datasetId) {
             showLoading();
             
             fetch(`/api/datasets/${dataset.id}/`, {
-                method: 'DELETE'
-            })
-            .then(() => {
-                hideLoading();
-                showNotification('Succès!', 'Dataset supprimé avec succès', 'success');
-                if (!datasetId) {
-                    bootstrap.Modal.getInstance(document.getElementById('datasetDetailModal')).hide();
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
                 }
-                loadDatasets();
+            })
+            .then(response => {
+                hideLoading();
+                if (response.ok) {
+                    showNotification('Succès!', 'Dataset supprimé avec succès', 'success');
+                    if (!datasetId) {
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('datasetDetailModal'));
+                        if (modal) modal.hide();
+                    }
+                    loadDatasets();
+                } else {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
             })
             .catch(error => {
                 hideLoading();
-                showNotification('Erreur', 'Erreur lors de la suppression', 'error');
+                console.error('Erreur de suppression:', error);
+                showNotification('Erreur', 'Erreur lors de la suppression: ' + error.message, 'error');
             });
         }
     });
 }
 
-// Nettoyer les graphiques
-function cleanupCharts() {
-    Object.values(charts).forEach(chart => {
-        if (chart) chart.destroy();
+// Función de limpieza de emergencia
+function emergencyCleanup() {
+    // Cerrar todos los modales abiertos
+    document.querySelectorAll('.modal.show').forEach(modal => {
+        const modalInstance = bootstrap.Modal.getInstance(modal);
+        if (modalInstance) {
+            modalInstance.hide();
+        }
     });
-    charts = {};
+    
+    // Eliminar todos los backdrops
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+    
+    // Limpiar clases del body
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    
+    // Ocultar loading spinner
+    hideLoading();
 }
 
-// Event listener pour nettoyer les graphiques quand le modal se ferme
-document.getElementById('datasetDetailModal').addEventListener('hidden.bs.modal', function () {
-    cleanupCharts();
+// Detectar tecla ESC para limpieza de emergencia
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        emergencyCleanup();
+    }
 });
 
 // Initialisation
 document.addEventListener('DOMContentLoaded', function() {
+    // Limpiar cualquier modal o backdrop residual al cargar la página
+    emergencyCleanup();
+    
+    // Agregar listeners para limpiar cuando se ocultan los modals
+    const uploadModal = document.getElementById('uploadProgressModal');
+    uploadModal.addEventListener('hidden.bs.modal', function () {
+        setTimeout(() => {
+            document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+        }, 100);
+    });
+    
+    const detailModal = document.getElementById('datasetDetailModal');
+    detailModal.addEventListener('hidden.bs.modal', function () {
+        setTimeout(() => {
+            document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+        }, 100);
+    });
+    
     loadDatasets();
+    initDragDrop();
     
     // Actualiser toutes les 30 secondes
     setInterval(loadDatasets, 30000);

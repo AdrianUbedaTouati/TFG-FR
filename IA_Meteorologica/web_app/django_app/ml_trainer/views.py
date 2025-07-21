@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 import pandas as pd
+import numpy as np
 import json
 from .models import Dataset, TrainingSession, WeatherPrediction, ModelType, NormalizationMethod, MetricType
 from .serializers import DatasetSerializer, TrainingSessionSerializer, WeatherPredictionSerializer
@@ -27,11 +28,64 @@ class DatasetColumnsView(APIView):
             columns = df.columns.tolist()
             dtypes = {col: str(df[col].dtype) for col in columns}
             
+            # Análisis estadístico básico
+            stats = {}
+            for col in columns:
+                col_stats = {
+                    'dtype': str(df[col].dtype),
+                    'null_count': int(df[col].isnull().sum()),
+                    'null_percentage': float(df[col].isnull().sum() / len(df) * 100),
+                    'unique_count': int(df[col].nunique()),
+                }
+                
+                # Estadísticas para columnas numéricas
+                if df[col].dtype in ['int64', 'float64']:
+                    col_stats.update({
+                        'mean': float(df[col].mean()) if not df[col].isnull().all() else None,
+                        'std': float(df[col].std()) if not df[col].isnull().all() else None,
+                        'min': float(df[col].min()) if not df[col].isnull().all() else None,
+                        'max': float(df[col].max()) if not df[col].isnull().all() else None,
+                        'q25': float(df[col].quantile(0.25)) if not df[col].isnull().all() else None,
+                        'q50': float(df[col].quantile(0.50)) if not df[col].isnull().all() else None,
+                        'q75': float(df[col].quantile(0.75)) if not df[col].isnull().all() else None,
+                    })
+                    
+                    # Histograma para visualización
+                    try:
+                        hist, bins = np.histogram(df[col].dropna(), bins=20)
+                        col_stats['histogram'] = {
+                            'counts': hist.tolist(),
+                            'bins': bins.tolist()
+                        }
+                    except:
+                        col_stats['histogram'] = None
+                
+                # Top valores para columnas categóricas
+                elif df[col].dtype == 'object':
+                    value_counts = df[col].value_counts().head(10)
+                    col_stats['top_values'] = {
+                        'values': value_counts.index.tolist(),
+                        'counts': value_counts.values.tolist()
+                    }
+                
+                stats[col] = col_stats
+            
+            # Preview con manejo de errores
+            preview_data = {}
+            for col in columns:
+                try:
+                    preview_data[col] = df[col].head(10).fillna('').astype(str).tolist()
+                except:
+                    preview_data[col] = ['Error'] * min(10, len(df))
+            
             return Response({
                 'columns': columns,
                 'dtypes': dtypes,
                 'shape': df.shape,
-                'preview': df.head(5).to_dict()
+                'stats': stats,
+                'preview': preview_data,
+                'total_null_count': int(df.isnull().sum().sum()),
+                'memory_usage': float(df.memory_usage(deep=True).sum() / 1024 / 1024)  # MB
             })
         except Exception as e:
             return Response(

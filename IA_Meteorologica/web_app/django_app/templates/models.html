@@ -352,7 +352,17 @@ function showModelDetails(modelId) {
     selectedModel = models.find(m => m.id === modelId);
     if (!selectedModel) return;
     
-    const modal = new bootstrap.Modal(document.getElementById('modelDetailModal'));
+    // Nettoyer les modals existants avant d'en créer un nouveau
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    
+    const modalElement = document.getElementById('modelDetailModal');
+    let modal = bootstrap.Modal.getInstance(modalElement);
+    if (!modal) {
+        modal = new bootstrap.Modal(modalElement);
+    }
     document.getElementById('modelDetailTitle').innerHTML = `
         <i class="bi bi-cpu"></i> ${selectedModel.name}
     `;
