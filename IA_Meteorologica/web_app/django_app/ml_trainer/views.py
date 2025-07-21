@@ -41,12 +41,17 @@ class DatasetColumnsView(APIView):
                     # Tomar muestra para analizar
                     sample = df[col].dropna().head(100)
                     if len(sample) > 0:
-                        # Intentar parsear como fecha
+                        # Intentar parsear como fecha con formato específico
                         try:
-                            date_parsed = pd.to_datetime(sample, errors='coerce')
-                            # Si más del 80% se parsean como fechas, es probable que sea una columna de fechas
-                            if date_parsed.notna().sum() / len(sample) > 0.8:
-                                dtype_str = 'datetime'
+                            # Intentar con formatos comunes de fecha
+                            for date_format in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%Y/%m/%d']:
+                                try:
+                                    date_parsed = pd.to_datetime(sample, format=date_format, errors='coerce')
+                                    if date_parsed.notna().sum() / len(sample) > 0.8:
+                                        dtype_str = 'datetime'
+                                        break
+                                except:
+                                    continue
                         except:
                             pass
                         
@@ -190,6 +195,371 @@ class DatasetColumnsView(APIView):
                 {'error': str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class DatasetColumnDetailsView(APIView):
+    def get(self, request, pk, column_name):
+        dataset = get_object_or_404(Dataset, pk=pk)
+        try:
+            df = pd.read_csv(dataset.file.path)
+            
+            if column_name not in df.columns:
+                return Response(
+                    {'error': f'Column {column_name} not found'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            col_data = df[column_name]
+            
+            # Get value counts for frequency information, sorted by frequency (descending)
+            value_counts = col_data.value_counts(dropna=False, sort=True)
+            total_count = len(col_data)
+            
+            # Create frequency data
+            frequency_data = []
+            for value, count in value_counts.items():
+                # Handle NaN values
+                if pd.isna(value):
+                    display_value = 'NaN'
+                elif col_data.dtype in ['int64', 'float64']:
+                    display_value = float(value)
+                else:
+                    display_value = str(value)
+                
+                frequency_data.append({
+                    'value': display_value,
+                    'count': int(count),
+                    'percentage': float(count / total_count * 100)
+                })
+            
+            response_data = {
+                'column': column_name,
+                'dtype': str(col_data.dtype),
+                'unique_count': len(col_data.dropna().unique()),
+                'frequency_data': frequency_data,
+                'null_count': int(col_data.isnull().sum()),
+                'total_count': total_count
+            }
+            
+            # For numeric columns, calculate outlier information
+            if col_data.dtype in ['int64', 'float64']:
+                non_null = col_data.dropna()
+                if len(non_null) > 0:
+                    q1 = non_null.quantile(0.25)
+                    q3 = non_null.quantile(0.75)
+                    iqr = q3 - q1
+                    lower_bound = q1 - (1.5 * iqr)
+                    upper_bound = q3 + (1.5 * iqr)
+                    
+                    outliers = non_null[(non_null < lower_bound) | (non_null > upper_bound)]
+                    
+                    # Convert outliers to list and sort
+                    outlier_list = outliers.tolist() if len(outliers) > 0 else []
+                    outlier_list.sort()
+                    
+                    response_data.update({
+                        'outlier_info': {
+                            'q1': float(q1),
+                            'q3': float(q3),
+                            'iqr': float(iqr),
+                            'lower_bound': float(lower_bound),
+                            'upper_bound': float(upper_bound),
+                            'outlier_count': len(outliers),
+                            'outlier_percentage': float(len(outliers) / len(non_null) * 100),
+                            'outlier_values': outlier_list  # Now returns all outliers sorted
+                        }
+                    })
+            
+            return Response(response_data)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class DatasetReportView(APIView):
+    def get(self, request, pk):
+        dataset = get_object_or_404(Dataset, pk=pk)
+        
+        try:
+            # Leer y analizar el dataset
+            df = pd.read_csv(dataset.file.path)
+            
+            # Generar HTML del reporte
+            html_content = self.generate_html_report(dataset, df)
+            
+            # Configurar la respuesta HTTP
+            response = HttpResponse(content_type='text/html; charset=utf-8')
+            response['Content-Disposition'] = f'attachment; filename="rapport_{dataset.name}_{pd.Timestamp.now().strftime("%Y%m%d")}.html"'
+            response.write(html_content.encode('utf-8'))
+            
+            return response
+            
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            print(f"Error en DatasetReportView: {error_detail}")
+            # Usar HttpResponse en lugar de Response para errores
+            error_response = HttpResponse(
+                f'<html><body><h1>Error</h1><p>{str(e)}</p><pre>{error_detail}</pre></body></html>',
+                content_type='text/html',
+                status=500
+            )
+            return error_response
+    
+    def generate_html_report(self, dataset, df):
+        """Genera un reporte HTML con el análisis del dataset"""
+        
+        try:
+            # Calcular estadísticas básicas
+            shape = df.shape
+            total_nulls = int(df.isnull().sum().sum())
+            memory_usage = df.memory_usage(deep=True).sum() / 1024 / 1024  # MB
+            
+            # Generar tabla de estadísticas por columna
+            column_stats = []
+            for col in df.columns:
+                dtype_str = str(df[col].dtype)
+                stats = {
+                    'column': col,
+                    'dtype': dtype_str,
+                    'null_count': int(df[col].isnull().sum()),
+                    'null_percentage': float(df[col].isnull().sum() / len(df) * 100),
+                    'unique_count': int(df[col].nunique())
+                }
+                
+                if df[col].dtype in ['int64', 'float64']:
+                    non_null = df[col].dropna()
+                    if len(non_null) > 0:
+                        stats.update({
+                            'mean': float(non_null.mean()),
+                            'std': float(non_null.std()),
+                            'min': float(non_null.min()),
+                            'max': float(non_null.max()),
+                            'q25': float(non_null.quantile(0.25)),
+                            'q50': float(non_null.quantile(0.50)),
+                            'q75': float(non_null.quantile(0.75))
+                        })
+                
+                column_stats.append(stats)
+        
+            # Generar HTML
+            html = f'''
+        <!DOCTYPE html>
+        <html lang="fr">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Rapport d'Analyse - {dataset.name}</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background-color: #f4f4f4;
+                }}
+                h1, h2, h3 {{
+                    color: #2c3e50;
+                }}
+                .header {{
+                    background-color: #3498db;
+                    color: white;
+                    padding: 20px;
+                    border-radius: 5px;
+                    margin-bottom: 30px;
+                }}
+                .header h1 {{
+                    color: white;
+                    margin: 0;
+                }}
+                .summary-grid {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 20px;
+                    margin-bottom: 30px;
+                }}
+                .summary-card {{
+                    background: white;
+                    padding: 20px;
+                    border-radius: 5px;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                }}
+                .summary-card h3 {{
+                    margin-top: 0;
+                    color: #3498db;
+                }}
+                .summary-card .value {{
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #2c3e50;
+                }}
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    background: white;
+                    margin-top: 20px;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                }}
+                th, td {{
+                    padding: 12px;
+                    text-align: left;
+                    border-bottom: 1px solid #ddd;
+                }}
+                th {{
+                    background-color: #3498db;
+                    color: white;
+                }}
+                tr:hover {{
+                    background-color: #f5f5f5;
+                }}
+                .numeric {{
+                    text-align: right;
+                }}
+                .footer {{
+                    margin-top: 50px;
+                    text-align: center;
+                    color: #7f8c8d;
+                    font-size: 14px;
+                }}
+                .preview-section {{
+                    margin-top: 30px;
+                    background: white;
+                    padding: 20px;
+                    border-radius: 5px;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                }}
+                .null-badge {{
+                    background-color: #e74c3c;
+                    color: white;
+                    padding: 2px 8px;
+                    border-radius: 3px;
+                    font-size: 12px;
+                }}
+                .type-badge {{
+                    background-color: #95a5a6;
+                    color: white;
+                    padding: 2px 8px;
+                    border-radius: 3px;
+                    font-size: 12px;
+                    margin-left: 5px;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Rapport d'Analyse du Dataset</h1>
+                <p>{dataset.name} - Généré le {pd.Timestamp.now().strftime("%d/%m/%Y à %H:%M")}</p>
+            </div>
+            
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <h3>Dimensions</h3>
+                    <div class="value">{shape[0]:,} × {shape[1]}</div>
+                    <p>{shape[0]:,} lignes, {shape[1]} colonnes</p>
+                </div>
+                <div class="summary-card">
+                    <h3>Taille en mémoire</h3>
+                    <div class="value">{memory_usage:.2f} MB</div>
+                    <p>Utilisation mémoire totale</p>
+                </div>
+                <div class="summary-card">
+                    <h3>Valeurs manquantes</h3>
+                    <div class="value">{total_nulls:,}</div>
+                    <p>{(total_nulls / (shape[0] * shape[1]) * 100):.2f}% du total</p>
+                </div>
+                <div class="summary-card">
+                    <h3>Date de création</h3>
+                    <div class="value">{dataset.created_at.strftime("%d/%m/%Y") if dataset.created_at else "N/A"}</div>
+                    <p>Import initial</p>
+                </div>
+            </div>
+            
+            <h2>Analyse des Variables</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Variable</th>
+                        <th>Type</th>
+                        <th>Valeurs uniques</th>
+                        <th>Valeurs nulles</th>
+                        <th>Statistiques</th>
+                    </tr>
+                </thead>
+                <tbody>
+        '''
+        
+            for stats in column_stats:
+                null_badge = f'<span class="null-badge">{stats["null_count"]} ({stats["null_percentage"]:.1f}%)</span>' if stats['null_count'] > 0 else '0'
+            
+                if 'mean' in stats:
+                    stat_info = f'''
+                        μ={stats["mean"]:.2f}, σ={stats["std"]:.2f}<br>
+                        Min: {stats["min"]:.2f}, Max: {stats["max"]:.2f}<br>
+                        Q1: {stats["q25"]:.2f}, Médiane: {stats["q50"]:.2f}, Q3: {stats["q75"]:.2f}
+                    '''
+                else:
+                    stat_info = f'{stats["unique_count"]} valeurs distinctes'
+            
+                dtype_display = 'Numérique' if stats['dtype'] in ['int64', 'float64'] else 'Texte'
+            
+                html += f'''
+                        <tr>
+                            <td><strong>{stats["column"]}</strong></td>
+                            <td><span class="type-badge">{dtype_display}</span></td>
+                            <td class="numeric">{stats["unique_count"]}</td>
+                            <td class="numeric">{null_badge}</td>
+                            <td>{stat_info}</td>
+                        </tr>
+                '''
+        
+            html += '''
+                    </tbody>
+                </table>
+                
+                <div class="preview-section">
+                    <h2>Aperçu des Données (10 premières lignes)</h2>
+                    <div style="overflow-x: auto;">
+            '''
+            
+            # Ajouter l'aperçu des données
+            try:
+                preview_html = df.head(10).to_html(classes='preview-table', index=False, escape=True)
+                html += preview_html
+            except Exception as e:
+                html += f'<p>Error al generar preview: {str(e)}</p>'
+            
+            html += '''
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    <p>Rapport généré automatiquement par IA Météorologique</p>
+                    <p>© 2024 - Tous droits réservés</p>
+                </div>
+            </body>
+            </html>
+            '''
+        
+            return html
+        except Exception as e:
+            # Si hay un error, devolver un HTML simple con el error
+            return f'''
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Error en el reporte</title>
+            </head>
+            <body>
+                <h1>Error al generar el reporte</h1>
+                <p>{str(e)}</p>
+            </body>
+            </html>
+            '''
 
 
 class DatasetDownloadView(APIView):

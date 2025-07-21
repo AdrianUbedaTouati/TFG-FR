@@ -6,7 +6,9 @@ urlpatterns = [
     path('datasets/', views.DatasetListCreateView.as_view(), name='dataset-list-create'),
     path('datasets/<int:pk>/', views.DatasetDetailView.as_view(), name='dataset-detail'),
     path('datasets/<int:pk>/columns/', views.DatasetColumnsView.as_view(), name='dataset-columns'),
+    path('datasets/<int:pk>/columns/<str:column_name>/', views.DatasetColumnDetailsView.as_view(), name='dataset-column-details'),
     path('datasets/<int:pk>/download/', views.DatasetDownloadView.as_view(), name='dataset-download'),
+    path('datasets/<int:pk>/report/', views.DatasetReportView.as_view(), name='dataset-report'),
     
     # Training session endpoints
     path('training-sessions/', views.TrainingSessionListCreateView.as_view(), name='training-session-list-create'),
