@@ -654,14 +654,36 @@ function showUploadDatasetModal() {
 }
 
 function showTrainModelModal() {
+    // Clean up any existing modals/backdrops first
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    hideLoading();
+    
     loadDatasets();
-    const modal = new bootstrap.Modal(document.getElementById('trainModelModal'));
+    const modalElement = document.getElementById('trainModelModal');
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: 'static',
+        keyboard: true
+    });
     modal.show();
 }
 
 function showPredictionModal() {
+    // Clean up any existing modals/backdrops first
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    hideLoading();
+    
     loadModels();
-    const modal = new bootstrap.Modal(document.getElementById('predictionModal'));
+    const modalElement = document.getElementById('predictionModal');
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: 'static',
+        keyboard: true
+    });
     modal.show();
 }
 
@@ -795,10 +817,13 @@ function trainModel() {
     
     showLoading();
     
+    const csrfToken = getCookie('csrftoken');
+    
     fetch('/api/training-sessions/', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
         },
         body: JSON.stringify(data)
     })
@@ -806,7 +831,10 @@ function trainModel() {
     .then(session => {
         // Lancer l'entraînement
         return fetch(`/api/training-sessions/${session.id}/train/`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            }
         });
     })
     .then(response => response.json())
@@ -834,10 +862,13 @@ function makePrediction() {
     
     showLoading();
     
+    const csrfToken = getCookie('csrftoken');
+    
     fetch('/api/predict/', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
         },
         body: JSON.stringify({
             model_id: modelId,
@@ -931,6 +962,26 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Also handle modal hide on backdrop click or ESC
     uploadModal.addEventListener('hide.bs.modal', function () {
+        hideLoading();
+    });
+    
+    // Clean up train model modal
+    const trainModal = document.getElementById('trainModelModal');
+    trainModal.addEventListener('hidden.bs.modal', function () {
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        hideLoading();
+    });
+    
+    // Clean up prediction modal
+    const predModal = document.getElementById('predictionModal');
+    predModal.addEventListener('hidden.bs.modal', function () {
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
         hideLoading();
     });
 });
