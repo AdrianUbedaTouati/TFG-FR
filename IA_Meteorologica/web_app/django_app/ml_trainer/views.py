@@ -474,7 +474,7 @@ class DatasetReportView(APIView):
                 </div>
                 <div class="summary-card">
                     <h3>Date de création</h3>
-                    <div class="value">{dataset.created_at.strftime("%d/%m/%Y") if dataset.created_at else "N/A"}</div>
+                    <div class="value">{dataset.uploaded_at.strftime("%d/%m/%Y") if dataset.uploaded_at else "N/A"}</div>
                     <p>Import initial</p>
                 </div>
             </div>
@@ -552,10 +552,10 @@ class DatasetReportView(APIView):
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Error en el reporte</title>
+                <title>Erreur dans le rapport</title>
             </head>
             <body>
-                <h1>Error al generar el reporte</h1>
+                <h1>Erreur lors de la génération du rapport</h1>
                 <p>{str(e)}</p>
             </body>
             </html>
