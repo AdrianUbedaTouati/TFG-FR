@@ -7,6 +7,16 @@ import pandas as pd
 import numpy as np
 import json
 import mimetypes
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import seaborn as sns
+from io import BytesIO
+import base64
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import Lasso
+from sklearn.model_selection import train_test_split
 from .models import Dataset, TrainingSession, WeatherPrediction, ModelType, NormalizationMethod, MetricType
 from .serializers import DatasetSerializer, TrainingSessionSerializer, WeatherPredictionSerializer
 from .ml_utils import get_model_config, get_normalization_methods, get_metrics, train_model, make_predictions
@@ -1269,3 +1279,534 @@ class PredictView(APIView):
                 {'error': str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class DatasetVariableAnalysisView(APIView):
+    def get(self, request, pk, column_name):
+        dataset = get_object_or_404(Dataset, pk=pk)
+        analysis_type = request.query_params.get('type', 'histogram')
+        
+        try:
+            df = pd.read_csv(dataset.file.path)
+            
+            if column_name not in df.columns:
+                return Response(
+                    {'error': f'Column {column_name} not found'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            col_data = df[column_name].dropna()
+            
+            if analysis_type == 'outlier_map':
+                return self.generate_outlier_map(col_data, column_name)
+            elif analysis_type == 'boxplot':
+                return self.generate_boxplot(col_data, column_name)
+            elif analysis_type == 'scatter':
+                # Necesita una segunda variable
+                second_column = request.query_params.get('second_column')
+                if not second_column or second_column not in df.columns:
+                    return Response(
+                        {'error': 'second_column is required for scatter plot'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                return self.generate_scatter_plot(df, column_name, second_column)
+            else:
+                return Response(
+                    {'error': f'Unknown analysis type: {analysis_type}'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def generate_outlier_map(self, data, column_name):
+        """Genera un mapa de outliers para datos numéricos"""
+        if data.dtype not in ['int64', 'float64']:
+            return Response(
+                {'error': 'Outlier map only available for numeric columns'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Calcular outliers usando IQR
+        q1 = data.quantile(0.25)
+        q3 = data.quantile(0.75)
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        
+        # Identificar outliers
+        outliers = data[(data < lower_bound) | (data > upper_bound)]
+        normal_data = data[(data >= lower_bound) & (data <= upper_bound)]
+        
+        # Crear visualización
+        plt.figure(figsize=(12, 6))
+        
+        # Subplot 1: Distribución con outliers marcados
+        plt.subplot(1, 2, 1)
+        plt.scatter(range(len(data)), data, alpha=0.5, s=20)
+        outlier_indices = data[(data < lower_bound) | (data > upper_bound)].index
+        plt.scatter(outlier_indices, outliers, color='red', s=50, label='Outliers', zorder=5)
+        plt.axhline(y=lower_bound, color='orange', linestyle='--', label='Lower bound')
+        plt.axhline(y=upper_bound, color='orange', linestyle='--', label='Upper bound')
+        plt.xlabel('Index')
+        plt.ylabel(column_name)
+        plt.title(f'Outlier Map - {column_name}')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Subplot 2: Box plot con outliers
+        plt.subplot(1, 2, 2)
+        box_plot = plt.boxplot([data], labels=[column_name], patch_artist=True)
+        box_plot['boxes'][0].set_facecolor('lightblue')
+        box_plot['boxes'][0].set_alpha(0.7)
+        
+        # Marcar outliers individuales
+        for outlier in outliers:
+            plt.scatter(1, outlier, color='red', s=50, alpha=0.7)
+        
+        plt.ylabel(column_name)
+        plt.title(f'Box Plot con Outliers - {column_name}')
+        plt.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        # Convertir a base64
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.getvalue()).decode()
+        plt.close()
+        
+        return Response({
+            'analysis_type': 'outlier_map',
+            'column': column_name,
+            'image': f'data:image/png;base64,{image_base64}',
+            'statistics': {
+                'total_values': len(data),
+                'outlier_count': len(outliers),
+                'outlier_percentage': float(len(outliers) / len(data) * 100),
+                'q1': float(q1),
+                'q3': float(q3),
+                'iqr': float(iqr),
+                'lower_bound': float(lower_bound),
+                'upper_bound': float(upper_bound),
+                'outlier_values': outliers.tolist()[:100]  # Limitar a 100 para no sobrecargar
+            }
+        })
+    
+    def generate_boxplot(self, data, column_name):
+        """Genera un boxplot detallado"""
+        if data.dtype not in ['int64', 'float64']:
+            return Response(
+                {'error': 'Boxplot only available for numeric columns'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Crear figura
+        plt.figure(figsize=(10, 6))
+        
+        # Crear boxplot con estilo
+        bp = plt.boxplot([data], labels=[column_name], patch_artist=True,
+                        notch=True, showmeans=True, meanline=True)
+        
+        # Personalizar colores
+        bp['boxes'][0].set_facecolor('lightblue')
+        bp['boxes'][0].set_alpha(0.7)
+        bp['medians'][0].set_color('red')
+        bp['medians'][0].set_linewidth(2)
+        bp['means'][0].set_color('green')
+        bp['means'][0].set_linewidth(2)
+        
+        # Agregar anotaciones
+        median = data.median()
+        mean = data.mean()
+        plt.text(1.1, median, f'Median: {median:.2f}', va='center')
+        plt.text(1.1, mean, f'Mean: {mean:.2f}', va='center', color='green')
+        
+        plt.ylabel(column_name)
+        plt.title(f'Box Plot Detallado - {column_name}')
+        plt.grid(True, alpha=0.3)
+        
+        # Convertir a base64
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.getvalue()).decode()
+        plt.close()
+        
+        return Response({
+            'analysis_type': 'boxplot',
+            'column': column_name,
+            'image': f'data:image/png;base64,{image_base64}',
+            'statistics': {
+                'min': float(data.min()),
+                'q1': float(data.quantile(0.25)),
+                'median': float(median),
+                'mean': float(mean),
+                'q3': float(data.quantile(0.75)),
+                'max': float(data.max()),
+                'std': float(data.std()),
+                'variance': float(data.var())
+            }
+        })
+    
+    def generate_scatter_plot(self, df, column1, column2):
+        """Genera un scatter plot entre dos variables"""
+        data1 = df[column1].dropna()
+        data2 = df[column2].dropna()
+        
+        # Asegurar que ambas columnas sean numéricas
+        if data1.dtype not in ['int64', 'float64'] or data2.dtype not in ['int64', 'float64']:
+            return Response(
+                {'error': 'Scatter plot only available for numeric columns'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Obtener datos comunes (sin NaN en ninguna)
+        common_index = data1.index.intersection(data2.index)
+        data1 = data1.loc[common_index]
+        data2 = data2.loc[common_index]
+        
+        # Crear figura
+        plt.figure(figsize=(10, 8))
+        
+        # Scatter plot con regresión
+        plt.scatter(data1, data2, alpha=0.5, s=30)
+        
+        # Añadir línea de regresión
+        z = np.polyfit(data1, data2, 1)
+        p = np.poly1d(z)
+        plt.plot(data1.sort_values(), p(data1.sort_values()), "r--", alpha=0.8, label=f'y={z[0]:.2f}x+{z[1]:.2f}')
+        
+        # Calcular correlación
+        correlation = data1.corr(data2)
+        
+        plt.xlabel(column1)
+        plt.ylabel(column2)
+        plt.title(f'Scatter Plot: {column1} vs {column2}\nCorrelación: {correlation:.3f}')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Convertir a base64
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.getvalue()).decode()
+        plt.close()
+        
+        return Response({
+            'analysis_type': 'scatter',
+            'columns': [column1, column2],
+            'image': f'data:image/png;base64,{image_base64}',
+            'statistics': {
+                'correlation': float(correlation),
+                'data_points': len(data1),
+                'regression_slope': float(z[0]),
+                'regression_intercept': float(z[1])
+            }
+        })
+
+
+class DatasetGeneralAnalysisView(APIView):
+    def get(self, request, pk):
+        dataset = get_object_or_404(Dataset, pk=pk)
+        analysis_type = request.query_params.get('type', 'correlation')
+        
+        try:
+            df = pd.read_csv(dataset.file.path)
+            
+            if analysis_type == 'correlation':
+                return self.generate_correlation_matrix(df)
+            elif analysis_type == 'pca':
+                return self.generate_pca_analysis(df)
+            elif analysis_type == 'lasso':
+                target_column = request.query_params.get('target')
+                if not target_column:
+                    return Response(
+                        {'error': 'target column is required for LASSO analysis'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                return self.generate_lasso_analysis(df, target_column)
+            else:
+                return Response(
+                    {'error': f'Unknown analysis type: {analysis_type}'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def generate_correlation_matrix(self, df):
+        """Genera una matriz de correlación para variables numéricas"""
+        # Seleccionar solo columnas numéricas
+        numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+        
+        if len(numeric_columns) < 2:
+            return Response(
+                {'error': 'At least 2 numeric columns are required for correlation matrix'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Calcular matriz de correlación
+        corr_matrix = df[numeric_columns].corr()
+        
+        # Crear figura
+        plt.figure(figsize=(12, 10))
+        
+        # Heatmap
+        mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+        sns.heatmap(corr_matrix, mask=mask, annot=True, fmt='.2f', 
+                    cmap='coolwarm', center=0, square=True,
+                    linewidths=1, cbar_kws={"shrink": .8})
+        
+        plt.title('Matriz de Correlación', fontsize=16, pad=20)
+        plt.tight_layout()
+        
+        # Convertir a base64
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.getvalue()).decode()
+        plt.close()
+        
+        # Encontrar correlaciones más fuertes
+        strong_correlations = []
+        for i in range(len(numeric_columns)):
+            for j in range(i+1, len(numeric_columns)):
+                corr_value = corr_matrix.iloc[i, j]
+                if abs(corr_value) > 0.5 and not np.isnan(corr_value):
+                    strong_correlations.append({
+                        'var1': numeric_columns[i],
+                        'var2': numeric_columns[j],
+                        'correlation': float(corr_value)
+                    })
+        
+        strong_correlations.sort(key=lambda x: abs(x['correlation']), reverse=True)
+        
+        return Response({
+            'analysis_type': 'correlation_matrix',
+            'image': f'data:image/png;base64,{image_base64}',
+            'statistics': {
+                'numeric_columns': numeric_columns,
+                'column_count': len(numeric_columns),
+                'strong_correlations': strong_correlations[:10]  # Top 10
+            }
+        })
+    
+    def generate_pca_analysis(self, df):
+        """Genera análisis PCA para reducción de dimensionalidad"""
+        # Seleccionar solo columnas numéricas
+        numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+        
+        if len(numeric_columns) < 3:
+            return Response(
+                {'error': 'At least 3 numeric columns are required for PCA'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Preparar datos
+        X = df[numeric_columns].dropna()
+        
+        # Escalar datos
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        
+        # Aplicar PCA
+        pca = PCA()
+        X_pca = pca.fit_transform(X_scaled)
+        
+        # Crear figuras
+        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+        
+        # 1. Varianza explicada
+        axes[0, 0].bar(range(1, len(pca.explained_variance_ratio_)+1), 
+                       pca.explained_variance_ratio_)
+        axes[0, 0].set_xlabel('Componente Principal')
+        axes[0, 0].set_ylabel('Varianza Explicada')
+        axes[0, 0].set_title('Varianza Explicada por Componente')
+        axes[0, 0].grid(True, alpha=0.3)
+        
+        # 2. Varianza acumulada
+        cumsum = np.cumsum(pca.explained_variance_ratio_)
+        axes[0, 1].plot(range(1, len(cumsum)+1), cumsum, 'bo-')
+        axes[0, 1].axhline(y=0.95, color='r', linestyle='--', label='95% varianza')
+        axes[0, 1].set_xlabel('Número de Componentes')
+        axes[0, 1].set_ylabel('Varianza Acumulada')
+        axes[0, 1].set_title('Varianza Acumulada')
+        axes[0, 1].legend()
+        axes[0, 1].grid(True, alpha=0.3)
+        
+        # 3. Biplot PC1 vs PC2
+        if X_pca.shape[1] >= 2:
+            axes[1, 0].scatter(X_pca[:, 0], X_pca[:, 1], alpha=0.5)
+            axes[1, 0].set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.2%})')
+            axes[1, 0].set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.2%})')
+            axes[1, 0].set_title('PCA - Primeras 2 Componentes')
+            axes[1, 0].grid(True, alpha=0.3)
+        
+        # 4. Loadings (contribución de variables)
+        loadings = pca.components_[:2].T * np.sqrt(pca.explained_variance_[:2])
+        for i, (var, loading) in enumerate(zip(numeric_columns, loadings)):
+            axes[1, 1].arrow(0, 0, loading[0], loading[1], 
+                           head_width=0.05, head_length=0.05, alpha=0.7)
+            axes[1, 1].text(loading[0]*1.1, loading[1]*1.1, var, fontsize=8)
+        
+        axes[1, 1].set_xlim(-1.2, 1.2)
+        axes[1, 1].set_ylim(-1.2, 1.2)
+        axes[1, 1].set_xlabel('PC1')
+        axes[1, 1].set_ylabel('PC2')
+        axes[1, 1].set_title('PCA Loadings')
+        axes[1, 1].grid(True, alpha=0.3)
+        axes[1, 1].axhline(y=0, color='k', linestyle='-', linewidth=0.5)
+        axes[1, 1].axvline(x=0, color='k', linestyle='-', linewidth=0.5)
+        
+        plt.tight_layout()
+        
+        # Convertir a base64
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.getvalue()).decode()
+        plt.close()
+        
+        # Componentes necesarios para 95% varianza
+        n_components_95 = np.argmax(cumsum >= 0.95) + 1
+        
+        return Response({
+            'analysis_type': 'pca',
+            'image': f'data:image/png;base64,{image_base64}',
+            'statistics': {
+                'total_variables': len(numeric_columns),
+                'explained_variance_ratio': pca.explained_variance_ratio_.tolist(),
+                'cumulative_variance': cumsum.tolist(),
+                'n_components_95_variance': int(n_components_95),
+                'principal_components': {
+                    f'PC{i+1}': {
+                        'variance_explained': float(var),
+                        'top_contributors': sorted(
+                            [(col, float(loading)) for col, loading in zip(numeric_columns, pca.components_[i])],
+                            key=lambda x: abs(x[1]),
+                            reverse=True
+                        )[:5]
+                    }
+                    for i, var in enumerate(pca.explained_variance_ratio_[:3])
+                }
+            }
+        })
+    
+    def generate_lasso_analysis(self, df, target_column):
+        """Genera análisis LASSO para selección de características"""
+        if target_column not in df.columns:
+            return Response(
+                {'error': f'Target column {target_column} not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Verificar que target sea numérico
+        if df[target_column].dtype not in ['int64', 'float64']:
+            return Response(
+                {'error': 'Target column must be numeric for LASSO'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Seleccionar features numéricas (excluyendo target)
+        numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+        numeric_columns.remove(target_column)
+        
+        if len(numeric_columns) < 2:
+            return Response(
+                {'error': 'At least 2 numeric features are required for LASSO'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Preparar datos
+        X = df[numeric_columns].dropna()
+        y = df.loc[X.index, target_column]
+        
+        # Dividir datos
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        
+        # Escalar datos
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        
+        # Probar diferentes valores de alpha
+        alphas = np.logspace(-4, 1, 50)
+        coefs = []
+        scores = []
+        
+        for alpha in alphas:
+            lasso = Lasso(alpha=alpha, random_state=42)
+            lasso.fit(X_train_scaled, y_train)
+            coefs.append(lasso.coef_)
+            scores.append(lasso.score(X_test_scaled, y_test))
+        
+        # Crear visualizaciones
+        fig, axes = plt.subplots(2, 1, figsize=(12, 10))
+        
+        # 1. Trayectoria de coeficientes
+        for i, col in enumerate(numeric_columns):
+            axes[0].plot(alphas, [coef[i] for coef in coefs], label=col)
+        
+        axes[0].set_xscale('log')
+        axes[0].set_xlabel('Alpha (Regularización)')
+        axes[0].set_ylabel('Coeficientes')
+        axes[0].set_title(f'LASSO Path - Prediciendo {target_column}')
+        axes[0].legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
+        axes[0].grid(True, alpha=0.3)
+        
+        # 2. Score vs Alpha
+        axes[1].plot(alphas, scores, 'b-')
+        best_alpha_idx = np.argmax(scores)
+        axes[1].scatter(alphas[best_alpha_idx], scores[best_alpha_idx], 
+                       color='red', s=100, zorder=5)
+        axes[1].set_xscale('log')
+        axes[1].set_xlabel('Alpha (Regularización)')
+        axes[1].set_ylabel('R² Score')
+        axes[1].set_title('Score vs Alpha')
+        axes[1].grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        # Convertir a base64
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.getvalue()).decode()
+        plt.close()
+        
+        # Entrenar modelo final con mejor alpha
+        best_alpha = alphas[best_alpha_idx]
+        lasso_final = Lasso(alpha=best_alpha, random_state=42)
+        lasso_final.fit(X_train_scaled, y_train)
+        
+        # Obtener características importantes
+        feature_importance = [(col, float(coef)) for col, coef in zip(numeric_columns, lasso_final.coef_) if abs(coef) > 0.01]
+        feature_importance.sort(key=lambda x: abs(x[1]), reverse=True)
+        
+        return Response({
+            'analysis_type': 'lasso',
+            'target_column': target_column,
+            'image': f'data:image/png;base64,{image_base64}',
+            'statistics': {
+                'best_alpha': float(best_alpha),
+                'best_score': float(scores[best_alpha_idx]),
+                'n_features_selected': len(feature_importance),
+                'total_features': len(numeric_columns),
+                'selected_features': feature_importance,
+                'feature_elimination_order': [
+                    {
+                        'alpha': float(alpha),
+                        'n_features': int(np.sum(np.abs(coef) > 0.01))
+                    }
+                    for alpha, coef in zip(alphas[::5], coefs[::5])  # Cada 5 para no sobrecargar
+                ]
+            }
+        })

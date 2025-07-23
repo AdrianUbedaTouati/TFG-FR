@@ -14,5 +14,9 @@ joblib==1.3.2
 tensorflow==2.19.0   # admite Py 3.12 y exige numpy < 2.2
 torch==2.7.1         # si quieres GPU usa la instrucción oficial de PyTorch
 
+# --- visualización ---------
+matplotlib==3.8.2
+seaborn==0.13.0
+
 # --- utilidades ------------
 Pillow==10.3.0
