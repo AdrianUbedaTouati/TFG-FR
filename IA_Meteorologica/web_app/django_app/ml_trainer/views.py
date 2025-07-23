@@ -379,6 +379,14 @@ class DatasetReportView(APIView):
                     'unique_count': int(df[col].nunique())
                 }
                 
+                # Get value counts for all columns
+                value_counts = df[col].value_counts(dropna=False).head(10)
+                if len(value_counts) > 0:
+                    stats['top_values'] = {
+                        'values': [str(v) if not pd.isna(v) else 'NaN' for v in value_counts.index.tolist()],
+                        'counts': value_counts.values.tolist()
+                    }
+                
                 if df[col].dtype in ['int64', 'float64']:
                     non_null = df[col].dropna()
                     if len(non_null) > 0:
@@ -822,12 +830,10 @@ class DatasetReportView(APIView):
                     if outlier_info and outlier_info.get('removed_count', 0) > 0:
                         percentage = (outlier_info['removed_count'] / outlier_info['total_before'] * 100)
                         outlier_html = f'''
-                        <div style="background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); 
-                                    border-radius: 8px; padding: 15px; margin-top: 15px; color: #fbbf24;">
-                            <strong>⚠️ Note sur les outliers:</strong><br>
-                            {outlier_info['removed_count']} valeurs ({percentage:.1f}%) ont été exclues de ce graphique 
-                            car elles se trouvent en dehors de l'intervalle [{outlier_info['lower_bound']:.2f}, {outlier_info['upper_bound']:.2f}]
-                            (calculé avec la méthode IQR: Q1 - 1.5×IQR, Q3 + 1.5×IQR)
+                        <div class="alert alert-warning mt-3">
+                            <i class="bi bi-exclamation-triangle"></i> 
+                            <strong>Outliers exclus:</strong> {outlier_info['removed_count']} valeurs ({percentage:.1f}%) ont été exclues du graphique.<br>
+                            <small>Valeurs en dehors de l'intervalle [{outlier_info['lower_bound']:.2f}, {outlier_info['upper_bound']:.2f}] (méthode IQR)</small>
                         </div>
                         '''
                     
@@ -854,6 +860,8 @@ class DatasetReportView(APIView):
             <div id="modalContainer"></div>
             
             <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <script src="https://unpkg.com/@sgratzl/chartjs-chart-boxplot@3"></script>
             <script>
                 // Store column statistics data
                 const columnStats = ''' + json.dumps(column_stats) + ''';
@@ -963,31 +971,31 @@ class DatasetReportView(APIView):
                                         <div class="row mb-4">
                                             <div class="col-md-6">
                                                 <div class="card bg-dark border-info">
-                                                    <div class="card-body">
+                                                    <div class="card-body" style="color: var(--light-color);">
                                                         <h6 class="text-info">Méthode IQR (Rango Intercuartílico)</h6>
-                                                        <p class="mb-2"><strong>Q1 (25%):</strong> ${q1.toFixed(2)}</p>
-                                                        <p class="mb-2"><strong>Q3 (75%):</strong> ${q3.toFixed(2)}</p>
-                                                        <p class="mb-2"><strong>IQR:</strong> ${iqr.toFixed(2)}</p>
-                                                        <hr>
-                                                        <p class="mb-2"><strong>Limite inférieure:</strong> ${lowerBound.toFixed(2)}</p>
-                                                        <p class="mb-0"><strong>Limite supérieure:</strong> ${upperBound.toFixed(2)}</p>
+                                                        <p class="mb-2" style="color: #e2e8f0;"><strong style="color: #60a5fa;">Q1 (25%):</strong> ${q1.toFixed(2)}</p>
+                                                        <p class="mb-2" style="color: #e2e8f0;"><strong style="color: #60a5fa;">Q3 (75%):</strong> ${q3.toFixed(2)}</p>
+                                                        <p class="mb-2" style="color: #e2e8f0;"><strong style="color: #60a5fa;">IQR:</strong> ${iqr.toFixed(2)}</p>
+                                                        <hr style="border-color: rgba(0, 212, 255, 0.3);">
+                                                        <p class="mb-2" style="color: #e2e8f0;"><strong style="color: #60a5fa;">Limite inférieure:</strong> ${lowerBound.toFixed(2)}</p>
+                                                        <p class="mb-0" style="color: #e2e8f0;"><strong style="color: #60a5fa;">Limite supérieure:</strong> ${upperBound.toFixed(2)}</p>
                                                     </div>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
                                                 <div class="card bg-dark border-warning">
-                                                    <div class="card-body">
+                                                    <div class="card-body" style="color: var(--light-color);">
                                                         <h6 class="text-warning">Résumé des Outliers</h6>
-                                                        <p class="mb-2">
-                                                            <i class="bi bi-arrow-down-circle"></i> 
-                                                            <strong>Valeurs en dessous:</strong> 
+                                                        <p class="mb-2" style="color: #e2e8f0;">
+                                                            <i class="bi bi-arrow-down-circle" style="color: #fbbf24;"></i> 
+                                                            <strong style="color: #fbbf24;">Valeurs en dessous:</strong> 
                                                             ${stats.min < lowerBound ? 
                                                                 `<span class="text-danger">Oui (min: ${stats.min.toFixed(2)})</span>` : 
                                                                 '<span class="text-success">Non</span>'}
                                                         </p>
-                                                        <p class="mb-2">
-                                                            <i class="bi bi-arrow-up-circle"></i> 
-                                                            <strong>Valeurs au-dessus:</strong> 
+                                                        <p class="mb-2" style="color: #e2e8f0;">
+                                                            <i class="bi bi-arrow-up-circle" style="color: #fbbf24;"></i> 
+                                                            <strong style="color: #fbbf24;">Valeurs au-dessus:</strong> 
                                                             ${stats.max > upperBound ? 
                                                                 `<span class="text-danger">Oui (max: ${stats.max.toFixed(2)})</span>` : 
                                                                 '<span class="text-success">Non</span>'}
@@ -996,6 +1004,12 @@ class DatasetReportView(APIView):
                                                 </div>
                                             </div>
                                         </div>
+                                        
+                                        <h6 class="text-primary mb-3">Diagrame de Boîte (Box Plot)</h6>
+                                        <div class="text-center mb-4">
+                                            <canvas id="outlierBoxPlot" height="200"></canvas>
+                                        </div>
+                                        
                                         <div class="alert alert-info">
                                             <i class="bi bi-info-circle"></i> 
                                             <strong>Intervalle de valeurs normales:</strong> [${lowerBound.toFixed(2)}, ${upperBound.toFixed(2)}]
@@ -1023,6 +1037,94 @@ class DatasetReportView(APIView):
                     // Show modal
                     const modal = new bootstrap.Modal(document.getElementById('outliersModal'));
                     modal.show();
+                    
+                    // Create box plot after modal is shown
+                    setTimeout(() => {
+                        const canvas = document.getElementById('outlierBoxPlot');
+                        if (canvas) {
+                            const ctx = canvas.getContext('2d');
+                            
+                            // Prepare data for box plot visualization
+                            // Use the actual data within IQR bounds for better visualization
+                            const median = stats.q50 || ((q1 + q3) / 2);
+                            
+                            // For whiskers, find actual min/max within bounds
+                            // This prevents extreme outliers from compressing the box plot
+                            let whiskerMin = q1;
+                            let whiskerMax = q3;
+                            
+                            // Find actual min value that's >= lowerBound
+                            if (stats.min >= lowerBound) {
+                                whiskerMin = stats.min;
+                            } else {
+                                // Use lower bound as whisker if there are outliers below
+                                whiskerMin = lowerBound;
+                            }
+                            
+                            // Find actual max value that's <= upperBound
+                            if (stats.max <= upperBound) {
+                                whiskerMax = stats.max;
+                            } else {
+                                // Use upper bound as whisker if there are outliers above
+                                whiskerMax = upperBound;
+                            }
+                            
+                            new Chart(ctx, {
+                                type: 'boxplot',
+                                data: {
+                                    labels: [columnName],
+                                    datasets: [{
+                                        label: 'Distribution',
+                                        backgroundColor: 'rgba(0, 212, 255, 0.3)',
+                                        borderColor: 'rgba(0, 212, 255, 1)',
+                                        borderWidth: 2,
+                                        padding: 10,
+                                        itemRadius: 0,
+                                        outlierColor: '#ff0000',
+                                        data: [[
+                                            whiskerMin,
+                                            q1,
+                                            median,
+                                            q3,
+                                            whiskerMax
+                                        ]]
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            display: false
+                                        },
+                                        title: {
+                                            display: true,
+                                            text: 'Distribution sans outliers',
+                                            color: '#00d4ff'
+                                        }
+                                    },
+                                    scales: {
+                                        y: {
+                                            ticks: {
+                                                color: '#f0f9ff'
+                                            },
+                                            grid: {
+                                                color: 'rgba(255, 255, 255, 0.1)'
+                                            }
+                                        },
+                                        x: {
+                                            ticks: {
+                                                color: '#f0f9ff'
+                                            },
+                                            grid: {
+                                                color: 'rgba(255, 255, 255, 0.1)'
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }, 200);
                 }
             </script>
         </body>
