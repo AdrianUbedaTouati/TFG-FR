@@ -640,7 +640,7 @@ function displayDatasetDetails(dataset, data) {
                             <div class="row">
                                 <div class="col-md-12">
                                     <label for="variableSelect1" class="form-label text-info">Sélectionner Variable:</label>
-                                    <select class="form-select variable-select" id="variableSelect1" data-analysis-id="1" onchange="updateAnalysisButtons(1)">
+                                    <select class="form-select variable-select" id="variableSelect1" data-analysis-id="1" onchange="updateAnalysisButton(1)">
                                         <option value="">-- Sélectionnez une variable --</option>
                                         ${columns.map(col => {
                                             const colStats = stats[col] || {};
@@ -664,12 +664,19 @@ function displayDatasetDetails(dataset, data) {
                                 </div>
                             </div>
                             <div class="row mt-3">
-                                <div class="col-md-12">
-                                    <div class="btn-group d-flex flex-wrap" role="group" id="analysisButtons1">
-                                        <button class="btn btn-primary" onclick="generateHistogram(1)">
-                                            <i class="bi bi-bar-chart"></i> Histogramme
-                                        </button>
-                                    </div>
+                                <div class="col-md-8">
+                                    <select class="form-select" id="analysisType1" onchange="updateAnalysisButton(1)">
+                                        <option value="histogram">Histogramme</option>
+                                        <option value="outlier_map" class="numeric-only">Carte des Outliers</option>
+                                        <option value="boxplot" class="numeric-only">Box Plot</option>
+                                        <option value="scatter" class="numeric-only">Scatter Plot (2 variables)</option>
+                                        <option value="lasso" class="numeric-only">LASSO (Sélection de variables)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <button class="btn btn-primary w-100" id="analysisButton1" onclick="executeAnalysis(1)">
+                                        <i class="bi bi-graph-up"></i> Générer Analyse
+                                    </button>
                                 </div>
                             </div>
                             <div class="mt-4" id="histogramContainer1" style="display: none;">
@@ -700,9 +707,6 @@ function displayDatasetDetails(dataset, data) {
                     </button>
                     <button class="btn btn-outline-warning" onclick="generateGeneralAnalysis('pca')">
                         <i class="bi bi-arrows-angle-contract"></i> Analyse PCA
-                    </button>
-                    <button class="btn btn-outline-success" onclick="generateGeneralAnalysis('lasso')">
-                        <i class="bi bi-funnel"></i> Sélection LASSO
                     </button>
                 </div>
                 <div id="generalAnalysisContainer">
@@ -889,6 +893,11 @@ function displayDatasetDetails(dataset, data) {
     // Combinar todo
     document.getElementById('datasetDetailContent').innerHTML = 
         dataPreview + variableSelector + generalInfo + detailedAnalysis;
+    
+    // Actualizar el botón de análisis para la primera variable
+    setTimeout(() => {
+        updateAnalysisButton(1);
+    }, 100);
 }
 
 // Generar gráficos del dataset
@@ -1089,7 +1098,7 @@ function addNewAnalysis() {
                 <div class="row">
                     <div class="col-md-12">
                         <label for="variableSelect${analysisCount}" class="form-label text-info">Sélectionner Variable:</label>
-                        <select class="form-select variable-select" id="variableSelect${analysisCount}" data-analysis-id="${analysisCount}" onchange="updateAnalysisButtons(${analysisCount})">
+                        <select class="form-select variable-select" id="variableSelect${analysisCount}" data-analysis-id="${analysisCount}" onchange="updateAnalysisButton(${analysisCount})">
                             <option value="">-- Sélectionnez une variable --</option>
                             ${columns.map(col => {
                                 const colStats = stats[col] || {};
@@ -1113,12 +1122,19 @@ function addNewAnalysis() {
                     </div>
                 </div>
                 <div class="row mt-3">
-                    <div class="col-md-12">
-                        <div class="btn-group d-flex flex-wrap" role="group" id="analysisButtons${analysisCount}">
-                            <button class="btn btn-primary" onclick="generateHistogram(${analysisCount})">
-                                <i class="bi bi-bar-chart"></i> Histogramme
-                            </button>
-                        </div>
+                    <div class="col-md-8">
+                        <select class="form-select" id="analysisType${analysisCount}" onchange="updateAnalysisButton(${analysisCount})">
+                            <option value="histogram">Histogramme</option>
+                            <option value="outlier_map" class="numeric-only">Carte des Outliers</option>
+                            <option value="boxplot" class="numeric-only">Box Plot</option>
+                            <option value="scatter" class="numeric-only">Scatter Plot (2 variables)</option>
+                            <option value="lasso" class="numeric-only">LASSO (Sélection de variables)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-primary w-100" id="analysisButton${analysisCount}" onclick="executeAnalysis(${analysisCount})">
+                            <i class="bi bi-graph-up"></i> Générer Analyse
+                        </button>
                     </div>
                 </div>
                 <div class="mt-4" id="histogramContainer${analysisCount}" style="display: none;">
@@ -1151,6 +1167,144 @@ function removeAnalysis(analysisId) {
         // Remove DOM element
         analysisCard.remove();
     }
+}
+
+// Nueva función para actualizar el botón según el tipo de análisis
+function updateAnalysisButton(analysisId) {
+    const variableSelect = document.getElementById(`variableSelect${analysisId}`);
+    const analysisTypeSelect = document.getElementById(`analysisType${analysisId}`);
+    const selectedOption = variableSelect.options[variableSelect.selectedIndex];
+    const isNumeric = selectedOption && selectedOption.getAttribute('data-numeric') === 'true';
+    
+    // Mostrar/ocultar opciones según el tipo de variable
+    const numericOptions = analysisTypeSelect.querySelectorAll('.numeric-only');
+    numericOptions.forEach(option => {
+        option.style.display = isNumeric ? 'block' : 'none';
+    });
+    
+    // Si la opción seleccionada no es válida para el tipo de variable, cambiar a histograma
+    const selectedAnalysis = analysisTypeSelect.value;
+    if (!isNumeric && ['outlier_map', 'boxplot', 'scatter', 'lasso'].includes(selectedAnalysis)) {
+        analysisTypeSelect.value = 'histogram';
+    }
+}
+
+// Nueva función para ejecutar el análisis seleccionado
+function executeAnalysis(analysisId) {
+    const analysisType = document.getElementById(`analysisType${analysisId}`).value;
+    
+    switch(analysisType) {
+        case 'histogram':
+            generateHistogram(analysisId);
+            break;
+        case 'outlier_map':
+        case 'boxplot':
+        case 'scatter':
+            generateAdvancedAnalysis(analysisId, analysisType);
+            break;
+        case 'lasso':
+            generateLassoForVariable(analysisId);
+            break;
+        default:
+            generateHistogram(analysisId);
+    }
+}
+
+// Nueva función para generar análisis LASSO con variable objetivo específica
+async function generateLassoForVariable(analysisId) {
+    const select = document.getElementById(`variableSelect${analysisId}`);
+    const targetVariable = select.value;
+    
+    if (!targetVariable) {
+        showNotification('Erreur', 'Veuillez sélectionner une variable cible', 'warning');
+        return;
+    }
+    
+    const currentDataset = window.selectedDataset;
+    if (!currentDataset || !currentDataset.id) {
+        showNotification('Erreur', 'Aucun dataset sélectionné', 'error');
+        return;
+    }
+    
+    try {
+        const url = `/api/datasets/${currentDataset.id}/analysis/?type=lasso&target=${encodeURIComponent(targetVariable)}`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Erreur lors de la génération de l\'analyse LASSO');
+        }
+        
+        // Mostrar el análisis LASSO
+        displayLassoAnalysisForVariable(analysisId, data);
+        
+    } catch (error) {
+        showNotification('Erreur', error.message, 'error');
+    }
+}
+
+// Función para mostrar el análisis LASSO para una variable
+function displayLassoAnalysisForVariable(analysisId, data) {
+    const container = document.getElementById(`analysisResultContainer${analysisId}`);
+    if (!container) return;
+    
+    let content = `
+        <div class="card bg-dark border-secondary">
+            <div class="card-header">
+                <h6 class="mb-0 text-info">
+                    <i class="bi bi-funnel"></i> 
+                    LASSO - Prédire ${data.target_column}
+                </h6>
+            </div>
+            <div class="card-body">
+                <img src="${data.image}" class="img-fluid" alt="lasso">
+                <div class="mt-3">
+                    <div class="alert alert-info">
+                        <strong>Variable cible:</strong> ${data.target_column}
+                        <br>
+                        <strong>Meilleur Alpha:</strong> ${data.statistics.best_alpha.toExponential(2)}
+                        <br>
+                        <strong>Score R²:</strong> ${data.statistics.best_score.toFixed(3)}
+                        <br>
+                        <strong>Variables sélectionnées:</strong> ${data.statistics.n_features_selected} sur ${data.statistics.total_features}
+                    </div>
+                    
+                    <h6 class="text-info">Variables Importantes pour prédire ${data.target_column}:</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Variable</th>
+                                    <th>Coefficient</th>
+                                    <th>Impact</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+    `;
+    
+    data.statistics.selected_features.forEach(([feature, coef]) => {
+        const color = coef > 0 ? 'text-success' : 'text-danger';
+        const impact = Math.abs(coef) > 0.5 ? 'Fort' : (Math.abs(coef) > 0.1 ? 'Moyen' : 'Faible');
+        content += `
+            <tr>
+                <td>${feature}</td>
+                <td class="${color}">${coef.toFixed(4)}</td>
+                <td>${impact}</td>
+            </tr>
+        `;
+    });
+    
+    content += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = content;
 }
 
 function generateHistogram(analysisId) {

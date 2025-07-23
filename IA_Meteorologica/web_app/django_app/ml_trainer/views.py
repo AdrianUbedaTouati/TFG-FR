@@ -1525,10 +1525,15 @@ class DatasetGeneralAnalysisView(APIView):
             elif analysis_type == 'lasso':
                 target_column = request.query_params.get('target')
                 if not target_column:
-                    return Response(
-                        {'error': 'target column is required for LASSO analysis'}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                    # Si no se proporciona target, usar la última columna numérica
+                    numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+                    if len(numeric_columns) < 2:
+                        return Response(
+                            {'error': 'At least 2 numeric columns are required for LASSO analysis'}, 
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    # Usar la última columna numérica como target por defecto
+                    target_column = numeric_columns[-1]
                 return self.generate_lasso_analysis(df, target_column)
             else:
                 return Response(
@@ -1795,6 +1800,7 @@ class DatasetGeneralAnalysisView(APIView):
             'analysis_type': 'lasso',
             'target_column': target_column,
             'image': f'data:image/png;base64,{image_base64}',
+            'auto_selected': request.query_params.get('target') is None,  # Indicar si se seleccionó automáticamente
             'statistics': {
                 'best_alpha': float(best_alpha),
                 'best_score': float(scores[best_alpha_idx]),

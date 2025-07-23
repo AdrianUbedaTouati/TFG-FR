@@ -152,11 +152,12 @@ async function generateGeneralAnalysis(analysisType) {
     try {
         let url = `/api/datasets/${currentDataset.id}/analysis/?type=${analysisType}`;
         
-        // Para LASSO necesitamos una variable objetivo
+        // Para LASSO podemos opcionalmente especificar una variable objetivo
         if (analysisType === 'lasso') {
-            const targetVariable = prompt('Sélectionnez la variable cible (target) pour LASSO:');
-            if (!targetVariable) return;
-            url += `&target=${encodeURIComponent(targetVariable)}`;
+            const targetVariable = prompt('Sélectionnez la variable cible (optionnel - laissez vide pour utiliser la dernière variable numérique):');
+            if (targetVariable) {
+                url += `&target=${encodeURIComponent(targetVariable)}`;
+            }
         }
         
         const response = await fetch(url);
@@ -272,6 +273,8 @@ function displayGeneralAnalysis(data) {
             case 'lasso':
                 content += `
                     <div class="alert alert-info">
+                        <strong>Variable cible:</strong> ${data.target_column} ${data.auto_selected ? '(sélectionnée automatiquement)' : ''}
+                        <br>
                         <strong>Meilleur Alpha:</strong> ${data.statistics.best_alpha.toExponential(2)}
                         <br>
                         <strong>Score R²:</strong> ${data.statistics.best_score.toFixed(3)}
@@ -344,52 +347,6 @@ function getAnalysisTitle(analysisType) {
     return titles[analysisType] || analysisType;
 }
 
-// Función para actualizar los botones de análisis
-function updateAnalysisButtons(analysisId) {
-    const select = document.getElementById(`variableSelect${analysisId}`);
-    if (!select || !select.value) {
-        // Si no hay variable seleccionada, solo mostrar el botón de histograma
-        const buttonContainer = document.getElementById(`analysisButtons${analysisId}`);
-        if (buttonContainer) {
-            buttonContainer.innerHTML = `
-                <button class="btn btn-primary" onclick="generateHistogram(${analysisId})">
-                    <i class="bi bi-bar-chart"></i> Histogramme
-                </button>
-            `;
-        }
-        return;
-    }
-    
-    const selectedOption = select.options[select.selectedIndex];
-    const isNumeric = selectedOption.getAttribute('data-numeric') === 'true';
-    
-    const buttonContainer = document.getElementById(`analysisButtons${analysisId}`);
-    if (!buttonContainer) return;
-    
-    let buttons = `
-        <button class="btn btn-primary me-2 mb-2" onclick="generateHistogram(${analysisId})">
-            <i class="bi bi-bar-chart"></i> Histogramme
-        </button>
-    `;
-    
-    if (isNumeric) {
-        buttons += `
-            <button class="btn btn-warning me-2 mb-2" onclick="generateAdvancedAnalysis(${analysisId}, 'outlier_map')">
-                <i class="bi bi-exclamation-triangle"></i> Outliers
-            </button>
-            <button class="btn btn-info me-2 mb-2" onclick="generateAdvancedAnalysis(${analysisId}, 'boxplot')">
-                <i class="bi bi-box"></i> Box Plot
-            </button>
-            <button class="btn btn-success me-2 mb-2" onclick="generateAdvancedAnalysis(${analysisId}, 'scatter')">
-                <i class="bi bi-scatter"></i> Scatter
-            </button>
-        `;
-    }
-    
-    buttonContainer.innerHTML = buttons;
-}
-
 // Exportar funciones para uso global
 window.generateAdvancedAnalysis = generateAdvancedAnalysis;
 window.generateGeneralAnalysis = generateGeneralAnalysis;
-window.updateAnalysisButtons = updateAnalysisButtons;
