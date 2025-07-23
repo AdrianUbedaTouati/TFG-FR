@@ -153,12 +153,29 @@ class DatasetColumnsView(APIView):
                             'magnitude_info': None
                         })
                     
-                    # Histograma para visualización
+                    # Histograma para visualización con exclusión de outliers
                     try:
-                        hist, bins = np.histogram(df[col].dropna(), bins=20)
+                        data = df[col].dropna()
+                        q1 = data.quantile(0.25)
+                        q3 = data.quantile(0.75)
+                        iqr = q3 - q1
+                        lower_bound = q1 - 1.5 * iqr
+                        upper_bound = q3 + 1.5 * iqr
+                        
+                        # Filtrar outliers
+                        data_no_outliers = data[(data >= lower_bound) & (data <= upper_bound)]
+                        outliers_removed = len(data) - len(data_no_outliers)
+                        
+                        hist, bins = np.histogram(data_no_outliers, bins=20)
                         col_stats['histogram'] = {
                             'counts': hist.tolist(),
-                            'bins': bins.tolist()
+                            'bins': bins.tolist(),
+                            'outliers_info': {
+                                'removed_count': int(outliers_removed),
+                                'lower_bound': float(lower_bound),
+                                'upper_bound': float(upper_bound),
+                                'total_before': int(len(data))
+                            }
                         }
                     except:
                         col_stats['histogram'] = None
@@ -288,7 +305,7 @@ class DatasetReportView(APIView):
             df = pd.read_csv(dataset.file.path)
             
             # Generar HTML del reporte
-            html_content = self.generate_html_report(dataset, df)
+            html_content = self.generate_html_report(dataset, df, None)
             
             # Configurar la respuesta HTTP
             response = HttpResponse(content_type='text/html; charset=utf-8')
@@ -309,7 +326,39 @@ class DatasetReportView(APIView):
             )
             return error_response
     
-    def generate_html_report(self, dataset, df):
+    def post(self, request, pk):
+        dataset = get_object_or_404(Dataset, pk=pk)
+        
+        try:
+            # Leer y analizar el dataset
+            df = pd.read_csv(dataset.file.path)
+            
+            # Obtener datos de los gráficos del request
+            chart_data = request.data.get('charts', {})
+            
+            # Generar HTML del reporte con los gráficos
+            html_content = self.generate_html_report(dataset, df, chart_data)
+            
+            # Configurar la respuesta HTTP
+            response = HttpResponse(content_type='text/html; charset=utf-8')
+            response['Content-Disposition'] = f'attachment; filename="rapport_{dataset.name}_{pd.Timestamp.now().strftime("%Y%m%d")}.html"'
+            response.write(html_content.encode('utf-8'))
+            
+            return response
+            
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            print(f"Error en DatasetReportView POST: {error_detail}")
+            # Usar HttpResponse en lugar de Response para errores
+            error_response = HttpResponse(
+                f'<html><body><h1>Error</h1><p>{str(e)}</p><pre>{error_detail}</pre></body></html>',
+                content_type='text/html',
+                status=500
+            )
+            return error_response
+    
+    def generate_html_report(self, dataset, df, chart_data=None):
         """Genera un reporte HTML con el análisis del dataset"""
         
         try:
@@ -353,144 +402,349 @@ class DatasetReportView(APIView):
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Rapport d'Analyse - {dataset.name}</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+            <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
             <style>
+                :root {{
+                    --primary-color: #00d4ff;
+                    --secondary-color: #0099ff;
+                    --accent-color: #ff00ff;
+                    --dark-color: #0a0e27;
+                    --light-color: #f0f9ff;
+                    --neon-glow: 0 0 20px rgba(0, 212, 255, 0.8);
+                    --neon-glow-intense: 0 0 40px rgba(0, 212, 255, 1);
+                }}
+                
+                * {{
+                    box-sizing: border-box;
+                }}
+                
                 body {{
-                    font-family: Arial, sans-serif;
-                    line-height: 1.6;
-                    color: #333;
+                    font-family: 'Poppins', sans-serif;
+                    background: #0a0e27;
+                    min-height: 100vh;
+                    position: relative;
+                    overflow-x: hidden;
+                    color: var(--light-color);
+                    margin: 0;
+                    padding: 0;
+                }}
+                
+                body::before {{
+                    content: '';
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: 
+                        radial-gradient(circle at 20% 50%, rgba(0, 212, 255, 0.3) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 50%, rgba(255, 0, 255, 0.2) 0%, transparent 50%),
+                        radial-gradient(circle at 50% 100%, rgba(0, 153, 255, 0.2) 0%, transparent 50%);
+                    pointer-events: none;
+                    animation: backgroundPulse 10s ease-in-out infinite;
+                }}
+                
+                @keyframes backgroundPulse {{
+                    0%, 100% {{ opacity: 0.3; }}
+                    50% {{ opacity: 0.5; }}
+                }}
+                
+                .container {{
                     max-width: 1200px;
                     margin: 0 auto;
                     padding: 20px;
-                    background-color: #f4f4f4;
+                    position: relative;
+                    z-index: 1;
                 }}
-                h1, h2, h3 {{
-                    color: #2c3e50;
+                h1, h2, h3, h4, h5, h6 {{
+                    color: var(--primary-color);
                 }}
-                .header {{
-                    background-color: #3498db;
-                    color: white;
-                    padding: 20px;
-                    border-radius: 5px;
-                    margin-bottom: 30px;
+                
+                /* Header like the page */
+                .page-header {{
+                    background: rgba(0, 212, 255, 0.05);
+                    border: 1px solid rgba(0, 212, 255, 0.3);
+                    border-radius: 20px;
+                    padding: 30px;
+                    margin-bottom: 40px;
+                    text-align: center;
+                    position: relative;
+                    overflow: hidden;
                 }}
-                .header h1 {{
-                    color: white;
+                
+                .page-header::before {{
+                    content: '';
+                    position: absolute;
+                    top: -50%;
+                    left: -50%;
+                    width: 200%;
+                    height: 200%;
+                    background: radial-gradient(circle, rgba(0, 212, 255, 0.1) 0%, transparent 70%);
+                    animation: rotate 20s linear infinite;
+                }}
+                
+                @keyframes rotate {{
+                    0% {{ transform: rotate(0deg); }}
+                    100% {{ transform: rotate(360deg); }}
+                }}
+                
+                .page-header h1 {{
+                    font-weight: 700;
+                    font-size: 3rem;
+                    margin-bottom: 10px;
+                    text-shadow: var(--neon-glow);
+                    position: relative;
+                    z-index: 1;
+                }}
+                
+                .page-header p {{
+                    color: rgba(240, 249, 255, 0.8);
+                    font-size: 1.2rem;
                     margin: 0;
+                    position: relative;
+                    z-index: 1;
                 }}
-                .summary-grid {{
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                    gap: 20px;
+                /* Stats Grid - Matching page styles exactly */
+                .row {{
                     margin-bottom: 30px;
                 }}
-                .summary-card {{
-                    background: white;
-                    padding: 20px;
-                    border-radius: 5px;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                
+                .stat-card {{
+                    background: rgba(0, 212, 255, 0.05);
+                    border: 1px solid rgba(0, 212, 255, 0.3);
+                    border-radius: 20px;
+                    padding: 30px 20px;
+                    height: 100%;
+                    transition: all 0.3s ease;
+                    position: relative;
+                    overflow: hidden;
                 }}
-                .summary-card h3 {{
-                    margin-top: 0;
-                    color: #3498db;
+                
+                .stat-card::before {{
+                    content: '';
+                    position: absolute;
+                    top: -50%;
+                    left: -50%;
+                    width: 200%;
+                    height: 200%;
+                    background: radial-gradient(circle, rgba(0, 212, 255, 0.05) 0%, transparent 70%);
+                    transition: all 0.3s ease;
+                    opacity: 0;
                 }}
-                .summary-card .value {{
-                    font-size: 24px;
-                    font-weight: bold;
-                    color: #2c3e50;
+                
+                .stat-card:hover {{
+                    transform: translateY(-5px);
+                    box-shadow: var(--neon-glow);
+                    border-color: var(--primary-color);
                 }}
-                table {{
-                    width: 100%;
-                    border-collapse: collapse;
-                    background: white;
+                
+                .stat-card:hover::before {{
+                    opacity: 1;
+                }}
+                
+                .stat-card .card-body {{
+                    position: relative;
+                    z-index: 1;
+                }}
+                
+                .stat-card i {{
+                    font-size: 2rem;
+                    color: var(--primary-color);
+                    text-shadow: var(--neon-glow);
+                }}
+                
+                .stat-card h3 {{
+                    font-size: 2rem;
+                    font-weight: 700;
+                    margin: 15px 0 5px 0;
+                    color: white !important;
+                }}
+                
+                .stat-card .text-muted {{
+                    color: rgba(240, 249, 255, 0.6) !important;
+                    font-size: 0.9rem;
+                }}
+                /* Tables matching page style */
+                .table {{
+                    background: transparent !important;
+                    color: var(--light-color);
                     margin-top: 20px;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
                 }}
-                th, td {{
-                    padding: 12px;
-                    text-align: left;
-                    border-bottom: 1px solid #ddd;
+                
+                .table thead th {{
+                    background-color: rgba(0, 212, 255, 0.1);
+                    color: var(--primary-color);
+                    border-color: rgba(0, 212, 255, 0.3);
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    padding: 15px;
                 }}
-                th {{
-                    background-color: #3498db;
-                    color: white;
+                
+                .table tbody tr {{
+                    border-color: rgba(0, 212, 255, 0.1);
+                    transition: all 0.3s ease;
                 }}
-                tr:hover {{
-                    background-color: #f5f5f5;
+                
+                .table tbody tr:hover {{
+                    background-color: rgba(0, 212, 255, 0.05);
+                    transform: translateX(5px);
                 }}
+                
+                .table td {{
+                    border-color: rgba(0, 212, 255, 0.1);
+                    padding: 12px 15px;
+                    vertical-align: middle;
+                }}
+                
                 .numeric {{
                     text-align: right;
+                    font-family: 'Monaco', 'Consolas', monospace;
                 }}
                 .footer {{
                     margin-top: 50px;
                     text-align: center;
-                    color: #7f8c8d;
+                    color: #64748b;
                     font-size: 14px;
+                    padding: 20px;
+                    border-top: 1px solid rgba(0, 212, 255, 0.2);
                 }}
                 .preview-section {{
                     margin-top: 30px;
-                    background: white;
-                    padding: 20px;
-                    border-radius: 5px;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                    background: rgba(30, 41, 59, 0.8);
+                    backdrop-filter: blur(10px);
+                    padding: 25px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(0, 212, 255, 0.3);
+                    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+                }}
+                .preview-section h2 {{
+                    margin-top: 0;
+                    color: #00d4ff;
+                    border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+                    padding-bottom: 10px;
+                    margin-bottom: 20px;
+                }}
+                .preview-table {{
+                    width: 100%;
+                    background: rgba(15, 17, 20, 0.5);
+                    border-radius: 8px;
+                    overflow: hidden;
+                }}
+                .preview-table th {{
+                    background: rgba(0, 212, 255, 0.1);
+                    color: #00d4ff;
+                }}
+                .preview-table td {{
+                    padding: 10px;
+                    border: 1px solid rgba(0, 212, 255, 0.1);
                 }}
                 .null-badge {{
-                    background-color: #e74c3c;
+                    background-color: #ef4444;
                     color: white;
                     padding: 2px 8px;
                     border-radius: 3px;
                     font-size: 12px;
                 }}
                 .type-badge {{
-                    background-color: #95a5a6;
+                    background-color: #60a5fa;
                     color: white;
                     padding: 2px 8px;
                     border-radius: 3px;
                     font-size: 12px;
                     margin-left: 5px;
                 }}
+                .chart-container {{
+                    background: rgba(30, 41, 59, 0.8);
+                    backdrop-filter: blur(10px);
+                    padding: 20px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(0, 212, 255, 0.3);
+                    margin-bottom: 30px;
+                    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+                }}
+                .chart-container h3 {{
+                    color: #00d4ff;
+                    margin-bottom: 20px;
+                    font-size: 1.3em;
+                    border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+                    padding-bottom: 10px;
+                }}
+                .chart-container img {{
+                    max-width: 100%;
+                    height: auto;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+                }}
+                .icon {{
+                    margin-right: 8px;
+                    color: #00d4ff;
+                }}
             </style>
         </head>
         <body>
-            <div class="header">
-                <h1>Rapport d'Analyse du Dataset</h1>
-                <p>{dataset.name} - Généré le {pd.Timestamp.now().strftime("%d/%m/%Y à %H:%M")}</p>
-            </div>
+            <div class="container">
+                <div class="page-header">
+                    <h1>Rapport d'Analyse du Dataset</h1>
+                    <p>{dataset.name} - Généré le {pd.Timestamp.now().strftime("%d/%m/%Y à %H:%M")}</p>
+                </div>
+                
+                <!-- Stats Grid like in the page -->
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="card-body text-center">
+                                <i class="bi bi-table"></i>
+                                <h3>{shape[0]:,} × {shape[1]}</h3>
+                                <p class="text-muted mb-0">Dimensions</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="card-body text-center">
+                                <i class="bi bi-hdd-fill"></i>
+                                <h3>{memory_usage:.2f} MB</h3>
+                                <p class="text-muted mb-0">Taille en mémoire</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="card-body text-center">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                                <h3>{total_nulls:,}</h3>
+                                <p class="text-muted mb-0">Valeurs manquantes</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="card-body text-center">
+                                <i class="bi bi-calendar-check-fill"></i>
+                                <h3>{dataset.uploaded_at.strftime("%d/%m/%Y") if dataset.uploaded_at else "N/A"}</h3>
+                                <p class="text-muted mb-0">Date d'importation</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             
-            <div class="summary-grid">
-                <div class="summary-card">
-                    <h3>Dimensions</h3>
-                    <div class="value">{shape[0]:,} × {shape[1]}</div>
-                    <p>{shape[0]:,} lignes, {shape[1]} colonnes</p>
-                </div>
-                <div class="summary-card">
-                    <h3>Taille en mémoire</h3>
-                    <div class="value">{memory_usage:.2f} MB</div>
-                    <p>Utilisation mémoire totale</p>
-                </div>
-                <div class="summary-card">
-                    <h3>Valeurs manquantes</h3>
-                    <div class="value">{total_nulls:,}</div>
-                    <p>{(total_nulls / (shape[0] * shape[1]) * 100):.2f}% du total</p>
-                </div>
-                <div class="summary-card">
-                    <h3>Date de création</h3>
-                    <div class="value">{dataset.uploaded_at.strftime("%d/%m/%Y") if dataset.uploaded_at else "N/A"}</div>
-                    <p>Import initial</p>
-                </div>
-            </div>
-            
-            <h2>Analyse des Variables</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Variable</th>
-                        <th>Type</th>
-                        <th>Valeurs uniques</th>
-                        <th>Valeurs nulles</th>
-                        <th>Statistiques</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <div class="mt-5">
+                <h2>Analyse des Variables</h2>
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Variable</th>
+                            <th>Type</th>
+                            <th>Valeurs uniques</th>
+                            <th>Valeurs nulles</th>
+                            <th>Statistiques</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
         '''
         
             for stats in column_stats:
@@ -514,13 +768,25 @@ class DatasetReportView(APIView):
                             <td class="numeric">{stats["unique_count"]}</td>
                             <td class="numeric">{null_badge}</td>
                             <td>{stat_info}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-info" onclick="showUniqueValues('{stats["column"]}')" title="Voir valeurs uniques">
+                                    <i class="bi bi-list-ul"></i>
+                                </button>
+                                {f'''
+                                <button class="btn btn-sm btn-outline-warning ms-1" onclick="showOutliers('{stats["column"]}')" title="Voir outliers">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                </button>
+                                ''' if stats['dtype'] in ['int64', 'float64'] else ''}
+                            </td>
                         </tr>
                 '''
         
             html += '''
                     </tbody>
                 </table>
-                
+            </div>
+            
+            <div class="mt-5">
                 <div class="preview-section">
                     <h2>Aperçu des Données (10 premières lignes)</h2>
                     <div style="overflow-x: auto;">
@@ -528,22 +794,240 @@ class DatasetReportView(APIView):
             
             # Ajouter l'aperçu des données
             try:
-                preview_html = df.head(10).to_html(classes='preview-table', index=False, escape=True)
+                preview_html = df.head(10).to_html(classes='table table-hover preview-table', index=False, escape=True)
                 html += preview_html
             except Exception as e:
-                html += f'<p>Error al generar preview: {str(e)}</p>'
+                html += f'<p>Erreur lors de la génération de l\'aperçu: {str(e)}</p>'
             
             html += '''
                     </div>
                 </div>
+            </div>
+            '''
+            
+            
+            # Ajouter les graphiques si disponibles
+            if chart_data:
+                html += '''
+                <div class="preview-section">
+                    <h2>Analyses de Distribution</h2>
+                '''
                 
+                for analysis_id, chart_info in chart_data.items():
+                    variable_name = chart_info.get('variable', 'Variable')
+                    chart_image = chart_info.get('chartImage', '')
+                    outlier_info = chart_info.get('outlierInfo', None)
+                    
+                    outlier_html = ''
+                    if outlier_info and outlier_info.get('removed_count', 0) > 0:
+                        percentage = (outlier_info['removed_count'] / outlier_info['total_before'] * 100)
+                        outlier_html = f'''
+                        <div style="background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); 
+                                    border-radius: 8px; padding: 15px; margin-top: 15px; color: #fbbf24;">
+                            <strong>⚠️ Note sur les outliers:</strong><br>
+                            {outlier_info['removed_count']} valeurs ({percentage:.1f}%) ont été exclues de ce graphique 
+                            car elles se trouvent en dehors de l'intervalle [{outlier_info['lower_bound']:.2f}, {outlier_info['upper_bound']:.2f}]
+                            (calculé avec la méthode IQR: Q1 - 1.5×IQR, Q3 + 1.5×IQR)
+                        </div>
+                        '''
+                    
+                    html += f'''
+                    <div class="chart-container">
+                        <h3><span class="icon">📊</span>Distribution de {variable_name}</h3>
+                        <img src="{chart_image}" alt="Histogramme de {variable_name}" />
+                        {outlier_html}
+                    </div>
+                    '''
+                
+                html += '''
+                </div>
+                '''
+            
+            html += '''
                 <div class="footer">
                     <p>Rapport généré automatiquement par IA Météorologique</p>
                     <p>© 2024 - Tous droits réservés</p>
                 </div>
-            </body>
-            </html>
-            '''
+            </div>
+            
+            <!-- Modal containers -->
+            <div id="modalContainer"></div>
+            
+            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+            <script>
+                // Store column statistics data
+                const columnStats = ''' + json.dumps(column_stats) + ''';
+                
+                // Function to show unique values modal
+                function showUniqueValues(columnName) {
+                    const stats = columnStats.find(s => s.column === columnName);
+                    if (!stats) return;
+                    
+                    let modalContent = `
+                        <div class="modal fade" id="uniqueValuesModal" tabindex="-1">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content" style="background: var(--dark-color); border: 1px solid var(--primary-color);">
+                                    <div class="modal-header" style="border-bottom: 1px solid rgba(0, 212, 255, 0.3);">
+                                        <h5 class="modal-title" style="color: var(--primary-color);">
+                                            <i class="bi bi-list-ul"></i> Analyse des Valeurs - "${columnName}"
+                                        </h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <span class="badge bg-info">Total: ${stats.unique_count || 0} valeurs uniques</span>
+                                            <span class="badge bg-warning ms-2">Nuls: ${stats.null_count || 0}</span>
+                                        </div>
+                    `;
+                    
+                    if (stats.top_values) {
+                        modalContent += `
+                                        <h6 class="text-primary mb-3">Distribution des fréquences (Top 10):</h6>
+                                        <table class="table table-sm table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>Valeur</th>
+                                                    <th class="text-end">Fréquence</th>
+                                                    <th class="text-end">Pourcentage</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                        `;
+                        
+                        const total = stats.top_values.counts.reduce((a, b) => a + b, 0);
+                        for (let i = 0; i < stats.top_values.values.length; i++) {
+                            const value = stats.top_values.values[i];
+                            const count = stats.top_values.counts[i];
+                            const percentage = (count / total * 100).toFixed(1);
+                            modalContent += `
+                                                <tr>
+                                                    <td>${value}</td>
+                                                    <td class="text-end">${count.toLocaleString('fr-FR')}</td>
+                                                    <td class="text-end">${percentage}%</td>
+                                                </tr>
+                            `;
+                        }
+                        
+                        modalContent += `
+                                            </tbody>
+                                        </table>
+                        `;
+                    }
+                    
+                    modalContent += `
+                                    </div>
+                                    <div class="modal-footer" style="border-top: 1px solid rgba(0, 212, 255, 0.3);">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                            <i class="bi bi-x-circle"></i> Fermer
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Remove existing modal if any
+                    const existingModal = document.getElementById('uniqueValuesModal');
+                    if (existingModal) existingModal.remove();
+                    
+                    // Add modal to container
+                    document.getElementById('modalContainer').innerHTML = modalContent;
+                    
+                    // Show modal
+                    const modal = new bootstrap.Modal(document.getElementById('uniqueValuesModal'));
+                    modal.show();
+                }
+                
+                // Function to show outliers modal
+                function showOutliers(columnName) {
+                    const stats = columnStats.find(s => s.column === columnName);
+                    if (!stats || !stats.q25 || !stats.q75) return;
+                    
+                    const q1 = stats.q25;
+                    const q3 = stats.q75;
+                    const iqr = q3 - q1;
+                    const lowerBound = q1 - 1.5 * iqr;
+                    const upperBound = q3 + 1.5 * iqr;
+                    
+                    let modalContent = `
+                        <div class="modal fade" id="outliersModal" tabindex="-1">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content" style="background: var(--dark-color); border: 1px solid var(--primary-color);">
+                                    <div class="modal-header" style="border-bottom: 1px solid rgba(0, 212, 255, 0.3);">
+                                        <h5 class="modal-title" style="color: var(--primary-color);">
+                                            <i class="bi bi-exclamation-triangle"></i> Analyse des Outliers - "${columnName}"
+                                        </h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="row mb-4">
+                                            <div class="col-md-6">
+                                                <div class="card bg-dark border-info">
+                                                    <div class="card-body">
+                                                        <h6 class="text-info">Méthode IQR (Rango Intercuartílico)</h6>
+                                                        <p class="mb-2"><strong>Q1 (25%):</strong> ${q1.toFixed(2)}</p>
+                                                        <p class="mb-2"><strong>Q3 (75%):</strong> ${q3.toFixed(2)}</p>
+                                                        <p class="mb-2"><strong>IQR:</strong> ${iqr.toFixed(2)}</p>
+                                                        <hr>
+                                                        <p class="mb-2"><strong>Limite inférieure:</strong> ${lowerBound.toFixed(2)}</p>
+                                                        <p class="mb-0"><strong>Limite supérieure:</strong> ${upperBound.toFixed(2)}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="card bg-dark border-warning">
+                                                    <div class="card-body">
+                                                        <h6 class="text-warning">Résumé des Outliers</h6>
+                                                        <p class="mb-2">
+                                                            <i class="bi bi-arrow-down-circle"></i> 
+                                                            <strong>Valeurs en dessous:</strong> 
+                                                            ${stats.min < lowerBound ? 
+                                                                `<span class="text-danger">Oui (min: ${stats.min.toFixed(2)})</span>` : 
+                                                                '<span class="text-success">Non</span>'}
+                                                        </p>
+                                                        <p class="mb-2">
+                                                            <i class="bi bi-arrow-up-circle"></i> 
+                                                            <strong>Valeurs au-dessus:</strong> 
+                                                            ${stats.max > upperBound ? 
+                                                                `<span class="text-danger">Oui (max: ${stats.max.toFixed(2)})</span>` : 
+                                                                '<span class="text-success">Non</span>'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="alert alert-info">
+                                            <i class="bi bi-info-circle"></i> 
+                                            <strong>Intervalle de valeurs normales:</strong> [${lowerBound.toFixed(2)}, ${upperBound.toFixed(2)}]
+                                            <br>
+                                            <small>Les valeurs en dehors de cet intervalle sont considérées comme des outliers potentiels.</small>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer" style="border-top: 1px solid rgba(0, 212, 255, 0.3);">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                            <i class="bi bi-x-circle"></i> Fermer
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Remove existing modal if any
+                    const existingModal = document.getElementById('outliersModal');
+                    if (existingModal) existingModal.remove();
+                    
+                    // Add modal to container
+                    document.getElementById('modalContainer').innerHTML = modalContent;
+                    
+                    // Show modal
+                    const modal = new bootstrap.Modal(document.getElementById('outliersModal'));
+                    modal.show();
+                }
+            </script>
+        </body>
+        </html>
+        '''
         
             return html
         except Exception as e:

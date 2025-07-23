@@ -3,10 +3,41 @@ from .models import Dataset, TrainingSession, WeatherPrediction
 
 
 class DatasetSerializer(serializers.ModelSerializer):
+    row_count = serializers.SerializerMethodField()
+    column_count = serializers.SerializerMethodField()
+    file_size = serializers.SerializerMethodField()
+    
     class Meta:
         model = Dataset
-        fields = ['id', 'name', 'file', 'uploaded_at']
+        fields = ['id', 'name', 'file', 'uploaded_at', 'row_count', 'column_count', 'file_size']
         read_only_fields = ['uploaded_at']
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._df_cache = {}
+    
+    def _get_dataframe(self, obj):
+        if obj.id not in self._df_cache:
+            try:
+                import pandas as pd
+                self._df_cache[obj.id] = pd.read_csv(obj.file.path)
+            except:
+                self._df_cache[obj.id] = None
+        return self._df_cache[obj.id]
+    
+    def get_row_count(self, obj):
+        df = self._get_dataframe(obj)
+        return df.shape[0] if df is not None else 0
+    
+    def get_column_count(self, obj):
+        df = self._get_dataframe(obj)
+        return df.shape[1] if df is not None else 0
+    
+    def get_file_size(self, obj):
+        try:
+            return obj.file.size
+        except:
+            return 0
 
 
 class TrainingSessionSerializer(serializers.ModelSerializer):

@@ -389,6 +389,9 @@
 let datasets = [];
 let selectedDataset = null;
 let charts = {};
+let analysisCount = 1;
+let analysisCharts = {}; // Store multiple charts by analysis ID
+let analysisData = {}; // Store analysis data for report generation
 
 // Función para obtener el CSRF token
 function getCookie(name) {
@@ -458,13 +461,15 @@ function displayDatasets(datasetList) {
                     <div class="dataset-icon">
                         <i class="bi bi-file-earmark-spreadsheet"></i>
                     </div>
-                    <h5 class="card-title text-center mb-3">${dataset.name}</h5>
-                    <p class="text-muted small text-center mb-3">
+                    <h5 class="card-title text-center mb-2" style="font-weight: 600; font-size: 1.3rem;">
+                        ${dataset.name}
+                    </h5>
+                    <p class="text-muted small text-center mb-4" style="font-size: 0.85rem; opacity: 0.8;">
                         ${dataset.description || 'Dataset météorologique'}
                     </p>
                     <div class="dataset-stats">
                         <div class="stat-item">
-                            <div class="stat-value">${dataset.row_count || 0}</div>
+                            <div class="stat-value">${(dataset.row_count || 0).toLocaleString('fr-FR')}</div>
                             <div class="text-muted small">Lignes</div>
                         </div>
                         <div class="stat-item">
@@ -476,9 +481,13 @@ function displayDatasets(datasetList) {
                             <div class="text-muted small">MB</div>
                         </div>
                     </div>
-                    <div class="text-center mt-3 text-muted small">
+                    <div class="text-center mt-4 pt-3" style="border-top: 1px solid rgba(0, 212, 255, 0.2); color: #00d4ff; font-size: 0.9rem;">
                         <i class="bi bi-calendar3"></i> 
-                        ${dataset.created_at ? new Date(dataset.created_at).toLocaleDateString('fr-FR') : 'Date inconnue'}
+                        Importé le ${dataset.uploaded_at ? new Date(dataset.uploaded_at).toLocaleDateString('fr-FR', { 
+                            year: 'numeric', 
+                            month: 'long', 
+                            day: 'numeric' 
+                        }) : 'Date inconnue'}
                     </div>
                 </div>
             </div>
@@ -575,6 +584,11 @@ function displayDatasetDetails(dataset, data) {
     // Guardar datos en variable global para uso posterior
     window.currentDatasetData = data;
     
+    // Reset analysis data for new dataset
+    analysisCount = 1;
+    analysisCharts = {};
+    analysisData = {};
+    
     // Preview de datos PRIMERO
     let dataPreview = `
         <div class="row mb-4">
@@ -612,48 +626,53 @@ function displayDatasetDetails(dataset, data) {
     let variableSelector = `
         <div class="row mb-4">
             <div class="col-md-12">
-                <h5 class="text-primary mb-3"><i class="bi bi-bar-chart-line"></i> Análisis de Distribución</h5>
-                <div class="card bg-dark border-primary">
-                    <div class="card-body">
-                        <div class="row align-items-end">
-                            <div class="col-md-8">
-                                <label for="variableSelect" class="form-label text-info">Seleccionar Variable:</label>
-                                <select class="form-select" id="variableSelect">
-                                    <option value="">-- Seleccione una variable --</option>
-                                    ${columns.map(col => {
-                                        const colStats = stats[col] || {};
-                                        const dtype = colStats.dtype || 'unknown';
-                                        const isNumeric = colStats.mean !== undefined;
-                                        
-                                        let typeLabel = dtype;
-                                        if (dtype.includes('int') || dtype.includes('float')) {
-                                            typeLabel = '📊 Numérico';
-                                        } else if (dtype.includes('datetime')) {
-                                            typeLabel = '📅 Fecha/Hora';
-                                        } else if (dtype.includes('numeric (stored as text)')) {
-                                            typeLabel = '🔢 Numérico (texto)';
-                                        } else if (dtype.includes('object')) {
-                                            typeLabel = '📝 Texto';
-                                        }
-                                        
-                                        return `<option value="${col}" data-numeric="${isNumeric}" data-dtype="${dtype}">${col} - ${typeLabel}</option>`;
-                                    }).join('')}
-                                </select>
+                <h5 class="text-primary mb-3"><i class="bi bi-bar-chart-line"></i> Analyse de Distribution</h5>
+                <div id="analysisContainer">
+                    <div class="card bg-dark border-primary mb-3 analysis-card" data-analysis-id="1">
+                        <div class="card-body">
+                            <div class="row align-items-end">
+                                <div class="col-md-8">
+                                    <label for="variableSelect1" class="form-label text-info">Sélectionner Variable:</label>
+                                    <select class="form-select variable-select" id="variableSelect1" data-analysis-id="1">
+                                        <option value="">-- Sélectionnez une variable --</option>
+                                        ${columns.map(col => {
+                                            const colStats = stats[col] || {};
+                                            const dtype = colStats.dtype || 'unknown';
+                                            const isNumeric = colStats.mean !== undefined;
+                                            
+                                            let typeLabel = dtype;
+                                            if (dtype.includes('int') || dtype.includes('float')) {
+                                                typeLabel = '📊 Numérique';
+                                            } else if (dtype.includes('datetime')) {
+                                                typeLabel = '📅 Date/Heure';
+                                            } else if (dtype.includes('numeric (stored as text)')) {
+                                                typeLabel = '🔢 Numérique (texte)';
+                                            } else if (dtype.includes('object')) {
+                                                typeLabel = '📝 Texte';
+                                            }
+                                            
+                                            return `<option value="${col}" data-numeric="${isNumeric}" data-dtype="${dtype}">${col} - ${typeLabel}</option>`;
+                                        }).join('')}
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <button class="btn btn-primary w-100" onclick="generateHistogram(1)">
+                                        <i class="bi bi-graph-up"></i> Générer Histogramme
+                                    </button>
+                                </div>
                             </div>
-                            <div class="col-md-4">
-                                <button class="btn btn-primary w-100" onclick="generateHistogram()">
-                                    <i class="bi bi-graph-up"></i> Generar Histograma
-                                </button>
+                            <div class="mt-4" id="histogramContainer1" style="display: none;">
+                                <canvas id="variableHistogram1" height="400"></canvas>
                             </div>
-                        </div>
-                        <div class="mt-4" id="histogramContainer" style="display: none;">
-                            <canvas id="variableHistogram" height="400"></canvas>
-                        </div>
-                        <div class="mt-3" id="variableStats" style="display: none;">
-                            <!-- Las estadísticas de la variable seleccionada aparecerán aquí -->
+                            <div class="mt-3" id="variableStats1" style="display: none;">
+                                <!-- Les statistiques de la variable sélectionnée apparaîtront ici -->
+                            </div>
                         </div>
                     </div>
                 </div>
+                <button class="btn btn-success btn-lg w-100" onclick="addNewAnalysis()">
+                    <i class="bi bi-plus-circle"></i> Ajouter une autre analyse de variable
+                </button>
             </div>
         </div>
     `;
@@ -1016,18 +1035,94 @@ function generateDatasetCharts(columns, stats) {
 }
 
 // Generar histograma para variable seleccionada
-function generateHistogram() {
-    const select = document.getElementById('variableSelect');
+// Function to add new analysis section
+function addNewAnalysis() {
+    analysisCount++;
+    const data = window.currentDatasetData;
+    const columns = data.columns || [];
+    const stats = data.stats || {};
+    
+    const newAnalysisHTML = `
+        <div class="card bg-dark border-primary mb-3 analysis-card" data-analysis-id="${analysisCount}">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="text-info mb-0">Analyse ${analysisCount}</h6>
+                    <button class="btn btn-sm btn-danger" onclick="removeAnalysis(${analysisCount})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+                <div class="row align-items-end">
+                    <div class="col-md-8">
+                        <label for="variableSelect${analysisCount}" class="form-label text-info">Sélectionner Variable:</label>
+                        <select class="form-select variable-select" id="variableSelect${analysisCount}" data-analysis-id="${analysisCount}">
+                            <option value="">-- Sélectionnez une variable --</option>
+                            ${columns.map(col => {
+                                const colStats = stats[col] || {};
+                                const dtype = colStats.dtype || 'unknown';
+                                const isNumeric = colStats.mean !== undefined;
+                                
+                                let typeLabel = dtype;
+                                if (dtype.includes('int') || dtype.includes('float')) {
+                                    typeLabel = '📊 Numérique';
+                                } else if (dtype.includes('datetime')) {
+                                    typeLabel = '📅 Date/Heure';
+                                } else if (dtype.includes('numeric (stored as text)')) {
+                                    typeLabel = '🔢 Numérique (texte)';
+                                } else if (dtype.includes('object')) {
+                                    typeLabel = '📝 Texte';
+                                }
+                                
+                                return `<option value="${col}" data-numeric="${isNumeric}" data-dtype="${dtype}">${col} - ${typeLabel}</option>`;
+                            }).join('')}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-primary w-100" onclick="generateHistogram(${analysisCount})">
+                            <i class="bi bi-graph-up"></i> Générer Histogramme
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-4" id="histogramContainer${analysisCount}" style="display: none;">
+                    <canvas id="variableHistogram${analysisCount}" height="400"></canvas>
+                </div>
+                <div class="mt-3" id="variableStats${analysisCount}" style="display: none;">
+                    <!-- Les statistiques de la variable sélectionnée apparaîtront ici -->
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('analysisContainer').insertAdjacentHTML('beforeend', newAnalysisHTML);
+}
+
+// Function to remove an analysis
+function removeAnalysis(analysisId) {
+    const analysisCard = document.querySelector(`[data-analysis-id="${analysisId}"]`);
+    if (analysisCard) {
+        // Destroy chart if exists
+        if (analysisCharts[analysisId]) {
+            analysisCharts[analysisId].destroy();
+            delete analysisCharts[analysisId];
+        }
+        // Remove data
+        delete analysisData[analysisId];
+        // Remove DOM element
+        analysisCard.remove();
+    }
+}
+
+function generateHistogram(analysisId) {
+    const select = document.getElementById(`variableSelect${analysisId}`);
     const selectedVariable = select.value;
     
     if (!selectedVariable) {
-        showNotification('Error', 'Por favor seleccione una variable', 'warning');
+        showNotification('Erreur', 'Veuillez sélectionner une variable', 'warning');
         return;
     }
     
     const data = window.currentDatasetData;
     if (!data || !data.stats) {
-        showNotification('Error', 'No hay datos disponibles', 'error');
+        showNotification('Erreur', 'Aucune donnée disponible', 'error');
         return;
     }
     
@@ -1035,15 +1130,15 @@ function generateHistogram() {
     const isNumeric = select.options[select.selectedIndex].getAttribute('data-numeric') === 'true';
     
     // Mostrar contenedor
-    document.getElementById('histogramContainer').style.display = 'block';
-    document.getElementById('variableStats').style.display = 'block';
+    document.getElementById(`histogramContainer${analysisId}`).style.display = 'block';
+    document.getElementById(`variableStats${analysisId}`).style.display = 'block';
     
     // Destruir gráfico anterior si existe
-    if (window.variableChart) {
-        window.variableChart.destroy();
+    if (analysisCharts[analysisId]) {
+        analysisCharts[analysisId].destroy();
     }
     
-    const canvas = document.getElementById('variableHistogram');
+    const canvas = document.getElementById(`variableHistogram${analysisId}`);
     const ctx = canvas.getContext('2d');
     
     if (isNumeric && colStats.histogram) {
@@ -1056,7 +1151,7 @@ function generateHistogram() {
             labels.push(`${bins[i].toFixed(1)} - ${bins[i+1].toFixed(1)}`);
         }
         
-        window.variableChart = new Chart(ctx, {
+        analysisCharts[analysisId] = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: labels,
@@ -1108,6 +1203,20 @@ function generateHistogram() {
             }
         });
         
+        // Mostrar información de outliers si existe
+        let outlierInfo = '';
+        if (colStats.histogram && colStats.histogram.outliers_info && colStats.histogram.outliers_info.removed_count > 0) {
+            const info = colStats.histogram.outliers_info;
+            outlierInfo = `
+                <div class="alert alert-warning mt-3">
+                    <i class="bi bi-exclamation-triangle"></i> 
+                    <strong>Outliers exclus:</strong> ${info.removed_count} valeurs (${((info.removed_count / info.total_before) * 100).toFixed(1)}%) 
+                    ont été exclues du graphique.<br>
+                    <small>Valeurs en dehors de l'intervalle [${info.lower_bound.toFixed(2)}, ${info.upper_bound.toFixed(2)}] (méthode IQR)</small>
+                </div>
+            `;
+        }
+        
         // Mostrar estadísticas
         let decimalInfo = '';
         if (colStats.decimals_info) {
@@ -1131,7 +1240,7 @@ function generateHistogram() {
             `;
         }
         
-        document.getElementById('variableStats').innerHTML = `
+        document.getElementById(`variableStats${analysisId}`).innerHTML = `
             <div class="card bg-dark border-info">
                 <div class="card-body">
                     <h6 class="text-info mb-3">Estadísticas de ${selectedVariable}</h6>
@@ -1173,12 +1282,13 @@ function generateHistogram() {
                             ${magnitudeInfo}
                         </div>
                     ` : ''}
+                    ${outlierInfo}
                 </div>
             </div>
         `;
     } else if (!isNumeric && colStats.top_values) {
         // Gráfico de barras para variables categóricas
-        window.variableChart = new Chart(ctx, {
+        analysisCharts[analysisId] = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: colStats.top_values.values,
@@ -1231,7 +1341,7 @@ function generateHistogram() {
         });
         
         // Mostrar estadísticas categóricas
-        document.getElementById('variableStats').innerHTML = `
+        document.getElementById(`variableStats${analysisId}`).innerHTML = `
             <div class="card bg-dark border-info">
                 <div class="card-body">
                     <h6 class="text-info mb-3">Información de ${selectedVariable}</h6>
@@ -1253,13 +1363,22 @@ function generateHistogram() {
             </div>
         `;
     } else {
-        document.getElementById('histogramContainer').innerHTML = `
+        document.getElementById(`histogramContainer${analysisId}`).innerHTML = `
             <div class="alert alert-warning">
-                <i class="bi bi-exclamation-triangle"></i> No hay datos de distribución disponibles para esta variable
+                <i class="bi bi-exclamation-triangle"></i> Aucune donnée de distribution disponible pour cette variable
             </div>
         `;
-        document.getElementById('variableStats').innerHTML = '';
+        document.getElementById(`variableStats${analysisId}`).innerHTML = '';
     }
+    
+    // Save analysis data for report generation
+    analysisData[analysisId] = {
+        variable: selectedVariable,
+        isNumeric: isNumeric,
+        stats: colStats,
+        chartData: analysisCharts[analysisId] ? analysisCharts[analysisId].toBase64Image() : null,
+        outlierInfo: colStats.histogram?.outliers_info || null
+    };
 }
 
 // Actualizar estadísticas
@@ -1267,7 +1386,7 @@ function updateStats(datasetList) {
     const totalSize = datasetList.reduce((sum, d) => sum + (d.file_size || 0), 0);
     const totalRows = datasetList.reduce((sum, d) => sum + (d.row_count || 0), 0);
     const lastDate = datasetList.length > 0 ? 
-        new Date(Math.max(...datasetList.map(d => new Date(d.created_at)))).toLocaleDateString('fr-FR') : '-';
+        new Date(Math.max(...datasetList.map(d => new Date(d.uploaded_at || d.created_at)))).toLocaleDateString('fr-FR') : '-';
     
     document.getElementById('totalDatasets').textContent = datasetList.length;
     document.getElementById('totalSize').textContent = (totalSize / 1024 / 1024).toFixed(2) + ' MB';
@@ -1424,12 +1543,29 @@ function downloadReport() {
     
     showNotification('Génération du rapport', 'Génération du rapport d\'analyse en cours...', 'info');
     
+    // Prepare chart data to send
+    const chartsData = {};
+    for (const [analysisId, data] of Object.entries(analysisData)) {
+        if (analysisCharts[analysisId]) {
+            chartsData[analysisId] = {
+                variable: data.variable,
+                isNumeric: data.isNumeric,
+                chartImage: analysisCharts[analysisId].toBase64Image(),
+                outlierInfo: data.outlierInfo
+            };
+        }
+    }
+    
     // Hacer petición para generar el reporte
     fetch(`/api/datasets/${selectedDataset.id}/report/`, {
-        method: 'GET',
+        method: 'POST',
         headers: {
-            'X-CSRFToken': getCookie('csrftoken')
-        }
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            charts: chartsData
+        })
     })
     .then(response => {
         if (!response.ok) {
