@@ -1,0 +1,41 @@
+# Entorno virtual
+.venv/
+IA_Meteorologica/.venv/
+
+# Archivos Python compilados
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribución / empaquetado
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Archivos de logs
+*.log
+
+# Configuración local / IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Variables de entorno / secretos
+.env
+*.env
+
+# Cachés
+.cache/
+pip-wheel-metadata/
+*.egg
+
+# Sistemas operativos
+.DS_Store
+Thumbs.db
+
+# Otros
+*.bak
