@@ -221,21 +221,30 @@ class EarlyStopping:
         return self.counter >= self.patience
 
 
-@torch.no_grad()
 def loop_epoch(model, loader, criterion, optimizer: torch.optim.Optimizer | None = None):
     is_train = optimizer is not None
     model.train(is_train)
+
     total = 0.0
-    for X, y in loader:
-        X, y = X.to(DEVICE), y.to(DEVICE)
-        if is_train:
+    if is_train:
+        # Fase de entrenamiento (sí queremos gradientes)
+        for X, y in loader:
+            X, y = X.to(DEVICE), y.to(DEVICE)
             optimizer.zero_grad()
-        out = model(X)
-        loss = criterion(out, y)
-        if is_train:
+            out = model(X)
+            loss = criterion(out, y)
             loss.backward()
             optimizer.step()
-        total += loss.item() * X.size(0)
+            total += loss.item() * X.size(0)
+    else:
+        # Fase de validación sin gradientes
+        with torch.no_grad():
+            for X, y in loader:
+                X, y = X.to(DEVICE), y.to(DEVICE)
+                out = model(X)
+                loss = criterion(out, y)
+                total += loss.item() * X.size(0)
+
     return total / len(loader.dataset)
 
 
@@ -529,3 +538,4 @@ if __name__ == "__main__":
         )
     else:
         menu(n_splits_default=args.splits)
+

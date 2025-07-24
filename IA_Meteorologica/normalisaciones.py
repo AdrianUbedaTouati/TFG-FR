@@ -4,7 +4,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
 from enum import Enum, auto
 from dataclasses import dataclass, field
-from typing import Callable, Dict
+from typing import Callable, Dict, Union
 
 # ────────────────────────────────
 # 1. Definir los Enum permitidos
@@ -21,11 +21,11 @@ class NumNorm(Enum):
 class TextNorm(Enum):
     LOWER = auto()          # Minúsculas
     STRIP = auto()          # Eliminar espacios en blanco en extremos
+    ONE_HOT = auto()        # Codificación one‑hot
 
 # ────────────────────────────────
 # 2. Implementar las funciones de normalización numérica
 # ────────────────────────────────
-# —— Genéricos ——
 def min_max_numeric(serie: pd.Series) -> pd.Series:
     esc = MinMaxScaler()
     return pd.Series(esc.fit_transform(serie.to_frame()).ravel(), index=serie.index, name=serie.name)
@@ -34,25 +34,17 @@ def z_score_numeric(serie: pd.Series) -> pd.Series:
     esc = StandardScaler()
     return pd.Series(esc.fit_transform(serie.to_frame()).ravel(), index=serie.index, name=serie.name)
 
-# —— LSTM / TCN ——
-# Se usará en redes LSTM y TCN
 def lstm_tcn_norm(serie: pd.Series) -> pd.Series:
     esc = MinMaxScaler(feature_range=(-1, 1))
     return pd.Series(esc.fit_transform(serie.to_frame()).ravel(), index=serie.index, name=serie.name)
 
-# —— CNN ——
-# Se usará en redes CNN
 def cnn_norm(serie: pd.Series) -> pd.Series:
     return z_score_numeric(serie)
 
-# —— Transformer ——
-# Se usará en Transformadores
 def transformer_norm(serie: pd.Series) -> pd.Series:
     esc = RobustScaler()
     return pd.Series(esc.fit_transform(serie.to_frame()).ravel(), index=serie.index, name=serie.name)
 
-# —— Árboles: RandomForest y Gradient Boosting ——
-# Se usará en modelos basados en árboles
 def tree_norm(serie: pd.Series) -> pd.Series:
     return serie.copy()
 
@@ -64,6 +56,18 @@ def lower_text(texto: pd.Series) -> pd.Series:
 
 def strip_text(texto: pd.Series) -> pd.Series:
     return texto.str.strip()
+
+def one_hot_text(texto: pd.Series) -> pd.DataFrame:
+    """
+    Devuelve un DataFrame con la codificación one-hot de la serie de texto.
+    Cada categoría única se convierte en una columna. Ejemplo de 4 frases:
+    frase1 -> 1 0 0 0
+    frase2 -> 0 1 0 0
+    ...
+    """
+    dummies = pd.get_dummies(texto, prefix=texto.name)
+    dummies.index = texto.index
+    return dummies
 
 # ────────────────────────────────
 # 4. 'Registry' para mapear Enum → función
@@ -77,9 +81,11 @@ NUM_REGISTRY: Dict[NumNorm, Callable[[pd.Series], pd.Series]] = {
     NumNorm.TREE: tree_norm,
 }
 
-TEXT_REGISTRY: Dict[TextNorm, Callable[[pd.Series], pd.Series]] = {
+# Las funciones de texto pueden devolver Series o DataFrame (para ONE_HOT)
+TEXT_REGISTRY: Dict[TextNorm, Callable[[pd.Series], Union[pd.Series, pd.DataFrame]]] = {
     TextNorm.LOWER: lower_text,
     TextNorm.STRIP: strip_text,
+    TextNorm.ONE_HOT: one_hot_text,
 }
 
 # ────────────────────────────────
@@ -104,18 +110,38 @@ class Normalizador:
         return self._df_normalizado.copy()
 
     def _normalizar(self) -> pd.DataFrame:
-        df_num = self.df.select_dtypes(include="number")
-        df_text = self.df.select_dtypes(exclude="number")
         num_func = NUM_REGISTRY[self.metodo_numerico]
         text_func = TEXT_REGISTRY[self.metodo_texto]
-        df_num_norm = df_num.apply(num_func, axis=0)
-        df_text_norm = df_text.apply(text_func, axis=0)
-        return pd.concat([df_num_norm, df_text_norm], axis=1)[self.df.columns]
+
+        frames = []
+        # Recorremos las columnas en su orden original
+        for col in self.df.columns:
+            serie = self.df[col]
+            if pd.api.types.is_numeric_dtype(serie):
+                col_norm = num_func(serie)
+                frames.append(col_norm.to_frame())
+            else:
+                col_norm = text_func(serie)
+                if isinstance(col_norm, pd.Series):
+                    frames.append(col_norm.to_frame())
+                else:  # DataFrame (one-hot)
+                    frames.append(col_norm)
+
+        return pd.concat(frames, axis=1)
 
 # ────────────────────────────────
 # 6. Ejemplo de uso
 # ────────────────────────────────
 if __name__ == "__main__":
-    datos = pd.read_csv("weatherHistory.csv")
-    normalizador = Normalizador(df=datos, metodo_numerico=NumNorm.LSTM_TCN, metodo_texto=TextNorm.LOWER)
-    print(normalizador.df_normalizado.head())
+    # Ejemplo simple
+    df_demo = pd.DataFrame({
+        "temperatura": [10, 12, 15, 14],
+        "frase": ["hola mundo", "adiós mundo", "hola mundo", "buenos días"]
+    })
+
+    normalizador = Normalizador(
+        df=df_demo,
+        metodo_numerico=NumNorm.LSTM_TCN,
+        metodo_texto=TextNorm.ONE_HOT
+    )
+    print(normalizador.df_normalizado)
