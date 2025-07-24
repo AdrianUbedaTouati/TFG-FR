@@ -1,37 +1,25 @@
 # -*- coding: utf-8 -*-
-"""train_weather_models_improved.py
-====================================
-Script interactivo y modular que **mejora las redes, añade regularización, early‑stopping y
-visualizaciones específicas** (pérdidas, predicción‑vs‑real, y matriz de convolución para
-la CNN‑1D) sobre el dataset ``weatherHistory.csv``.
+"""train_weather_models_interactivo.py
+=====================================
+Entrenamiento (con CV temporal, early-stopping, gráficas, etc.) de distintas
+arquitecturas sobre *weatherHistory.csv*, **permitiendo escoger interactivamente
+la normalización numérica y de texto** para cada red.
 
-Cambios principales respecto a ``train_weather_models.py``
-----------------------------------------------------------
-* 🧠 **Arquitecturas mejoradas**: Dropout, BatchNorm, kernel_size paramétrico y
-  activaciones LeakyReLU.
-* ⏳ **Early Stopping** basado en pérdida de validación con paciencia.
-* 📊 **Gráficas automáticas** para **cada red**:
-  - Evolución train/val‑loss por fold y promedio.
-  - Serie real vs predicción en test.
-  - 🌈 **Matriz de convolución** (heatmap primer kernel) para CNN‑1D.
-* CLI unificado con argumentos para hiperparámetros clave.
-* Refactor utilidades (``plotters.py``) para desacoplar lógica de visualización.
-
-Ejemplo rápido
-^^^^^^^^^^^^^^
-.. code-block:: bash
-
-   $ python train_weather_models_improved.py --model CNN --epochs 100 --patience 15
-
+Uso rápido (CLI)
+----------------
+$ python redNeuronal.py             # Lanza menú interactivo
+$ python redNeuronal.py LSTM        # Default normals (recomendados)
+$ python redNeuronal.py LSTM --num_norm Z_SCORE --text_norm STRIP
+$ python redNeuronal.py --all       # Entrena todas con defaults
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+from typing import Callable, Dict, List
 
 import joblib
 import matplotlib.pyplot as plt
@@ -42,19 +30,21 @@ import torch.nn as nn
 from sklearn.model_selection import TimeSeriesSplit
 from torch.utils.data import DataLoader, Dataset, Subset
 
-# -----------------------------------------------------------------------------
-# Configuración global ---------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────────
+# Configuración global
+# ──────────────────────────────────────────────────────────────────────────────
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-DATA_PATH = Path(__file__).parent / "weatherHistory.csv"
+DATA_PATH = Path(__file__).parent / "databases/weatherHistory.csv"
 MODELS_DIR = Path(__file__).parent / "models_finales"
 PLOTS_DIR = Path(__file__).parent / "plots"
 MODELS_DIR.mkdir(exist_ok=True)
 PLOTS_DIR.mkdir(exist_ok=True)
 
-# -----------------------------------------------------------------------------
-# Utils -----------------------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────────
+# Dataset helper
+# ──────────────────────────────────────────────────────────────────────────────
 class TimeSeriesDataset(Dataset):
-    """Ventanas deslizantes de longitud fija para series univariantes."""
+    """Ventanas deslizantes univariantes"""
 
     def __init__(self, series: np.ndarray, window: int):
         self.X, self.y = [], []
@@ -64,26 +54,30 @@ class TimeSeriesDataset(Dataset):
         self.X = torch.tensor(np.stack(self.X), dtype=torch.float32)
         self.y = torch.tensor(np.stack(self.y), dtype=torch.float32)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.X)
 
     def __getitem__(self, idx):
         return self.X[idx], self.y[idx]
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Normalizaciones disponibles
+# ──────────────────────────────────────────────────────────────────────────────
+from normalisaciones import Normalizador, NumNorm, TextNorm
 
-# -----------------------------------------------------------------------------
-# Normalizadores --------------------------------------------------------------
-from normalisaciones import Normalizador, NumNorm  # noqa: E402
-
-NORMALIZER_MAP = {
+# Mapeo “recomendado” por arquitectura
+NORMALIZER_MAP: Dict[str, NumNorm] = {
     "LSTM": NumNorm.LSTM_TCN,
     "TCN": NumNorm.LSTM_TCN,
     "CNN": NumNorm.CNN,
     "TRANSFORMER": NumNorm.TRANSFORMER,
 }
 
-# -----------------------------------------------------------------------------
-# Modelos PyTorch -------------------------------------------------------------
+RECOMMENDED_TEXT = TextNorm.LOWER
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Modelos PyTorch (LSTM, TCN, CNN-1D, Transformer)
+# ──────────────────────────────────────────────────────────────────────────────
 class LSTMNetwork(nn.Module):
     def __init__(self, input_size: int, hidden_size: int = 64, n_layers: int = 2, dropout: float = 0.2):
         super().__init__()
@@ -107,8 +101,8 @@ class LSTMNetwork(nn.Module):
 class TemporalBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, dilation, dropout):
         super().__init__()
-        padding = (kernel_size - 1) * dilation
-        layers: list[nn.Module] = [
+        padding = (kernel_size - 1)
+        layers: List[nn.Module] = [
             nn.Conv1d(
                 in_channels,
                 out_channels,
@@ -133,93 +127,139 @@ class TemporalBlock(nn.Module):
             nn.Dropout(dropout),
         ]
         self.net = nn.Sequential(*layers)
+        self.downsample = nn.Conv1d(in_channels, out_channels, 1) if in_channels != out_channels else nn.Identity()
 
     def forward(self, x):
-        out = self.net(x)
-        return out[:, :, :-self.net[0].padding[0]]
+        out = self.net(x) + self.downsample(x)
+        return torch.relu(out)
 
 
 class TCNNetwork(nn.Module):
-    def __init__(self, input_size: int, channels: tuple[int, ...] = (32, 32), kernel_size: int = 3, dropout: float = 0.2):
+    def __init__(self, input_size: int, num_channels: List[int] = [32, 32], kernel_size: int = 3, dropout: float = 0.2):
         super().__init__()
-        layers = []
-        in_ch = input_size
-        for i, ch in enumerate(channels):
-            layers.append(TemporalBlock(in_ch, ch, kernel_size, dilation=2 ** i, dropout=dropout))
-            in_ch = ch
-        self.network = nn.Sequential(*layers)
-        self.fc = nn.Linear(channels[-1], input_size)
+        layers: List[nn.Module] = []
+        num_levels = len(num_channels)
+        for i in range(num_levels):
+            dilation_size = 2 ** i
+            in_ch = input_size if i == 0 else num_channels[i - 1]
+            out_ch = num_channels[i]
+            layers.append(
+                TemporalBlock(in_ch, out_ch, kernel_size, dilation_size, dropout)
+            )
+        self.tcn = nn.Sequential(*layers)
+        self.fc = nn.Linear(num_channels[-1], input_size)
 
     def forward(self, x):
-        x = x.transpose(1, 2)
-        y = self.network(x)
-        y = y[:, :, -1]
-        return self.fc(y)
+        # PyTorch TCN espera (batch, channels, seq_len)
+        y1 = self.tcn(x.transpose(1, 2))
+        o = self.fc(y1[:, :, -1])
+        return o
 
 
 class CNN1DNetwork(nn.Module):
-    def __init__(self, input_size: int, dropout: float = 0.2):
+    def __init__(self, input_size: int, channels: List[int] = [16, 32], kernel_size: int = 3):
         super().__init__()
-        self.conv = nn.Sequential(
-            nn.Conv1d(input_size, 32, 3, padding=1),
-            nn.LeakyReLU(),
-            nn.BatchNorm1d(32),
-            nn.MaxPool1d(2),
-            nn.Dropout(dropout),
-            nn.Conv1d(32, 64, 3, padding=1),
-            nn.LeakyReLU(),
-            nn.BatchNorm1d(64),
-            nn.MaxPool1d(2),
-            nn.Dropout(dropout),
-        )
-        self.fc = nn.Linear(64, input_size)
+        layers: List[nn.Module] = []
+        in_ch = 1
+        for ch in channels:
+            layers.extend(
+                [
+                    nn.Conv1d(in_ch, ch, kernel_size, padding=kernel_size - 1),
+                    nn.BatchNorm1d(ch),
+                    nn.LeakyReLU(),
+                    nn.MaxPool1d(2),
+                ]
+            )
+            in_ch = ch
+        self.conv = nn.Sequential(*layers)
+        conv_out_size = channels[-1]
+        self.fc = nn.Linear(conv_out_size, input_size)
 
     def forward(self, x):
-        x = x.transpose(1, 2)
-        h = self.conv(x)
-        h = h.mean(dim=2)
-        return self.fc(h)
-
-    # Utilidad para devolver la matriz de convolución del primer filtro
-    @property
-    def first_kernel(self) -> torch.Tensor:
-        return self.conv[0].weight.detach().cpu()
+        # Para CNN usamos (batch, channels=1, seq_len)
+        y = self.conv(x.transpose(1, 2))
+        y = y.mean(dim=-1)
+        return self.fc(y)
 
 
 class TransformerNetwork(nn.Module):
-    def __init__(self, input_size: int, n_heads: int = 4, num_layers: int = 2, dropout: float = 0.2):
+    def __init__(self, input_size: int, d_model: int = 32, nhead: int = 4, num_layers: int = 2, dim_feedforward: int = 64):
         super().__init__()
-        self.pos_encoder = nn.Parameter(torch.randn(500, 1, input_size))
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=input_size, nhead=n_heads, dropout=dropout, batch_first=True
-        )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
-        self.fc = nn.Linear(input_size, input_size)
+        self.input_proj = nn.Linear(input_size, d_model)
+        encoder_layer = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout=0.1, batch_first=True)
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers)
+        self.fc = nn.Linear(d_model, input_size)
 
     def forward(self, x):
-        seq_len = x.size(1)
-        pos = self.pos_encoder[:seq_len].permute(1, 0, 2)
-        x = x + pos
-        h = self.transformer(x)
-        return self.fc(h[:, -1, :])
+        y = self.input_proj(x)
+        y = self.encoder(y)
+        return self.fc(y[:, -1, :])
 
 
-MODEL_CLASSES = {
+MODEL_CLASSES: Dict[str, Callable[[int], nn.Module]] = {
     "LSTM": LSTMNetwork,
     "TCN": TCNNetwork,
     "CNN": CNN1DNetwork,
     "TRANSFORMER": TransformerNetwork,
 }
 
-# -----------------------------------------------------------------------------
-# Visualizaciones -------------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────────
+# Funciones auxiliares de entrenamiento
+# ──────────────────────────────────────────────────────────────────────────────
+class EarlyStopping:
+    def __init__(self, patience: int = 10):
+        self.patience = patience
+        self.counter = 0
+        self.best_loss = float("inf")
 
-def plot_losses(history: dict[str, list[float]], title: str, save_path: Path):
+    def step(self, loss: float) -> bool:
+        if loss < self.best_loss:
+            self.best_loss = loss
+            self.counter = 0
+        else:
+            self.counter += 1
+        return self.counter >= self.patience
+
+
+@torch.no_grad()
+def loop_epoch(model, loader, criterion, optimizer: torch.optim.Optimizer | None = None):
+    is_train = optimizer is not None
+    model.train(is_train)
+    total = 0.0
+    for X, y in loader:
+        X, y = X.to(DEVICE), y.to(DEVICE)
+        if is_train:
+            optimizer.zero_grad()
+        out = model(X)
+        loss = criterion(out, y)
+        if is_train:
+            loss.backward()
+            optimizer.step()
+        total += loss.item() * X.size(0)
+    return total / len(loader.dataset)
+
+
+@torch.no_grad()
+def rmse_from_loader(model, loader):
+    model.eval()
+    preds, targets = [], []
+    for X, y in loader:
+        X = X.to(DEVICE)
+        preds.append(model(X).cpu().numpy())
+        targets.append(y.numpy())
+    preds = np.concatenate(preds, axis=0)
+    targets = np.concatenate(targets, axis=0)
+    mse = ((preds - targets) ** 2).mean()
+    rmse = np.sqrt(mse)
+    return rmse, preds.flatten(), targets.flatten()
+
+
+def plot_losses(history: Dict[str, List[float]], title: str, save_path: Path):
     plt.figure()
     plt.plot(history["train"], label="Train")
     plt.plot(history["val"], label="Val")
     plt.xlabel("Época")
-    plt.ylabel("MSE")
+    plt.ylabel("Pérdida (MSE)")
     plt.title(title)
     plt.legend()
     plt.tight_layout()
@@ -239,107 +279,56 @@ def plot_pred_vs_real(preds: np.ndarray, targets: np.ndarray, title: str, save_p
     plt.savefig(save_path)
     plt.close()
 
-
-def plot_conv_matrix(kernel: torch.Tensor, title: str, save_path: Path):
-    """Muestra heatmap del primer kernel [out_channels=32, in_channels=input_size, kernel_size]."""
-    # Seleccionar el primer filtro y el primer canal para simplificar vista
-    kernel2d = kernel[0].numpy()
-    plt.figure()
-    plt.imshow(kernel2d, aspect="auto", cmap="viridis")
-    plt.colorbar(label="Peso")
-    plt.title(title)
-    plt.xlabel("Índice entrada")
-    plt.ylabel("Índice kernel")
-    plt.tight_layout()
-    plt.savefig(save_path)
-    plt.close()
-
-
-# -----------------------------------------------------------------------------
-# Early Stopping --------------------------------------------------------------
-class EarlyStopping:
-    """Detiene entrenamiento si no hay mejora en 'patience' épocas."""
-
-    def __init__(self, patience: int = 10, min_delta: float = 0.0):
-        self.patience = patience
-        self.min_delta = min_delta
-        self.best_loss: float | None = None
-        self.epochs_no_improve = 0
-
-    def step(self, val_loss: float) -> bool:
-        if self.best_loss is None or val_loss < self.best_loss - self.min_delta:
-            self.best_loss = val_loss
-            self.epochs_no_improve = 0
-        else:
-            self.epochs_no_improve += 1
-        return self.epochs_no_improve >= self.patience
-
-
-# -----------------------------------------------------------------------------
-# Entrenamiento con validación cruzada ---------------------------------------
-
-def loop_epoch(model, loader, criterion, optimizer=None):
-    running = 0.0
-    for X, y in loader:
-        X, y = X.to(DEVICE), y.to(DEVICE)
-        if optimizer:
-            optimizer.zero_grad()
-        pred = model(X)
-        loss = criterion(pred, y)
-        if optimizer:
-            loss.backward()
-            optimizer.step()
-        running += loss.item() * len(X)
-    return running / len(loader.dataset)
-
-
-def rmse_from_loader(model, loader):
-    preds, targets = [], []
-    with torch.no_grad():
-        for X, y in loader:
-            X, y = X.to(DEVICE), y.to(DEVICE)
-            preds.append(model(X).cpu().numpy())
-            targets.append(y.cpu().numpy())
-    preds = np.concatenate(preds)
-    targets = np.concatenate(targets)
-    return np.sqrt(((preds - targets) ** 2).mean()), preds, targets
-
-
+# ──────────────────────────────────────────────────────────────────────────────
+# Entrenamiento principal
+# ──────────────────────────────────────────────────────────────────────────────
 def train_model(
     model_name: str,
+    num_norm: NumNorm | None = None,
+    text_norm: TextNorm | None = None,
+    *,
     epochs: int = 100,
     batch_size: int = 64,
     lr: float = 1e-3,
     n_splits: int = 5,
     patience: int = 10,
 ):
-    print(f"\n=== Entrenando {model_name} con {n_splits}-fold TimeSeries CV ===")
+    """Entrena un modelo concreto con las normalizaciones seleccionadas."""
 
-    # 1. Datos ----------------------------------------------------------------
+    # Asignar valores por defecto si el usuario no eligió
+    if num_norm is None:
+        num_norm = NORMALIZER_MAP[model_name]
+    if text_norm is None:
+        text_norm = RECOMMENDED_TEXT
+
+    print(
+        f"\n=== Entrenando {model_name} | NumNorm={num_norm.name} | "
+        f"TextNorm={text_norm.name} | CV={n_splits} ==="
+    )
+
+    # 1. Carga y normalización de datos
     df = pd.read_csv(DATA_PATH)
-    series = df["Temperature (C)"].values[:, None]
-
-    norm = Normalizador(NORMALIZER_MAP[model_name])
-    series_norm = norm.ajustar_transformar(series)
+    norm = Normalizador(
+        df=df[["Temperature (C)"]],
+        metodo_numerico=num_norm,
+        metodo_texto=text_norm,
+    )
+    series_norm = norm.df_normalizado.values
 
     window = 24
     ds_full = TimeSeriesDataset(series_norm, window)
     n_total = len(ds_full)
 
-    # Reservamos 15% final para test -----------------------------------------
     test_size = int(0.15 * n_total)
     test_indices = list(range(n_total - test_size, n_total))
     trainval_indices = list(range(0, n_total - test_size))
 
     test_loader = DataLoader(Subset(ds_full, test_indices), batch_size=batch_size)
 
-    # 2. Validación cruzada temporal -----------------------------------------
+    # 2. CV temporal
     tscv = TimeSeriesSplit(n_splits=n_splits)
-
-    fold_histories: list[dict[str, list[float]]] = []
+    input_size = 1
     best_fold_state, best_fold_rmse, best_fold_epoch, best_fold_idx = None, float("inf"), None, None
-
-    input_size = series.shape[1]
 
     for fold, (tr_idx, val_idx) in enumerate(tscv.split(trainval_indices), 1):
         tr_indices = [trainval_indices[i] for i in tr_idx]
@@ -378,45 +367,39 @@ def train_model(
                 print(f"Fold {fold}/{n_splits} - Época {epoch:3d}: train={train_loss:.4f}  val={val_loss:.4f}")
 
         fold_rmse = np.sqrt(best_val_loss)
-        fold_histories.append(history)
-
-        # Almacenar mejor fold global ----------------------------------------
         if fold_rmse < best_fold_rmse:
             best_fold_rmse = fold_rmse
             best_fold_state = best_state
             best_fold_epoch = best_epoch
             best_fold_idx = fold
 
-        # Plot por fold -------------------------------------------------------
         plot_losses(
             history,
             title=f"{model_name} Fold {fold} pérdidas",
-            save_path=PLOTS_DIR / f"{model_name}_fold{fold}_loss.png",
+            save_path=PLOTS_DIR / f"{model_name}_{num_norm.name}_{fold}_loss.png",
         )
-
         print(f"→ Fold {fold} terminado | Mejor val_RMSE={fold_rmse:.4f} (época {best_epoch})")
 
-    # 3. Evaluación final en test --------------------------------------------
+    # 3. Evaluación final en test
     model_best = MODEL_CLASSES[model_name](input_size).to(DEVICE)
     model_best.load_state_dict(best_fold_state)
-    model_best.eval()
-
     rmse, preds, targets = rmse_from_loader(model_best, test_loader)
     mae = np.abs(preds - targets).mean()
-    ss_res = ((targets - preds) ** 2).sum()
-    ss_tot = ((targets - targets.mean()) ** 2).sum()
-    r2 = 1 - ss_res / ss_tot
+    r2 = 1 - ((targets - preds) ** 2).sum() / ((targets - targets.mean()) ** 2).sum()
 
-    # 4. Guardado -------------------------------------------------------------
+    # 4. Guardado
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{model_name}_{timestamp}.pt"
+    filename = f"{model_name}_{num_norm.name}_{text_norm.name}_{timestamp}.pt"
     path = MODELS_DIR / filename
     torch.save(
         {
             "model_name": model_name,
             "state_dict": best_fold_state,
             "input_size": input_size,
-            "scaler_state": norm.exportar_estado(),
+            "normalizacion": {
+                "numerica": num_norm.name,
+                "texto": text_norm.name,
+            },
             "metrics": {"rmse": rmse, "mae": mae, "r2": r2},
             "best_fold": best_fold_idx,
             "best_epoch": best_fold_epoch,
@@ -425,80 +408,99 @@ def train_model(
         path,
     )
     print(
-        f"\nMejor modelo: fold {best_fold_idx} | época {best_fold_epoch}\n"
-        f"Guardado en {path} (Test RMSE={rmse:.4f}, MAE={mae:.4f}, R²={r2:.4f})\n"
+        f"\n✔️  Modelo guardado en {path}\n"
+        f"Test RMSE={rmse:.4f} | MAE={mae:.4f} | R²={r2:.4f}\n"
     )
 
-    # 5. Gráfica promedio CV --------------------------------------------------
-    avg_train = np.mean([h["train"] for h in fold_histories], axis=0)
-    avg_val = np.mean([h["val"] for h in fold_histories], axis=0)
-    plot_losses(
-        {"train": avg_train, "val": avg_val},
-        title=f"{model_name} CV {n_splits}-fold (prom)",
-        save_path=PLOTS_DIR / f"{model_name}_cv_loss.png",
+    # Gráfica final real vs predicción
+    plot_pred_vs_real(
+        preds,
+        targets,
+        title=f"{model_name}-{num_norm.name}-test",
+        save_path=PLOTS_DIR / f"{model_name}_{num_norm.name}_pred_vs_real.png",
     )
 
-    # 6. Gráfica predicción vs real ------------------------------------------
-    plot_pred_vs_real(preds, targets, f"{model_name} Predicción vs Real", PLOTS_DIR / f"{model_name}_pred.png")
+# ──────────────────────────────────────────────────────────────────────────────
+# Menú / CLI
+# ──────────────────────────────────────────────────────────────────────────────
+def choose_enum(title: str, enum_cls, recommended) -> Enum:
+    """Muestra un menú de opciones para un Enum y devuelve la elección."""
+    options = list(enum_cls)
+    print(f"\n{title}:")
+    for i, opt in enumerate(options, 1):
+        rec = " (recomendado)" if opt == recommended else ""
+        print(f" {i}. {opt.name}{rec}")
+    while True:
+        sel = input("Selecciona una opción (Enter = recomendado): ").strip()
+        if sel == "":
+            return recommended
+        if sel.isdigit() and 1 <= int(sel) <= len(options):
+            return options[int(sel) - 1]
+        print("⚠️  Entrada no válida, intenta de nuevo.")
 
-    # 7. Matriz de convolución si CNN ----------------------------------------
-    if model_name == "CNN":
-        kernel = model_best.first_kernel  # [out_ch, in_ch, k]
-        plot_conv_matrix(kernel, "Matriz de convolución (1er filtro)", PLOTS_DIR / f"{model_name}_kernel.png")
 
-
-# -----------------------------------------------------------------------------
-# Menú / CLI ------------------------------------------------------------------
-
-def menu(n_splits_default=5):
-    def make_action(name):
-        return lambda cfg: train_model(name, **cfg)
-
-    options = {
-        "1": ("Entrenar LSTM", make_action("LSTM")),
-        "2": ("Entrenar TCN", make_action("TCN")),
-        "3": ("Entrenar CNN‑1D", make_action("CNN")),
-        "4": ("Entrenar Transformer", make_action("TRANSFORMER")),
-        "5": ("Entrenar TODAS", lambda cfg: [train_model(m, **cfg) for m in MODEL_CLASSES]),
-        "0": ("Salir", lambda cfg: sys.exit(0)),
-    }
-
-    # Config común via input --------------------------------------------------
+def menu(n_splits_default: int = 5):
+    MODEL_KEYS = {"1": "LSTM", "2": "TCN", "3": "CNN", "4": "TRANSFORMER"}
+    print("=== Configuración global ===")
     cfg = {
-        "epochs": int(input(f"Épocas [{100}]: ") or 100),
-        "batch_size": int(input(f"Batch size [{64}]: ") or 64),
-        "lr": float(input(f"LR [{1e-3}]: ") or 1e-3),
+        "epochs": int(input(f"Épocas [100]: ") or 100),
+        "batch_size": int(input(f"Batch size [64]: ") or 64),
+        "lr": float(input(f"LR [1e-3]: ") or 1e-3),
         "n_splits": int(input(f"Folds CV [{n_splits_default}]: ") or n_splits_default),
-        "patience": int(input(f"Patience early‑stopping [{10}]: ") or 10),
+        "patience": int(input(f"Patience early-stopping [10]: ") or 10),
     }
 
     while True:
-        print("\n==== Menú de entrenamiento ====")
-        for key, (desc, _) in options.items():
-            print(f" {key}. {desc}")
-        choice = input("Selecciona una opción: ")
-        action = options.get(choice)
-        if action:
-            action[1](cfg)
+        print("\n==== Menú de modelos ====")
+        for key, name in MODEL_KEYS.items():
+            print(f" {key}. Entrenar {name}")
+        print(" 5. Entrenar TODOS (defaults)")
+        print(" 0. Salir")
+
+        choice = input("Selecciona una opción: ").strip()
+        if choice == "0":
+            sys.exit(0)
+        elif choice == "5":
+            for model in MODEL_CLASSES:
+                train_model(
+                    model,
+                    NORMALIZER_MAP[model],
+                    RECOMMENDED_TEXT,
+                    **cfg,
+                )
+        elif choice in MODEL_KEYS:
+            model_name = MODEL_KEYS[choice]
+            num_norm = choose_enum(
+                f"Normalización numérica para {model_name}",
+                NumNorm,
+                NORMALIZER_MAP[model_name],
+            )
+            text_norm = choose_enum(
+                "Normalización de texto",
+                TextNorm,
+                RECOMMENDED_TEXT,
+            )
+            train_model(model_name, num_norm, text_norm, **cfg)
         else:
-            print("Opción no válida. Intenta de nuevo.")
+            print("⚠️  Opción no válida.")
 
-
-# -----------------------------------------------------------------------------
-# Punto de entrada ------------------------------------------------------------
-
+# ──────────────────────────────────────────────────────────────────────────────
+# Entrada principal
+# ──────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Entrenamiento de modelos meteorológicos mejorados")
-    parser.add_argument("--model", choices=MODEL_CLASSES.keys(), help="Modelo a entrenar", nargs="?")
+    parser = argparse.ArgumentParser(description="Entrenamiento de modelos meteorológicos")
+    parser.add_argument("model", nargs="?", choices=MODEL_CLASSES.keys(), help="Modelo a entrenar")
     parser.add_argument("--all", action="store_true", help="Entrenar todos los modelos")
+    parser.add_argument("--num_norm", choices=[e.name for e in NumNorm], help="Normalización numérica")
+    parser.add_argument("--text_norm", choices=[e.name for e in TextNorm], help="Normalización de texto")
     parser.add_argument("--splits", type=int, default=5, help="Número de folds para TimeSeriesSplit")
     parser.add_argument("--epochs", type=int, default=100, help="Número máximo de épocas")
     parser.add_argument("--batch_size", type=int, default=64, help="Tamaño de batch")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
-    parser.add_argument("--patience", type=int, default=10, help="Patience early‑stopping")
+    parser.add_argument("--patience", type=int, default=10, help="Patience early-stopping")
     args = parser.parse_args()
 
-    cfg = {
+    cfg_common = {
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "lr": args.lr,
@@ -506,10 +508,24 @@ if __name__ == "__main__":
         "patience": args.patience,
     }
 
+    # Parse posibles Enum via CLI
+    num_norm_cli = NumNorm[args.num_norm] if args.num_norm else None
+    text_norm_cli = TextNorm[args.text_norm] if args.text_norm else None
+
     if args.all:
-        for name in MODEL_CLASSES:
-            train_model(name, **cfg)
+        for model in MODEL_CLASSES:
+            train_model(
+                model,
+                num_norm_cli or NORMALIZER_MAP[model],
+                text_norm_cli or RECOMMENDED_TEXT,
+                **cfg_common,
+            )
     elif args.model:
-        train_model(args.model, **cfg)
+        train_model(
+            args.model,
+            num_norm_cli,
+            text_norm_cli,
+            **cfg_common,
+        )
     else:
         menu(n_splits_default=args.splits)

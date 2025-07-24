@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(ls:*)",
+      "Bash(npx create-react-app:*)",
+      "Bash(django-admin startproject:*)",
+      "Bash(pip install:*)",
+      "Bash(python3 -m pip install django)",
+      "Bash(mv:*)",
+      "Bash(python:*)",
+      "Bash(source:*)",
+      "Bash(rg:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(.venv/Scripts/python.exe web_app/django_app/manage.py makemigrations:*)",
+      "Bash(.venv/Scripts/python.exe web_app/django_app/manage.py migrate:*)",
+      "Bash(.venv/Scripts/python.exe web_app/django_app/manage.py dbshell:*)",
+      "Bash(sqlite3:*)",
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(rm:*)",
+      "Bash(claude doctor)",
+      "Bash(claude --version)"
+    ],
+    "deny": []
+  }
+}
