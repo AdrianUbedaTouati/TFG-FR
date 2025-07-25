@@ -20,3 +20,6 @@ seaborn==0.13.0
 
 # --- utilidades ------------
 Pillow==10.3.0
+
+# --- OpenAI (IA generativa) -
+openai>=1.0.0,<2.0.0  # nuevo cliente: from openai import OpenAI

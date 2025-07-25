@@ -10,6 +10,7 @@ urlpatterns = [
     path('predictions/', views.predictions, name='predictions'),
     path('models/', views.models, name='models'),
     path('datasets/', views.datasets, name='datasets'),
+    path('datasets/<int:dataset_id>/normalize/', views.dataset_normalize, name='dataset-normalize'),
     path('admin/', admin.site.urls),
     path('api/', include('ml_trainer.urls')),
 ]

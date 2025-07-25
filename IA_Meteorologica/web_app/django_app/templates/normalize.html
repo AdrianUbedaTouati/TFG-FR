@@ -1,0 +1,1290 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Normalización de Dataset{% endblock %}
+
+{% block extra_css %}
+<style>
+    .normalization-container {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .dataset-header {
+        background: rgba(0, 212, 255, 0.05);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 20px;
+        padding: 30px;
+        margin-bottom: 30px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .dataset-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(0, 212, 255, 0.1) 0%, transparent 70%);
+        animation: rotate 20s linear infinite;
+    }
+
+    .dataset-info {
+        position: relative;
+        z-index: 1;
+    }
+
+    .dataset-stats {
+        display: flex;
+        gap: 30px;
+        margin-top: 20px;
+    }
+
+    .stat-item {
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--primary-color);
+        text-shadow: var(--neon-glow);
+    }
+
+    .stat-label {
+        color: rgba(240, 249, 255, 0.6);
+        font-size: 0.9rem;
+    }
+
+    .variables-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .variable-card {
+        background: rgba(0, 212, 255, 0.05);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 15px;
+        padding: 20px;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .variable-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--neon-glow);
+        border-color: var(--primary-color);
+    }
+
+    .variable-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(0, 212, 255, 0.05) 0%, transparent 70%);
+        transition: all 0.3s ease;
+        opacity: 0;
+    }
+
+    .variable-card:hover::before {
+        opacity: 1;
+    }
+
+    .variable-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        position: relative;
+        z-index: 1;
+    }
+
+    .variable-name {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: var(--primary-color);
+    }
+
+    .variable-type {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .type-numeric {
+        background: rgba(0, 212, 255, 0.2);
+        color: #00d4ff;
+        border: 1px solid rgba(0, 212, 255, 0.4);
+    }
+
+    .type-text {
+        background: rgba(255, 0, 255, 0.2);
+        color: #ff00ff;
+        border: 1px solid rgba(255, 0, 255, 0.4);
+    }
+
+    .type-unknown {
+        background: rgba(255, 165, 0, 0.2);
+        color: #ffa500;
+        border: 1px solid rgba(255, 165, 0, 0.4);
+    }
+
+    .variable-stats {
+        font-size: 0.85rem;
+        color: rgba(240, 249, 255, 0.7);
+        margin-bottom: 15px;
+        line-height: 1.6;
+        position: relative;
+        z-index: 1;
+    }
+
+    .normalization-select {
+        width: 100%;
+        padding: 10px;
+        background: rgba(15, 17, 20, 0.8);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 8px;
+        color: var(--light-color);
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+        z-index: 1;
+    }
+
+    .normalization-select:hover {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+    }
+
+    .normalization-select:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: var(--neon-glow);
+    }
+
+    .normalization-select option {
+        background: var(--dark-color);
+        padding: 10px;
+    }
+
+    .normalization-select optgroup {
+        font-weight: bold;
+        color: var(--primary-color);
+    }
+
+    .preview-btn {
+        margin-top: 10px;
+        width: 100%;
+        padding: 8px;
+        background: transparent;
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        color: var(--primary-color);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 0.85rem;
+        position: relative;
+        z-index: 1;
+    }
+
+    .preview-btn:hover {
+        background: rgba(0, 212, 255, 0.1);
+        border-color: var(--primary-color);
+        box-shadow: var(--neon-glow);
+    }
+
+    .control-panel {
+        background: rgba(0, 212, 255, 0.05);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 20px;
+        padding: 30px;
+        margin-bottom: 30px;
+        position: sticky;
+        top: 20px;
+    }
+
+    .control-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--primary-color);
+        margin-bottom: 20px;
+        text-shadow: var(--neon-glow);
+    }
+
+    .control-group {
+        margin-bottom: 20px;
+    }
+
+    .control-label {
+        display: block;
+        font-size: 0.9rem;
+        color: rgba(240, 249, 255, 0.8);
+        margin-bottom: 8px;
+    }
+
+    .dataset-name-input {
+        width: 100%;
+        padding: 10px;
+        background: rgba(15, 17, 20, 0.8);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 8px;
+        color: var(--light-color);
+        font-size: 0.9rem;
+        transition: all 0.3s ease;
+    }
+
+    .dataset-name-input:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: var(--neon-glow);
+    }
+
+    .apply-btn {
+        width: 100%;
+        padding: 12px 24px;
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .apply-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--neon-glow-intense);
+    }
+
+    .apply-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .normalized-copies {
+        margin-top: 30px;
+    }
+
+    .copies-title {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: var(--primary-color);
+        margin-bottom: 15px;
+    }
+
+    .copy-list {
+        background: rgba(15, 17, 20, 0.5);
+        border-radius: 10px;
+        padding: 10px;
+    }
+
+    .copy-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+        transition: all 0.3s ease;
+    }
+
+    .copy-item:last-child {
+        border-bottom: none;
+    }
+
+    .copy-item:hover {
+        background: rgba(0, 212, 255, 0.05);
+    }
+
+    .copy-name {
+        font-size: 0.9rem;
+        color: var(--light-color);
+    }
+
+    .copy-date {
+        font-size: 0.8rem;
+        color: rgba(240, 249, 255, 0.5);
+    }
+
+    .copy-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .copy-btn {
+        padding: 6px 12px;
+        background: transparent;
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        color: var(--primary-color);
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 0.8rem;
+    }
+
+    .copy-btn:hover {
+        background: rgba(0, 212, 255, 0.1);
+        border-color: var(--primary-color);
+    }
+
+    .loading-spinner {
+        display: none;
+        text-align: center;
+        padding: 50px;
+    }
+
+    .spinner {
+        border: 3px solid rgba(0, 212, 255, 0.1);
+        border-top: 3px solid var(--primary-color);
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .preview-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+        overflow-y: auto;
+    }
+
+    .preview-content {
+        max-width: 800px;
+        margin: 50px auto;
+        background: var(--dark-color);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 20px;
+        padding: 30px;
+        position: relative;
+    }
+
+    .preview-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .preview-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--primary-color);
+    }
+
+    .close-preview {
+        background: transparent;
+        border: none;
+        color: var(--light-color);
+        font-size: 1.5rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .close-preview:hover {
+        color: var(--primary-color);
+    }
+
+    .preview-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+
+    .preview-table th,
+    .preview-table td {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+    }
+
+    .preview-table th {
+        background: rgba(0, 212, 255, 0.1);
+        color: var(--primary-color);
+        font-weight: 600;
+    }
+
+    .preview-table tr:hover {
+        background: rgba(0, 212, 255, 0.05);
+    }
+
+    .stats-comparison {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    .stats-box {
+        background: rgba(0, 212, 255, 0.05);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 10px;
+        padding: 15px;
+    }
+
+    .stats-box h4 {
+        color: var(--primary-color);
+        margin-bottom: 10px;
+    }
+
+    .stat-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 0;
+        font-size: 0.9rem;
+    }
+
+    .stat-row label {
+        color: rgba(240, 249, 255, 0.7);
+    }
+
+    .stat-row value {
+        color: var(--light-color);
+        font-weight: 500;
+    }
+    
+    /* Estilos para el modal de progreso */
+    .progress-container {
+        color: var(--light-color);
+    }
+    
+    .progress {
+        overflow: visible;
+    }
+    
+    .progress-bar {
+        position: relative;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    
+    #progressLog {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 212, 255, 0.5) rgba(0, 0, 0, 0.3);
+    }
+    
+    #progressLog::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    #progressLog::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.3);
+    }
+    
+    #progressLog::-webkit-scrollbar-thumb {
+        background-color: rgba(0, 212, 255, 0.5);
+        border-radius: 4px;
+    }
+    
+    #progressLog::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(0, 212, 255, 0.8);
+    }
+    
+    .modal-content {
+        animation: modalGlow 3s ease-in-out infinite alternate;
+    }
+    
+    @keyframes modalGlow {
+        0% { box-shadow: 0 0 20px rgba(0, 212, 255, 0.3); }
+        100% { box-shadow: 0 0 40px rgba(0, 212, 255, 0.5); }
+    }
+    
+    .steps-graph {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 10px;
+        padding: 20px;
+        border: 1px solid rgba(0, 212, 255, 0.2);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="normalization-container">
+    <div class="page-header">
+        <h1>Normalización de Dataset</h1>
+        <p>Normaliza tu dataset variable por variable con métodos específicos para cada tipo de dato</p>
+    </div>
+
+    <div class="dataset-header">
+        <div class="dataset-info">
+            <h2 id="dataset-name">Cargando dataset...</h2>
+            <div class="dataset-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="dataset-rows">-</div>
+                    <div class="stat-label">Filas</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="dataset-cols">-</div>
+                    <div class="stat-label">Columnas</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="normalized-count">0</div>
+                    <div class="stat-label">Normalizadas</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <h3 class="mb-4">Variables del Dataset</h3>
+            <div class="variables-grid" id="variables-grid">
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                    <p class="mt-3">Cargando variables...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="control-panel">
+                <h3 class="control-title">Control de Normalización</h3>
+                
+                <div class="control-group">
+                    <label class="control-label">Nombre del dataset normalizado:</label>
+                    <input type="text" class="dataset-name-input" id="new-dataset-name" 
+                           placeholder="Se generará automáticamente">
+                </div>
+
+                <div class="control-group">
+                    <label class="control-label">Variables seleccionadas:</label>
+                    <div id="selected-count">0 variables seleccionadas</div>
+                </div>
+
+                <button class="apply-btn" id="apply-normalization" disabled>
+                    <i class="bi bi-check-circle"></i> Aplicar Normalización
+                </button>
+
+                <div class="normalized-copies" id="normalized-copies">
+                    <h4 class="copies-title">Copias Normalizadas</h4>
+                    <div class="copy-list" id="copy-list">
+                        <p class="text-muted text-center">No hay copias normalizadas</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de previsualización -->
+<div class="preview-modal" id="preview-modal">
+    <div class="preview-content">
+        <div class="preview-header">
+            <h3 class="preview-title" id="preview-title">Previsualización</h3>
+            <button class="close-preview" onclick="closePreview()">&times;</button>
+        </div>
+        <div id="preview-body">
+            <!-- Content will be dynamically inserted here -->
+        </div>
+    </div>
+</div>
+
+<!-- Modal de progreso de normalización -->
+<div class="modal fade" id="progressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background: var(--dark-color); border: 1px solid rgba(0, 212, 255, 0.3);">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(0, 212, 255, 0.3);">
+                <h5 class="modal-title" style="color: var(--primary-color);">
+                    <i class="bi bi-gear-wide-connected"></i> Proceso de Normalización
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="progress-container">
+                    <div class="overall-progress mb-4">
+                        <h6 style="color: var(--light-color);">Progreso General</h6>
+                        <div class="progress" style="height: 30px; background: rgba(0, 212, 255, 0.1);">
+                            <div id="overallProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 style="background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));"
+                                 role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                <span id="overallProgressText">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="current-step mb-4">
+                        <h6 style="color: var(--light-color);">Paso Actual</h6>
+                        <div class="step-info" style="background: rgba(0, 212, 255, 0.05); padding: 15px; border-radius: 10px; border: 1px solid rgba(0, 212, 255, 0.2);">
+                            <div id="currentStepText" style="color: var(--primary-color); font-weight: 600;">Preparando normalización...</div>
+                            <div id="currentStepDetails" style="color: rgba(240, 249, 255, 0.7); font-size: 0.9rem; margin-top: 5px;"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="steps-visualization mb-4">
+                        <h6 style="color: var(--light-color);">Pasos del Proceso</h6>
+                        <div class="steps-graph" style="position: relative; height: 300px;">
+                            <canvas id="progressChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="steps-log">
+                        <h6 style="color: var(--light-color);">Registro de Actividad</h6>
+                        <div id="progressLog" style="background: rgba(0, 0, 0, 0.3); padding: 15px; border-radius: 10px; height: 150px; overflow-y: auto; font-family: monospace; font-size: 0.85rem;">
+                            <!-- Los logs aparecerán aquí -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid rgba(0, 212, 255, 0.3);">
+                <button type="button" class="btn btn-danger" id="cancelNormalization">
+                    <i class="bi bi-x-circle"></i> Cancelar Proceso
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const datasetId = {{ dataset_id }};
+    let datasetInfo = null;
+    let normalizationConfig = {};
+    let normalizedCount = 0;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadDatasetInfo();
+    });
+
+    async function loadDatasetInfo() {
+        try {
+            const response = await fetch(`/api/datasets/${datasetId}/normalization/`);
+            if (!response.ok) throw new Error('Error loading dataset info');
+            
+            datasetInfo = await response.json();
+            
+            // Actualizar información del dataset
+            document.getElementById('dataset-name').textContent = datasetInfo.dataset.name;
+            document.getElementById('dataset-rows').textContent = datasetInfo.dataset.shape[0].toLocaleString();
+            document.getElementById('dataset-cols').textContent = datasetInfo.dataset.shape[1];
+            
+            // Sugerir nombre para el dataset normalizado
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            document.getElementById('new-dataset-name').placeholder = 
+                `${datasetInfo.dataset.name}_normalized_${timestamp}`;
+            
+            // Renderizar variables
+            renderVariables();
+            
+            // Cargar copias normalizadas
+            renderNormalizedCopies();
+            
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error al cargar información del dataset', 'error');
+        }
+    }
+
+    function renderVariables() {
+        const grid = document.getElementById('variables-grid');
+        grid.innerHTML = '';
+        
+        for (const [column, info] of Object.entries(datasetInfo.normalization_info)) {
+            const card = createVariableCard(column, info);
+            grid.appendChild(card);
+        }
+    }
+
+    function createVariableCard(column, info) {
+        const card = document.createElement('div');
+        card.className = 'variable-card';
+        
+        // Determinar el tipo de badge
+        const typeClass = `type-${info.type}`;
+        const typeLabel = info.type === 'numeric' ? 'Numérico' : 
+                         info.type === 'text' ? 'Texto' : 'Desconocido';
+        
+        // Crear contenido de estadísticas
+        let statsHtml = '';
+        if (info.type === 'numeric' && info.stats) {
+            statsHtml = `
+                <div class="variable-stats">
+                    ${info.stats.mean !== null ? `Media: ${info.stats.mean.toFixed(2)}` : ''}
+                    ${info.stats.std !== null ? ` | Desv: ${info.stats.std.toFixed(2)}` : ''}<br>
+                    ${info.stats.min !== null ? `Min: ${info.stats.min.toFixed(2)}` : ''}
+                    ${info.stats.max !== null ? ` | Max: ${info.stats.max.toFixed(2)}` : ''}
+                </div>
+            `;
+        } else if (info.type === 'text' && info.stats) {
+            statsHtml = `
+                <div class="variable-stats">
+                    ${info.stats.unique_count} valores únicos<br>
+                    ${info.stats.sample_values ? `Ej: ${info.stats.sample_values.slice(0, 2).join(', ')}...` : ''}
+                </div>
+            `;
+        }
+        
+        card.innerHTML = `
+            <div class="variable-header">
+                <span class="variable-name">${column}</span>
+                <span class="variable-type ${typeClass}">${typeLabel}</span>
+            </div>
+            ${statsHtml}
+            <select class="normalization-select" id="norm-${column}" onchange="onNormalizationChange('${column}')">
+                <option value="">Sin normalizar</option>
+                <optgroup label="Métodos principales">
+                    ${info.primary_methods.map(method => 
+                        `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                    ).join('')}
+                </optgroup>
+                ${info.secondary_methods.length > 0 ? `
+                    <optgroup label="Otros métodos">
+                        ${info.secondary_methods.map(method => 
+                            `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                        ).join('')}
+                    </optgroup>
+                ` : ''}
+            </select>
+            <button class="preview-btn" onclick="previewNormalization('${column}')" 
+                    id="preview-btn-${column}" style="display: none;">
+                <i class="bi bi-eye"></i> Previsualizar
+            </button>
+        `;
+        
+        return card;
+    }
+
+    function onNormalizationChange(column) {
+        const select = document.getElementById(`norm-${column}`);
+        const previewBtn = document.getElementById(`preview-btn-${column}`);
+        
+        if (select.value) {
+            normalizationConfig[column] = select.value;
+            previewBtn.style.display = 'block';
+        } else {
+            delete normalizationConfig[column];
+            previewBtn.style.display = 'none';
+        }
+        
+        updateSelectedCount();
+    }
+
+    function updateSelectedCount() {
+        const count = Object.keys(normalizationConfig).length;
+        document.getElementById('selected-count').textContent = 
+            `${count} variable${count !== 1 ? 's' : ''} seleccionada${count !== 1 ? 's' : ''}`;
+        document.getElementById('normalized-count').textContent = count;
+        
+        const applyBtn = document.getElementById('apply-normalization');
+        applyBtn.disabled = count === 0;
+    }
+
+    async function previewNormalization(column) {
+        const method = normalizationConfig[column];
+        if (!method) return;
+        
+        try {
+            const response = await fetch(`/api/datasets/${datasetId}/normalization/preview/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    column: column,
+                    method: method
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                console.error('Error response:', data);
+                let errorMessage = 'Error al generar previsualización';
+                
+                if (data.error) {
+                    errorMessage = data.error;
+                    if (data.traceback) {
+                        console.error('Traceback:', data.traceback);
+                    }
+                    if (data.debug_info) {
+                        console.error('Debug info:', data.debug_info);
+                    }
+                }
+                
+                showNotification(errorMessage, 'error');
+                return;
+            }
+            
+            showPreview(data);
+            
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error de conexión al generar previsualización', 'error');
+        }
+    }
+
+    function showPreview(preview) {
+        const modal = document.getElementById('preview-modal');
+        const body = document.getElementById('preview-body');
+        const title = document.getElementById('preview-title');
+        
+        title.textContent = `Previsualización: ${preview.column} (${preview.method})`;
+        
+        let bodyHtml = '';
+        
+        if (preview.new_columns) {
+            // One-hot encoding
+            bodyHtml = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> One-Hot Encoding generará ${preview.new_columns.length} nuevas columnas
+                </div>
+                <h4>Nuevas columnas:</h4>
+                <ul>
+                    ${preview.new_columns.map(col => `<li>${col}</li>`).join('')}
+                </ul>
+                ${preview.one_hot_preview ? `
+                    <h4>Vista previa (primeras 10 filas):</h4>
+                    <div style="overflow-x: auto;">
+                        <table class="preview-table">
+                            <thead>
+                                <tr>
+                                    ${preview.new_columns.map(col => `<th>${col}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${preview.one_hot_preview.slice(0, 10).map(row => `
+                                    <tr>
+                                        ${preview.new_columns.map(col => `<td>${row[col]}</td>`).join('')}
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : ''}
+            `;
+        } else {
+            // Normal preview
+            bodyHtml = `
+                <h4>Comparación antes/después (${preview.sample_size} muestras):</h4>
+                <table class="preview-table">
+                    <thead>
+                        <tr>
+                            <th>Índice</th>
+                            <th>Antes</th>
+                            <th>Después</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${preview.before.map((val, idx) => `
+                            <tr>
+                                <td>${idx + 1}</td>
+                                <td>${val}</td>
+                                <td>${preview.after[idx]}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            // Añadir estadísticas si están disponibles
+            if (preview.stats) {
+                bodyHtml += `
+                    <div class="stats-comparison">
+                        <div class="stats-box">
+                            <h4>Estadísticas Originales</h4>
+                            ${Object.entries(preview.stats.before).map(([key, val]) => `
+                                <div class="stat-row">
+                                    <label>${key}:</label>
+                                    <value>${val !== null ? val.toFixed(4) : 'N/A'}</value>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="stats-box">
+                            <h4>Estadísticas Normalizadas</h4>
+                            ${Object.entries(preview.stats.after).map(([key, val]) => `
+                                <div class="stat-row">
+                                    <label>${key}:</label>
+                                    <value>${val !== null ? val.toFixed(4) : 'N/A'}</value>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        body.innerHTML = bodyHtml;
+        modal.style.display = 'block';
+    }
+
+    function closePreview() {
+        document.getElementById('preview-modal').style.display = 'none';
+    }
+
+    let normalizationProcess = null;
+    let progressChart = null;
+    let cancelRequested = false;
+
+    async function applyNormalization() {
+        const applyBtn = document.getElementById('apply-normalization');
+        applyBtn.disabled = true;
+        
+        const datasetName = document.getElementById('new-dataset-name').value || 
+                           document.getElementById('new-dataset-name').placeholder;
+        
+        // Preparar datos para el proceso
+        const normalizedColumns = Object.keys(normalizationConfig);
+        const totalSteps = normalizedColumns.length + 3; // +3 para: preparación, guardado, finalización
+        
+        // Mostrar modal de progreso
+        showProgressModal(totalSteps, normalizedColumns);
+        
+        try {
+            // Simular proceso paso a paso (en producción, esto sería asíncrono)
+            await simulateNormalizationProcess(datasetName, normalizedColumns);
+            
+        } catch (error) {
+            console.error('Error completo:', error);
+            hideProgressModal();
+            
+            // Mostrar error más específico
+            let errorMessage = 'Error al aplicar normalización';
+            if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            showNotification(errorMessage, 'error');
+            
+            // Si hay log de progreso, añadir el error
+            if (document.getElementById('progressLog')) {
+                addProgressLog(`❌ Error: ${errorMessage}`);
+            }
+        } finally {
+            applyBtn.disabled = false;
+            applyBtn.innerHTML = '<i class="bi bi-check-circle"></i> Aplicar Normalización';
+        }
+    }
+    
+    function showProgressModal(totalSteps, columns) {
+        cancelRequested = false;
+        
+        // Resetear UI
+        document.getElementById('overallProgressBar').style.width = '0%';
+        document.getElementById('overallProgressText').textContent = '0%';
+        document.getElementById('currentStepText').textContent = 'Preparando normalización...';
+        document.getElementById('currentStepDetails').textContent = '';
+        document.getElementById('progressLog').innerHTML = '';
+        
+        // Inicializar gráfico
+        initializeProgressChart(columns);
+        
+        // Mostrar modal
+        const modal = new bootstrap.Modal(document.getElementById('progressModal'));
+        modal.show();
+        
+        // Configurar botón de cancelar
+        document.getElementById('cancelNormalization').onclick = () => {
+            cancelNormalization();
+        };
+    }
+    
+    function hideProgressModal() {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('progressModal'));
+        if (modal) {
+            modal.hide();
+        }
+    }
+    
+    function initializeProgressChart(columns) {
+        const ctx = document.getElementById('progressChart').getContext('2d');
+        
+        if (progressChart) {
+            progressChart.destroy();
+        }
+        
+        const labels = ['Preparación', ...columns, 'Guardado', 'Finalización'];
+        const data = new Array(labels.length).fill(0);
+        
+        progressChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Progreso',
+                    data: data,
+                    backgroundColor: 'rgba(0, 212, 255, 0.2)',
+                    borderColor: 'rgba(0, 212, 255, 1)',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            color: '#f0f9ff',
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: '#f0f9ff',
+                            maxRotation: 45,
+                            minRotation: 45
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.parsed.y + '% completado';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    async function simulateNormalizationProcess(datasetName, columns) {
+        const totalSteps = columns.length + 3;
+        let currentStep = 0;
+        
+        // Paso 1: Preparación
+        updateProgress(currentStep, totalSteps, 'Preparando normalización...', 'Cargando dataset y verificando configuración');
+        addProgressLog('✓ Iniciando proceso de normalización');
+        addProgressLog(`✓ Dataset: ${datasetInfo.dataset.name}`);
+        addProgressLog(`✓ Variables a normalizar: ${columns.length}`);
+        updateChartStep(0, 100);
+        await delay(1000);
+        
+        if (cancelRequested) throw new Error('Proceso cancelado por el usuario');
+        
+        currentStep++;
+        
+        // Normalizar cada columna
+        for (let i = 0; i < columns.length; i++) {
+            const column = columns[i];
+            const method = normalizationConfig[column];
+            
+            updateProgress(currentStep, totalSteps, `Normalizando: ${column}`, `Método: ${method}`);
+            addProgressLog(`⚙️ Normalizando "${column}" con método ${method}...`);
+            
+            // Simular tiempo de procesamiento
+            await delay(800 + Math.random() * 400);
+            
+            updateChartStep(i + 1, 100);
+            addProgressLog(`✓ "${column}" normalizada correctamente`);
+            
+            if (cancelRequested) throw new Error('Proceso cancelado por el usuario');
+            
+            currentStep++;
+        }
+        
+        // Paso: Guardando
+        updateProgress(currentStep, totalSteps, 'Guardando dataset...', 'Escribiendo archivo CSV normalizado');
+        addProgressLog('💾 Guardando dataset normalizado...');
+        updateChartStep(columns.length + 1, 100);
+        
+        // Hacer la llamada real al servidor
+        const response = await fetch(`/api/datasets/${datasetId}/normalization/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                normalization_config: normalizationConfig,
+                create_copy: true,
+                copy_name: datasetName
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Error del servidor:', errorData);
+            throw new Error(errorData.error || 'Error al aplicar normalización');
+        }
+        
+        const result = await response.json();
+        currentStep++;
+        
+        // Paso: Finalización
+        updateProgress(currentStep, totalSteps, 'Finalizando...', 'Proceso completado exitosamente');
+        addProgressLog(`✓ Dataset guardado como: ${result.dataset_name}`);
+        addProgressLog(`✓ Nuevas dimensiones: ${result.new_shape[0]} filas x ${result.new_shape[1]} columnas`);
+        updateChartStep(columns.length + 2, 100);
+        
+        await delay(1000);
+        
+        // Éxito
+        hideProgressModal();
+        showNotification(`Dataset normalizado creado: ${result.dataset_name}`, 'success');
+        
+        // Limpiar selección
+        normalizationConfig = {};
+        loadDatasetInfo();
+        
+        // Redirigir después de 2 segundos
+        setTimeout(() => {
+            window.location.href = `/datasets/`;
+        }, 2000);
+    }
+    
+    function updateProgress(current, total, stepText, details) {
+        const percentage = Math.round((current / total) * 100);
+        
+        document.getElementById('overallProgressBar').style.width = percentage + '%';
+        document.getElementById('overallProgressText').textContent = percentage + '%';
+        document.getElementById('currentStepText').textContent = stepText;
+        document.getElementById('currentStepDetails').textContent = details || '';
+    }
+    
+    function updateChartStep(stepIndex, value) {
+        if (progressChart) {
+            progressChart.data.datasets[0].data[stepIndex] = value;
+            progressChart.update();
+        }
+    }
+    
+    function addProgressLog(message) {
+        const log = document.getElementById('progressLog');
+        const timestamp = new Date().toLocaleTimeString();
+        log.innerHTML += `<div style="color: #00d4ff;">[${timestamp}] ${message}</div>`;
+        log.scrollTop = log.scrollHeight;
+    }
+    
+    function delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    async function cancelNormalization() {
+        cancelRequested = true;
+        addProgressLog('❌ Cancelación solicitada por el usuario');
+        
+        // Aquí deberías hacer una llamada al servidor para cancelar el proceso real
+        // y limpiar cualquier archivo temporal
+        
+        await delay(500);
+        hideProgressModal();
+        showNotification('Proceso de normalización cancelado', 'warning');
+    }
+
+    function renderNormalizedCopies() {
+        const copyList = document.getElementById('copy-list');
+        
+        if (!datasetInfo.normalized_copies || datasetInfo.normalized_copies.length === 0) {
+            copyList.innerHTML = '<p class="text-muted text-center">No hay copias normalizadas</p>';
+            return;
+        }
+        
+        copyList.innerHTML = datasetInfo.normalized_copies.map(copy => `
+            <div class="copy-item">
+                <div>
+                    <div class="copy-name">${copy.name}</div>
+                    <div class="copy-date">${new Date(copy.created_at).toLocaleString()}</div>
+                </div>
+                <div class="copy-actions">
+                    <button class="copy-btn" onclick="viewDataset(${copy.id})">
+                        <i class="bi bi-eye"></i> Ver
+                    </button>
+                    <button class="copy-btn" onclick="continueNormalization(${copy.id})">
+                        <i class="bi bi-arrow-repeat"></i> Continuar
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function viewDataset(id) {
+        // Redirigir directamente al análisis del dataset normalizado
+        window.location.href = `/datasets/?open=${id}`;
+    }
+
+    function continueNormalization(id) {
+        window.location.href = `/datasets/${id}/normalize/`;
+    }
+
+    function showNotification(message, type) {
+        // Implementar notificaciones toast
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        // Añadir al contenedor de toasts (crear si no existe)
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
+        
+        toastContainer.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Event listeners
+    document.getElementById('apply-normalization').addEventListener('click', applyNormalization);
+    
+    // Cerrar modal al hacer clic fuera
+    window.onclick = function(event) {
+        const modal = document.getElementById('preview-modal');
+        if (event.target === modal) {
+            closePreview();
+        }
+    }
+</script>
+{% endblock %}

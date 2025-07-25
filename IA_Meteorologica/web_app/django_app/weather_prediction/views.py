@@ -14,3 +14,6 @@ def models(request):
 
 def datasets(request):
     return render(request, 'datasets.html')
+
+def dataset_normalize(request, dataset_id):
+    return render(request, 'normalize.html', {'dataset_id': dataset_id})

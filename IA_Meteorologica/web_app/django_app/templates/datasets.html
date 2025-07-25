@@ -13,7 +13,21 @@
         padding: 30px;
         transition: all 0.4s ease;
         position: relative;
-        overflow: hidden;
+        overflow: visible; /* Cambiar a visible para que los botones no se corten */
+    }
+    
+    /* Forzar reset de hover cuando el mouse no está sobre la tarjeta */
+    .dataset-card:not(:hover) {
+        transform: translateY(0) !important;
+        border-color: rgba(0, 212, 255, 0.3) !important;
+        box-shadow: none !important;
+    }
+    
+    .dataset-card:not(:hover)::before {
+        opacity: 0 !important;
+    }
+    
+    .dataset-clickable {
         cursor: pointer;
     }
     
@@ -96,12 +110,17 @@
     
     .quick-actions {
         position: absolute;
-        top: 15px;
-        right: 15px;
+        top: 10px;
+        right: 10px;
         display: flex;
-        gap: 10px;
+        gap: 8px;
         opacity: 0;
         transition: opacity 0.3s ease;
+        z-index: 10; /* Asegurar que los botones estén por encima */
+        background: rgba(10, 14, 39, 0.8); /* Fondo para mejor contraste */
+        padding: 8px;
+        border-radius: 15px;
+        backdrop-filter: blur(10px);
     }
     
     .dataset-card:hover .quick-actions {
@@ -110,16 +129,56 @@
     
     .quick-actions button {
         background: rgba(0, 212, 255, 0.2);
-        border: 1px solid rgba(0, 212, 255, 0.5);
+        border: 2px solid rgba(0, 212, 255, 0.5);
         color: #00d4ff;
-        padding: 8px 12px;
+        padding: 12px 16px; /* Más padding para área clickeable más grande */
         border-radius: 10px;
-        transition: all 0.3s ease;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        font-size: 1.2rem; /* Iconos más grandes */
+        position: relative; /* Para z-index */
+        z-index: 11;
+        min-width: 45px; /* Ancho mínimo */
+        min-height: 45px; /* Alto mínimo */
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
     
     .quick-actions button:hover {
-        background: rgba(0, 212, 255, 0.4);
+        background: rgba(0, 212, 255, 0.8);
         transform: scale(1.1);
+        box-shadow: 0 0 20px rgba(0, 212, 255, 0.8);
+        border-color: #00d4ff;
+        color: white;
+    }
+    
+    .quick-actions button:active {
+        transform: scale(0.95);
+        background: rgba(0, 212, 255, 1);
+    }
+    
+    .quick-actions button:focus {
+        outline: 2px solid #00d4ff;
+        outline-offset: 2px;
+    }
+    
+    /* Colores específicos para cada acción */
+    .quick-actions button[data-action="normalize"]:hover {
+        background: rgba(0, 212, 255, 0.8);
+        border-color: #00d4ff;
+    }
+    
+    .quick-actions button[data-action="download"]:hover {
+        background: rgba(16, 185, 129, 0.8);
+        border-color: #10b981;
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.8);
+    }
+    
+    .quick-actions button[data-action="delete"]:hover {
+        background: rgba(239, 68, 68, 0.8);
+        border-color: #ef4444;
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
     }
     
     /* Estilos para el modal de detalles */
@@ -414,22 +473,29 @@ function getCookie(name) {
     return cookieValue;
 }
 
+// Normalizar dataset
+function normalizeDataset(datasetId) {
+    window.location.href = `/datasets/${datasetId}/normalize/`;
+}
+
 // Charger les datasets
 function loadDatasets() {
     showLoading();
     
-    fetch('/api/datasets/')
+    return fetch('/api/datasets/')
         .then(response => response.json())
         .then(data => {
             datasets = data;
             displayDatasets(data);
             updateStats(data);
             hideLoading();
+            return data;
         })
         .catch(error => {
             console.error('Erreur:', error);
             hideLoading();
             showNotification('Erreur', 'Impossible de charger les datasets', 'error');
+            throw error;
         });
 }
 
@@ -437,6 +503,11 @@ function loadDatasets() {
 function displayDatasets(datasetList) {
     const grid = document.getElementById('datasetsGrid');
     grid.innerHTML = '';
+    
+    // Limpiar cualquier estado hover residual
+    document.querySelectorAll('.dataset-card').forEach(card => {
+        card.classList.remove('hover');
+    });
     
     if (datasetList.length === 0) {
         grid.innerHTML = `
@@ -453,16 +524,21 @@ function displayDatasets(datasetList) {
         const size = dataset.file_size ? (dataset.file_size / 1024 / 1024).toFixed(2) : '0';
         
         col.innerHTML = `
-            <div class="card dataset-card h-100" onclick="showDatasetDetails(${dataset.id})">
+            <div class="card dataset-card h-100" data-dataset-id="${dataset.id}" 
+                 onmouseenter="this.classList.add('hover')" 
+                 onmouseleave="this.classList.remove('hover')">
                 <div class="quick-actions">
-                    <button onclick="event.stopPropagation(); downloadDataset(${dataset.id})" title="Télécharger">
+                    <button class="action-btn" data-action="normalize" data-dataset-id="${dataset.id}" title="Normaliser">
+                        <i class="bi bi-sliders"></i>
+                    </button>
+                    <button class="action-btn" data-action="download" data-dataset-id="${dataset.id}" title="Télécharger">
                         <i class="bi bi-download"></i>
                     </button>
-                    <button onclick="event.stopPropagation(); deleteDataset(${dataset.id})" title="Supprimer">
+                    <button class="action-btn" data-action="delete" data-dataset-id="${dataset.id}" title="Supprimer">
                         <i class="bi bi-trash"></i>
                     </button>
                 </div>
-                <div class="card-body">
+                <div class="card-body dataset-clickable" data-dataset-id="${dataset.id}">
                     <div class="dataset-icon">
                         <i class="bi bi-file-earmark-spreadsheet"></i>
                     </div>
@@ -498,6 +574,43 @@ function displayDatasets(datasetList) {
             </div>
         `;
         grid.appendChild(col);
+    });
+    
+    // Agregar event listeners después de crear los elementos
+    setupDatasetCardListeners();
+}
+
+// Configurar listeners para las tarjetas de dataset
+function setupDatasetCardListeners() {
+    // Click en el cuerpo de la tarjeta
+    document.querySelectorAll('.dataset-clickable').forEach(element => {
+        element.addEventListener('click', function(e) {
+            const datasetId = this.getAttribute('data-dataset-id');
+            showDatasetDetails(parseInt(datasetId));
+        });
+    });
+    
+    // Click en los botones de acción
+    document.querySelectorAll('.action-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const action = this.getAttribute('data-action');
+            const datasetId = parseInt(this.getAttribute('data-dataset-id'));
+            
+            switch(action) {
+                case 'normalize':
+                    normalizeDataset(datasetId);
+                    break;
+                case 'download':
+                    downloadDataset(datasetId);
+                    break;
+                case 'delete':
+                    deleteDataset(datasetId);
+                    break;
+            }
+        });
     });
 }
 
@@ -2443,7 +2556,32 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 100);
     });
     
-    loadDatasets();
+    // Cargar datasets con callback para manejar URL params
+    loadDatasets().then(() => {
+        // Verificar si hay un dataset específico para abrir
+        const urlParams = new URLSearchParams(window.location.search);
+        const datasetToOpen = urlParams.get('open');
+        const hash = window.location.hash;
+        
+        if (datasetToOpen) {
+            // Abrir dataset desde parámetro URL
+            setTimeout(() => {
+                const datasetCard = document.querySelector(`[data-dataset-id="${datasetToOpen}"] .dataset-clickable`);
+                if (datasetCard) {
+                    datasetCard.click();
+                }
+            }, 500);
+        } else if (hash && hash.startsWith('#dataset-')) {
+            // Abrir dataset desde hash
+            const datasetId = hash.replace('#dataset-', '');
+            setTimeout(() => {
+                const datasetCard = document.querySelector(`[data-dataset-id="${datasetId}"] .dataset-clickable`);
+                if (datasetCard) {
+                    datasetCard.click();
+                }
+            }, 500);
+        }
+    });
     initDragDrop();
     
     // Actualiser toutes les 30 secondes

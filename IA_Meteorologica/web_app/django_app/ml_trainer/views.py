@@ -20,6 +20,25 @@ from sklearn.model_selection import train_test_split
 from .models import Dataset, TrainingSession, WeatherPrediction, ModelType, NormalizationMethod, MetricType
 from .serializers import DatasetSerializer, TrainingSessionSerializer, WeatherPredictionSerializer
 from .ml_utils import get_model_config, get_normalization_methods, get_metrics, train_model, make_predictions
+try:
+    # Intentar importar desde el módulo local primero
+    from .normalization_methods import NumNorm, TextNorm, Normalizador
+except ImportError:
+    # Si falla, intentar desde el archivo principal
+    import sys
+    import os
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    
+    try:
+        from normalisaciones import NumNorm, TextNorm, Normalizador
+    except ImportError as e:
+        print(f"Error importing normalisaciones: {e}")
+        # Fallback para desarrollo
+        NumNorm = None
+        TextNorm = None
+        Normalizador = None
 
 
 class DatasetListCreateView(generics.ListCreateAPIView):
@@ -1816,3 +1835,388 @@ class DatasetGeneralAnalysisView(APIView):
                 ]
             }
         })
+
+
+class DatasetNormalizationView(APIView):
+    def get(self, request, pk):
+        """Obtiene información de normalización para un dataset"""
+        dataset = get_object_or_404(Dataset, pk=pk)
+        
+        try:
+            df = pd.read_csv(dataset.file.path)
+            
+            # Analizar cada columna para determinar métodos de normalización disponibles
+            normalization_info = {}
+            
+            for col in df.columns:
+                col_type = str(df[col].dtype)
+                
+                if df[col].dtype in ['int64', 'float64']:
+                    # Columna numérica
+                    normalization_info[col] = {
+                        'type': 'numeric',
+                        'primary_methods': [
+                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores al rango [0, 1]'},
+                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Estandariza a media 0 y desviación 1'},
+                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Escala al rango [-1, 1] para RNN/TCN'},
+                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Normalización Z-Score para CNN'},
+                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler resistente a outliers'},
+                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación (modelos de árbol)'}
+                        ],
+                        'secondary_methods': [
+                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte a minúsculas (si son texto)'},
+                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final'},
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Codificación one-hot'}
+                        ],
+                        'stats': {
+                            'mean': float(df[col].mean()) if not df[col].isna().all() else None,
+                            'std': float(df[col].std()) if not df[col].isna().all() else None,
+                            'min': float(df[col].min()) if not df[col].isna().all() else None,
+                            'max': float(df[col].max()) if not df[col].isna().all() else None
+                        }
+                    }
+                elif df[col].dtype == 'object':
+                    # Columna de texto o objeto
+                    unique_values = df[col].nunique()
+                    sample_values = df[col].dropna().head(5).tolist()
+                    
+                    normalization_info[col] = {
+                        'type': 'text',
+                        'primary_methods': [
+                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte todo a minúsculas'},
+                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final'},
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': f'Crea {unique_values} columnas binarias'}
+                        ],
+                        'secondary_methods': [
+                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores (si son números como texto)'},
+                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Estandariza (si son números como texto)'},
+                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Escala [-1, 1] (si son números)'},
+                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Z-Score (si son números)'},
+                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler (si son números)'},
+                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación'}
+                        ],
+                        'stats': {
+                            'unique_count': unique_values,
+                            'sample_values': sample_values,
+                            'most_common': df[col].value_counts().head(3).to_dict() if unique_values < 100 else None
+                        }
+                    }
+                else:
+                    # Tipo desconocido o personalizado
+                    normalization_info[col] = {
+                        'type': 'unknown',
+                        'primary_methods': [
+                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Intenta escalar al rango [0, 1]'},
+                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Intenta estandarizar'},
+                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Intenta escalar a [-1, 1]'},
+                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Intenta Z-Score'},
+                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'Intenta RobustScaler'},
+                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación'},
+                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Intenta convertir a minúsculas'},
+                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Intenta eliminar espacios'},
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Intenta codificación one-hot'}
+                        ],
+                        'secondary_methods': [],
+                        'stats': {
+                            'dtype': col_type,
+                            'sample_values': df[col].dropna().head(5).astype(str).tolist()
+                        }
+                    }
+            
+            # Obtener copias normalizadas existentes
+            normalized_copies = Dataset.objects.filter(
+                name__startswith=f"{dataset.name}_normalized_"
+            ).order_by('-uploaded_at')
+            
+            return Response({
+                'dataset': {
+                    'id': dataset.id,
+                    'name': dataset.name,
+                    'shape': list(df.shape),  # Convertir tupla a lista
+                    'columns': list(df.columns)
+                },
+                'normalization_info': normalization_info,
+                'normalized_copies': [
+                    {
+                        'id': copy.id,
+                        'name': copy.name,
+                        'created_at': copy.uploaded_at,
+                        'description': f"Dataset normalizado" if '_normalized_' in copy.name else "Dataset"
+                    }
+                    for copy in normalized_copies
+                ]
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def post(self, request, pk):
+        """Aplica normalización a columnas específicas del dataset"""
+        dataset = get_object_or_404(Dataset, pk=pk)
+        
+        # Check if this is a progress check request
+        if request.data.get('check_progress'):
+            session_id = request.data.get('session_id')
+            # En una implementación real, aquí verificarías el progreso real
+            # Por ahora, retornamos un progreso simulado
+            return Response({
+                'status': 'processing',
+                'progress': 50,
+                'current_step': 'Normalizando columna X',
+                'total_steps': 10,
+                'completed_steps': 5
+            })
+        
+        try:
+            df = pd.read_csv(dataset.file.path)
+            
+            # Obtener configuración de normalización
+            normalization_config = request.data.get('normalization_config', {})
+            create_copy = request.data.get('create_copy', True)
+            copy_name = request.data.get('copy_name', f"{dataset.name}_normalized_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}")
+            
+            # Para una implementación real con progreso, aquí deberías:
+            # 1. Crear una tarea asíncrona (usando Celery o similar)
+            # 2. Retornar un ID de sesión inmediatamente
+            # 3. El frontend consultaría el progreso periódicamente
+            
+            # Por ahora, hacemos el proceso sincrónicamente
+            if create_copy:
+                # Trabajar con una copia
+                df_normalized = df.copy()
+            else:
+                df_normalized = df
+            
+            # Aplicar normalizaciones
+            applied_normalizations = []
+            total_columns = len(normalization_config)
+            processed_columns = 0
+            
+            for column, method in normalization_config.items():
+                if column not in df_normalized.columns:
+                    continue
+                
+                try:
+                    if method in ['MIN_MAX', 'Z_SCORE', 'LSTM_TCN', 'CNN', 'TRANSFORMER', 'TREE']:
+                        # Normalización numérica
+                        num_method = NumNorm[method]
+                        normalizador = Normalizador(metodo_numerico=num_method)
+                        df_result = normalizador.normalizar(df_normalized[[column]])
+                        
+                        # Si el resultado es un DataFrame (como en ONE_HOT), manejarlo apropiadamente
+                        if isinstance(df_result, pd.DataFrame) and len(df_result.columns) > 1:
+                            # Eliminar la columna original y agregar las nuevas
+                            df_normalized = df_normalized.drop(columns=[column])
+                            df_normalized = pd.concat([df_normalized, df_result], axis=1)
+                        else:
+                            df_normalized[column] = df_result[column]
+                        
+                        applied_normalizations.append({
+                            'column': column,
+                            'method': method,
+                            'type': 'numeric'
+                        })
+                    
+                    elif method in ['LOWER', 'STRIP', 'ONE_HOT']:
+                        # Normalización de texto
+                        text_method = TextNorm[method]
+                        normalizador = Normalizador(metodo_texto=text_method)
+                        df_result = normalizador.normalizar(df_normalized[[column]])
+                        
+                        if method == 'ONE_HOT' and isinstance(df_result, pd.DataFrame):
+                            # One-hot encoding genera múltiples columnas
+                            df_normalized = df_normalized.drop(columns=[column])
+                            df_normalized = pd.concat([df_normalized, df_result], axis=1)
+                        else:
+                            df_normalized[column] = df_result[column]
+                        
+                        applied_normalizations.append({
+                            'column': column,
+                            'method': method,
+                            'type': 'text'
+                        })
+                    
+                    processed_columns += 1
+                    
+                except Exception as e:
+                    print(f"Error normalizando columna {column} con método {method}: {str(e)}")
+                    continue
+            
+            if create_copy:
+                # Guardar como nuevo dataset
+                from django.core.files.base import ContentFile
+                import io
+                
+                # Convertir DataFrame a CSV
+                csv_buffer = io.StringIO()
+                df_normalized.to_csv(csv_buffer, index=False)
+                csv_content = csv_buffer.getvalue()
+                
+                # Crear nuevo dataset
+                new_dataset = Dataset(
+                    name=copy_name
+                )
+                
+                # Guardar archivo
+                csv_file = ContentFile(csv_content.encode('utf-8'))
+                new_dataset.file.save(f"{copy_name}.csv", csv_file)
+                new_dataset.save()
+                
+                return Response({
+                    'success': True,
+                    'dataset_id': new_dataset.id,
+                    'dataset_name': new_dataset.name,
+                    'applied_normalizations': applied_normalizations,
+                    'new_shape': list(df_normalized.shape),  # Convertir tupla a lista
+                    'new_columns': list(df_normalized.columns),
+                    'total_processed': processed_columns,
+                    'total_columns': total_columns
+                })
+            else:
+                # Sobrescribir dataset original (no recomendado)
+                dataset.file.seek(0)
+                df_normalized.to_csv(dataset.file.path, index=False)
+                
+                return Response({
+                    'success': True,
+                    'dataset_id': dataset.id,
+                    'applied_normalizations': applied_normalizations,
+                    'new_shape': list(df_normalized.shape),  # Convertir tupla a lista
+                    'new_columns': list(df_normalized.columns),
+                    'total_processed': processed_columns,
+                    'total_columns': total_columns
+                })
+                
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            print(f"Error en normalización: {str(e)}")
+            print(f"Traceback completo: {error_detail}")
+            print(f"Config recibida: {request.data}")
+            
+            return Response(
+                {
+                    'error': str(e),
+                    'traceback': error_detail,
+                    'received_data': request.data
+                }, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class DatasetNormalizationPreviewView(APIView):
+    def post(self, request, pk):
+        """Previsualiza el resultado de normalizar una columna"""
+        dataset = get_object_or_404(Dataset, pk=pk)
+        
+        try:
+            df = pd.read_csv(dataset.file.path)
+            
+            column = request.data.get('column')
+            method = request.data.get('method')
+            
+            if not column or not method:
+                return Response(
+                    {'error': 'column and method are required'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if column not in df.columns:
+                return Response(
+                    {'error': f'Column {column} not found'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Tomar una muestra para la previsualización
+            sample_size = min(100, len(df))
+            df_sample = df[[column]].head(sample_size).copy()
+            
+            try:
+                # Verificar si las clases están disponibles
+                if NumNorm is None or TextNorm is None or Normalizador is None:
+                    return Response(
+                        {'error': 'Normalization module not available. Please check server configuration.'}, 
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+                
+                if method in ['MIN_MAX', 'Z_SCORE', 'LSTM_TCN', 'CNN', 'TRANSFORMER', 'TREE']:
+                    num_method = NumNorm[method]
+                    normalizador = Normalizador(metodo_numerico=num_method)
+                    df_result = normalizador.normalizar(df_sample)
+                elif method in ['LOWER', 'STRIP', 'ONE_HOT']:
+                    text_method = TextNorm[method]
+                    normalizador = Normalizador(metodo_texto=text_method)
+                    df_result = normalizador.normalizar(df_sample)
+                else:
+                    return Response(
+                        {'error': f'Unknown method: {method}'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Preparar respuesta con antes y después
+                preview_data = {
+                    'column': column,
+                    'method': method,
+                    'sample_size': sample_size,
+                    'before': [str(val) if pd.notna(val) else 'NaN' for val in df_sample[column].head(20)],
+                    'after': None,
+                    'new_columns': None
+                }
+                
+                if isinstance(df_result, pd.DataFrame) and method == 'ONE_HOT':
+                    # One-hot encoding genera múltiples columnas
+                    preview_data['after'] = 'One-Hot Encoding genera múltiples columnas'
+                    preview_data['new_columns'] = list(df_result.columns)
+                    preview_data['one_hot_preview'] = df_result.head(20).to_dict('records')
+                else:
+                    preview_data['after'] = [str(val) if pd.notna(val) else 'NaN' for val in df_result[column].head(20)]
+                
+                # Estadísticas del cambio
+                if df[column].dtype in ['int64', 'float64'] and method != 'ONE_HOT':
+                    original_stats = {
+                        'mean': float(df_sample[column].mean()) if not df_sample[column].isna().all() else None,
+                        'std': float(df_sample[column].std()) if not df_sample[column].isna().all() else None,
+                        'min': float(df_sample[column].min()) if not df_sample[column].isna().all() else None,
+                        'max': float(df_sample[column].max()) if not df_sample[column].isna().all() else None
+                    }
+                    
+                    normalized_stats = {
+                        'mean': float(df_result[column].mean()) if not df_result[column].isna().all() else None,
+                        'std': float(df_result[column].std()) if not df_result[column].isna().all() else None,
+                        'min': float(df_result[column].min()) if not df_result[column].isna().all() else None,
+                        'max': float(df_result[column].max()) if not df_result[column].isna().all() else None
+                    }
+                    
+                    preview_data['stats'] = {
+                        'before': original_stats,
+                        'after': normalized_stats
+                    }
+                
+                return Response(preview_data)
+                
+            except Exception as e:
+                import traceback
+                return Response(
+                    {
+                        'error': f'Error applying normalization: {str(e)}',
+                        'column': column,
+                        'method': method,
+                        'traceback': traceback.format_exc(),
+                        'debug_info': {
+                            'sample_shape': df_sample.shape,
+                            'sample_dtype': str(df_sample[column].dtype),
+                            'sample_nulls': int(df_sample[column].isna().sum()),
+                            'normalization_available': NumNorm is not None
+                        }
+                    }, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )

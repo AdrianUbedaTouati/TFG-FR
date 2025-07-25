@@ -6,10 +6,11 @@ class DatasetSerializer(serializers.ModelSerializer):
     row_count = serializers.SerializerMethodField()
     column_count = serializers.SerializerMethodField()
     file_size = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
     
     class Meta:
         model = Dataset
-        fields = ['id', 'name', 'file', 'uploaded_at', 'row_count', 'column_count', 'file_size']
+        fields = ['id', 'name', 'file', 'uploaded_at', 'row_count', 'column_count', 'file_size', 'description']
         read_only_fields = ['uploaded_at']
     
     def __init__(self, *args, **kwargs):
@@ -38,6 +39,12 @@ class DatasetSerializer(serializers.ModelSerializer):
             return obj.file.size
         except:
             return 0
+    
+    def get_description(self, obj):
+        # Generar descripción basada en el nombre
+        if '_normalized_' in obj.name:
+            return f"Dataset normalizado"
+        return "Dataset meteorológico"
 
 
 class TrainingSessionSerializer(serializers.ModelSerializer):
