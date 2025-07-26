@@ -855,6 +855,20 @@ function displayDatasetDetails(dataset, data) {
                                     </button>
                                 </div>
                             </div>
+                            <div class="row mt-2" id="histogramConfig1" style="display: none;">
+                                <div class="col-md-4">
+                                    <label for="numBins1" class="form-label text-info small">Nombre d'intervalles:</label>
+                                    <input type="number" class="form-control form-control-sm" id="numBins1" value="20" min="5" max="50" onchange="updateHistogramBins(1)">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="binMin1" class="form-label text-info small">Valeur minimale:</label>
+                                    <input type="number" class="form-control form-control-sm" id="binMin1" step="any" onchange="updateHistogramBins(1)">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="binMax1" class="form-label text-info small">Valeur maximale:</label>
+                                    <input type="number" class="form-control form-control-sm" id="binMax1" step="any" onchange="updateHistogramBins(1)">
+                                </div>
+                            </div>
                             <div class="mt-4" id="histogramContainer1" style="display: none;">
                                 <canvas id="variableHistogram1" height="400"></canvas>
                             </div>
@@ -1321,6 +1335,20 @@ function addNewAnalysis() {
                         </button>
                     </div>
                 </div>
+                <div class="row mt-2" id="histogramConfig${analysisCount}" style="display: none;">
+                    <div class="col-md-4">
+                        <label for="numBins${analysisCount}" class="form-label text-info small">Nombre d'intervalles:</label>
+                        <input type="number" class="form-control form-control-sm" id="numBins${analysisCount}" value="20" min="5" max="50" onchange="updateHistogramBins(${analysisCount})">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="binMin${analysisCount}" class="form-label text-info small">Valeur minimale:</label>
+                        <input type="number" class="form-control form-control-sm" id="binMin${analysisCount}" step="any" onchange="updateHistogramBins(${analysisCount})">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="binMax${analysisCount}" class="form-label text-info small">Valeur maximale:</label>
+                        <input type="number" class="form-control form-control-sm" id="binMax${analysisCount}" step="any" onchange="updateHistogramBins(${analysisCount})">
+                    </div>
+                </div>
                 <div class="mt-4" id="histogramContainer${analysisCount}" style="display: none;">
                     <canvas id="variableHistogram${analysisCount}" height="400"></canvas>
                 </div>
@@ -1380,6 +1408,16 @@ function handleOutliersChange(analysisId) {
     const selectedVariable = document.getElementById(`variableSelect${analysisId}`).value;
     
     if (selectedVariable && analysisType === 'histogram') {
+        generateHistogram(analysisId);
+    }
+}
+
+// Función para actualizar el histograma cuando se cambian los bins
+function updateHistogramBins(analysisId) {
+    const analysisType = document.getElementById(`analysisType${analysisId}`).value;
+    const selectedVariable = document.getElementById(`variableSelect${analysisId}`).value;
+    
+    if (selectedVariable && analysisType === 'histogram' && analysisCharts[analysisId]) {
         generateHistogram(analysisId);
     }
 }
@@ -1524,6 +1562,20 @@ function generateHistogram(analysisId) {
     document.getElementById(`histogramContainer${analysisId}`).style.display = 'block';
     document.getElementById(`variableStats${analysisId}`).style.display = 'block';
     
+    // Mostrar controles de configuración para histogramas numéricos
+    if (isNumeric) {
+        document.getElementById(`histogramConfig${analysisId}`).style.display = 'flex';
+        // Establecer valores por defecto
+        if (!document.getElementById(`binMin${analysisId}`).value && colStats.min !== undefined) {
+            document.getElementById(`binMin${analysisId}`).value = colStats.min;
+        }
+        if (!document.getElementById(`binMax${analysisId}`).value && colStats.max !== undefined) {
+            document.getElementById(`binMax${analysisId}`).value = colStats.max;
+        }
+    } else {
+        document.getElementById(`histogramConfig${analysisId}`).style.display = 'none';
+    }
+    
     // Destruir gráfico anterior si existe
     if (analysisCharts[analysisId]) {
         analysisCharts[analysisId].destroy();
@@ -1547,9 +1599,59 @@ function generateHistogram(analysisId) {
             counts = colStats.histogram.counts;
         }
         
-        const labels = [];
-        for (let i = 0; i < bins.length - 1; i++) {
-            labels.push(`${bins[i].toFixed(1)} - ${bins[i+1].toFixed(1)}`);
+        // Obtener configuración personalizada
+        const numBins = parseInt(document.getElementById(`numBins${analysisId}`).value) || 20;
+        const customMin = parseFloat(document.getElementById(`binMin${analysisId}`).value);
+        const customMax = parseFloat(document.getElementById(`binMax${analysisId}`).value);
+        
+        // Recalcular bins si hay valores personalizados
+        let labels = [];
+        let adjustedCounts = counts;
+        
+        if (!isNaN(customMin) && !isNaN(customMax) && customMin < customMax) {
+            // Crear nuevos bins basados en los valores personalizados
+            const binWidth = (customMax - customMin) / numBins;
+            const newBins = [];
+            for (let i = 0; i <= numBins; i++) {
+                newBins.push(customMin + i * binWidth);
+            }
+            
+            // Recalcular los conteos para los nuevos bins
+            adjustedCounts = new Array(numBins).fill(0);
+            
+            // Distribuir los datos originales en los nuevos bins
+            for (let i = 0; i < bins.length - 1; i++) {
+                const binStart = bins[i];
+                const binEnd = bins[i + 1];
+                const binCount = counts[i];
+                
+                // Encontrar en qué nuevos bins cae este rango
+                for (let j = 0; j < newBins.length - 1; j++) {
+                    const newBinStart = newBins[j];
+                    const newBinEnd = newBins[j + 1];
+                    
+                    // Calcular la intersección
+                    const overlapStart = Math.max(binStart, newBinStart);
+                    const overlapEnd = Math.min(binEnd, newBinEnd);
+                    
+                    if (overlapStart < overlapEnd) {
+                        // Hay intersección, distribuir proporcionalmente
+                        const overlapRatio = (overlapEnd - overlapStart) / (binEnd - binStart);
+                        adjustedCounts[j] += Math.round(binCount * overlapRatio);
+                    }
+                }
+            }
+            
+            // Crear etiquetas con los nuevos bins
+            for (let i = 0; i < newBins.length - 1; i++) {
+                const decimals = binWidth < 1 ? 2 : (binWidth < 10 ? 1 : 0);
+                labels.push(`${newBins[i].toFixed(decimals)} - ${newBins[i+1].toFixed(decimals)}`);
+            }
+        } else {
+            // Usar bins originales
+            for (let i = 0; i < bins.length - 1; i++) {
+                labels.push(`${bins[i].toFixed(1)} - ${bins[i+1].toFixed(1)}`);
+            }
         }
         
         analysisCharts[analysisId] = new Chart(ctx, {
@@ -1558,7 +1660,7 @@ function generateHistogram(analysisId) {
                 labels: labels,
                 datasets: [{
                     label: `Distribución de ${selectedVariable}`,
-                    data: counts,
+                    data: adjustedCounts,
                     backgroundColor: 'rgba(0, 212, 255, 0.5)',
                     borderColor: 'rgba(0, 212, 255, 1)',
                     borderWidth: 1
