@@ -173,6 +173,17 @@
     }
     
     
+    /* Estilos para checkbox de outliers */
+    .form-check-input:checked {
+        background-color: #00d4ff;
+        border-color: #00d4ff;
+    }
+    
+    .form-check-input:focus {
+        border-color: #00d4ff;
+        box-shadow: 0 0 0 0.25rem rgba(0, 212, 255, 0.25);
+    }
+    
     /* Colores específicos para cada acción */
     .quick-actions button[data-action="normalize"]:hover {
         background: rgba(0, 212, 255, 0.8);
@@ -821,7 +832,7 @@ function displayDatasetDetails(dataset, data) {
                                 </div>
                             </div>
                             <div class="row mt-3">
-                                <div class="col-md-8">
+                                <div class="col-md-6">
                                     <select class="form-select" id="analysisType1" onchange="updateAnalysisButton(1)">
                                         <option value="histogram">Histogramme</option>
                                         <option value="outlier_map" class="numeric-only">Carte des Outliers</option>
@@ -830,9 +841,17 @@ function displayDatasetDetails(dataset, data) {
                                         <option value="lasso" class="numeric-only">LASSO (Sélection de variables)</option>
                                     </select>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
+                                    <div class="form-check mt-2">
+                                        <input class="form-check-input" type="checkbox" id="includeOutliers1" checked onchange="handleOutliersChange(1)">
+                                        <label class="form-check-label text-info" for="includeOutliers1">
+                                            Inclure outliers
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
                                     <button class="btn btn-primary w-100" id="analysisButton1" onclick="executeAnalysis(1)">
-                                        <i class="bi bi-graph-up"></i> Générer Analyse
+                                        <i class="bi bi-graph-up"></i> Générer
                                     </button>
                                 </div>
                             </div>
@@ -1279,7 +1298,7 @@ function addNewAnalysis() {
                     </div>
                 </div>
                 <div class="row mt-3">
-                    <div class="col-md-8">
+                    <div class="col-md-6">
                         <select class="form-select" id="analysisType${analysisCount}" onchange="updateAnalysisButton(${analysisCount})">
                             <option value="histogram">Histogramme</option>
                             <option value="outlier_map" class="numeric-only">Carte des Outliers</option>
@@ -1288,9 +1307,17 @@ function addNewAnalysis() {
                             <option value="lasso" class="numeric-only">LASSO (Sélection de variables)</option>
                         </select>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="includeOutliers${analysisCount}" checked onchange="handleOutliersChange(${analysisCount})">
+                            <label class="form-check-label text-info" for="includeOutliers${analysisCount}">
+                                Inclure outliers
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
                         <button class="btn btn-primary w-100" id="analysisButton${analysisCount}" onclick="executeAnalysis(${analysisCount})">
-                            <i class="bi bi-graph-up"></i> Générer Analyse
+                            <i class="bi bi-graph-up"></i> Générer
                         </button>
                     </div>
                 </div>
@@ -1347,6 +1374,16 @@ function updateAnalysisButton(analysisId) {
 }
 
 // Nueva función para ejecutar el análisis seleccionado
+function handleOutliersChange(analysisId) {
+    // Si ya hay un gráfico generado, regenerarlo con la nueva configuración
+    const analysisType = document.getElementById(`analysisType${analysisId}`).value;
+    const selectedVariable = document.getElementById(`variableSelect${analysisId}`).value;
+    
+    if (selectedVariable && analysisType === 'histogram') {
+        generateHistogram(analysisId);
+    }
+}
+
 function executeAnalysis(analysisId) {
     const analysisType = document.getElementById(`analysisType${analysisId}`).value;
     
@@ -1467,6 +1504,7 @@ function displayLassoAnalysisForVariable(analysisId, data) {
 function generateHistogram(analysisId) {
     const select = document.getElementById(`variableSelect${analysisId}`);
     const selectedVariable = select.value;
+    const includeOutliers = document.getElementById(`includeOutliers${analysisId}`).checked;
     
     if (!selectedVariable) {
         showNotification('Erreur', 'Veuillez sélectionner une variable', 'warning');
@@ -1496,10 +1534,20 @@ function generateHistogram(analysisId) {
     
     if (isNumeric && colStats.histogram) {
         // Histograma para variables numéricas
-        const bins = colStats.histogram.bins;
-        const counts = colStats.histogram.counts;
-        const labels = [];
+        let bins, counts;
         
+        // Usar los datos apropiados según el checkbox de outliers
+        if (!includeOutliers && colStats.histogram.bins_no_outliers && colStats.histogram.outliers_info.outlier_count > 0) {
+            // Usar histograma sin outliers
+            bins = colStats.histogram.bins_no_outliers;
+            counts = colStats.histogram.counts_no_outliers;
+        } else {
+            // Usar histograma completo
+            bins = colStats.histogram.bins;
+            counts = colStats.histogram.counts;
+        }
+        
+        const labels = [];
         for (let i = 0; i < bins.length - 1; i++) {
             labels.push(`${bins[i].toFixed(1)} - ${bins[i+1].toFixed(1)}`);
         }
@@ -1522,7 +1570,7 @@ function generateHistogram(analysisId) {
                 plugins: {
                     title: {
                         display: true,
-                        text: `Histograma de ${selectedVariable}`,
+                        text: `Histograma de ${selectedVariable}${!includeOutliers && colStats.histogram.outliers_info && colStats.histogram.outliers_info.outlier_count > 0 ? ' (sans outliers)' : ''}`,
                         color: '#00d4ff',
                         font: { size: 16 }
                     },
@@ -1556,16 +1604,37 @@ function generateHistogram(analysisId) {
             }
         });
         
-        // Mostrar información de outliers si existe
+        // Mostrar información de outliers siempre si existe
         let outlierInfo = '';
-        if (colStats.histogram && colStats.histogram.outliers_info && colStats.histogram.outliers_info.removed_count > 0) {
+        if (colStats.histogram && colStats.histogram.outliers_info && colStats.histogram.outliers_info.outlier_count > 0) {
             const info = colStats.histogram.outliers_info;
+            if (!includeOutliers) {
+                outlierInfo = `
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-info-circle"></i> 
+                        <strong>Outliers détectés et exclus:</strong> ${info.outlier_count} valeurs (${info.outlier_percentage.toFixed(1)}%) 
+                        ont été exclues du graphique.<br>
+                        <small>Valeurs en dehors de l'intervalle [${info.lower_bound.toFixed(2)}, ${info.upper_bound.toFixed(2)}]</small><br>
+                        <small>IQR: ${info.iqr.toFixed(2)} (Q1: ${info.q1.toFixed(2)}, Q3: ${info.q3.toFixed(2)})</small>
+                    </div>
+                `;
+            } else {
+                outlierInfo = `
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-exclamation-triangle"></i> 
+                        <strong>Outliers détectés:</strong> ${info.outlier_count} valeurs (${info.outlier_percentage.toFixed(1)}%) 
+                        sont des outliers (inclus dans le graphique).<br>
+                        <small>Valeurs en dehors de l'intervalle [${info.lower_bound.toFixed(2)}, ${info.upper_bound.toFixed(2)}]</small><br>
+                        <small>IQR: ${info.iqr.toFixed(2)} (Q1: ${info.q1.toFixed(2)}, Q3: ${info.q3.toFixed(2)})</small>
+                    </div>
+                `;
+            }
+        } else if (colStats.histogram && colStats.histogram.outliers_info) {
             outlierInfo = `
-                <div class="alert alert-warning mt-3">
-                    <i class="bi bi-exclamation-triangle"></i> 
-                    <strong>Outliers exclus:</strong> ${info.removed_count} valeurs (${((info.removed_count / info.total_before) * 100).toFixed(1)}%) 
-                    ont été exclues du graphique.<br>
-                    <small>Valeurs en dehors de l'intervalle [${info.lower_bound.toFixed(2)}, ${info.upper_bound.toFixed(2)}] (méthode IQR)</small>
+                <div class="alert alert-success mt-3">
+                    <i class="bi bi-check-circle"></i> 
+                    <strong>Aucun outlier détecté</strong> dans cette variable.<br>
+                    <small>Toutes les valeurs sont dans l'intervalle [${colStats.histogram.outliers_info.lower_bound.toFixed(2)}, ${colStats.histogram.outliers_info.upper_bound.toFixed(2)}]</small>
                 </div>
             `;
         }

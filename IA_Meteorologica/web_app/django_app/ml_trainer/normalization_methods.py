@@ -5,6 +5,7 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
 from enum import Enum, auto
 from dataclasses import dataclass, field
 from typing import Callable, Dict, Union
+import numpy as np
 
 # ────────────────────────────────
 # 1. Definir los Enum permitidos
@@ -82,8 +83,17 @@ def lower_text(serie: pd.Series) -> pd.Series:
 def strip_text(serie: pd.Series) -> pd.Series:
     return serie.str.strip()
 
-def one_hot_text(serie: pd.Series) -> pd.DataFrame:
-    return pd.get_dummies(serie, prefix=serie.name if serie.name else 'col')
+def one_hot_text(serie: pd.Series) -> pd.Series:
+    # Convertir a códigos categóricos (0, 1, 2, etc.)
+    if serie.dtype == 'object' or serie.dtype.name == 'category':
+        # Crear un mapeo de categorías a números
+        unique_vals = serie.dropna().unique()
+        mapping = {val: i for i, val in enumerate(sorted(unique_vals))}
+        # Aplicar el mapeo, mantener NaN como NaN
+        result = serie.map(mapping)
+        # Asegurar que los valores sean enteros (0, 1, 2, etc.)
+        return result.astype('Int64')  # Int64 permite NaN
+    return serie
 
 # ────────────────────────────────
 # 4. Configurar el Dispatch Table
@@ -123,11 +133,6 @@ class Normalizador:
             elif pd.api.types.is_string_dtype(df[col]) or df[col].dtype == 'object':
                 func = self.dispatch_text[self.metodo_texto]
                 res = func(df[col])
-                
-                # Siempre reemplazar la columna original, sin crear nuevas columnas
-                if isinstance(res, pd.DataFrame):
-                    # Para one-hot, usar solo la primera columna o convertir a categórico numérico
-                    resultado[col] = res.idxmax(axis=1) if len(res.columns) > 1 else res.iloc[:, 0]
-                else:
-                    resultado[col] = res
+                # Ahora res siempre será una Serie, no un DataFrame
+                resultado[col] = res
         return resultado

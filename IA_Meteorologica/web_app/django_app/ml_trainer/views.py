@@ -182,7 +182,7 @@ class DatasetColumnsView(APIView):
                             'magnitude_info': None
                         })
                     
-                    # Histograma para visualización con exclusión de outliers
+                    # Histograma para visualización
                     try:
                         data = df[col].dropna()
                         q1 = data.quantile(0.25)
@@ -191,19 +191,30 @@ class DatasetColumnsView(APIView):
                         lower_bound = q1 - 1.5 * iqr
                         upper_bound = q3 + 1.5 * iqr
                         
-                        # Filtrar outliers
-                        data_no_outliers = data[(data >= lower_bound) & (data <= upper_bound)]
-                        outliers_removed = len(data) - len(data_no_outliers)
+                        # Identificar outliers
+                        outliers = data[(data < lower_bound) | (data > upper_bound)]
+                        outliers_count = len(outliers)
                         
-                        hist, bins = np.histogram(data_no_outliers, bins=20)
+                        # Generar histograma completo (con outliers)
+                        hist_full, bins_full = np.histogram(data, bins=20)
+                        
+                        # Generar histograma sin outliers
+                        data_no_outliers = data[(data >= lower_bound) & (data <= upper_bound)]
+                        hist_no_outliers, bins_no_outliers = np.histogram(data_no_outliers, bins=20)
+                        
                         col_stats['histogram'] = {
-                            'counts': hist.tolist(),
-                            'bins': bins.tolist(),
+                            'counts': hist_full.tolist(),
+                            'bins': bins_full.tolist(),
+                            'counts_no_outliers': hist_no_outliers.tolist(),
+                            'bins_no_outliers': bins_no_outliers.tolist(),
                             'outliers_info': {
-                                'removed_count': int(outliers_removed),
+                                'outlier_count': int(outliers_count),
+                                'outlier_percentage': float(outliers_count / len(data) * 100) if len(data) > 0 else 0,
                                 'lower_bound': float(lower_bound),
                                 'upper_bound': float(upper_bound),
-                                'total_before': int(len(data))
+                                'q1': float(q1),
+                                'q3': float(q3),
+                                'iqr': float(iqr)
                             }
                         }
                     except:
@@ -1866,7 +1877,7 @@ class DatasetNormalizationView(APIView):
                         'secondary_methods': [
                             {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte a minúsculas (si son texto)'},
                             {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final'},
-                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Codificación one-hot'}
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos (0, 1, 2...)'}
                         ],
                         'stats': {
                             'mean': float(df[col].mean()) if not df[col].isna().all() else None,
@@ -1885,7 +1896,7 @@ class DatasetNormalizationView(APIView):
                         'primary_methods': [
                             {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte todo a minúsculas'},
                             {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final'},
-                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': f'Crea {unique_values} columnas binarias'}
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': f'Convierte {unique_values} categorías a códigos numéricos (0, 1, 2...)'}
                         ],
                         'secondary_methods': [
                             {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores (si son números como texto)'},
@@ -1914,7 +1925,7 @@ class DatasetNormalizationView(APIView):
                             {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación'},
                             {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Intenta convertir a minúsculas'},
                             {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Intenta eliminar espacios'},
-                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Intenta codificación one-hot'}
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos'}
                         ],
                         'secondary_methods': [],
                         'stats': {
@@ -2005,14 +2016,7 @@ class DatasetNormalizationView(APIView):
                         num_method = NumNorm[method]
                         normalizador = Normalizador(metodo_numerico=num_method)
                         df_result = normalizador.normalizar(df_normalized[[column]])
-                        
-                        # Si el resultado es un DataFrame (como en ONE_HOT), manejarlo apropiadamente
-                        if isinstance(df_result, pd.DataFrame) and len(df_result.columns) > 1:
-                            # Eliminar la columna original y agregar las nuevas
-                            df_normalized = df_normalized.drop(columns=[column])
-                            df_normalized = pd.concat([df_normalized, df_result], axis=1)
-                        else:
-                            df_normalized[column] = df_result[column]
+                        df_normalized[column] = df_result[column]
                         
                         applied_normalizations.append({
                             'column': column,
@@ -2025,13 +2029,7 @@ class DatasetNormalizationView(APIView):
                         text_method = TextNorm[method]
                         normalizador = Normalizador(metodo_texto=text_method)
                         df_result = normalizador.normalizar(df_normalized[[column]])
-                        
-                        if method == 'ONE_HOT' and isinstance(df_result, pd.DataFrame):
-                            # One-hot encoding genera múltiples columnas
-                            df_normalized = df_normalized.drop(columns=[column])
-                            df_normalized = pd.concat([df_normalized, df_result], axis=1)
-                        else:
-                            df_normalized[column] = df_result[column]
+                        df_normalized[column] = df_result[column]
                         
                         applied_normalizations.append({
                             'column': column,
@@ -2166,13 +2164,8 @@ class DatasetNormalizationPreviewView(APIView):
                     'new_columns': None
                 }
                 
-                if isinstance(df_result, pd.DataFrame) and method == 'ONE_HOT':
-                    # One-hot encoding genera múltiples columnas
-                    preview_data['after'] = 'One-Hot Encoding genera múltiples columnas'
-                    preview_data['new_columns'] = list(df_result.columns)
-                    preview_data['one_hot_preview'] = df_result.head(20).to_dict('records')
-                else:
-                    preview_data['after'] = [str(val) if pd.notna(val) else 'NaN' for val in df_result[column].head(20)]
+                # Para todos los métodos, incluyendo ONE_HOT
+                preview_data['after'] = [str(val) if pd.notna(val) else 'NaN' for val in df_result[column].head(20)]
                 
                 # Estadísticas del cambio
                 if df[column].dtype in ['int64', 'float64'] and method != 'ONE_HOT':
