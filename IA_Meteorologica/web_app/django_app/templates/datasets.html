@@ -13,7 +13,7 @@
         padding: 30px;
         transition: all 0.4s ease;
         position: relative;
-        overflow: visible; /* Cambiar a visible para que los botones no se corten */
+        overflow: hidden; /* Cambiar a hidden para limitar el área clickeable */
     }
     
     /* Forzar reset de hover cuando el mouse no está sobre la tarjeta */
@@ -34,14 +34,15 @@
     .dataset-card::before {
         content: '';
         position: absolute;
-        top: -50%;
-        left: -50%;
-        width: 200%;
-        height: 200%;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
         background: radial-gradient(circle, rgba(0, 212, 255, 0.1) 0%, transparent 70%);
         transform: rotate(45deg);
         transition: all 0.5s ease;
         opacity: 0;
+        pointer-events: none; /* Evitar que interfiera con los clicks */
     }
     
     .dataset-card:hover {
@@ -110,17 +111,13 @@
     
     .quick-actions {
         position: absolute;
-        top: 10px;
-        right: 10px;
+        top: 15px;
+        right: 15px;
         display: flex;
-        gap: 8px;
+        gap: 10px;
         opacity: 0;
         transition: opacity 0.3s ease;
-        z-index: 10; /* Asegurar que los botones estén por encima */
-        background: rgba(10, 14, 39, 0.8); /* Fondo para mejor contraste */
-        padding: 8px;
-        border-radius: 15px;
-        backdrop-filter: blur(10px);
+        z-index: 100;
     }
     
     .dataset-card:hover .quick-actions {
@@ -129,20 +126,19 @@
     
     .quick-actions button {
         background: rgba(0, 212, 255, 0.2);
-        border: 2px solid rgba(0, 212, 255, 0.5);
+        border: 2px solid rgba(0, 212, 255, 0.4);
         color: #00d4ff;
-        padding: 12px 16px; /* Más padding para área clickeable más grande */
-        border-radius: 10px;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
         transition: all 0.2s ease;
         cursor: pointer;
-        font-size: 1.2rem; /* Iconos más grandes */
-        position: relative; /* Para z-index */
-        z-index: 11;
-        min-width: 45px; /* Ancho mínimo */
-        min-height: 45px; /* Alto mínimo */
+        font-size: 1.1rem;
         display: flex;
         align-items: center;
         justify-content: center;
+        padding: 0;
+        margin: 0;
     }
     
     .quick-actions button:hover {
@@ -162,6 +158,20 @@
         outline: 2px solid #00d4ff;
         outline-offset: 2px;
     }
+    
+    /* Estilos para la tarjeta de dataset */
+    .dataset-card {
+        position: relative;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }
+    
+    .dataset-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0, 212, 255, 0.3);
+    }
+    
     
     /* Colores específicos para cada acción */
     .quick-actions button[data-action="normalize"]:hover {
@@ -523,95 +533,129 @@ function displayDatasets(datasetList) {
         col.className = 'col-md-6 col-lg-4';
         const size = dataset.file_size ? (dataset.file_size / 1024 / 1024).toFixed(2) : '0';
         
-        col.innerHTML = `
-            <div class="card dataset-card h-100" data-dataset-id="${dataset.id}" 
-                 onmouseenter="this.classList.add('hover')" 
-                 onmouseleave="this.classList.remove('hover')">
-                <div class="quick-actions">
-                    <button class="action-btn" data-action="normalize" data-dataset-id="${dataset.id}" title="Normaliser">
-                        <i class="bi bi-sliders"></i>
-                    </button>
-                    <button class="action-btn" data-action="download" data-dataset-id="${dataset.id}" title="Télécharger">
-                        <i class="bi bi-download"></i>
-                    </button>
-                    <button class="action-btn" data-action="delete" data-dataset-id="${dataset.id}" title="Supprimer">
-                        <i class="bi bi-trash"></i>
-                    </button>
+        // Crear la tarjeta del dataset
+        const card = document.createElement('div');
+        card.className = 'card dataset-card h-100';
+        card.setAttribute('data-dataset-id', dataset.id);
+        
+        // Crear el contenedor de acciones rápidas
+        const quickActions = document.createElement('div');
+        quickActions.className = 'quick-actions';
+        
+        // Botón Normalizar
+        const btnNormalize = document.createElement('button');
+        btnNormalize.type = 'button';
+        btnNormalize.className = 'action-btn';
+        btnNormalize.setAttribute('data-action', 'normalize');
+        btnNormalize.setAttribute('data-dataset-id', dataset.id);
+        btnNormalize.title = 'Normalizar';
+        btnNormalize.innerHTML = '<i class="bi bi-sliders"></i>';
+        
+        // Botón Descargar
+        const btnDownload = document.createElement('button');
+        btnDownload.type = 'button';
+        btnDownload.className = 'action-btn';
+        btnDownload.setAttribute('data-action', 'download');
+        btnDownload.setAttribute('data-dataset-id', dataset.id);
+        btnDownload.title = 'Descargar';
+        btnDownload.innerHTML = '<i class="bi bi-download"></i>';
+        
+        // Botón Eliminar
+        const btnDelete = document.createElement('button');
+        btnDelete.type = 'button';
+        btnDelete.className = 'action-btn';
+        btnDelete.setAttribute('data-action', 'delete');
+        btnDelete.setAttribute('data-dataset-id', dataset.id);
+        btnDelete.title = 'Eliminar';
+        btnDelete.innerHTML = '<i class="bi bi-trash"></i>';
+        
+        quickActions.appendChild(btnNormalize);
+        quickActions.appendChild(btnDownload);
+        quickActions.appendChild(btnDelete);
+        
+        // Crear el cuerpo de la tarjeta
+        const cardBody = document.createElement('div');
+        cardBody.className = 'card-body';
+        cardBody.innerHTML = `
+            <div class="dataset-icon">
+                <i class="bi bi-file-earmark-spreadsheet"></i>
+            </div>
+            <h5 class="card-title text-center mb-2" style="font-weight: 600; font-size: 1.3rem;">
+                ${dataset.name}
+            </h5>
+            <p class="text-muted small text-center mb-4" style="font-size: 0.85rem; opacity: 0.8;">
+                ${dataset.description || 'Dataset météorologique'}
+            </p>
+            <div class="dataset-stats">
+                <div class="stat-item">
+                    <div class="stat-value">${(dataset.row_count || 0).toLocaleString('fr-FR')}</div>
+                    <div class="text-muted small">Lignes</div>
                 </div>
-                <div class="card-body dataset-clickable" data-dataset-id="${dataset.id}">
-                    <div class="dataset-icon">
-                        <i class="bi bi-file-earmark-spreadsheet"></i>
-                    </div>
-                    <h5 class="card-title text-center mb-2" style="font-weight: 600; font-size: 1.3rem;">
-                        ${dataset.name}
-                    </h5>
-                    <p class="text-muted small text-center mb-4" style="font-size: 0.85rem; opacity: 0.8;">
-                        ${dataset.description || 'Dataset météorologique'}
-                    </p>
-                    <div class="dataset-stats">
-                        <div class="stat-item">
-                            <div class="stat-value">${(dataset.row_count || 0).toLocaleString('fr-FR')}</div>
-                            <div class="text-muted small">Lignes</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${dataset.column_count || 0}</div>
-                            <div class="text-muted small">Colonnes</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${size}</div>
-                            <div class="text-muted small">MB</div>
-                        </div>
-                    </div>
-                    <div class="text-center mt-4 pt-3" style="border-top: 1px solid rgba(0, 212, 255, 0.2); color: #00d4ff; font-size: 0.9rem;">
-                        <i class="bi bi-calendar3"></i> 
-                        Importé le ${dataset.uploaded_at ? new Date(dataset.uploaded_at).toLocaleDateString('fr-FR', { 
-                            year: 'numeric', 
-                            month: 'long', 
-                            day: 'numeric' 
-                        }) : 'Date inconnue'}
-                    </div>
+                <div class="stat-item">
+                    <div class="stat-value">${dataset.column_count || 0}</div>
+                    <div class="text-muted small">Colonnes</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${size}</div>
+                    <div class="text-muted small">MB</div>
                 </div>
             </div>
+            <div class="text-center mt-4 pt-3" style="border-top: 1px solid rgba(0, 212, 255, 0.2); color: #00d4ff; font-size: 0.9rem;">
+                <i class="bi bi-calendar3"></i> 
+                Importé le ${dataset.uploaded_at ? new Date(dataset.uploaded_at).toLocaleDateString('fr-FR', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                }) : 'Date inconnue'}
+            </div>
         `;
+        
+        // Ensamblar la tarjeta
+        card.appendChild(quickActions);
+        card.appendChild(cardBody);
+        col.appendChild(card);
         grid.appendChild(col);
+        
+        // Agregar eventos directamente a la tarjeta
+        card.addEventListener('click', function(e) {
+            // Solo procesar clic si no es en un botón
+            if (!e.target.closest('.action-btn')) {
+                showDatasetDetails(dataset.id);
+            }
+        });
+        
+        card.addEventListener('mouseenter', function() {
+            this.classList.add('hover');
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.classList.remove('hover');
+        });
+        
+        // Eventos para los botones
+        btnNormalize.addEventListener('click', function(e) {
+            e.stopPropagation();
+            normalizeDataset(dataset.id);
+        });
+        
+        btnDownload.addEventListener('click', function(e) {
+            e.stopPropagation();
+            downloadDataset(dataset.id);
+        });
+        
+        btnDelete.addEventListener('click', function(e) {
+            e.stopPropagation();
+            deleteDataset(dataset.id);
+        });
     });
     
     // Agregar event listeners después de crear los elementos
     setupDatasetCardListeners();
 }
 
-// Configurar listeners para las tarjetas de dataset
+// Función vacía ya que los eventos se agregan directamente en displayDatasets
 function setupDatasetCardListeners() {
-    // Click en el cuerpo de la tarjeta
-    document.querySelectorAll('.dataset-clickable').forEach(element => {
-        element.addEventListener('click', function(e) {
-            const datasetId = this.getAttribute('data-dataset-id');
-            showDatasetDetails(parseInt(datasetId));
-        });
-    });
-    
-    // Click en los botones de acción
-    document.querySelectorAll('.action-btn').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const action = this.getAttribute('data-action');
-            const datasetId = parseInt(this.getAttribute('data-dataset-id'));
-            
-            switch(action) {
-                case 'normalize':
-                    normalizeDataset(datasetId);
-                    break;
-                case 'download':
-                    downloadDataset(datasetId);
-                    break;
-                case 'delete':
-                    deleteDataset(datasetId);
-                    break;
-            }
-        });
-    });
+    // Los eventos ya se agregan directamente al crear las tarjetas
 }
 
 // Afficher les détails d'un dataset

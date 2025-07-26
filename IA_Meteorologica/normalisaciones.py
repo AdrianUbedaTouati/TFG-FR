@@ -113,21 +113,21 @@ class Normalizador:
         num_func = NUM_REGISTRY[self.metodo_numerico]
         text_func = TEXT_REGISTRY[self.metodo_texto]
 
-        frames = []
+        resultado = self.df.copy()
         # Recorremos las columnas en su orden original
         for col in self.df.columns:
             serie = self.df[col]
             if pd.api.types.is_numeric_dtype(serie):
                 col_norm = num_func(serie)
-                frames.append(col_norm.to_frame())
+                resultado[col] = col_norm
             else:
                 col_norm = text_func(serie)
                 if isinstance(col_norm, pd.Series):
-                    frames.append(col_norm.to_frame())
-                else:  # DataFrame (one-hot)
-                    frames.append(col_norm)
+                    resultado[col] = col_norm
+                else:  # DataFrame (one-hot) - reemplazar con categoría principal
+                    resultado[col] = col_norm.idxmax(axis=1) if len(col_norm.columns) > 1 else col_norm.iloc[:, 0]
 
-        return pd.concat(frames, axis=1)
+        return resultado
 
 # ────────────────────────────────
 # 6. Ejemplo de uso

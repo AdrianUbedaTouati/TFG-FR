@@ -124,10 +124,10 @@ class Normalizador:
                 func = self.dispatch_text[self.metodo_texto]
                 res = func(df[col])
                 
-                # Si one-hot devuelve un DataFrame, reemplazar la columna original
+                # Siempre reemplazar la columna original, sin crear nuevas columnas
                 if isinstance(res, pd.DataFrame):
-                    resultado = resultado.drop(columns=[col])
-                    resultado = pd.concat([resultado, res], axis=1)
+                    # Para one-hot, usar solo la primera columna o convertir a categórico numérico
+                    resultado[col] = res.idxmax(axis=1) if len(res.columns) > 1 else res.iloc[:, 0]
                 else:
                     resultado[col] = res
         return resultado
