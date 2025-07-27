@@ -10,17 +10,23 @@
         background: rgba(10, 14, 39, 0.8);
         border: 2px solid rgba(0, 212, 255, 0.3);
         border-radius: 20px;
-        padding: 25px;
+        padding: 20px;
         transition: all 0.4s ease;
         position: relative;
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        height: 420px;
-        width: 350px;
-        min-width: 350px;
-        max-width: 350px;
+        height: 380px;
+        width: 100%;
         backdrop-filter: blur(10px);
+    }
+    
+    @media (max-width: 576px) {
+        .model-card {
+            height: auto;
+            min-height: 320px;
+            padding: 15px;
+        }
     }
     
     .model-card::before {
@@ -179,11 +185,30 @@
     .status-failed { background: #ef4444; }
     
     .models-container {
-        display: flex;
-        gap: 30px;
-        overflow-x: auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+        gap: 20px;
         padding: 20px 0;
-        scroll-behavior: smooth;
+    }
+    
+    @media (max-width: 576px) {
+        .models-container {
+            grid-template-columns: 1fr;
+            padding: 10px 0;
+            gap: 15px;
+        }
+    }
+    
+    @media (min-width: 577px) and (max-width: 992px) {
+        .models-container {
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        }
+    }
+    
+    @media (min-width: 993px) {
+        .models-container {
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        }
     }
     
     .models-container::-webkit-scrollbar {
@@ -206,18 +231,177 @@
     
     .create-model-card {
         background: rgba(138, 43, 226, 0.1);
-        border: 3px dashed rgba(138, 43, 226, 0.5);
+        border: 2px dashed rgba(138, 43, 226, 0.5);
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
         transition: all 0.3s ease;
+        min-height: 280px;
     }
     
     .create-model-card:hover {
         background: rgba(138, 43, 226, 0.2);
         border-color: #8a2be2;
-        transform: scale(1.02);
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(138, 43, 226, 0.3);
+    }
+    
+    .create-model-card i {
+        font-size: 3rem;
+        color: #8a2be2;
+        margin-bottom: 10px;
+    }
+    
+    .create-model-card h5 {
+        font-size: 1.1rem;
+        margin-bottom: 5px;
+    }
+    
+    .create-model-card p {
+        font-size: 0.9rem;
+        margin-bottom: 0;
+    }
+    
+    @media (max-width: 576px) {
+        .create-model-card {
+            min-height: 200px;
+        }
+        
+        .create-model-card i {
+            font-size: 2.5rem;
+        }
+        
+        .create-model-card h5 {
+            font-size: 1rem;
+        }
+        
+        .create-model-card p {
+            font-size: 0.85rem;
+        }
+    }
+    
+    /* Empty state message */
+    .empty-state-message {
+        grid-column: 2 / -1;
+        text-align: center;
+        padding: 40px 20px;
+    }
+    
+    .empty-state-icon {
+        font-size: 4rem;
+        color: rgba(138, 43, 226, 0.5);
+    }
+    
+    .empty-state-title {
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 1.3rem;
+        font-weight: 500;
+    }
+    
+    .empty-state-text {
+        font-size: 0.95rem;
+    }
+    
+    @media (max-width: 576px) {
+        .empty-state-message {
+            grid-column: 1 / -1;
+            padding: 30px 15px;
+        }
+        
+        .empty-state-icon {
+            font-size: 3rem;
+        }
+        
+        .empty-state-title {
+            font-size: 1.1rem;
+        }
+        
+        .empty-state-text {
+            font-size: 0.9rem;
+        }
+    }
+    
+    /* Layer builder styles for expert mode */
+    .layer-item {
+        background: rgba(0, 212, 255, 0.1);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 10px;
+        position: relative;
+        transition: all 0.3s ease;
+    }
+    
+    .layer-item:hover {
+        background: rgba(0, 212, 255, 0.15);
+        transform: translateX(5px);
+    }
+    
+    .layer-item .layer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .layer-item .layer-title {
+        font-weight: bold;
+        color: #00d4ff;
+    }
+    
+    .layer-item .layer-controls {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .layer-item .btn-move {
+        background: rgba(0, 212, 255, 0.2);
+        border: 1px solid rgba(0, 212, 255, 0.4);
+        color: #00d4ff;
+        padding: 2px 8px;
+        font-size: 0.8rem;
+        transition: all 0.3s ease;
+    }
+    
+    .layer-item .btn-move:hover:not(:disabled) {
+        background: rgba(0, 212, 255, 0.4);
+        border-color: #00d4ff;
+        box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+    }
+    
+    .layer-item .btn-delete {
+        background: rgba(255, 107, 107, 0.2);
+        border: 1px solid rgba(255, 107, 107, 0.4);
+        color: #ff6b6b;
+        padding: 2px 8px;
+        font-size: 0.8rem;
+        transition: all 0.3s ease;
+    }
+    
+    .layer-item .btn-delete:hover {
+        background: rgba(255, 107, 107, 0.4);
+        border-color: #ff6b6b;
+        box-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+    }
+    
+    .layer-params {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px;
+    }
+    
+    /* Replace all gray buttons with vibrant colors */
+    .btn-secondary {
+        background: rgba(138, 43, 226, 0.2) !important;
+        border: 1px solid rgba(138, 43, 226, 0.5) !important;
+        color: #ffffff !important;
+    }
+    
+    .btn-secondary:hover {
+        background: rgba(138, 43, 226, 0.4) !important;
+        border-color: #8a2be2 !important;
+        box-shadow: 0 0 20px rgba(138, 43, 226, 0.5) !important;
     }
     
     /* Modal styles */
@@ -348,9 +532,9 @@
                 <!-- Carte pour créer un nouveau modèle -->
                 <div class="card model-card create-model-card" onclick="showCreateModelModal()">
                     <div class="text-center">
-                        <i class="bi bi-plus-circle" style="font-size: 4rem; color: #8a2be2;"></i>
-                        <h5 class="text-white mt-3">Créer un Nouveau Modèle</h5>
-                        <p class="text-muted">Définir et configurer un nouveau modèle</p>
+                        <i class="bi bi-plus-circle"></i>
+                        <h5 class="text-white mt-2">Créer un Nouveau Modèle</h5>
+                        <p class="text-muted">Définir et configurer</p>
                     </div>
                 </div>
                 
@@ -403,7 +587,7 @@
     </div>
 </div>
 
-<!-- Modal Créer un Modèle -->
+<!-- Modal Créer un Modèle (identique à dashboard) -->
 <div class="modal fade" id="createModelModal" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
@@ -420,10 +604,6 @@
                             <div class="mb-3">
                                 <label for="modelName" class="form-label">Nom du Modèle</label>
                                 <input type="text" class="form-control" id="modelName" placeholder="Ex: Modèle Météo LSTM v2" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="modelDescription" class="form-label">Description</label>
-                                <textarea class="form-control" id="modelDescription" rows="2" placeholder="Description du modèle..."></textarea>
                             </div>
                             <div class="mb-3">
                                 <label for="modelType" class="form-label">Type de Modèle</label>
@@ -444,29 +624,218 @@
                             </div>
                         </div>
                         <div class="col-md-6">
+                            <div id="modelRequirements" class="model-requirements" style="display: none;">
+                                <h6 class="text-warning mb-2"><i class="bi bi-info-circle"></i> Exigences du Modèle</h6>
+                                <p id="modelRequirementsText" class="mb-0 small"></p>
+                            </div>
                             <div class="mb-3">
                                 <label class="form-label">Colonnes Cibles (à prédire)</label>
                                 <div id="targetVariables" class="border rounded p-3" style="max-height: 200px; overflow-y: auto; background: rgba(255, 107, 107, 0.05); border-color: rgba(255, 107, 107, 0.3) !important;">
                                     <p class="text-muted">Sélectionnez d'abord un dataset</p>
                                 </div>
+                                <small class="text-muted" id="targetHelp">Cliquez pour sélectionner les variables à prédire</small>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Variables Prédictives</label>
                                 <div id="predictorVariables" class="border rounded p-3" style="max-height: 200px; overflow-y: auto; background: rgba(0, 212, 255, 0.05); border-color: rgba(0, 212, 255, 0.3) !important;">
                                     <p class="text-muted">Sélectionnez d'abord un dataset</p>
                                 </div>
+                                <small class="text-muted" id="predictorHelp">Cliquez pour sélectionner les variables d'entrée</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="testSize" class="form-label">Taille du Test (%)</label>
+                                <input type="number" class="form-control" id="testSize" min="10" max="50" value="20" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="epochs" class="form-label">Époques (pour Deep Learning)</label>
+                                <input type="number" class="form-control" id="epochs" min="1" max="1000" value="50">
                             </div>
                         </div>
                     </div>
                     
-                    <div class="alert alert-info mt-3">
-                        <i class="bi bi-info-circle"></i> Le modèle sera sauvegardé sans entraînement. Vous pourrez l'entraîner plus tard depuis cette page.
+                    <!-- Mode Expert Toggle -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="expertMode" onchange="toggleExpertMode()">
+                                <label class="form-check-label" for="expertMode">
+                                    <i class="bi bi-gear-fill"></i> Mode Expert - Configuration avancée du modèle
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Configuration du Modèle (Normal + Expert) -->
+                    <div id="modelConfiguration" class="mt-4" style="display: none;">
+                        <h5 class="text-info mb-3"><i class="bi bi-sliders"></i> Configuration du Modèle</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="lossFunction" class="form-label">Fonction de Perte</label>
+                                    <select class="form-select" id="lossFunction">
+                                        <option value="">Sélectionner...</option>
+                                        <optgroup label="Régression">
+                                            <option value="mse">MSE (Mean Squared Error)</option>
+                                            <option value="mae">MAE (Mean Absolute Error)</option>
+                                            <option value="huber">Huber Loss</option>
+                                            <option value="log_cosh">Log-Cosh Loss</option>
+                                        </optgroup>
+                                        <optgroup label="Classification">
+                                            <option value="binary_crossentropy">Binary Crossentropy</option>
+                                            <option value="categorical_crossentropy">Categorical Crossentropy</option>
+                                            <option value="sparse_categorical_crossentropy">Sparse Categorical Crossentropy</option>
+                                        </optgroup>
+                                        <optgroup label="Multi-tâches">
+                                            <option value="custom">Personnalisée (définir dans le code)</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="optimizer" class="form-label">Optimiseur</label>
+                                    <select class="form-select" id="optimizer">
+                                        <option value="adam">Adam</option>
+                                        <option value="sgd">SGD</option>
+                                        <option value="rmsprop">RMSprop</option>
+                                        <option value="adagrad">Adagrad</option>
+                                        <option value="adamax">Adamax</option>
+                                        <option value="nadam">Nadam</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="learningRate" class="form-label">Taux d'Apprentissage</label>
+                                    <input type="number" class="form-control" id="learningRate" step="0.0001" value="0.001">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="batchSize" class="form-label">Taille du Batch</label>
+                                    <input type="number" class="form-control" id="batchSize" min="1" value="32">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Architecture du Réseau (Mode Expert) -->
+                    <div id="networkArchitecture" class="mt-4" style="display: none;">
+                        <h5 class="text-info mb-3"><i class="bi bi-diagram-3"></i> Architecture du Réseau</h5>
+                        
+                        <!-- Boutons pour ajouter des couches -->
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('dense')">
+                                <i class="bi bi-plus-circle"></i> Dense
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('lstm')">
+                                <i class="bi bi-plus-circle"></i> LSTM
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('gru')">
+                                <i class="bi bi-plus-circle"></i> GRU
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('conv1d')">
+                                <i class="bi bi-plus-circle"></i> Conv1D
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('dropout')">
+                                <i class="bi bi-plus-circle"></i> Dropout
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('batchnorm')">
+                                <i class="bi bi-plus-circle"></i> BatchNorm
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('flatten')">
+                                <i class="bi bi-plus-circle"></i> Flatten
+                            </button>
+                        </div>
+                        
+                        <!-- Conteneur des couches -->
+                        <div id="layersContainer" class="border rounded p-3" style="max-height: 400px; overflow-y: auto; background: rgba(0, 0, 0, 0.3);">
+                            <p class="text-muted text-center">Aucune couche ajoutée. Cliquez sur les boutons ci-dessus pour ajouter des couches.</p>
+                        </div>
+                        
+                        <!-- Configuration de la couche de sortie -->
+                        <div class="mt-3">
+                            <h6 class="text-warning">Couche de Sortie</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="outputActivation" class="form-label">Activation de Sortie</label>
+                                        <select class="form-select" id="outputActivation">
+                                            <option value="linear">Linear (Régression)</option>
+                                            <option value="sigmoid">Sigmoid (Classification binaire)</option>
+                                            <option value="softmax">Softmax (Classification multi-classe)</option>
+                                            <option value="tanh">Tanh</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="outputUnits" class="form-label">Nombre d'Unités de Sortie</label>
+                                        <input type="number" class="form-control" id="outputUnits" min="1" value="1">
+                                        <small class="text-muted">Sera automatiquement ajusté selon les variables cibles</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Métriques et Callbacks -->
+                    <div id="metricsCallbacks" class="mt-4" style="display: none;">
+                        <h5 class="text-info mb-3"><i class="bi bi-graph-up"></i> Métriques et Callbacks</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Métriques à Suivre</label>
+                                <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+                                    <div class="form-check">
+                                        <input class="form-check-input metric-checkbox" type="checkbox" value="accuracy" id="metric_accuracy">
+                                        <label class="form-check-label" for="metric_accuracy">Accuracy</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input metric-checkbox" type="checkbox" value="mae" id="metric_mae" checked>
+                                        <label class="form-check-label" for="metric_mae">MAE</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input metric-checkbox" type="checkbox" value="mse" id="metric_mse" checked>
+                                        <label class="form-check-label" for="metric_mse">MSE</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input metric-checkbox" type="checkbox" value="rmse" id="metric_rmse">
+                                        <label class="form-check-label" for="metric_rmse">RMSE</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input metric-checkbox" type="checkbox" value="r2" id="metric_r2">
+                                        <label class="form-check-label" for="metric_r2">R²</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Callbacks</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="earlyStoppingCallback" checked>
+                                    <label class="form-check-label" for="earlyStoppingCallback">
+                                        Early Stopping
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="reduceLRCallback" checked>
+                                    <label class="form-check-label" for="reduceLRCallback">
+                                        Reduce LR on Plateau
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="modelCheckpointCallback" checked>
+                                    <label class="form-check-label" for="modelCheckpointCallback">
+                                        Model Checkpoint
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info mt-4">
+                        <i class="bi bi-info-circle"></i> Le modèle sera sauvegardé. Vous pourrez l'entraîner plus tard depuis cette page.
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-                <button type="button" class="btn btn-primary" onclick="saveNewModel()">
+                <button type="button" class="btn btn-primary" onclick="createModelOnly()">
                     <i class="bi bi-save"></i> Créer le Modèle
                 </button>
             </div>
@@ -577,8 +946,14 @@ function displayModels() {
     
     if (filteredModels.length === 0) {
         const emptyMessage = document.createElement('div');
-        emptyMessage.className = 'col-12 text-center text-muted py-5';
-        emptyMessage.innerHTML = '<i class="bi bi-cpu" style="font-size: 3rem;"></i><br>Aucun modèle trouvé';
+        emptyMessage.className = 'empty-state-message';
+        emptyMessage.innerHTML = `
+            <div class="text-center py-5">
+                <i class="bi bi-cpu empty-state-icon"></i>
+                <h5 class="empty-state-title mt-3">Aucun modèle trouvé</h5>
+                <p class="empty-state-text text-muted">Créez votre premier modèle pour commencer</p>
+            </div>
+        `;
         container.appendChild(emptyMessage);
         return;
     }
@@ -593,6 +968,8 @@ function displayModels() {
 function createModelCard(model) {
     const card = document.createElement('div');
     card.className = 'card model-card';
+    card.style.cursor = 'pointer';
+    card.onclick = () => editModel(model.id);
     
     const latestTraining = model.latest_training;
     const statusClass = latestTraining?.status === 'completed' ? 'success' : 
@@ -604,11 +981,6 @@ function createModelCard(model) {
                     onclick="event.stopPropagation(); trainModel(${model.id})" 
                     title="Entraîner">
                 <i class="bi bi-play-fill"></i>
-            </button>
-            <button type="button" class="action-btn" data-action="edit" 
-                    onclick="event.stopPropagation(); editModel(${model.id})" 
-                    title="Éditer">
-                <i class="bi bi-pencil"></i>
             </button>
             <button type="button" class="action-btn" data-action="clone" 
                     onclick="event.stopPropagation(); cloneModel(${model.id})" 
@@ -839,89 +1211,251 @@ function editModel(modelId) {
     // Clean up any existing modals first
     cleanupModals();
     
-    document.getElementById('editModelTitle').innerHTML = `
-        <i class="bi bi-pencil-square"></i> Éditer - ${model.name}
-    `;
+    // Réinitialiser le formulaire
+    document.getElementById('createModelForm').reset();
+    networkLayers = model.custom_architecture || [];
+    layerIdCounter = networkLayers.length;
     
-    // Créer le formulaire d'édition
-    document.getElementById('editModelContent').innerHTML = `
-        <form id="editModelForm">
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="mb-3">
-                        <label for="editModelName" class="form-label">Nom du modèle</label>
-                        <input type="text" class="form-control" id="editModelName" 
-                               value="${model.name}" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="editModelDescription" class="form-label">Description</label>
-                        <textarea class="form-control" id="editModelDescription" rows="3">${model.description || ''}</textarea>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="mb-3">
-                        <label class="form-label">Type de modèle</label>
-                        <input type="text" class="form-control" value="${model.model_type.toUpperCase()}" disabled>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Dataset</label>
-                        <input type="text" class="form-control" value="${model.dataset_name}" disabled>
-                    </div>
-                </div>
-            </div>
+    // Charger les valeurs du modèle
+    document.getElementById('modelName').value = model.name;
+    document.getElementById('modelType').value = model.model_type;
+    document.getElementById('epochs').value = model.hyperparameters?.epochs || 50;
+    document.getElementById('testSize').value = (model.hyperparameters?.test_size || 0.2) * 100;
+    
+    // Si c'est un modèle de deep learning, charger la configuration
+    if (model.hyperparameters) {
+        if (model.hyperparameters.loss_function) {
+            document.getElementById('lossFunction').value = model.hyperparameters.loss_function;
+        }
+        if (model.hyperparameters.optimizer) {
+            document.getElementById('optimizer').value = model.hyperparameters.optimizer;
+        }
+        if (model.hyperparameters.learning_rate) {
+            document.getElementById('learningRate').value = model.hyperparameters.learning_rate;
+        }
+        if (model.hyperparameters.batch_size) {
+            document.getElementById('batchSize').value = model.hyperparameters.batch_size;
+        }
+        if (model.hyperparameters.output_activation) {
+            document.getElementById('outputActivation').value = model.hyperparameters.output_activation;
+        }
+        if (model.hyperparameters.output_units) {
+            document.getElementById('outputUnits').value = model.hyperparameters.output_units;
+        }
+    }
+    
+    // Activer le mode expert si nécessaire
+    if (model.use_custom_architecture && model.custom_architecture?.length > 0) {
+        document.getElementById('expertMode').checked = true;
+        toggleExpertMode();
+        renderLayers();
+    }
+    
+    // Charger les datasets et sélectionner le bon
+    fetch('/api/datasets/')
+        .then(response => response.json())
+        .then(datasets => {
+            const select = document.getElementById('dataset');
+            select.innerHTML = '<option value="">Sélectionner un dataset...</option>';
+            datasets.forEach(dataset => {
+                const option = document.createElement('option');
+                option.value = dataset.id;
+                option.textContent = dataset.name;
+                if (dataset.id === model.dataset) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
             
-            <div class="alert alert-info">
-                <i class="bi bi-info-circle"></i> Pour modifier la configuration technique du modèle (architecture, variables, etc.), 
-                créez une nouvelle version en clonant ce modèle.
-            </div>
-        </form>
+            // Charger les colonnes du dataset sélectionné
+            if (model.dataset) {
+                loadDatasetColumns();
+                
+                // Après le chargement des colonnes, sélectionner les bonnes
+                setTimeout(() => {
+                    // Sélectionner les variables cibles
+                    model.target_columns.forEach(col => {
+                        const checkbox = document.querySelector(`#target_${col.replace(/[^a-zA-Z0-9]/g, '_')}`);
+                        if (checkbox) checkbox.checked = true;
+                    });
+                    
+                    // Sélectionner les variables prédictives
+                    model.predictor_columns.forEach(col => {
+                        const checkbox = document.querySelector(`#pred_${col.replace(/[^a-zA-Z0-9]/g, '_')}`);
+                        if (checkbox) checkbox.checked = true;
+                    });
+                    
+                    // Appliquer les règles du modèle
+                    applyModelRules();
+                }, 1000);
+            }
+        });
+    
+    // Changer le titre du modal
+    document.querySelector('#createModelModal .modal-title').innerHTML = `
+        <i class="bi bi-pencil-square"></i> Éditer le Modèle - ${model.name}
     `;
     
-    const modalElement = document.getElementById('editModelModal');
-    // Always create a fresh instance
+    // Changer le bouton pour sauvegarder au lieu de créer
+    const footer = document.querySelector('#createModelModal .modal-footer');
+    footer.innerHTML = `
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-primary" onclick="updateModel(${modelId})">
+            <i class="bi bi-save"></i> Sauvegarder les modifications
+        </button>
+    `;
+    
+    // Afficher le modal
+    const modalElement = document.getElementById('createModelModal');
     const modal = new bootstrap.Modal(modalElement, {
-        backdrop: false,  // Pas de backdrop
+        backdrop: false,
         keyboard: true,
         focus: true
     });
     modal.show();
 }
 
-// Sauvegarder les modifications
-function saveModelChanges() {
-    if (!selectedModel) return;
+// Mettre à jour le modèle
+function updateModel(modelId) {
+    const modelType = document.getElementById('modelType').value;
     
-    const data = {
-        name: document.getElementById('editModelName').value,
-        description: document.getElementById('editModelDescription').value
+    // Validation du type de modèle
+    if (!modelType || !modelRules[modelType]) {
+        showNotification('Erreur', 'Veuillez sélectionner un type de modèle', 'error');
+        return;
+    }
+    
+    const rules = modelRules[modelType];
+    
+    // Collecter les variables cibles sélectionnées
+    const targetCheckboxes = document.querySelectorAll('.target-checkbox:checked');
+    const targetColumns = Array.from(targetCheckboxes).map(cb => cb.value);
+    
+    // Collecter les variables prédictives sélectionnées
+    const predictorCheckboxes = document.querySelectorAll('.predictor-checkbox:checked:not(:disabled)');
+    const predictorColumns = Array.from(predictorCheckboxes).map(cb => cb.value);
+    
+    // Validation selon les règles du modèle
+    if (targetColumns.length < rules.minTargets) {
+        showNotification('Erreur', `${rules.name} nécessite au moins ${rules.minTargets} variable(s) cible(s)`, 'error');
+        return;
+    }
+    
+    if (predictorColumns.length < rules.minPredictors) {
+        showNotification('Erreur', `${rules.name} nécessite au moins ${rules.minPredictors} variable(s) prédictive(s)`, 'error');
+        return;
+    }
+    
+    // Construire la configuration du modèle
+    const expertMode = document.getElementById('expertMode').checked;
+    let modelConfig = {
+        epochs: parseInt(document.getElementById('epochs').value),
+        test_size: parseInt(document.getElementById('testSize').value) / 100
+    };
+    
+    // Configuration commune pour les modèles de deep learning
+    if (isDeepLearningModel(modelType) || expertMode) {
+        modelConfig.loss_function = document.getElementById('lossFunction').value;
+        modelConfig.optimizer = document.getElementById('optimizer').value;
+        modelConfig.learning_rate = parseFloat(document.getElementById('learningRate').value);
+        modelConfig.batch_size = parseInt(document.getElementById('batchSize').value);
+        
+        // Métriques sélectionnées
+        const selectedMetrics = Array.from(document.querySelectorAll('.metric-checkbox:checked')).map(cb => cb.value);
+        modelConfig.metrics = selectedMetrics;
+        
+        // Callbacks
+        modelConfig.callbacks = {
+            early_stopping: document.getElementById('earlyStoppingCallback').checked,
+            reduce_lr: document.getElementById('reduceLRCallback').checked,
+            model_checkpoint: document.getElementById('modelCheckpointCallback').checked
+        };
+        
+        // Configuration de sortie
+        modelConfig.output_activation = document.getElementById('outputActivation').value;
+        modelConfig.output_units = parseInt(document.getElementById('outputUnits').value);
+    }
+    
+    // Architecture personnalisée en mode expert
+    if (expertMode && networkLayers.length > 0) {
+        modelConfig.custom_architecture = networkLayers;
+        modelConfig.use_custom_architecture = true;
+    } else {
+        modelConfig.use_custom_architecture = false;
+    }
+    
+    const modelData = {
+        name: document.getElementById('modelName').value,
+        description: `Modèle ${modelType.toUpperCase()} pour prédire ${targetColumns.join(', ')}`,
+        model_type: modelType,
+        dataset: document.getElementById('dataset').value,
+        target_columns: targetColumns,
+        predictor_columns: predictorColumns,
+        default_config: modelConfig,
+        hyperparameters: modelConfig,
+        custom_architecture: expertMode && networkLayers.length > 0 ? networkLayers : null,
+        use_custom_architecture: expertMode && networkLayers.length > 0
     };
     
     showLoading();
     
-    fetch(`/api/models/${selectedModel.id}/`, {
-        method: 'PATCH',
+    const csrfToken = getCookie('csrftoken');
+    
+    // Mettre à jour le modèle
+    fetch(`/api/models/${modelId}/`, {
+        method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
+            'X-CSRFToken': csrfToken
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(modelData)
     })
-    .then(response => response.json())
-    .then(updated => {
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(modelDef => {
+        // Fermer le modal et recharger la liste
         hideLoading();
-        showNotification('Succès', 'Modèle mis à jour avec succès', 'success');
-        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('editModelModal'));
+        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('createModelModal'));
         if (modalInstance) {
             modalInstance.hide();
             modalInstance.dispose();
         }
         cleanupModals();
-        loadModels();
+        
+        // Reset form and state
+        document.getElementById('createModelForm').reset();
+        networkLayers = [];
+        layerIdCounter = 0;
+        document.getElementById('expertMode').checked = false;
+        toggleExpertMode();
+        
+        // Reset modal title and footer for next use
+        document.querySelector('#createModelModal .modal-title').innerHTML = `
+            <i class="bi bi-cpu"></i> Créer un Nouveau Modèle
+        `;
+        
+        const footer = document.querySelector('#createModelModal .modal-footer');
+        footer.innerHTML = `
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+            <button type="button" class="btn btn-primary" onclick="createModelOnly()">
+                <i class="bi bi-save"></i> Créer le Modèle
+            </button>
+        `;
+        
+        showNotification('Succès', 'Modèle mis à jour avec succès!', 'success');
+        
+        // Recharger la page après un court délai pour éviter les problèmes
+        setTimeout(() => {
+            window.location.reload();
+        }, 1500);
     })
     .catch(error => {
         hideLoading();
-        console.error('Erreur:', error);
-        showNotification('Erreur', 'Impossible de sauvegarder les modifications', 'error');
+        showNotification('Erreur', 'Erreur lors de la mise à jour du modèle: ' + error, 'error');
     });
 }
 
@@ -938,7 +1472,15 @@ function cloneModel(modelId) {
         confirmButtonColor: '#8a2be2',
         cancelButtonColor: '#6b7280',
         confirmButtonText: 'Oui, cloner',
-        cancelButtonText: 'Annuler'
+        cancelButtonText: 'Annuler',
+        background: '#1a1f3a',
+        color: '#ffffff',
+        customClass: {
+            popup: 'swal-custom-popup',
+            title: 'swal-custom-title',
+            htmlContainer: 'swal-custom-text',
+            confirmButton: 'swal-custom-button'
+        }
     }).then((result) => {
         if (result.isConfirmed) {
             showLoading();
@@ -953,7 +1495,9 @@ function cloneModel(modelId) {
             .then(newModel => {
                 hideLoading();
                 showNotification('Succès', 'Modèle cloné avec succès', 'success');
-                loadModels();
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
             })
             .catch(error => {
                 hideLoading();
@@ -980,7 +1524,15 @@ function deleteModel(modelId) {
         confirmButtonColor: '#ef4444',
         cancelButtonColor: '#6b7280',
         confirmButtonText: 'Oui, supprimer',
-        cancelButtonText: 'Annuler'
+        cancelButtonText: 'Annuler',
+        background: '#1a1f3a',
+        color: '#ffffff',
+        customClass: {
+            popup: 'swal-custom-popup',
+            title: 'swal-custom-title',
+            htmlContainer: 'swal-custom-text',
+            confirmButton: 'swal-custom-button'
+        }
     }).then((result) => {
         if (result.isConfirmed) {
             showLoading();
@@ -994,7 +1546,9 @@ function deleteModel(modelId) {
             .then(() => {
                 hideLoading();
                 showNotification('Succès', 'Modèle supprimé avec succès', 'success');
-                loadModels();
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
             })
             .catch(error => {
                 hideLoading();
@@ -1093,6 +1647,588 @@ function showNotification(title, message, type = 'info') {
     }, 5000);
 }
 
+// Définir les règles spécifiques pour chaque type de modèle
+const modelRules = {
+    'random_forest': {
+        name: 'Random Forest',
+        minTargets: 1,
+        maxTargets: 1,
+        minPredictors: 1,
+        allowSameVarAsBoth: false,
+        description: 'Modèle de classification/régression. Nécessite exactement 1 variable cible et au moins 1 variable prédictive. Les variables ne peuvent pas être à la fois cible et prédictive.'
+    },
+    'lstm': {
+        name: 'LSTM',
+        minTargets: 1,
+        maxTargets: null, // Pas de limite
+        minPredictors: 1,
+        allowSameVarAsBoth: true,
+        description: 'Réseau de neurones récurrent pour séries temporelles. Peut prédire plusieurs variables simultanément. Les variables peuvent être à la fois cible et prédictive (prédiction auto-régressive).'
+    },
+    'gru': {
+        name: 'GRU',
+        minTargets: 1,
+        maxTargets: null,
+        minPredictors: 1,
+        allowSameVarAsBoth: true,
+        description: 'Réseau de neurones récurrent optimisé. Similaire à LSTM mais plus rapide. Peut gérer des prédictions multivariées et auto-régressives.'
+    },
+    'xgboost': {
+        name: 'XGBoost',
+        minTargets: 1,
+        maxTargets: 1,
+        minPredictors: 1,
+        allowSameVarAsBoth: false,
+        description: 'Boosting de gradient optimisé. Excellent pour la classification/régression. Nécessite exactement 1 variable cible.'
+    },
+    'gradient_boosting': {
+        name: 'Gradient Boosting',
+        minTargets: 1,
+        maxTargets: 1,
+        minPredictors: 1,
+        allowSameVarAsBoth: false,
+        description: 'Méthode d\'ensemble par boosting. Nécessite exactement 1 variable cible et au moins 1 variable prédictive distincte.'
+    }
+};
+
+// Variables globales pour l'architecture du réseau
+let networkLayers = [];
+let layerIdCounter = 0;
+
+// Configuration des paramètres par défaut pour chaque type de couche
+const layerDefaults = {
+    dense: {
+        name: 'Dense',
+        params: {
+            units: { type: 'number', default: 128, min: 1, label: 'Unités' },
+            activation: { 
+                type: 'select', 
+                default: 'relu', 
+                options: ['relu', 'tanh', 'sigmoid', 'linear', 'elu', 'selu', 'swish'],
+                label: 'Activation'
+            },
+            use_bias: { type: 'checkbox', default: true, label: 'Utiliser Bias' },
+            kernel_initializer: {
+                type: 'select',
+                default: 'glorot_uniform',
+                options: ['glorot_uniform', 'glorot_normal', 'he_uniform', 'he_normal', 'random_normal', 'random_uniform'],
+                label: 'Initialisation'
+            }
+        }
+    },
+    lstm: {
+        name: 'LSTM',
+        params: {
+            units: { type: 'number', default: 128, min: 1, label: 'Unités' },
+            activation: { type: 'select', default: 'tanh', options: ['tanh', 'sigmoid', 'relu'], label: 'Activation' },
+            recurrent_activation: { type: 'select', default: 'sigmoid', options: ['sigmoid', 'tanh', 'relu'], label: 'Activation Récurrente' },
+            return_sequences: { type: 'checkbox', default: false, label: 'Return Sequences' },
+            dropout: { type: 'number', default: 0, min: 0, max: 1, step: 0.1, label: 'Dropout' },
+            recurrent_dropout: { type: 'number', default: 0, min: 0, max: 1, step: 0.1, label: 'Dropout Récurrent' }
+        }
+    },
+    gru: {
+        name: 'GRU',
+        params: {
+            units: { type: 'number', default: 128, min: 1, label: 'Unités' },
+            activation: { type: 'select', default: 'tanh', options: ['tanh', 'sigmoid', 'relu'], label: 'Activation' },
+            recurrent_activation: { type: 'select', default: 'sigmoid', options: ['sigmoid', 'tanh', 'relu'], label: 'Activation Récurrente' },
+            return_sequences: { type: 'checkbox', default: false, label: 'Return Sequences' },
+            dropout: { type: 'number', default: 0, min: 0, max: 1, step: 0.1, label: 'Dropout' },
+            recurrent_dropout: { type: 'number', default: 0, min: 0, max: 1, step: 0.1, label: 'Dropout Récurrent' }
+        }
+    },
+    conv1d: {
+        name: 'Conv1D',
+        params: {
+            filters: { type: 'number', default: 64, min: 1, label: 'Filtres' },
+            kernel_size: { type: 'number', default: 3, min: 1, label: 'Taille du Noyau' },
+            strides: { type: 'number', default: 1, min: 1, label: 'Strides' },
+            padding: { type: 'select', default: 'same', options: ['valid', 'same', 'causal'], label: 'Padding' },
+            activation: { type: 'select', default: 'relu', options: ['relu', 'tanh', 'sigmoid', 'linear'], label: 'Activation' }
+        }
+    },
+    dropout: {
+        name: 'Dropout',
+        params: {
+            rate: { type: 'number', default: 0.2, min: 0, max: 1, step: 0.05, label: 'Taux de Dropout' }
+        }
+    },
+    batchnorm: {
+        name: 'BatchNormalization',
+        params: {
+            momentum: { type: 'number', default: 0.99, min: 0, max: 1, step: 0.01, label: 'Momentum' },
+            epsilon: { type: 'number', default: 0.001, min: 0, step: 0.0001, label: 'Epsilon' }
+        }
+    },
+    flatten: {
+        name: 'Flatten',
+        params: {}
+    }
+};
+
+// Charger les colonnes du dataset sélectionné
+function loadDatasetColumns() {
+    const datasetId = document.getElementById('dataset').value;
+    const targetDiv = document.getElementById('targetVariables');
+    const predictorDiv = document.getElementById('predictorVariables');
+    
+    if (!datasetId) {
+        targetDiv.innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+        predictorDiv.innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+        return;
+    }
+    
+    // Afficher un message de chargement
+    targetDiv.innerHTML = '<p class="text-muted"><i class="bi bi-hourglass-split"></i> Chargement des colonnes...</p>';
+    predictorDiv.innerHTML = '<p class="text-muted"><i class="bi bi-hourglass-split"></i> Chargement des colonnes...</p>';
+    
+    fetch(`/api/datasets/${datasetId}/columns/`)
+        .then(response => {
+            console.log('Response status:', response.status);
+            console.log('Response headers:', response.headers);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Données reçues:', data); // Debug
+            
+            // La réponse contient un objet avec 'columns' et 'dtypes'
+            const columns = data.columns || [];
+            const dtypes = data.dtypes || {};
+            
+            // Créer les checkboxes pour les variables cibles et prédictives
+            targetDiv.innerHTML = '';
+            predictorDiv.innerHTML = '';
+            
+            if (columns.length === 0) {
+                targetDiv.innerHTML = '<p class="text-warning">Aucune colonne trouvée dans ce dataset</p>';
+                predictorDiv.innerHTML = '<p class="text-warning">Aucune colonne trouvée dans ce dataset</p>';
+                return;
+            }
+            
+            columns.forEach(columnName => {
+                const dtype = dtypes[columnName] || 'unknown';
+                const safeId = columnName.replace(/[^a-zA-Z0-9]/g, '_');
+                
+                // Créer une checkbox pour les variables cibles
+                const targetCheckboxDiv = document.createElement('div');
+                targetCheckboxDiv.className = 'form-check mb-2';
+                targetCheckboxDiv.innerHTML = `
+                    <input class="form-check-input target-checkbox" type="checkbox" 
+                           value="${columnName}" id="target_${safeId}">
+                    <label class="form-check-label" for="target_${safeId}" style="cursor: pointer;">
+                        ${columnName} <span class="text-muted small">(${dtype})</span>
+                    </label>
+                `;
+                targetDiv.appendChild(targetCheckboxDiv);
+                
+                // Créer une checkbox pour les variables prédictives
+                const predCheckboxDiv = document.createElement('div');
+                predCheckboxDiv.className = 'form-check mb-2';
+                predCheckboxDiv.innerHTML = `
+                    <input class="form-check-input predictor-checkbox" type="checkbox" 
+                           value="${columnName}" id="pred_${safeId}" checked>
+                    <label class="form-check-label" for="pred_${safeId}" style="cursor: pointer;">
+                        ${columnName} <span class="text-muted small">(${dtype})</span>
+                    </label>
+                `;
+                predictorDiv.appendChild(predCheckboxDiv);
+            });
+            
+            // Appliquer les règles du modèle sélectionné
+            applyModelRules();
+            
+            showNotification('Succès', `${columns.length} colonnes chargées`, 'success');
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des colonnes:', error);
+            targetDiv.innerHTML = '<p class="text-danger">Erreur lors du chargement des colonnes</p>';
+            predictorDiv.innerHTML = '<p class="text-danger">Erreur lors du chargement des colonnes</p>';
+            showNotification('Erreur', 'Impossible de charger les colonnes du dataset: ' + error.message, 'error');
+        });
+}
+
+// Appliquer les règles du modèle sélectionné
+function applyModelRules() {
+    const modelType = document.getElementById('modelType').value;
+    const modelReqDiv = document.getElementById('modelRequirements');
+    const modelReqText = document.getElementById('modelRequirementsText');
+    
+    if (!modelType || !modelRules[modelType]) {
+        modelReqDiv.style.display = 'none';
+        return;
+    }
+    
+    const rules = modelRules[modelType];
+    modelReqDiv.style.display = 'block';
+    modelReqText.innerHTML = rules.description;
+    
+    // Mettre à jour les textes d'aide
+    const targetHelp = document.getElementById('targetHelp');
+    const predictorHelp = document.getElementById('predictorHelp');
+    
+    if (rules.maxTargets === 1) {
+        targetHelp.textContent = 'Sélectionnez exactement 1 variable à prédire';
+    } else {
+        targetHelp.textContent = 'Sélectionnez une ou plusieurs variables à prédire';
+    }
+    
+    if (!rules.allowSameVarAsBoth) {
+        predictorHelp.textContent = 'Les variables cibles ne peuvent pas être sélectionnées comme prédictives';
+    } else {
+        predictorHelp.textContent = 'Les variables peuvent être à la fois cibles et prédictives';
+    }
+    
+    // Appliquer les restrictions si nécessaire
+    updateVariableRestrictions();
+}
+
+// Mettre à jour les restrictions sur les variables
+function updateVariableRestrictions() {
+    const modelType = document.getElementById('modelType').value;
+    if (!modelType || !modelRules[modelType]) return;
+    
+    const rules = modelRules[modelType];
+    const targetCheckboxes = document.querySelectorAll('.target-checkbox:checked');
+    const predictorCheckboxes = document.querySelectorAll('.predictor-checkbox');
+    
+    if (!rules.allowSameVarAsBoth) {
+        // Désactiver dans les prédicteurs les variables sélectionnées comme cibles
+        const targetValues = Array.from(targetCheckboxes).map(cb => cb.value);
+        
+        predictorCheckboxes.forEach(checkbox => {
+            if (targetValues.includes(checkbox.value)) {
+                checkbox.checked = false;
+                checkbox.disabled = true;
+                checkbox.parentElement.classList.add('text-muted');
+            } else {
+                checkbox.disabled = false;
+                checkbox.parentElement.classList.remove('text-muted');
+            }
+        });
+    } else {
+        // Réactiver toutes les checkboxes si le modèle le permet
+        predictorCheckboxes.forEach(checkbox => {
+            checkbox.disabled = false;
+            checkbox.parentElement.classList.remove('text-muted');
+        });
+    }
+    
+    // Si maxTargets = 1, désactiver les autres checkboxes cibles
+    if (rules.maxTargets === 1 && targetCheckboxes.length >= 1) {
+        document.querySelectorAll('.target-checkbox:not(:checked)').forEach(checkbox => {
+            checkbox.disabled = true;
+        });
+    } else {
+        document.querySelectorAll('.target-checkbox:not(:checked)').forEach(checkbox => {
+            checkbox.disabled = false;
+        });
+    }
+}
+
+// Toggle du mode expert
+function toggleExpertMode() {
+    const expertMode = document.getElementById('expertMode').checked;
+    const modelType = document.getElementById('modelType').value;
+    
+    // Afficher/masquer les sections selon le mode
+    document.getElementById('modelConfiguration').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
+    document.getElementById('networkArchitecture').style.display = expertMode ? 'block' : 'none';
+    document.getElementById('metricsCallbacks').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
+    
+    // Si on désactive le mode expert, réinitialiser l'architecture personnalisée
+    if (!expertMode) {
+        networkLayers = [];
+        document.getElementById('layersContainer').innerHTML = '<p class="text-muted text-center">Aucune couche ajoutée. Cliquez sur les boutons ci-dessus pour ajouter des couches.</p>';
+    }
+}
+
+// Vérifier si c'est un modèle de deep learning
+function isDeepLearningModel(modelType) {
+    return ['lstm', 'gru'].includes(modelType);
+}
+
+// Ajouter une couche
+function addLayer(layerType) {
+    const layerConfig = layerDefaults[layerType];
+    if (!layerConfig) return;
+    
+    const layerId = layerIdCounter++;
+    const layer = {
+        id: layerId,
+        type: layerType,
+        name: layerConfig.name,
+        params: {}
+    };
+    
+    // Initialiser avec les valeurs par défaut
+    Object.keys(layerConfig.params).forEach(param => {
+        layer.params[param] = layerConfig.params[param].default;
+    });
+    
+    networkLayers.push(layer);
+    renderLayers();
+}
+
+// Rendre l'affichage des couches
+function renderLayers() {
+    const container = document.getElementById('layersContainer');
+    
+    if (networkLayers.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center">Aucune couche ajoutée. Cliquez sur les boutons ci-dessus pour ajouter des couches.</p>';
+        return;
+    }
+    
+    container.innerHTML = networkLayers.map((layer, index) => {
+        const layerConfig = layerDefaults[layer.type];
+        let paramsHtml = '';
+        
+        Object.keys(layerConfig.params).forEach(paramName => {
+            const paramConfig = layerConfig.params[paramName];
+            const value = layer.params[paramName];
+            
+            switch (paramConfig.type) {
+                case 'number':
+                    paramsHtml += `
+                        <div class="mb-2">
+                            <label class="form-label small">${paramConfig.label}</label>
+                            <input type="number" class="form-control form-control-sm" 
+                                   value="${value}" 
+                                   min="${paramConfig.min || ''}" 
+                                   max="${paramConfig.max || ''}" 
+                                   step="${paramConfig.step || ''}"
+                                   onchange="updateLayerParam(${layer.id}, '${paramName}', this.value)">
+                        </div>
+                    `;
+                    break;
+                case 'select':
+                    paramsHtml += `
+                        <div class="mb-2">
+                            <label class="form-label small">${paramConfig.label}</label>
+                            <select class="form-select form-select-sm" 
+                                    onchange="updateLayerParam(${layer.id}, '${paramName}', this.value)">
+                                ${paramConfig.options.map(opt => 
+                                    `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                    `;
+                    break;
+                case 'checkbox':
+                    paramsHtml += `
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" 
+                                   ${value ? 'checked' : ''}
+                                   onchange="updateLayerParam(${layer.id}, '${paramName}', this.checked)">
+                            <label class="form-check-label small">${paramConfig.label}</label>
+                        </div>
+                    `;
+                    break;
+            }
+        });
+        
+        return `
+            <div class="layer-item">
+                <div class="layer-header">
+                    <span class="layer-title">
+                        <i class="bi bi-layers"></i> ${index + 1}. ${layer.name}
+                    </span>
+                    <div class="layer-controls">
+                        <button class="btn btn-move btn-sm" onclick="moveLayer(${index}, -1)" 
+                                ${index === 0 ? 'disabled' : ''}>
+                            <i class="bi bi-arrow-up"></i>
+                        </button>
+                        <button class="btn btn-move btn-sm" onclick="moveLayer(${index}, 1)" 
+                                ${index === networkLayers.length - 1 ? 'disabled' : ''}>
+                            <i class="bi bi-arrow-down"></i>
+                        </button>
+                        <button class="btn btn-delete btn-sm" onclick="removeLayer(${index})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="layer-params">
+                    ${paramsHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Mettre à jour un paramètre de couche
+function updateLayerParam(layerId, paramName, value) {
+    const layer = networkLayers.find(l => l.id === layerId);
+    if (layer) {
+        // Convertir les valeurs string en nombres si nécessaire
+        if (typeof value === 'string' && !isNaN(value) && value !== '') {
+            value = parseFloat(value);
+        }
+        layer.params[paramName] = value;
+    }
+}
+
+// Déplacer une couche
+function moveLayer(index, direction) {
+    if (index + direction < 0 || index + direction >= networkLayers.length) return;
+    
+    const temp = networkLayers[index];
+    networkLayers[index] = networkLayers[index + direction];
+    networkLayers[index + direction] = temp;
+    renderLayers();
+}
+
+// Supprimer une couche
+function removeLayer(index) {
+    networkLayers.splice(index, 1);
+    renderLayers();
+}
+
+// Créer uniquement la définition du modèle (sans entraînement)
+function createModelOnly() {
+    const modelType = document.getElementById('modelType').value;
+    
+    // Validation du type de modèle
+    if (!modelType || !modelRules[modelType]) {
+        showNotification('Erreur', 'Veuillez sélectionner un type de modèle', 'error');
+        return;
+    }
+    
+    const rules = modelRules[modelType];
+    
+    // Collecter les variables cibles sélectionnées
+    const targetCheckboxes = document.querySelectorAll('.target-checkbox:checked');
+    const targetColumns = Array.from(targetCheckboxes).map(cb => cb.value);
+    
+    // Collecter les variables prédictives sélectionnées
+    const predictorCheckboxes = document.querySelectorAll('.predictor-checkbox:checked:not(:disabled)');
+    const predictorColumns = Array.from(predictorCheckboxes).map(cb => cb.value);
+    
+    // Validation selon les règles du modèle
+    if (targetColumns.length < rules.minTargets) {
+        showNotification('Erreur', `${rules.name} nécessite au moins ${rules.minTargets} variable(s) cible(s)`, 'error');
+        return;
+    }
+    
+    if (predictorColumns.length < rules.minPredictors) {
+        showNotification('Erreur', `${rules.name} nécessite au moins ${rules.minPredictors} variable(s) prédictive(s)`, 'error');
+        return;
+    }
+    
+    // Construire la configuration du modèle
+    const expertMode = document.getElementById('expertMode').checked;
+    let modelConfig = {
+        epochs: parseInt(document.getElementById('epochs').value)
+    };
+    
+    // Configuration commune pour les modèles de deep learning
+    if (isDeepLearningModel(modelType) || expertMode) {
+        modelConfig.loss_function = document.getElementById('lossFunction').value;
+        modelConfig.optimizer = document.getElementById('optimizer').value;
+        modelConfig.learning_rate = parseFloat(document.getElementById('learningRate').value);
+        modelConfig.batch_size = parseInt(document.getElementById('batchSize').value);
+        
+        // Métriques sélectionnées
+        const selectedMetrics = Array.from(document.querySelectorAll('.metric-checkbox:checked')).map(cb => cb.value);
+        modelConfig.metrics = selectedMetrics;
+        
+        // Callbacks
+        modelConfig.callbacks = {
+            early_stopping: document.getElementById('earlyStoppingCallback').checked,
+            reduce_lr: document.getElementById('reduceLRCallback').checked,
+            model_checkpoint: document.getElementById('modelCheckpointCallback').checked
+        };
+        
+        // Configuration de sortie
+        modelConfig.output_activation = document.getElementById('outputActivation').value;
+        modelConfig.output_units = parseInt(document.getElementById('outputUnits').value);
+    }
+    
+    // Architecture personnalisée en mode expert
+    if (expertMode && networkLayers.length > 0) {
+        modelConfig.custom_architecture = networkLayers;
+        modelConfig.use_custom_architecture = true;
+    } else {
+        modelConfig.use_custom_architecture = false;
+    }
+    
+    const modelDefinitionData = {
+        name: document.getElementById('modelName').value,
+        description: `Modèle ${modelType.toUpperCase()} pour prédire ${targetColumns.join(', ')}`,
+        model_type: modelType,
+        dataset: document.getElementById('dataset').value,
+        target_columns: targetColumns,
+        predictor_columns: predictorColumns,
+        default_config: modelConfig,
+        hyperparameters: modelConfig,
+        custom_architecture: expertMode && networkLayers.length > 0 ? networkLayers : null,
+        use_custom_architecture: expertMode && networkLayers.length > 0
+    };
+    
+    showLoading();
+    
+    const csrfToken = getCookie('csrftoken');
+    
+    // Créer la définition du modèle
+    fetch('/api/models/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(modelDefinitionData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(modelDef => {
+        // Fermer le modal et recharger la liste
+        hideLoading();
+        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('createModelModal'));
+        if (modalInstance) {
+            modalInstance.hide();
+            modalInstance.dispose();
+        }
+        cleanupModals();
+        
+        // Reset form and state
+        document.getElementById('createModelForm').reset();
+        networkLayers = [];
+        layerIdCounter = 0;
+        document.getElementById('expertMode').checked = false;
+        toggleExpertMode();
+        
+        // Reset modal title and footer for next use
+        document.querySelector('#createModelModal .modal-title').innerHTML = `
+            <i class="bi bi-cpu"></i> Créer un Nouveau Modèle
+        `;
+        
+        const footer = document.querySelector('#createModelModal .modal-footer');
+        footer.innerHTML = `
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+            <button type="button" class="btn btn-primary" onclick="createModelOnly()">
+                <i class="bi bi-save"></i> Créer le Modèle
+            </button>
+        `;
+        
+        showNotification('Succès', 'Modèle créé avec succès!', 'success');
+        
+        // Recharger la page après un court délai pour éviter les problèmes
+        setTimeout(() => {
+            window.location.reload();
+        }, 1500);
+    })
+    .catch(error => {
+        hideLoading();
+        showNotification('Erreur', 'Erreur lors de la création du modèle: ' + error, 'error');
+    });
+}
+
 // Fonction pour afficher le modal de création
 function showCreateModelModal() {
     // Ensure page is clean
@@ -1100,6 +2236,14 @@ function showCreateModelModal() {
         // Clean up any existing modals first
         cleanupModals();
         hideLoading();
+        
+        // Réinitialiser le formulaire
+        document.getElementById('createModelForm').reset();
+        document.getElementById('targetVariables').innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+        document.getElementById('predictorVariables').innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+        document.getElementById('modelRequirements').style.display = 'none';
+        networkLayers = [];
+        layerIdCounter = 0;
         
         // Charger les datasets disponibles
         fetch('/api/datasets/')
@@ -1118,181 +2262,41 @@ function showCreateModelModal() {
                 console.error('Erreur lors du chargement des datasets:', error);
             });
         
-        // Réinitialiser le formulaire
-        document.getElementById('createModelForm').reset();
-        document.getElementById('targetVariables').innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
-        document.getElementById('predictorVariables').innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
-        
-        // Afficher le modal
+        // Show modal
         const modalElement = document.getElementById('createModelModal');
-        
-        // Always create a fresh instance
         const modal = new bootstrap.Modal(modalElement, {
-            backdrop: false,  // Pas de backdrop pour éviter le filtre gris
+            backdrop: false,
             keyboard: true,
             focus: true
         });
-        
         modal.show();
-    }, 50);
+    }, 100);
 }
 
-// Charger les colonnes du dataset
-function loadDatasetColumns() {
-    const datasetId = document.getElementById('dataset').value;
-    const targetDiv = document.getElementById('targetVariables');
-    const predictorDiv = document.getElementById('predictorVariables');
-    
-    if (!datasetId) {
-        targetDiv.innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
-        predictorDiv.innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
-        return;
-    }
-    
-    // Charger les colonnes
-    fetch(`/api/datasets/${datasetId}/columns/`)
-        .then(response => response.json())
-        .then(data => {
-            const columns = data.columns || [];
-            
-            // Variables cibles
-            targetDiv.innerHTML = '';
-            columns.forEach(columnName => {
-                const div = document.createElement('div');
-                div.className = 'form-check';
-                div.innerHTML = `
-                    <input class="form-check-input target-checkbox" type="checkbox" 
-                           value="${columnName}" id="target_${columnName}">
-                    <label class="form-check-label" for="target_${columnName}">
-                        ${columnName}
-                    </label>
-                `;
-                targetDiv.appendChild(div);
-            });
-            
-            // Variables prédictives
-            predictorDiv.innerHTML = '';
-            columns.forEach(columnName => {
-                const div = document.createElement('div');
-                div.className = 'form-check';
-                div.innerHTML = `
-                    <input class="form-check-input predictor-checkbox" type="checkbox" 
-                           value="${columnName}" id="predictor_${columnName}">
-                    <label class="form-check-label" for="predictor_${columnName}">
-                        ${columnName}
-                    </label>
-                `;
-                predictorDiv.appendChild(div);
-            });
-        })
-        .catch(error => {
-            console.error('Erreur:', error);
-            targetDiv.innerHTML = '<p class="text-danger">Erreur lors du chargement des colonnes</p>';
-            predictorDiv.innerHTML = '<p class="text-danger">Erreur lors du chargement des colonnes</p>';
+// Ajouter des listeners pour les changements
+document.addEventListener('DOMContentLoaded', function() {
+    // Listener pour le changement de type de modèle
+    const modelTypeSelect = document.getElementById('modelType');
+    if (modelTypeSelect) {
+        modelTypeSelect.addEventListener('change', function() {
+            applyModelRules();
+            toggleExpertMode(); // Mettre à jour l'affichage selon le type de modèle
         });
-}
-
-// Sauvegarder le nouveau modèle
-function saveNewModel() {
-    // Collecter les données du formulaire
-    const modelName = document.getElementById('modelName').value;
-    const modelDescription = document.getElementById('modelDescription').value;
-    const modelType = document.getElementById('modelType').value;
-    const datasetId = document.getElementById('dataset').value;
-    
-    // Validation basique
-    if (!modelName || !modelType || !datasetId) {
-        showNotification('Erreur', 'Veuillez remplir tous les champs obligatoires', 'error');
-        return;
     }
     
-    // Collecter les variables sélectionnées
-    const targetColumns = Array.from(document.querySelectorAll('.target-checkbox:checked'))
-        .map(cb => cb.value);
-    const predictorColumns = Array.from(document.querySelectorAll('.predictor-checkbox:checked'))
-        .map(cb => cb.value);
-    
-    if (targetColumns.length === 0) {
-        showNotification('Erreur', 'Veuillez sélectionner au moins une variable cible', 'error');
-        return;
-    }
-    
-    if (predictorColumns.length === 0) {
-        showNotification('Erreur', 'Veuillez sélectionner au moins une variable prédictive', 'error');
-        return;
-    }
-    
-    // Configuration par défaut selon le type de modèle
-    let defaultConfig = {};
-    if (modelType === 'lstm' || modelType === 'gru') {
-        defaultConfig = {
-            epochs: 50,
-            batch_size: 32,
-            optimizer: 'adam',
-            learning_rate: 0.001,
-            loss_function: 'mse',
-            metrics: ['mae', 'mse']
-        };
-    } else if (modelType === 'random_forest') {
-        defaultConfig = {
-            n_estimators: 100,
-            max_depth: null,
-            min_samples_split: 2,
-            min_samples_leaf: 1
-        };
-    } else if (modelType === 'xgboost') {
-        defaultConfig = {
-            n_estimators: 100,
-            max_depth: 3,
-            learning_rate: 0.1,
-            objective: 'reg:squarederror'
-        };
-    }
-    
-    const modelData = {
-        name: modelName,
-        description: modelDescription || `Modèle ${modelType.toUpperCase()} pour prédire ${targetColumns.join(', ')}`,
-        model_type: modelType,
-        dataset: datasetId,
-        target_columns: targetColumns,
-        predictor_columns: predictorColumns,
-        default_config: defaultConfig,
-        hyperparameters: defaultConfig
-    };
-    
-    showLoading();
-    
-    fetch('/api/models/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify(modelData)
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+    // Listener pour les changements de variables cibles
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('target-checkbox')) {
+            updateVariableRestrictions();
+            // Mettre à jour automatiquement le nombre d'unités de sortie
+            const targetCount = document.querySelectorAll('.target-checkbox:checked').length;
+            const outputUnitsInput = document.getElementById('outputUnits');
+            if (outputUnitsInput) {
+                outputUnitsInput.value = targetCount || 1;
+            }
         }
-        return response.json();
-    })
-    .then(model => {
-        hideLoading();
-        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('createModelModal'));
-        if (modalInstance) {
-            modalInstance.hide();
-            modalInstance.dispose();
-        }
-        cleanupModals();
-        showNotification('Succès', 'Modèle créé avec succès!', 'success');
-        loadModels(); // Recharger la liste des modèles
-    })
-    .catch(error => {
-        hideLoading();
-        console.error('Erreur:', error);
-        showNotification('Erreur', 'Impossible de créer le modèle', 'error');
     });
-}
+});
 
 // Initialisation
 document.addEventListener('DOMContentLoaded', function() {

@@ -540,6 +540,69 @@
                 margin-top: 80px;
             }
         }
+        
+        /* SweetAlert2 custom styles */
+        .swal-custom-popup {
+            border: 2px solid rgba(0, 212, 255, 0.5) !important;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.3) !important;
+        }
+        
+        .swal-custom-title {
+            color: #00d4ff !important;
+            font-weight: 600 !important;
+        }
+        
+        .swal-custom-text {
+            color: #f0f9ff !important;
+        }
+        
+        .swal-custom-button {
+            background: linear-gradient(135deg, #00d4ff, #0099ff) !important;
+            border: none !important;
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3) !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        .swal-custom-button:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.5) !important;
+        }
+        
+        .swal2-icon.swal2-success {
+            border-color: #10b981 !important;
+            color: #10b981 !important;
+        }
+        
+        .swal2-icon.swal2-success [class^=swal2-success-line] {
+            background-color: #10b981 !important;
+        }
+        
+        .swal2-icon.swal2-success .swal2-success-ring {
+            border-color: rgba(16, 185, 129, 0.3) !important;
+        }
+        
+        /* Success notification specific styling - matching dataset success green */
+        .swal2-popup.swal2-show .swal-custom-popup {
+            border-color: rgba(16, 185, 129, 0.6) !important;
+            box-shadow: 0 0 40px rgba(16, 185, 129, 0.5) !important;
+        }
+        
+        .swal2-icon.swal2-success + .swal2-title {
+            color: #10b981 !important;
+            text-shadow: 0 0 15px rgba(16, 185, 129, 0.8) !important;
+        }
+        
+        .swal2-popup.swal2-show .swal2-actions button.swal2-confirm {
+            background: linear-gradient(135deg, #10b981, #059669) !important;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.5) !important;
+            border: none !important;
+        }
+        
+        .swal2-popup.swal2-show .swal2-actions button.swal2-confirm:hover {
+            background: linear-gradient(135deg, #059669, #047857) !important;
+            box-shadow: 0 8px 30px rgba(16, 185, 129, 0.7) !important;
+            transform: translateY(-2px) !important;
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -667,7 +730,15 @@
                 text: text,
                 icon: type,
                 confirmButtonText: 'OK',
-                confirmButtonColor: '#6366f1'
+                confirmButtonColor: '#6366f1',
+                background: '#1a1f3a',
+                color: '#ffffff',
+                customClass: {
+                    popup: 'swal-custom-popup',
+                    title: 'swal-custom-title',
+                    htmlContainer: 'swal-custom-text',
+                    confirmButton: 'swal-custom-button'
+                }
             });
         }
         
