@@ -41,10 +41,36 @@ class Dataset(models.Model):
     is_normalized = models.BooleanField(default=False)
     parent_dataset = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='normalized_copies')
     parent_dataset_name = models.CharField(max_length=255, null=True, blank=True, help_text="Nombre del dataset padre (se mantiene aunque se borre el original)")
+    root_dataset_id = models.IntegerField(null=True, blank=True, help_text="ID del dataset raíz original (para mantener agrupación)")
     normalization_method = models.CharField(max_length=255, null=True, blank=True)
     
     def __str__(self):
         return self.name
+    
+    def get_genealogy(self):
+        """Obtiene toda la genealogía del dataset (lista de ancestros)"""
+        genealogy = []
+        current = self
+        visited = set()  # Para evitar ciclos infinitos
+        
+        while current.parent_dataset and current.parent_dataset.id not in visited:
+            visited.add(current.parent_dataset.id)
+            genealogy.append({
+                'id': current.parent_dataset.id,
+                'name': current.parent_dataset.name,
+                'exists': True
+            })
+            current = current.parent_dataset
+        
+        # Si no hay más padres pero tenemos el nombre guardado, agregarlo
+        if not current.parent_dataset and current.parent_dataset_name and current.id != self.id:
+            genealogy.append({
+                'id': None,
+                'name': current.parent_dataset_name,
+                'exists': False
+            })
+        
+        return list(reversed(genealogy))  # Devolver desde el más antiguo al más reciente
 
 
 class TrainingSession(models.Model):

@@ -2079,6 +2079,14 @@ class DatasetNormalizationView(APIView):
                 df_normalized.to_csv(csv_buffer, index=False)
                 csv_content = csv_buffer.getvalue()
                 
+                # Determinar el root_dataset_id
+                if dataset.is_normalized and dataset.root_dataset_id:
+                    # Si el padre ya es normalizado, usar su root_dataset_id
+                    root_id = dataset.root_dataset_id
+                else:
+                    # Si el padre es original, él es el root
+                    root_id = dataset.id
+                
                 # Crear nuevo dataset
                 new_dataset = Dataset(
                     name=copy_name,
@@ -2087,6 +2095,7 @@ class DatasetNormalizationView(APIView):
                     is_normalized=True,
                     parent_dataset=dataset,
                     parent_dataset_name=dataset.name,  # Guardar el nombre del dataset padre
+                    root_dataset_id=root_id,  # Guardar el ID del dataset raíz
                     normalization_method=str(normalization_config)
                 )
                 

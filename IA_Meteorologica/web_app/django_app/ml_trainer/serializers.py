@@ -9,13 +9,14 @@ class DatasetSerializer(serializers.ModelSerializer):
     display_description = serializers.SerializerMethodField()
     parent_dataset_name = serializers.SerializerMethodField()
     upload_time = serializers.SerializerMethodField()
+    genealogy = serializers.SerializerMethodField()
     
     class Meta:
         model = Dataset
         fields = ['id', 'name', 'short_description', 'long_description', 'file', 'uploaded_at', 
                   'row_count', 'column_count', 'file_size', 'display_description', 
                   'is_normalized', 'parent_dataset', 'parent_dataset_name', 
-                  'normalization_method', 'upload_time']
+                  'normalization_method', 'upload_time', 'genealogy', 'root_dataset_id']
         read_only_fields = ['uploaded_at']
     
     def __init__(self, *args, **kwargs):
@@ -68,6 +69,11 @@ class DatasetSerializer(serializers.ModelSerializer):
     def get_upload_time(self, obj):
         # Devolver hora y minutos en formato HH:MM
         return obj.uploaded_at.strftime('%H:%M') if obj.uploaded_at else ''
+    
+    def get_genealogy(self, obj):
+        if obj.is_normalized:
+            return obj.get_genealogy()
+        return []
 
 
 class TrainingSessionSerializer(serializers.ModelSerializer):

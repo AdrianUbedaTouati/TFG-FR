@@ -420,6 +420,26 @@
         padding: 0 10px;
         flex-shrink: 0;
     }
+    
+    /* Estilos para el árbol genealógico */
+    .genealogy-tree {
+        background: rgba(0, 212, 255, 0.05);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 10px;
+        padding: 15px;
+        font-family: monospace;
+    }
+    
+    .genealogy-item {
+        padding: 5px 0;
+        transition: all 0.3s ease;
+    }
+    
+    .genealogy-item:hover {
+        background: rgba(0, 212, 255, 0.1);
+        padding-left: 10px;
+        border-radius: 5px;
+    }
 </style>
 {% endblock %}
 
@@ -773,9 +793,27 @@ function displayDatasets(datasetList) {
         displayDatasetGroup(group);
     });
     
-    // Mostrar datasets sin padre (huérfanos)
+    // Agrupar datasets huérfanos por root_dataset_id
+    const orphanGroups = {};
     datasetList.forEach(dataset => {
-        if (dataset.is_normalized && !dataset.parent_dataset) {
+        if (dataset.is_normalized && !dataset.parent_dataset && dataset.root_dataset_id) {
+            if (!orphanGroups[dataset.root_dataset_id]) {
+                orphanGroups[dataset.root_dataset_id] = [];
+            }
+            orphanGroups[dataset.root_dataset_id].push(dataset);
+        }
+    });
+    
+    // Mostrar grupos de huérfanos
+    Object.entries(orphanGroups).forEach(([rootId, orphans]) => {
+        // Ordenar por fecha
+        orphans.sort((a, b) => new Date(a.uploaded_at) - new Date(b.uploaded_at));
+        displayOrphanGroup(rootId, orphans);
+    });
+    
+    // Mostrar datasets huérfanos sin root_dataset_id
+    datasetList.forEach(dataset => {
+        if (dataset.is_normalized && !dataset.parent_dataset && !dataset.root_dataset_id) {
             displayOrphanDataset(dataset);
         }
     });
@@ -860,7 +898,42 @@ function displayDatasetGroup(group) {
     container.appendChild(groupDiv);
 }
 
-// Mostrar dataset huérfano
+// Mostrar grupo de datasets huérfanos
+function displayOrphanGroup(rootId, orphans) {
+    const container = document.getElementById('datasetsContainer');
+    
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'dataset-group';
+    groupDiv.setAttribute('data-group-id', `orphan-${rootId}`);
+    
+    // Obtener el nombre del dataset original del primer huérfano
+    const originalName = orphans[0].parent_dataset_name || 'Dataset eliminado';
+    
+    const header = document.createElement('div');
+    header.className = 'dataset-group-header';
+    header.innerHTML = `
+        <h3 class="dataset-group-title">
+            <i class="bi bi-folder2-open"></i> ${originalName}
+            <span class="badge bg-warning ms-2">Original eliminado</span>
+            <span class="badge bg-primary ms-2">${orphans.length} normalizaciones</span>
+        </h3>
+    `;
+    
+    const cardsContainer = document.createElement('div');
+    cardsContainer.className = 'dataset-cards-container';
+    
+    // Mostrar todos los datasets huérfanos del grupo
+    orphans.forEach(dataset => {
+        const card = createDatasetCard(dataset, 'normalized');
+        cardsContainer.appendChild(card);
+    });
+    
+    groupDiv.appendChild(header);
+    groupDiv.appendChild(cardsContainer);
+    container.appendChild(groupDiv);
+}
+
+// Mostrar dataset huérfano individual
 function displayOrphanDataset(dataset) {
     const container = document.getElementById('datasetsContainer');
     
@@ -1236,8 +1309,26 @@ function displayDatasetDetails(dataset, data) {
                         ` : ''}
                         ${dataset.is_normalized && dataset.parent_dataset_name ? `
                             <div class="mb-2">
-                                <strong class="text-muted">Dataset origen:</strong>
+                                <strong class="text-muted">Dataset padre directo:</strong>
                                 <p class="mb-0">${dataset.parent_dataset_name}</p>
+                            </div>
+                        ` : ''}
+                        ${dataset.is_normalized && dataset.genealogy && dataset.genealogy.length > 0 ? `
+                            <div class="mb-2">
+                                <strong class="text-muted">Árbol genealógico completo:</strong>
+                                <div class="genealogy-tree mt-2">
+                                    ${dataset.genealogy.map((ancestor, index) => `
+                                        <div class="genealogy-item" style="margin-left: ${index * 20}px;">
+                                            <i class="bi bi-arrow-return-right text-info"></i>
+                                            <span class="${!ancestor.exists ? 'text-warning' : ''}">${ancestor.name}</span>
+                                            ${!ancestor.exists ? '<span class="badge bg-warning ms-2">Eliminado</span>' : ''}
+                                        </div>
+                                    `).join('')}
+                                    <div class="genealogy-item" style="margin-left: ${dataset.genealogy.length * 20}px;">
+                                        <i class="bi bi-arrow-return-right text-success"></i>
+                                        <strong>${dataset.name}</strong> <span class="badge bg-success ms-2">Actual</span>
+                                    </div>
+                                </div>
                             </div>
                         ` : ''}
                         <div>
