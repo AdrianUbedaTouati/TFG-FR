@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Dataset, TrainingSession, WeatherPrediction
+from .models import Dataset, TrainingSession, WeatherPrediction, ModelDefinition
 
 
 class DatasetSerializer(serializers.ModelSerializer):
@@ -76,6 +76,40 @@ class DatasetSerializer(serializers.ModelSerializer):
         return []
 
 
+class ModelDefinitionSerializer(serializers.ModelSerializer):
+    dataset_name = serializers.CharField(source='dataset.name', read_only=True)
+    latest_training = serializers.SerializerMethodField()
+    success_rate = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ModelDefinition
+        fields = [
+            'id', 'name', 'description', 'model_type', 'created_at', 'updated_at',
+            'dataset', 'dataset_name', 'predictor_columns', 'target_columns',
+            'default_config', 'hyperparameters', 'custom_architecture', 
+            'use_custom_architecture', 'training_count', 'best_score', 
+            'last_trained', 'is_active', 'latest_training', 'success_rate'
+        ]
+    
+    def get_latest_training(self, obj):
+        latest = obj.get_latest_training()
+        if latest:
+            return {
+                'id': latest.id,
+                'status': latest.status,
+                'created_at': latest.created_at,
+                'metrics': latest.test_results
+            }
+        return None
+    
+    def get_success_rate(self, obj):
+        total = obj.trainingsession_set.count()
+        if total == 0:
+            return 0
+        completed = obj.trainingsession_set.filter(status='completed').count()
+        return round((completed / total) * 100, 1)
+
+
 class TrainingSessionSerializer(serializers.ModelSerializer):
     dataset_name = serializers.CharField(source='dataset.name', read_only=True)
     
@@ -86,7 +120,7 @@ class TrainingSessionSerializer(serializers.ModelSerializer):
             'predictor_columns', 'target_columns', 'target_column', 'normalization_method',
             'hyperparameters', 'config', 'train_split', 'val_split', 'test_split', 'test_size',
             'selected_metrics', 'training_history', 'test_results',
-            'status', 'error_message'
+            'status', 'error_message', 'custom_architecture', 'use_custom_architecture'
         ]
         read_only_fields = ['created_at', 'training_history', 'test_results', 'status', 'error_message']
 

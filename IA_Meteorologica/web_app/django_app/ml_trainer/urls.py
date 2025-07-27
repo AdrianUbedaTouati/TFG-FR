@@ -14,6 +14,12 @@ urlpatterns = [
     path('datasets/<int:pk>/normalization/', views.DatasetNormalizationView.as_view(), name='dataset-normalization'),
     path('datasets/<int:pk>/normalization/preview/', views.DatasetNormalizationPreviewView.as_view(), name='dataset-normalization-preview'),
     
+    # Model definition endpoints
+    path('models/', views.ModelDefinitionListCreateView.as_view(), name='model-list-create'),
+    path('models/<int:pk>/', views.ModelDefinitionDetailView.as_view(), name='model-detail'),
+    path('models/<int:pk>/trainings/', views.ModelDefinitionTrainingsView.as_view(), name='model-trainings'),
+    path('models/<int:pk>/clone/', views.CloneModelDefinitionView.as_view(), name='model-clone'),
+    
     # Training session endpoints
     path('training-sessions/', views.TrainingSessionListCreateView.as_view(), name='training-session-list-create'),
     path('training-sessions/<int:pk>/', views.TrainingSessionDetailView.as_view(), name='training-session-detail'),

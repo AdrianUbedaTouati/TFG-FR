@@ -1,15 +1,26 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Gestion des Modèles - MétéoIA{% endblock %}
 
 {% block extra_css %}
 <style>
+    /* Styles similaires aux cartes de datasets */
     .model-card {
-        border: none;
+        background: rgba(10, 14, 39, 0.8);
+        border: 2px solid rgba(0, 212, 255, 0.3);
         border-radius: 20px;
-        overflow: hidden;
-        transition: all 0.3s ease;
+        padding: 25px;
+        transition: all 0.4s ease;
         position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        height: 420px;
+        width: 350px;
+        min-width: 350px;
+        max-width: 350px;
+        backdrop-filter: blur(10px);
     }
     
     .model-card::before {
@@ -17,240 +28,446 @@
         position: absolute;
         top: 0;
         left: 0;
-        right: 0;
-        height: 5px;
-        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(circle, rgba(138, 43, 226, 0.1) 0%, transparent 70%);
+        transform: rotate(45deg);
+        transition: all 0.5s ease;
+        opacity: 0;
+        pointer-events: none;
     }
     
     .model-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        transform: translateY(-10px);
+        border-color: rgba(138, 43, 226, 0.8);
+        box-shadow: 0 15px 40px rgba(138, 43, 226, 0.3);
     }
     
-    .model-type-badge {
+    .model-card:hover::before {
+        opacity: 1;
+    }
+    
+    .model-icon {
+        font-size: 3rem;
+        background: linear-gradient(135deg, #8a2be2, #6366f1);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 10px;
+        text-align: center;
+    }
+    
+    .model-card .card-title {
+        color: white !important;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+    
+    .model-card .card-body {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        width: 100%;
+        padding: 0;
+    }
+    
+    .model-stats {
+        display: flex;
+        justify-content: space-around;
+        margin-top: auto;
+        margin-bottom: 10px;
+    }
+    
+    .stat-item {
+        text-align: center;
+    }
+    
+    .stat-value {
+        font-size: 1.3rem;
+        font-weight: bold;
+        color: #8a2be2;
+    }
+    
+    .quick-actions {
         position: absolute;
-        top: 15px;
+        top: 10px;
         right: 15px;
-        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-        color: white;
-        padding: 5px 15px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
+        display: flex;
+        gap: 10px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        z-index: 100;
     }
     
-    .metric-circle {
-        width: 120px;
-        height: 120px;
+    .model-card:hover .quick-actions {
+        opacity: 1;
+    }
+    
+    .quick-actions button {
+        background: rgba(138, 43, 226, 0.2);
+        border: 2px solid rgba(138, 43, 226, 0.4);
+        color: #8a2be2;
         border-radius: 50%;
-        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        width: 35px;
+        height: 35px;
+        padding: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: white;
-        font-size: 2rem;
-        font-weight: bold;
-        margin: 0 auto 20px;
-        position: relative;
-        box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
-    }
-    
-    .metric-circle::after {
-        content: '';
-        position: absolute;
-        inset: -3px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-        z-index: -1;
-        opacity: 0.5;
-        animation: pulse 2s ease-in-out infinite;
-    }
-    
-    @keyframes pulse {
-        0%, 100% { transform: scale(1); opacity: 0.5; }
-        50% { transform: scale(1.1); opacity: 0.2; }
-    }
-    
-    .status-badge {
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 500;
-    }
-    
-    .status-completed { background: #10b98130; color: #10b981; }
-    .status-training { background: #f59e0b30; color: #f59e0b; }
-    .status-failed { background: #ef444430; color: #ef4444; }
-    
-    .chart-container {
-        height: 300px;
-        padding: 20px;
-    }
-    
-    .params-table {
-        font-size: 0.9rem;
-    }
-    
-    .params-table th {
-        background: rgba(99, 102, 241, 0.1);
-        font-weight: 600;
-    }
-    
-    .upload-zone {
-        border: 3px dashed rgba(99, 102, 241, 0.3);
-        border-radius: 20px;
-        padding: 40px;
-        text-align: center;
         transition: all 0.3s ease;
         cursor: pointer;
-        background: rgba(99, 102, 241, 0.05);
     }
     
-    .upload-zone:hover {
-        border-color: var(--primary-color);
-        background: rgba(99, 102, 241, 0.1);
+    .quick-actions button:hover {
+        transform: scale(1.1);
     }
     
-    .upload-zone.dragover {
-        border-color: var(--primary-color);
-        background: rgba(99, 102, 241, 0.2);
+    .quick-actions button[data-action="train"]:hover {
+        background: rgba(138, 43, 226, 0.8);
+        border-color: #8a2be2;
+        color: white;
+        box-shadow: 0 0 20px rgba(138, 43, 226, 0.8);
+    }
+    
+    .quick-actions button[data-action="edit"]:hover {
+        background: rgba(99, 102, 241, 0.8);
+        border-color: #6366f1;
+        color: white;
+        box-shadow: 0 0 20px rgba(99, 102, 241, 0.8);
+    }
+    
+    .quick-actions button[data-action="clone"]:hover {
+        background: rgba(16, 185, 129, 0.8);
+        border-color: #10b981;
+        color: white;
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.8);
+    }
+    
+    .quick-actions button[data-action="delete"]:hover {
+        background: rgba(239, 68, 68, 0.8);
+        border-color: #ef4444;
+        color: white;
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
+    }
+    
+    .model-type-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        background: rgba(138, 43, 226, 0.2);
+        color: #8a2be2;
+        border: 1px solid rgba(138, 43, 226, 0.3);
+    }
+    
+    .training-status {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.85rem;
+    }
+    
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    
+    .status-success { background: #10b981; }
+    .status-training { background: #f59e0b; animation: pulse 2s infinite; }
+    .status-failed { background: #ef4444; }
+    
+    .models-container {
+        display: flex;
+        gap: 30px;
+        overflow-x: auto;
+        padding: 20px 0;
+        scroll-behavior: smooth;
+    }
+    
+    .models-container::-webkit-scrollbar {
+        height: 10px;
+    }
+    
+    .models-container::-webkit-scrollbar-track {
+        background: rgba(138, 43, 226, 0.1);
+        border-radius: 5px;
+    }
+    
+    .models-container::-webkit-scrollbar-thumb {
+        background: rgba(138, 43, 226, 0.5);
+        border-radius: 5px;
+    }
+    
+    .models-container::-webkit-scrollbar-thumb:hover {
+        background: rgba(138, 43, 226, 0.7);
+    }
+    
+    .create-model-card {
+        background: rgba(138, 43, 226, 0.1);
+        border: 3px dashed rgba(138, 43, 226, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .create-model-card:hover {
+        background: rgba(138, 43, 226, 0.2);
+        border-color: #8a2be2;
         transform: scale(1.02);
     }
     
-    .comparison-table {
-        font-size: 0.9rem;
+    /* Modal styles */
+    .modal-backdrop.show {
+        opacity: 0.5;
     }
     
-    .comparison-table th {
-        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-        color: white;
-        position: sticky;
-        top: 0;
-        z-index: 10;
+    /* Modal d'historique des entraînements */
+    .training-history-item {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(138, 43, 226, 0.3);
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 10px;
+        transition: all 0.3s ease;
     }
     
-    .best-value {
-        background: #10b98120;
-        font-weight: bold;
-        color: #10b981;
+    .training-history-item:hover {
+        background: rgba(138, 43, 226, 0.1);
+        transform: translateX(5px);
+    }
+    
+    .metric-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        margin-right: 5px;
+        background: rgba(99, 102, 241, 0.2);
+        color: #a5b4fc;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container-fluid mt-5">
     <!-- Header -->
-    <div class="row mb-5">
+    <div class="row mb-4">
         <div class="col-12">
-            <h1 class="text-white fw-bold">
+            <h1 class="display-4 text-white mb-4">
                 <i class="bi bi-cpu"></i> Gestion des Modèles
             </h1>
-            <p class="text-white-50">Gérez vos modèles d'IA, visualisez leurs performances et paramètres</p>
         </div>
     </div>
-
-    <!-- Actions -->
-    <div class="row mb-5">
-        <div class="col-md-6">
-            <div class="upload-zone" onclick="document.getElementById('modelFile').click()">
-                <i class="bi bi-cloud-upload fs-1 text-primary mb-3 d-block"></i>
-                <h5>Charger un Modèle Sauvegardé</h5>
-                <p class="text-muted mb-0">Glissez-déposez ou cliquez pour sélectionner un fichier .pkl ou .h5</p>
-                <input type="file" id="modelFile" accept=".pkl,.h5,.pth,.onnx" style="display: none;" onchange="uploadModel(this)">
+    
+    <!-- Statistiques -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-cpu text-primary" style="font-size: 2rem;"></i>
+                    <h3 class="mt-3" id="totalModels">0</h3>
+                    <p class="text-muted mb-0">Modèles Définis</p>
+                </div>
             </div>
         </div>
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body d-flex flex-column justify-content-center text-center">
-                    <h5 class="mb-3">Actions Rapides</h5>
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-primary" onclick="window.location.href='{% url 'dashboard' %}'">
-                            <i class="bi bi-plus-circle"></i> Entraîner un Nouveau Modèle
-                        </button>
-                        <button class="btn btn-secondary" onclick="compareModels()">
-                            <i class="bi bi-bar-chart"></i> Comparer les Modèles
-                        </button>
-                        <button class="btn btn-info text-white" onclick="exportAllMetrics()">
-                            <i class="bi bi-download"></i> Exporter les Métriques
-                        </button>
-                    </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-graph-up text-success" style="font-size: 2rem;"></i>
+                    <h3 class="mt-3" id="totalTrainings">0</h3>
+                    <p class="text-muted mb-0">Entraînements Totaux</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-trophy text-warning" style="font-size: 2rem;"></i>
+                    <h3 class="mt-3" id="bestScore">-</h3>
+                    <p class="text-muted mb-0">Meilleur Score</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-clock-history text-info" style="font-size: 2rem;"></i>
+                    <h3 class="mt-3" id="lastTraining">-</h3>
+                    <p class="text-muted mb-0">Dernier Entraînement</p>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Liste des modèles -->
-    <div class="row mb-5">
+    
+    <!-- Filtres -->
+    <div class="row mb-4">
         <div class="col-12">
-            <h2 class="text-white mb-4">Modèles Disponibles</h2>
-        </div>
-        <div id="modelsGrid" class="row g-4">
-            <!-- Les modèles seront chargés ici -->
-            <div class="col-12 text-center text-white-50 py-5">
-                <i class="bi bi-cpu fs-1 d-block mb-3"></i>
-                Chargement des modèles...
-            </div>
-        </div>
-    </div>
-
-    <!-- Comparaison des modèles -->
-    <div class="row mb-5" id="comparisonSection" style="display: none;">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-gradient text-white">
-                    <h5 class="mb-0">
-                        <i class="bi bi-bar-chart"></i> Comparaison des Modèles
-                    </h5>
-                </div>
+            <div class="card bg-dark border-primary">
                 <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table comparison-table">
-                            <thead>
-                                <tr>
-                                    <th>Modèle</th>
-                                    <th>Type</th>
-                                    <th>Précision</th>
-                                    <th>MAE</th>
-                                    <th>RMSE</th>
-                                    <th>R²</th>
-                                    <th>Temps d'entraînement</th>
-                                    <th>Taille</th>
-                                </tr>
-                            </thead>
-                            <tbody id="comparisonTableBody">
-                                <!-- Les données seront chargées ici -->
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="mt-4">
-                        <canvas id="comparisonChart" height="100"></canvas>
+                    <div class="row align-items-center">
+                        <div class="col-md-4">
+                            <label for="searchFilter" class="form-label text-info">Rechercher par nom</label>
+                            <input type="text" class="form-control" id="searchFilter" 
+                                   placeholder="Nom du modèle..." onkeyup="filterModels()">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="typeFilter" class="form-label text-info">Type de modèle</label>
+                            <select class="form-select" id="typeFilter" onchange="filterModels()">
+                                <option value="">Tous les types</option>
+                                <option value="random_forest">Random Forest</option>
+                                <option value="lstm">LSTM</option>
+                                <option value="gru">GRU</option>
+                                <option value="xgboost">XGBoost</option>
+                                <option value="gradient_boosting">Gradient Boosting</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label text-info">Tri</label>
+                            <select class="form-select" id="sortFilter" onchange="filterModels()">
+                                <option value="name">Par nom</option>
+                                <option value="date">Par date de création</option>
+                                <option value="performance">Par performance</option>
+                                <option value="trainings">Par nombre d'entraînements</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modèles -->
+    <div class="row">
+        <div class="col-12">
+            <h3 class="text-white mb-3">Modèles Disponibles</h3>
+            <div class="models-container" id="modelsContainer">
+                <!-- Carte pour créer un nouveau modèle -->
+                <div class="card model-card create-model-card" onclick="showCreateModelModal()">
+                    <div class="text-center">
+                        <i class="bi bi-plus-circle" style="font-size: 4rem; color: #8a2be2;"></i>
+                        <h5 class="text-white mt-3">Créer un Nouveau Modèle</h5>
+                        <p class="text-muted">Définir et configurer un nouveau modèle</p>
+                    </div>
+                </div>
+                
+                <!-- Les modèles seront chargés ici -->
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal Détails du Modèle -->
-<div class="modal fade" id="modelDetailModal" tabindex="-1">
+<!-- Modal Historique des Entraînements -->
+<div class="modal fade" id="trainingHistoryModal" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modelDetailTitle">
-                    <i class="bi bi-cpu"></i> Détails du Modèle
+                <h5 class="modal-title text-white" id="trainingHistoryTitle">
+                    <i class="bi bi-clock-history"></i> Historique des Entraînements
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body" id="modelDetailContent">
-                <!-- Le contenu sera injecté dynamiquement -->
+            <div class="modal-body" id="trainingHistoryContent">
+                <!-- Le contenu sera chargé dynamiquement -->
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
-                <button type="button" class="btn btn-danger" onclick="deleteModel()">
-                    <i class="bi bi-trash"></i> Supprimer
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Édition du Modèle -->
+<div class="modal fade" id="editModelModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-white" id="editModelTitle">
+                    <i class="bi bi-pencil-square"></i> Éditer le Modèle
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="editModelContent">
+                <!-- Le contenu sera chargé dynamiquement -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="saveModelChanges()">
+                    <i class="bi bi-save"></i> Enregistrer les modifications
                 </button>
-                <button type="button" class="btn btn-primary" onclick="downloadModel()">
-                    <i class="bi bi-download"></i> Télécharger
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Créer un Modèle -->
+<div class="modal fade" id="createModelModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-white">
+                    <i class="bi bi-cpu"></i> Créer un Nouveau Modèle
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createModelForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="modelName" class="form-label">Nom du Modèle</label>
+                                <input type="text" class="form-control" id="modelName" placeholder="Ex: Modèle Météo LSTM v2" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="modelDescription" class="form-label">Description</label>
+                                <textarea class="form-control" id="modelDescription" rows="2" placeholder="Description du modèle..."></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="modelType" class="form-label">Type de Modèle</label>
+                                <select class="form-select" id="modelType" required>
+                                    <option value="">Sélectionner...</option>
+                                    <option value="random_forest">Random Forest</option>
+                                    <option value="lstm">LSTM (Deep Learning)</option>
+                                    <option value="gru">GRU (Deep Learning)</option>
+                                    <option value="xgboost">XGBoost</option>
+                                    <option value="gradient_boosting">Gradient Boosting</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="dataset" class="form-label">Dataset</label>
+                                <select class="form-select" id="dataset" required onchange="loadDatasetColumns()">
+                                    <option value="">Sélectionner un dataset...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Colonnes Cibles (à prédire)</label>
+                                <div id="targetVariables" class="border rounded p-3" style="max-height: 200px; overflow-y: auto; background: rgba(255, 107, 107, 0.05); border-color: rgba(255, 107, 107, 0.3) !important;">
+                                    <p class="text-muted">Sélectionnez d'abord un dataset</p>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Variables Prédictives</label>
+                                <div id="predictorVariables" class="border rounded p-3" style="max-height: 200px; overflow-y: auto; background: rgba(0, 212, 255, 0.05); border-color: rgba(0, 212, 255, 0.3) !important;">
+                                    <p class="text-muted">Sélectionnez d'abord un dataset</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-info-circle"></i> Le modèle sera sauvegardé sans entraînement. Vous pourrez l'entraîner plus tard depuis cette page.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="saveNewModel()">
+                    <i class="bi bi-save"></i> Créer le Modèle
                 </button>
             </div>
         </div>
@@ -259,490 +476,505 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-let models = [];
+let modelsList = [];
+let filteredModels = [];
 let selectedModel = null;
-let comparisonChart = null;
 
 // Charger les modèles
 function loadModels() {
     showLoading();
     
-    fetch('/api/training-sessions/')
-        .then(response => response.json())
+    fetch('/api/models/')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            models = data;
-            displayModels(models);
+            modelsList = data;
+            updateStatistics();
+            filterModels();
             hideLoading();
         })
         .catch(error => {
             console.error('Erreur:', error);
             hideLoading();
+            showNotification('Erreur', 'Impossible de charger les modèles', 'error');
         });
 }
 
-// Afficher les modèles
-function displayModels(modelsList) {
-    const grid = document.getElementById('modelsGrid');
-    grid.innerHTML = '';
+// Mettre à jour les statistiques
+function updateStatistics() {
+    document.getElementById('totalModels').textContent = modelsList.length;
     
-    if (modelsList.length === 0) {
-        grid.innerHTML = `
-            <div class="col-12 text-center text-white-50 py-5">
-                <i class="bi bi-cpu fs-1 d-block mb-3"></i>
-                Aucun modèle disponible
-                <br>
-                <a href="{% url 'dashboard' %}" class="btn btn-primary mt-3">
-                    <i class="bi bi-plus-circle"></i> Entraîner votre premier modèle
-                </a>
+    let totalTrainings = 0;
+    let bestScore = 0;
+    let lastTrainingDate = null;
+    
+    modelsList.forEach(model => {
+        totalTrainings += model.training_count || 0;
+        if (model.best_score && model.best_score > bestScore) {
+            bestScore = model.best_score;
+        }
+        if (model.last_trained) {
+            const date = new Date(model.last_trained);
+            if (!lastTrainingDate || date > lastTrainingDate) {
+                lastTrainingDate = date;
+            }
+        }
+    });
+    
+    document.getElementById('totalTrainings').textContent = totalTrainings;
+    document.getElementById('bestScore').textContent = bestScore > 0 ? (bestScore * 100).toFixed(1) + '%' : '-';
+    document.getElementById('lastTraining').textContent = lastTrainingDate ? 
+        lastTrainingDate.toLocaleDateString('fr-FR') : '-';
+}
+
+// Filtrer les modèles
+function filterModels() {
+    const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
+    const typeFilter = document.getElementById('typeFilter').value;
+    const sortBy = document.getElementById('sortFilter').value;
+    
+    // Filtrer
+    filteredModels = modelsList.filter(model => {
+        const matchesSearch = model.name.toLowerCase().includes(searchTerm) || 
+                            model.description.toLowerCase().includes(searchTerm);
+        const matchesType = !typeFilter || model.model_type === typeFilter;
+        return matchesSearch && matchesType;
+    });
+    
+    // Trier
+    filteredModels.sort((a, b) => {
+        switch (sortBy) {
+            case 'name':
+                return a.name.localeCompare(b.name);
+            case 'date':
+                return new Date(b.created_at) - new Date(a.created_at);
+            case 'performance':
+                return (b.best_score || 0) - (a.best_score || 0);
+            case 'trainings':
+                return (b.training_count || 0) - (a.training_count || 0);
+            default:
+                return 0;
+        }
+    });
+    
+    displayModels();
+}
+
+// Afficher les modèles
+function displayModels() {
+    const container = document.getElementById('modelsContainer');
+    
+    // Garder la carte de création
+    const createCard = container.querySelector('.create-model-card');
+    container.innerHTML = '';
+    container.appendChild(createCard);
+    
+    if (filteredModels.length === 0) {
+        const emptyMessage = document.createElement('div');
+        emptyMessage.className = 'col-12 text-center text-muted py-5';
+        emptyMessage.innerHTML = '<i class="bi bi-cpu" style="font-size: 3rem;"></i><br>Aucun modèle trouvé';
+        container.appendChild(emptyMessage);
+        return;
+    }
+    
+    filteredModels.forEach(model => {
+        const card = createModelCard(model);
+        container.appendChild(card);
+    });
+}
+
+// Créer une carte de modèle
+function createModelCard(model) {
+    const card = document.createElement('div');
+    card.className = 'card model-card';
+    
+    const latestTraining = model.latest_training;
+    const statusClass = latestTraining?.status === 'completed' ? 'success' : 
+                       latestTraining?.status === 'training' ? 'training' : 'failed';
+    
+    card.innerHTML = `
+        <div class="quick-actions">
+            <button type="button" class="action-btn" data-action="train" 
+                    onclick="event.stopPropagation(); trainModel(${model.id})" 
+                    title="Entraîner">
+                <i class="bi bi-play-fill"></i>
+            </button>
+            <button type="button" class="action-btn" data-action="edit" 
+                    onclick="event.stopPropagation(); editModel(${model.id})" 
+                    title="Éditer">
+                <i class="bi bi-pencil"></i>
+            </button>
+            <button type="button" class="action-btn" data-action="clone" 
+                    onclick="event.stopPropagation(); cloneModel(${model.id})" 
+                    title="Cloner">
+                <i class="bi bi-files"></i>
+            </button>
+            <button type="button" class="action-btn" data-action="delete" 
+                    onclick="event.stopPropagation(); deleteModel(${model.id})" 
+                    title="Supprimer">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+        
+        <div class="card-body">
+            <div class="model-icon">
+                <i class="bi bi-diagram-3"></i>
+            </div>
+            <h5 class="card-title text-center mb-2" style="font-weight: 600; font-size: 1.2rem;">
+                ${model.name}
+            </h5>
+            <div class="text-center mb-3">
+                <span class="model-type-badge">${model.model_type.toUpperCase()}</span>
+            </div>
+            <p class="text-muted small text-center mb-3" style="font-size: 0.85rem;">
+                ${model.description || 'Modèle de prédiction météorologique'}
+            </p>
+            
+            <div class="model-stats">
+                <div class="stat-item">
+                    <div class="stat-value">${model.training_count || 0}</div>
+                    <div class="text-muted small">Entraînements</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${model.success_rate || 0}%</div>
+                    <div class="text-muted small">Succès</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${model.best_score ? (model.best_score * 100).toFixed(1) : '-'}%</div>
+                    <div class="text-muted small">Meilleur</div>
+                </div>
+            </div>
+            
+            <div class="mt-3 pt-3" style="border-top: 1px solid rgba(138, 43, 226, 0.2);">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted small">Dataset:</span>
+                    <span class="text-info small">${model.dataset_name}</span>
+                </div>
+                ${latestTraining ? `
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted small">Dernier statut:</span>
+                    <span class="training-status">
+                        <span class="status-dot status-${statusClass}"></span>
+                        <span class="small">${getStatusText(latestTraining.status)}</span>
+                    </span>
+                </div>
+                ` : ''}
+            </div>
+            
+            <div class="text-center mt-auto pt-2">
+                <button class="btn btn-sm btn-outline-primary" onclick="showTrainingHistory(${model.id})">
+                    <i class="bi bi-clock-history"></i> Voir l'historique
+                </button>
+            </div>
+        </div>
+    `;
+    
+    return card;
+}
+
+// Obtenir le texte du statut
+function getStatusText(status) {
+    switch (status) {
+        case 'completed': return 'Terminé';
+        case 'training': return 'En cours';
+        case 'failed': return 'Échoué';
+        default: return 'En attente';
+    }
+}
+
+// Afficher l'historique des entraînements
+function showTrainingHistory(modelId) {
+    const model = modelsList.find(m => m.id === modelId);
+    if (!model) return;
+    
+    selectedModel = model;
+    
+    // Clean up any existing modals first
+    cleanupModals();
+    
+    document.getElementById('trainingHistoryTitle').innerHTML = `
+        <i class="bi bi-clock-history"></i> Historique - ${model.name}
+    `;
+    
+    showLoading();
+    
+    fetch(`/api/models/${modelId}/trainings/`)
+        .then(response => response.json())
+        .then(trainings => {
+            hideLoading();
+            displayTrainingHistory(trainings);
+            
+            const modalElement = document.getElementById('trainingHistoryModal');
+            // Always create a fresh instance
+            const modal = new bootstrap.Modal(modalElement, {
+                backdrop: false,  // Pas de backdrop
+                keyboard: true,
+                focus: true
+            });
+            modal.show();
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Erreur:', error);
+            showNotification('Erreur', 'Impossible de charger l\'historique', 'error');
+        });
+}
+
+// Afficher l'historique
+function displayTrainingHistory(trainings) {
+    const content = document.getElementById('trainingHistoryContent');
+    
+    if (trainings.length === 0) {
+        content.innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-clock-history" style="font-size: 3rem;"></i>
+                <p class="mt-3">Aucun entraînement pour ce modèle</p>
+                <button class="btn btn-primary" onclick="trainModel(${selectedModel.id})">
+                    <i class="bi bi-play-fill"></i> Lancer le premier entraînement
+                </button>
             </div>
         `;
         return;
     }
     
-    modelsList.forEach(model => {
-        const accuracy = model.metrics?.accuracy || Math.random() * 0.2 + 0.8;
-        const status = model.status || 'completed';
-        const statusClass = status === 'completed' ? 'status-completed' : 
-                          status === 'training' ? 'status-training' : 'status-failed';
-        const statusText = status === 'completed' ? 'Terminé' : 
-                         status === 'training' ? 'En cours' : 'Échoué';
+    content.innerHTML = trainings.map(training => {
+        const metrics = training.test_results || {};
+        const statusClass = training.status === 'completed' ? 'success' : 
+                           training.status === 'training' ? 'warning' : 'danger';
         
-        const col = document.createElement('div');
-        col.className = 'col-md-6 col-lg-4';
-        col.innerHTML = `
-            <div class="card model-card h-100" onclick="showModelDetails(${model.id})">
-                <span class="model-type-badge">${model.model_type?.toUpperCase() || 'LSTM'}</span>
-                <div class="card-body">
-                    <div class="metric-circle">
-                        ${(accuracy * 100).toFixed(1)}%
-                    </div>
-                    <h5 class="card-title text-center mb-3">${model.name}</h5>
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="status-badge ${statusClass}">${statusText}</span>
+        return `
+            <div class="training-history-item">
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <h6 class="mb-1">Session #${training.id}</h6>
                         <small class="text-muted">
-                            <i class="bi bi-calendar3"></i> 
-                            ${new Date(model.created_at).toLocaleDateString('fr-FR')}
+                            ${new Date(training.created_at).toLocaleString('fr-FR')}
                         </small>
                     </div>
-                    <div class="small text-muted">
-                        <div class="d-flex justify-content-between mb-2">
-                            <span><i class="bi bi-database"></i> Dataset:</span>
-                            <span>${model.dataset_name || 'Dataset météo'}</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-2">
-                            <span><i class="bi bi-bullseye"></i> MAE:</span>
-                            <span>${model.metrics?.mae?.toFixed(3) || '0.052'}</span>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <span><i class="bi bi-clock"></i> Durée:</span>
-                            <span>${model.training_duration || '5m 32s'}</span>
-                        </div>
+                    <div class="col-md-2">
+                        <span class="badge bg-${statusClass}">
+                            ${getStatusText(training.status)}
+                        </span>
+                    </div>
+                    <div class="col-md-5">
+                        ${metrics.accuracy ? `
+                            <span class="metric-badge">Accuracy: ${(metrics.accuracy * 100).toFixed(2)}%</span>
+                        ` : ''}
+                        ${metrics.mae ? `
+                            <span class="metric-badge">MAE: ${metrics.mae.toFixed(4)}</span>
+                        ` : ''}
+                        ${metrics.rmse ? `
+                            <span class="metric-badge">RMSE: ${metrics.rmse.toFixed(4)}</span>
+                        ` : ''}
+                    </div>
+                    <div class="col-md-2 text-end">
+                        ${training.status === 'completed' ? `
+                            <button class="btn btn-sm btn-outline-info" 
+                                    onclick="window.location.href='/training-progress/${training.id}/'">
+                                <i class="bi bi-eye"></i> Détails
+                            </button>
+                        ` : ''}
                     </div>
                 </div>
             </div>
         `;
-        grid.appendChild(col);
-    });
+    }).join('');
 }
 
-// Afficher les détails d'un modèle
-function showModelDetails(modelId) {
-    selectedModel = models.find(m => m.id === modelId);
-    if (!selectedModel) return;
+// Entraîner le modèle
+function trainModel(modelId) {
+    const model = modelsList.find(m => m.id === modelId);
+    if (!model) return;
     
-    // Nettoyer les modals existants avant d'en créer un nouveau
-    document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
-    document.body.classList.remove('modal-open');
-    document.body.style.removeProperty('overflow');
-    document.body.style.removeProperty('padding-right');
-    
-    const modalElement = document.getElementById('modelDetailModal');
-    let modal = bootstrap.Modal.getInstance(modalElement);
-    if (!modal) {
-        modal = new bootstrap.Modal(modalElement);
-    }
-    document.getElementById('modelDetailTitle').innerHTML = `
-        <i class="bi bi-cpu"></i> ${selectedModel.name}
-    `;
-    
-    const metrics = selectedModel.metrics || {
-        accuracy: Math.random() * 0.2 + 0.8,
-        mae: Math.random() * 0.1,
-        rmse: Math.random() * 0.15,
-        r2: Math.random() * 0.2 + 0.8
+    // Créer une nouvelle session d'entraînement basée sur la définition du modèle
+    const trainingData = {
+        model_definition: modelId,
+        name: `${model.name} - Training ${new Date().toISOString()}`,
+        model_type: model.model_type,
+        dataset: model.dataset,
+        predictor_columns: model.predictor_columns,
+        target_columns: model.target_columns,
+        config: model.default_config,
+        hyperparameters: model.hyperparameters,
+        custom_architecture: model.custom_architecture,
+        use_custom_architecture: model.use_custom_architecture
     };
-    
-    const params = selectedModel.config || {
-        n_estimators: 100,
-        max_depth: 20,
-        learning_rate: 0.01,
-        epochs: 50
-    };
-    
-    document.getElementById('modelDetailContent').innerHTML = `
-        <div class="row">
-            <div class="col-md-4">
-                <h6 class="text-muted mb-3">Informations Générales</h6>
-                <table class="table table-sm">
-                    <tr>
-                        <td><strong>Type:</strong></td>
-                        <td><span class="model-type-badge">${selectedModel.model_type?.toUpperCase() || 'LSTM'}</span></td>
-                    </tr>
-                    <tr>
-                        <td><strong>État:</strong></td>
-                        <td><span class="status-badge status-${selectedModel.status || 'completed'}">${selectedModel.status === 'completed' ? 'Terminé' : 'En cours'}</span></td>
-                    </tr>
-                    <tr>
-                        <td><strong>Dataset:</strong></td>
-                        <td>${selectedModel.dataset_name || 'Dataset météo'}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Créé le:</strong></td>
-                        <td>${new Date(selectedModel.created_at).toLocaleString('fr-FR')}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Durée:</strong></td>
-                        <td>${selectedModel.training_duration || '5m 32s'}</td>
-                    </tr>
-                </table>
-            </div>
-            <div class="col-md-4">
-                <h6 class="text-muted mb-3">Métriques de Performance</h6>
-                <div class="text-center mb-3">
-                    <div class="metric-circle" style="width: 100px; height: 100px; font-size: 1.5rem;">
-                        ${(metrics.accuracy * 100).toFixed(1)}%
-                    </div>
-                    <small class="text-muted">Précision</small>
-                </div>
-                <table class="table table-sm">
-                    <tr>
-                        <td><strong>MAE:</strong></td>
-                        <td>${metrics.mae.toFixed(4)}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>RMSE:</strong></td>
-                        <td>${metrics.rmse.toFixed(4)}</td>
-                    </tr>
-                    <tr>
-                        <td><strong>R²:</strong></td>
-                        <td>${metrics.r2.toFixed(4)}</td>
-                    </tr>
-                </table>
-            </div>
-            <div class="col-md-4">
-                <h6 class="text-muted mb-3">Paramètres du Modèle</h6>
-                <table class="table table-sm params-table">
-                    ${Object.entries(params).map(([key, value]) => `
-                        <tr>
-                            <td><strong>${key}:</strong></td>
-                            <td>${value}</td>
-                        </tr>
-                    `).join('')}
-                </table>
-            </div>
-        </div>
-        
-        <div class="row mt-4">
-            <div class="col-12">
-                <h6 class="text-muted mb-3">Graphiques de Performance</h6>
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-body">
-                                <canvas id="lossChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-body">
-                                <canvas id="accuracyChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        ${selectedModel.feature_importance ? `
-        <div class="row mt-4">
-            <div class="col-12">
-                <h6 class="text-muted mb-3">Importance des Variables</h6>
-                <div class="card">
-                    <div class="card-body">
-                        <canvas id="featureImportanceChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-        ` : ''}
-    `;
-    
-    modal.show();
-    
-    // Créer les graphiques
-    setTimeout(() => {
-        createModelCharts();
-    }, 300);
-}
-
-// Créer les graphiques du modèle
-function createModelCharts() {
-    // Graphique de perte
-    const lossCtx = document.getElementById('lossChart').getContext('2d');
-    const epochs = Array.from({length: 50}, (_, i) => i + 1);
-    const trainLoss = epochs.map(e => 0.5 * Math.exp(-e/10) + Math.random() * 0.05);
-    const valLoss = epochs.map(e => 0.6 * Math.exp(-e/10) + Math.random() * 0.08);
-    
-    new Chart(lossCtx, {
-        type: 'line',
-        data: {
-            labels: epochs,
-            datasets: [{
-                label: 'Perte d\'entraînement',
-                data: trainLoss,
-                borderColor: '#6366f1',
-                backgroundColor: 'transparent',
-                tension: 0.4
-            }, {
-                label: 'Perte de validation',
-                data: valLoss,
-                borderColor: '#ec4899',
-                backgroundColor: 'transparent',
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Évolution de la Perte'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
-    
-    // Graphique de précision
-    const accuracyCtx = document.getElementById('accuracyChart').getContext('2d');
-    const trainAcc = epochs.map(e => 0.6 + 0.35 * (1 - Math.exp(-e/15)) + Math.random() * 0.02);
-    const valAcc = epochs.map(e => 0.55 + 0.35 * (1 - Math.exp(-e/15)) + Math.random() * 0.03);
-    
-    new Chart(accuracyCtx, {
-        type: 'line',
-        data: {
-            labels: epochs,
-            datasets: [{
-                label: 'Précision d\'entraînement',
-                data: trainAcc,
-                borderColor: '#10b981',
-                backgroundColor: 'transparent',
-                tension: 0.4
-            }, {
-                label: 'Précision de validation',
-                data: valAcc,
-                borderColor: '#f59e0b',
-                backgroundColor: 'transparent',
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Évolution de la Précision'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: false,
-                    min: 0.5,
-                    max: 1,
-                    ticks: {
-                        callback: function(value) {
-                            return (value * 100).toFixed(0) + '%';
-                        }
-                    }
-                }
-            }
-        }
-    });
-    
-    // Graphique d'importance des variables (si disponible)
-    if (document.getElementById('featureImportanceChart')) {
-        const featureCtx = document.getElementById('featureImportanceChart').getContext('2d');
-        const features = ['Température', 'Humidité', 'Pression', 'Vitesse du vent', 'Direction du vent', 'Précipitations'];
-        const importance = features.map(() => Math.random() * 0.3 + 0.1);
-        
-        new Chart(featureCtx, {
-            type: 'bar',
-            data: {
-                labels: features,
-                datasets: [{
-                    label: 'Importance',
-                    data: importance,
-                    backgroundColor: '#6366f1'
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Importance des Variables'
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 0.5
-                    }
-                }
-            }
-        });
-    }
-}
-
-// Comparer les modèles
-function compareModels() {
-    document.getElementById('comparisonSection').style.display = 'block';
-    
-    const tbody = document.getElementById('comparisonTableBody');
-    tbody.innerHTML = '';
-    
-    const completedModels = models.filter(m => m.status === 'completed' || !m.status);
-    
-    // Trouver les meilleures valeurs pour chaque métrique
-    const bestAccuracy = Math.max(...completedModels.map(m => m.metrics?.accuracy || Math.random() * 0.2 + 0.8));
-    const bestMAE = Math.min(...completedModels.map(m => m.metrics?.mae || Math.random() * 0.1));
-    const bestRMSE = Math.min(...completedModels.map(m => m.metrics?.rmse || Math.random() * 0.15));
-    const bestR2 = Math.max(...completedModels.map(m => m.metrics?.r2 || Math.random() * 0.2 + 0.8));
-    
-    completedModels.forEach(model => {
-        const metrics = model.metrics || {
-            accuracy: Math.random() * 0.2 + 0.8,
-            mae: Math.random() * 0.1,
-            rmse: Math.random() * 0.15,
-            r2: Math.random() * 0.2 + 0.8
-        };
-        
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td><strong>${model.name}</strong></td>
-            <td><span class="badge bg-primary">${model.model_type?.toUpperCase() || 'LSTM'}</span></td>
-            <td class="${metrics.accuracy === bestAccuracy ? 'best-value' : ''}">${(metrics.accuracy * 100).toFixed(2)}%</td>
-            <td class="${metrics.mae === bestMAE ? 'best-value' : ''}">${metrics.mae.toFixed(4)}</td>
-            <td class="${metrics.rmse === bestRMSE ? 'best-value' : ''}">${metrics.rmse.toFixed(4)}</td>
-            <td class="${metrics.r2 === bestR2 ? 'best-value' : ''}">${metrics.r2.toFixed(4)}</td>
-            <td>${model.training_duration || '5m 32s'}</td>
-            <td>${model.model_size || '2.3 MB'}</td>
-        `;
-        tbody.appendChild(row);
-    });
-    
-    // Créer le graphique de comparaison
-    if (comparisonChart) {
-        comparisonChart.destroy();
-    }
-    
-    const ctx = document.getElementById('comparisonChart').getContext('2d');
-    comparisonChart = new Chart(ctx, {
-        type: 'radar',
-        data: {
-            labels: ['Précision', 'MAE (inversé)', 'RMSE (inversé)', 'R²', 'Vitesse'],
-            datasets: completedModels.slice(0, 5).map((model, index) => {
-                const metrics = model.metrics || {
-                    accuracy: Math.random() * 0.2 + 0.8,
-                    mae: Math.random() * 0.1,
-                    rmse: Math.random() * 0.15,
-                    r2: Math.random() * 0.2 + 0.8
-                };
-                const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
-                
-                return {
-                    label: model.name,
-                    data: [
-                        metrics.accuracy,
-                        1 - metrics.mae,
-                        1 - metrics.rmse,
-                        metrics.r2,
-                        Math.random() * 0.3 + 0.7
-                    ],
-                    borderColor: colors[index % colors.length],
-                    backgroundColor: colors[index % colors.length] + '20'
-                };
-            })
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Comparaison Radar des Modèles'
-                }
-            },
-            scales: {
-                r: {
-                    beginAtZero: true,
-                    max: 1
-                }
-            }
-        }
-    });
-    
-    // Scroll vers la section de comparaison
-    document.getElementById('comparisonSection').scrollIntoView({ behavior: 'smooth' });
-}
-
-// Upload d'un modèle
-function uploadModel(input) {
-    const file = input.files[0];
-    if (!file) return;
-    
-    const formData = new FormData();
-    formData.append('model_file', file);
-    formData.append('name', file.name.replace(/\.[^/.]+$/, ''));
     
     showLoading();
     
-    // Simuler l'upload
-    setTimeout(() => {
+    fetch('/api/training-sessions/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(trainingData)
+    })
+    .then(response => response.json())
+    .then(session => {
         hideLoading();
-        showNotification('Succès!', 'Modèle chargé avec succès', 'success');
+        // Rediriger vers la page de progression
+        window.location.href = `/training-progress/${session.id}/`;
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('Erreur:', error);
+        showNotification('Erreur', 'Impossible de démarrer l\'entraînement', 'error');
+    });
+}
+
+// Éditer le modèle
+function editModel(modelId) {
+    const model = modelsList.find(m => m.id === modelId);
+    if (!model) return;
+    
+    selectedModel = model;
+    
+    // Clean up any existing modals first
+    cleanupModals();
+    
+    document.getElementById('editModelTitle').innerHTML = `
+        <i class="bi bi-pencil-square"></i> Éditer - ${model.name}
+    `;
+    
+    // Créer le formulaire d'édition
+    document.getElementById('editModelContent').innerHTML = `
+        <form id="editModelForm">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="editModelName" class="form-label">Nom du modèle</label>
+                        <input type="text" class="form-control" id="editModelName" 
+                               value="${model.name}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editModelDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="editModelDescription" rows="3">${model.description || ''}</textarea>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Type de modèle</label>
+                        <input type="text" class="form-control" value="${model.model_type.toUpperCase()}" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Dataset</label>
+                        <input type="text" class="form-control" value="${model.dataset_name}" disabled>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> Pour modifier la configuration technique du modèle (architecture, variables, etc.), 
+                créez une nouvelle version en clonant ce modèle.
+            </div>
+        </form>
+    `;
+    
+    const modalElement = document.getElementById('editModelModal');
+    // Always create a fresh instance
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: false,  // Pas de backdrop
+        keyboard: true,
+        focus: true
+    });
+    modal.show();
+}
+
+// Sauvegarder les modifications
+function saveModelChanges() {
+    if (!selectedModel) return;
+    
+    const data = {
+        name: document.getElementById('editModelName').value,
+        description: document.getElementById('editModelDescription').value
+    };
+    
+    showLoading();
+    
+    fetch(`/api/models/${selectedModel.id}/`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(updated => {
+        hideLoading();
+        showNotification('Succès', 'Modèle mis à jour avec succès', 'success');
+        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('editModelModal'));
+        if (modalInstance) {
+            modalInstance.hide();
+            modalInstance.dispose();
+        }
+        cleanupModals();
         loadModels();
-    }, 2000);
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('Erreur:', error);
+        showNotification('Erreur', 'Impossible de sauvegarder les modifications', 'error');
+    });
 }
 
-// Télécharger un modèle
-function downloadModel() {
-    if (!selectedModel) return;
+// Cloner le modèle
+function cloneModel(modelId) {
+    const model = modelsList.find(m => m.id === modelId);
+    if (!model) return;
     
-    showNotification('Téléchargement', 'Le téléchargement du modèle va commencer...', 'info');
-    
-    // Simuler le téléchargement
-    setTimeout(() => {
-        const link = document.createElement('a');
-        link.href = '#';
-        link.download = `${selectedModel.name}_model.pkl`;
-        link.click();
-    }, 1000);
+    Swal.fire({
+        title: 'Cloner le modèle',
+        text: `Voulez-vous créer une copie de "${model.name}"?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#8a2be2',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Oui, cloner',
+        cancelButtonText: 'Annuler'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            showLoading();
+            
+            fetch(`/api/models/${modelId}/clone/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(newModel => {
+                hideLoading();
+                showNotification('Succès', 'Modèle cloné avec succès', 'success');
+                loadModels();
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Erreur:', error);
+                showNotification('Erreur', 'Impossible de cloner le modèle', 'error');
+            });
+        }
+    });
 }
 
-// Supprimer un modèle
-function deleteModel() {
-    if (!selectedModel) return;
+// Supprimer le modèle
+function deleteModel(modelId) {
+    const model = modelsList.find(m => m.id === modelId);
+    if (!model) return;
     
     Swal.fire({
         title: 'Êtes-vous sûr?',
-        text: `Voulez-vous vraiment supprimer le modèle "${selectedModel.name}"?`,
+        html: `
+            <p>Voulez-vous vraiment supprimer le modèle "<strong>${model.name}</strong>"?</p>
+            <p class="text-warning"><i class="bi bi-exclamation-triangle"></i> Cette action supprimera également tous les entraînements associés.</p>
+        `,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#ef4444',
@@ -753,73 +985,312 @@ function deleteModel() {
         if (result.isConfirmed) {
             showLoading();
             
-            fetch(`/api/training-sessions/${selectedModel.id}/`, {
-                method: 'DELETE'
+            fetch(`/api/models/${modelId}/`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
             })
             .then(() => {
                 hideLoading();
-                showNotification('Succès!', 'Modèle supprimé avec succès', 'success');
-                bootstrap.Modal.getInstance(document.getElementById('modelDetailModal')).hide();
+                showNotification('Succès', 'Modèle supprimé avec succès', 'success');
                 loadModels();
             })
             .catch(error => {
                 hideLoading();
-                showNotification('Erreur', 'Erreur lors de la suppression', 'error');
+                console.error('Erreur:', error);
+                showNotification('Erreur', 'Impossible de supprimer le modèle', 'error');
             });
         }
     });
 }
 
-// Exporter toutes les métriques
-function exportAllMetrics() {
-    const metrics = models.map(m => ({
-        name: m.name,
-        type: m.model_type,
-        accuracy: m.metrics?.accuracy || 0,
-        mae: m.metrics?.mae || 0,
-        rmse: m.metrics?.rmse || 0,
-        r2: m.metrics?.r2 || 0,
-        created_at: m.created_at,
-        training_duration: m.training_duration
-    }));
-    
-    const dataStr = JSON.stringify(metrics, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    
-    const exportFileDefaultName = `metriques_modeles_${new Date().toISOString()}.json`;
-    
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-    
-    showNotification('Succès!', 'Métriques exportées avec succès', 'success');
+// Fonction utilitaire pour obtenir le cookie CSRF
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
 }
 
-// Drag and drop
-const uploadZone = document.querySelector('.upload-zone');
-if (uploadZone) {
-    uploadZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadZone.classList.add('dragover');
-    });
-    
-    uploadZone.addEventListener('dragleave', () => {
-        uploadZone.classList.remove('dragover');
-    });
-    
-    uploadZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadZone.classList.remove('dragover');
+// Ensure cleanupModals is available if not defined in base.html
+if (typeof cleanupModals === 'undefined') {
+    function cleanupModals() {
+        // Remove all backdrops
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
         
-        const file = e.dataTransfer.files[0];
-        if (file && (file.name.endsWith('.pkl') || file.name.endsWith('.h5') || 
-                    file.name.endsWith('.pth') || file.name.endsWith('.onnx'))) {
-            document.getElementById('modelFile').files = e.dataTransfer.files;
-            uploadModel(document.getElementById('modelFile'));
-        } else {
-            showNotification('Erreur', 'Format de fichier non supporté', 'error');
+        // Dispose of all modal instances
+        document.querySelectorAll('.modal').forEach(modalEl => {
+            const modalInstance = bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) {
+                modalInstance.dispose();
+            }
+        });
+    }
+}
+
+// Afficher le chargement
+function showLoading() {
+    const loader = document.createElement('div');
+    loader.id = 'globalLoader';
+    loader.className = 'text-center p-5';
+    loader.innerHTML = `
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Chargement...</span>
+        </div>
+    `;
+    document.body.appendChild(loader);
+}
+
+// Masquer le chargement
+function hideLoading() {
+    const loader = document.getElementById('globalLoader');
+    if (loader) {
+        loader.remove();
+    }
+}
+
+// Afficher une notification
+function showNotification(title, message, type = 'info') {
+    const icon = type === 'success' ? 'check-circle' : 
+                 type === 'error' ? 'x-circle' : 
+                 type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+                 
+    const bgColor = type === 'success' ? 'success' : 
+                    type === 'error' ? 'danger' : 
+                    type === 'warning' ? 'warning' : 'info';
+    
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${bgColor} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+    notification.style.zIndex = '9999';
+    notification.innerHTML = `
+        <div class="d-flex align-items-center">
+            <i class="bi bi-${icon} fs-4 me-2"></i>
+            <div>
+                <strong>${title}</strong>
+                <p class="mb-0 small">${message}</p>
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        notification.remove();
+    }, 5000);
+}
+
+// Fonction pour afficher le modal de création
+function showCreateModelModal() {
+    // Ensure page is clean
+    setTimeout(() => {
+        // Clean up any existing modals first
+        cleanupModals();
+        hideLoading();
+        
+        // Charger les datasets disponibles
+        fetch('/api/datasets/')
+            .then(response => response.json())
+            .then(datasets => {
+                const select = document.getElementById('dataset');
+                select.innerHTML = '<option value="">Sélectionner un dataset...</option>';
+                datasets.forEach(dataset => {
+                    const option = document.createElement('option');
+                    option.value = dataset.id;
+                    option.textContent = dataset.name;
+                    select.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error('Erreur lors du chargement des datasets:', error);
+            });
+        
+        // Réinitialiser le formulaire
+        document.getElementById('createModelForm').reset();
+        document.getElementById('targetVariables').innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+        document.getElementById('predictorVariables').innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+        
+        // Afficher le modal
+        const modalElement = document.getElementById('createModelModal');
+        
+        // Always create a fresh instance
+        const modal = new bootstrap.Modal(modalElement, {
+            backdrop: false,  // Pas de backdrop pour éviter le filtre gris
+            keyboard: true,
+            focus: true
+        });
+        
+        modal.show();
+    }, 50);
+}
+
+// Charger les colonnes du dataset
+function loadDatasetColumns() {
+    const datasetId = document.getElementById('dataset').value;
+    const targetDiv = document.getElementById('targetVariables');
+    const predictorDiv = document.getElementById('predictorVariables');
+    
+    if (!datasetId) {
+        targetDiv.innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+        predictorDiv.innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+        return;
+    }
+    
+    // Charger les colonnes
+    fetch(`/api/datasets/${datasetId}/columns/`)
+        .then(response => response.json())
+        .then(data => {
+            const columns = data.columns || [];
+            
+            // Variables cibles
+            targetDiv.innerHTML = '';
+            columns.forEach(columnName => {
+                const div = document.createElement('div');
+                div.className = 'form-check';
+                div.innerHTML = `
+                    <input class="form-check-input target-checkbox" type="checkbox" 
+                           value="${columnName}" id="target_${columnName}">
+                    <label class="form-check-label" for="target_${columnName}">
+                        ${columnName}
+                    </label>
+                `;
+                targetDiv.appendChild(div);
+            });
+            
+            // Variables prédictives
+            predictorDiv.innerHTML = '';
+            columns.forEach(columnName => {
+                const div = document.createElement('div');
+                div.className = 'form-check';
+                div.innerHTML = `
+                    <input class="form-check-input predictor-checkbox" type="checkbox" 
+                           value="${columnName}" id="predictor_${columnName}">
+                    <label class="form-check-label" for="predictor_${columnName}">
+                        ${columnName}
+                    </label>
+                `;
+                predictorDiv.appendChild(div);
+            });
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            targetDiv.innerHTML = '<p class="text-danger">Erreur lors du chargement des colonnes</p>';
+            predictorDiv.innerHTML = '<p class="text-danger">Erreur lors du chargement des colonnes</p>';
+        });
+}
+
+// Sauvegarder le nouveau modèle
+function saveNewModel() {
+    // Collecter les données du formulaire
+    const modelName = document.getElementById('modelName').value;
+    const modelDescription = document.getElementById('modelDescription').value;
+    const modelType = document.getElementById('modelType').value;
+    const datasetId = document.getElementById('dataset').value;
+    
+    // Validation basique
+    if (!modelName || !modelType || !datasetId) {
+        showNotification('Erreur', 'Veuillez remplir tous les champs obligatoires', 'error');
+        return;
+    }
+    
+    // Collecter les variables sélectionnées
+    const targetColumns = Array.from(document.querySelectorAll('.target-checkbox:checked'))
+        .map(cb => cb.value);
+    const predictorColumns = Array.from(document.querySelectorAll('.predictor-checkbox:checked'))
+        .map(cb => cb.value);
+    
+    if (targetColumns.length === 0) {
+        showNotification('Erreur', 'Veuillez sélectionner au moins une variable cible', 'error');
+        return;
+    }
+    
+    if (predictorColumns.length === 0) {
+        showNotification('Erreur', 'Veuillez sélectionner au moins une variable prédictive', 'error');
+        return;
+    }
+    
+    // Configuration par défaut selon le type de modèle
+    let defaultConfig = {};
+    if (modelType === 'lstm' || modelType === 'gru') {
+        defaultConfig = {
+            epochs: 50,
+            batch_size: 32,
+            optimizer: 'adam',
+            learning_rate: 0.001,
+            loss_function: 'mse',
+            metrics: ['mae', 'mse']
+        };
+    } else if (modelType === 'random_forest') {
+        defaultConfig = {
+            n_estimators: 100,
+            max_depth: null,
+            min_samples_split: 2,
+            min_samples_leaf: 1
+        };
+    } else if (modelType === 'xgboost') {
+        defaultConfig = {
+            n_estimators: 100,
+            max_depth: 3,
+            learning_rate: 0.1,
+            objective: 'reg:squarederror'
+        };
+    }
+    
+    const modelData = {
+        name: modelName,
+        description: modelDescription || `Modèle ${modelType.toUpperCase()} pour prédire ${targetColumns.join(', ')}`,
+        model_type: modelType,
+        dataset: datasetId,
+        target_columns: targetColumns,
+        predictor_columns: predictorColumns,
+        default_config: defaultConfig,
+        hyperparameters: defaultConfig
+    };
+    
+    showLoading();
+    
+    fetch('/api/models/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(modelData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
+        return response.json();
+    })
+    .then(model => {
+        hideLoading();
+        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('createModelModal'));
+        if (modalInstance) {
+            modalInstance.hide();
+            modalInstance.dispose();
+        }
+        cleanupModals();
+        showNotification('Succès', 'Modèle créé avec succès!', 'success');
+        loadModels(); // Recharger la liste des modèles
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('Erreur:', error);
+        showNotification('Erreur', 'Impossible de créer le modèle', 'error');
     });
 }
 
@@ -827,8 +1298,8 @@ if (uploadZone) {
 document.addEventListener('DOMContentLoaded', function() {
     loadModels();
     
-    // Actualiser toutes les minutes
-    setInterval(loadModels, 60000);
+    // Actualiser toutes les 30 secondes
+    setInterval(loadModels, 30000);
 });
 </script>
 {% endblock %}

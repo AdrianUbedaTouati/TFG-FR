@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 import json
 
 
@@ -73,7 +74,55 @@ class Dataset(models.Model):
         return list(reversed(genealogy))  # Devolver desde el más antiguo al más reciente
 
 
+class ModelDefinition(models.Model):
+    """Definición/Template de un modelo que puede ser entrenado múltiples veces"""
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    model_type = models.CharField(max_length=50, choices=ModelType.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    
+    # Dataset asociado
+    dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
+    
+    # Configuración del modelo
+    predictor_columns = models.JSONField(default=list)
+    target_columns = models.JSONField(default=list)
+    
+    # Configuración de entrenamiento por defecto
+    default_config = models.JSONField(default=dict)
+    hyperparameters = models.JSONField(default=dict)
+    
+    # Arquitectura personalizada
+    custom_architecture = models.JSONField(null=True, blank=True)
+    use_custom_architecture = models.BooleanField(default=False)
+    
+    # Estadísticas
+    training_count = models.IntegerField(default=0)
+    best_score = models.FloatField(null=True, blank=True)
+    last_trained = models.DateTimeField(null=True, blank=True)
+    
+    # Estado
+    is_active = models.BooleanField(default=True)
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_model_type_display()})"
+    
+    def get_latest_training(self):
+        return self.trainingsession_set.order_by('-created_at').first()
+    
+    def get_best_training(self):
+        # Obtener el mejor entrenamiento basado en la métrica principal
+        return self.trainingsession_set.filter(
+            status='completed',
+            test_results__isnull=False
+        ).order_by('-test_results__primary_metric').first()
+
+
 class TrainingSession(models.Model):
+    # Referencia al modelo definido
+    model_definition = models.ForeignKey(ModelDefinition, on_delete=models.CASCADE, null=True, blank=True)
     name = models.CharField(max_length=200)
     dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
     model_type = models.CharField(max_length=50, choices=ModelType.choices)
@@ -95,6 +144,10 @@ class TrainingSession(models.Model):
     # Hyperparameters (stored as JSON for flexibility)
     hyperparameters = models.JSONField(default=dict)
     config = models.JSONField(default=dict)  # For additional configuration like epochs
+    
+    # Custom architecture for expert mode
+    custom_architecture = models.JSONField(null=True, blank=True)
+    use_custom_architecture = models.BooleanField(default=False)
     
     # Train/Val/Test split
     train_split = models.FloatField(default=0.7)

@@ -17,8 +17,8 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Lasso
 from sklearn.model_selection import train_test_split
-from .models import Dataset, TrainingSession, WeatherPrediction, ModelType, NormalizationMethod, MetricType
-from .serializers import DatasetSerializer, TrainingSessionSerializer, WeatherPredictionSerializer
+from .models import Dataset, TrainingSession, WeatherPrediction, ModelType, NormalizationMethod, MetricType, ModelDefinition
+from .serializers import DatasetSerializer, TrainingSessionSerializer, WeatherPredictionSerializer, ModelDefinitionSerializer
 from .ml_utils import get_model_config, get_normalization_methods, get_metrics, train_model, make_predictions
 try:
     # Intentar importar desde el módulo local primero
@@ -2254,3 +2254,45 @@ class DatasetNormalizationPreviewView(APIView):
                 {'error': str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+# Model Definition Views
+class ModelDefinitionListCreateView(generics.ListCreateAPIView):
+    queryset = ModelDefinition.objects.all()
+    serializer_class = ModelDefinitionSerializer
+
+
+class ModelDefinitionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = ModelDefinition.objects.all()
+    serializer_class = ModelDefinitionSerializer
+
+
+class ModelDefinitionTrainingsView(APIView):
+    def get(self, request, pk):
+        model_def = get_object_or_404(ModelDefinition, pk=pk)
+        trainings = model_def.trainingsession_set.all().order_by('-created_at')
+        serializer = TrainingSessionSerializer(trainings, many=True)
+        return Response(serializer.data)
+
+
+class CloneModelDefinitionView(APIView):
+    def post(self, request, pk):
+        original = get_object_or_404(ModelDefinition, pk=pk)
+        
+        # Crear copia
+        new_model = ModelDefinition.objects.create(
+            name=f"{original.name} (Copia)",
+            description=original.description,
+            model_type=original.model_type,
+            dataset=original.dataset,
+            predictor_columns=original.predictor_columns,
+            target_columns=original.target_columns,
+            default_config=original.default_config,
+            hyperparameters=original.hyperparameters,
+            custom_architecture=original.custom_architecture,
+            use_custom_architecture=original.use_custom_architecture,
+            user=request.user if request.user.is_authenticated else None
+        )
+        
+        serializer = ModelDefinitionSerializer(new_model)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
