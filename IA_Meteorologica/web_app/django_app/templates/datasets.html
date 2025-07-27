@@ -13,7 +13,13 @@
         padding: 30px;
         transition: all 0.4s ease;
         position: relative;
-        overflow: hidden; /* Cambiar a hidden para limitar el área clickeable */
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        width: 350px;
+        min-width: 350px;
+        max-width: 350px;
     }
     
     /* Forzar reset de hover cuando el mouse no está sobre la tarjeta */
@@ -66,12 +72,26 @@
     
     .dataset-card .card-title {
         color: white !important;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+    
+    .dataset-card .card-body {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        width: 100%;
+    }
+    
+    .dataset-card p {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
     
     .dataset-stats {
         display: flex;
         justify-content: space-around;
-        margin-top: 20px;
+        margin-top: auto;
         padding-top: 20px;
         border-top: 1px solid rgba(0, 212, 255, 0.2);
     }
@@ -159,18 +179,6 @@
         outline-offset: 2px;
     }
     
-    /* Estilos para la tarjeta de dataset */
-    .dataset-card {
-        position: relative;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        overflow: hidden;
-    }
-    
-    .dataset-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 30px rgba(0, 212, 255, 0.3);
-    }
     
     
     /* Estilos para checkbox de outliers */
@@ -371,6 +379,8 @@
         overflow-x: auto;
         padding: 10px 0;
         align-items: stretch;
+        min-height: 450px;
+        max-height: 500px;
     }
     
     .dataset-cards-container::-webkit-scrollbar {
@@ -394,14 +404,12 @@
     .dataset-card.original {
         border-color: rgba(0, 212, 255, 0.6);
         background: rgba(0, 212, 255, 0.1);
-        min-width: 300px;
         flex-shrink: 0;
     }
     
     .dataset-card.normalized {
         border-color: rgba(255, 0, 255, 0.4);
         background: rgba(255, 0, 255, 0.05);
-        min-width: 280px;
         flex-shrink: 0;
     }
     
