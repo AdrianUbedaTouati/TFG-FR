@@ -974,7 +974,7 @@
         
         try {
             // Simular proceso paso a paso (en producción, esto sería asíncrono)
-            await simulateNormalizationProcess(datasetName, normalizedColumns);
+            await simulateNormalizationProcess(datasetName, normalizedColumns, shortDescription, longDescription);
             
         } catch (error) {
             console.error('Error completo:', error);
@@ -1094,7 +1094,7 @@
         });
     }
     
-    async function simulateNormalizationProcess(datasetName, columns) {
+    async function simulateNormalizationProcess(datasetName, columns, shortDescription, longDescription) {
         const totalSteps = columns.length + 3;
         let currentStep = 0;
         
