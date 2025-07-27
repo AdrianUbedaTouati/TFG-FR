@@ -739,6 +739,17 @@ class DatasetReportView(APIView):
                     <p>{dataset.name} - Généré le {pd.Timestamp.now().strftime("%d/%m/%Y à %H:%M")}</p>
                 </div>
                 
+                <!-- Descriptions du dataset -->
+                <div class="stat-card mb-4">
+                    <div class="card-body">
+                        <h3><i class="bi bi-info-circle icon"></i>Informations du Dataset</h3>
+                        {f'<p><strong>Description courte:</strong> {dataset.short_description}</p>' if hasattr(dataset, 'short_description') and dataset.short_description else ''}
+                        {f'<p><strong>Description détaillée:</strong> {dataset.long_description}</p>' if hasattr(dataset, 'long_description') and dataset.long_description else ''}
+                        {f'<p><strong>Dataset normalisé depuis:</strong> {dataset.parent_dataset.name}</p>' if hasattr(dataset, 'parent_dataset') and dataset.parent_dataset else ''}
+                        <p><strong>Date de création:</strong> {dataset.uploaded_at.strftime("%d/%m/%Y à %H:%M") if dataset.uploaded_at else "N/A"}</p>
+                    </div>
+                </div>
+                
                 <!-- Stats Grid like in the page -->
                 <div class="row">
                     <div class="col-md-3">
@@ -1936,7 +1947,7 @@ class DatasetNormalizationView(APIView):
             
             # Obtener copias normalizadas existentes
             normalized_copies = Dataset.objects.filter(
-                name__startswith=f"{dataset.name}_normalized_"
+                parent_dataset=dataset
             ).order_by('-uploaded_at')
             
             return Response({
@@ -1987,7 +1998,22 @@ class DatasetNormalizationView(APIView):
             # Obtener configuración de normalización
             normalization_config = request.data.get('normalization_config', {})
             create_copy = request.data.get('create_copy', True)
-            copy_name = request.data.get('copy_name', f"{dataset.name}_normalized_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}")
+            
+            # Generar nombre con el nuevo formato
+            # Contar cuántas normalizaciones existen para este dataset
+            normalized_count = Dataset.objects.filter(parent_dataset=dataset).count()
+            next_number = normalized_count + 1
+            
+            # Si el usuario proporcionó un nombre, usarlo; si no, generar uno
+            user_provided_name = request.data.get('copy_name', '').strip()
+            if user_provided_name:
+                copy_name = user_provided_name
+            else:
+                copy_name = f"{dataset.name}_normalizacion_{next_number}"
+            
+            # Obtener descripciones personalizadas
+            copy_short_description = request.data.get('copy_short_description', '').strip()
+            copy_long_description = request.data.get('copy_long_description', '').strip()
             
             # Para una implementación real con progreso, aquí deberías:
             # 1. Crear una tarea asíncrona (usando Celery o similar)
@@ -2055,7 +2081,12 @@ class DatasetNormalizationView(APIView):
                 
                 # Crear nuevo dataset
                 new_dataset = Dataset(
-                    name=copy_name
+                    name=copy_name,
+                    short_description=copy_short_description if copy_short_description else f"Normalizado desde {dataset.name}",
+                    long_description=copy_long_description if copy_long_description else f"Dataset normalizado desde {dataset.name} aplicando los siguientes métodos: {', '.join(set(normalization_config.values()))}. Procesado el {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}.",
+                    is_normalized=True,
+                    parent_dataset=dataset,
+                    normalization_method=str(normalization_config)
                 )
                 
                 # Guardar archivo

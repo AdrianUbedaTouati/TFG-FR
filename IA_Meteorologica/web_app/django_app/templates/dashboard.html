@@ -357,8 +357,15 @@
                         <input type="text" class="form-control" id="datasetName" placeholder="Ex: Données météo 2024" required>
                     </div>
                     <div class="mb-3">
-                        <label for="datasetDescription" class="form-label">Description</label>
-                        <textarea class="form-control" id="datasetDescription" rows="3" placeholder="Décrivez votre dataset..."></textarea>
+                        <label for="datasetShortDescription" class="form-label">Description courte <small class="text-muted" id="dashShortCharCount">(0/80)</small></label>
+                        <input type="text" class="form-control" id="datasetShortDescription" 
+                               placeholder="Description brève pour les cartes..." 
+                               maxlength="80" oninput="updateDashShortCharCount()">
+                    </div>
+                    <div class="mb-3">
+                        <label for="datasetLongDescription" class="form-label">Description détaillée <small class="text-muted">(optionnel)</small></label>
+                        <textarea class="form-control" id="datasetLongDescription" rows="3" 
+                                  placeholder="Description complète du dataset, méthodologie, source des données..."></textarea>
                     </div>
                     <div class="mb-3">
                         <label for="datasetFile" class="form-label">Fichier CSV</label>
@@ -985,5 +992,91 @@ document.addEventListener('DOMContentLoaded', function() {
         hideLoading();
     });
 });
+
+// Actualizar contador de caracteres para descripción corta
+function updateDashShortCharCount() {
+    const input = document.getElementById('datasetShortDescription');
+    const charCount = document.getElementById('dashShortCharCount');
+    if (input && charCount) {
+        const current = input.value.length;
+        charCount.textContent = `(${current}/80)`;
+        charCount.style.color = current >= 80 ? '#ff6b6b' : '#6c757d';
+    }
+}
+
+// Función para subir dataset
+function uploadDataset() {
+    const name = document.getElementById('datasetName').value.trim();
+    const shortDescription = document.getElementById('datasetShortDescription').value.trim();
+    const longDescription = document.getElementById('datasetLongDescription').value.trim();
+    const fileInput = document.getElementById('datasetFile');
+    const file = fileInput.files[0];
+    
+    if (!name || !file) {
+        showNotification('Por favor complete todos los campos requeridos', 'error');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('short_description', shortDescription);
+    formData.append('long_description', longDescription);
+    formData.append('file', file);
+    
+    // Mostrar progreso
+    document.getElementById('uploadProgress').classList.remove('d-none');
+    const progressBar = document.querySelector('#uploadProgress .progress-bar');
+    
+    // Simular progreso
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+        progress += Math.random() * 20;
+        if (progress > 90) progress = 90;
+        progressBar.style.width = progress + '%';
+    }, 200);
+    
+    fetch('/api/datasets/', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        clearInterval(progressInterval);
+        progressBar.style.width = '100%';
+        
+        setTimeout(() => {
+            // Cerrar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('uploadDatasetModal'));
+            modal.hide();
+            
+            showNotification('Dataset cargado exitosamente', 'success');
+            updateDashboardMetrics();
+        }, 1000);
+    })
+    .catch(error => {
+        clearInterval(progressInterval);
+        showNotification('Error al cargar el dataset: ' + error, 'error');
+        document.getElementById('uploadProgress').classList.add('d-none');
+    });
+}
+
+// Función para obtener CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
 </script>
 {% endblock %}

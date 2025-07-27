@@ -31,9 +31,16 @@ class MetricType(models.TextChoices):
 
 class Dataset(models.Model):
     name = models.CharField(max_length=255)
+    short_description = models.CharField(max_length=80, blank=True, null=True, help_text="Descripción corta (máx. 80 caracteres)")
+    long_description = models.TextField(blank=True, null=True, help_text="Descripción detallada del dataset")
     file = models.FileField(upload_to='datasets/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    
+    # Campos para normalización
+    is_normalized = models.BooleanField(default=False)
+    parent_dataset = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='normalized_copies')
+    normalization_method = models.CharField(max_length=255, null=True, blank=True)
     
     def __str__(self):
         return self.name

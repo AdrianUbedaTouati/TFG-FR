@@ -570,6 +570,19 @@
                     <input type="text" class="dataset-name-input" id="new-dataset-name" 
                            placeholder="Se generará automáticamente">
                 </div>
+                
+                <div class="control-group">
+                    <label class="control-label">Descripción corta: <small class="text-muted" id="normShortCharCount">(0/80)</small></label>
+                    <input type="text" class="dataset-name-input" id="new-dataset-short-description" 
+                           placeholder="Descripción breve para las tarjetas..."
+                           maxlength="80" oninput="updateNormShortCharCount()">
+                </div>
+                
+                <div class="control-group">
+                    <label class="control-label">Descripción detallada (opcional):</label>
+                    <textarea class="dataset-name-input" id="new-dataset-long-description" 
+                              rows="3" placeholder="Describa detalladamente los cambios realizados en la normalización..."></textarea>
+                </div>
 
                 <div class="control-group">
                     <label class="control-label">Variables seleccionadas:</label>
@@ -684,9 +697,11 @@
             document.getElementById('dataset-cols').textContent = datasetInfo.dataset.shape[1];
             
             // Sugerir nombre para el dataset normalizado
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            // Contar cuántas normalizaciones existen
+            const normalizedCount = datasetInfo.normalized_copies ? datasetInfo.normalized_copies.length : 0;
+            const nextNumber = normalizedCount + 1;
             document.getElementById('new-dataset-name').placeholder = 
-                `${datasetInfo.dataset.name}_normalized_${timestamp}`;
+                `${datasetInfo.dataset.name}_normalizacion_${nextNumber}`;
             
             // Renderizar variables
             renderVariables();
@@ -947,6 +962,8 @@
         
         const datasetName = document.getElementById('new-dataset-name').value || 
                            document.getElementById('new-dataset-name').placeholder;
+        const shortDescription = document.getElementById('new-dataset-short-description').value.trim();
+        const longDescription = document.getElementById('new-dataset-long-description').value.trim();
         
         // Preparar datos para el proceso
         const normalizedColumns = Object.keys(normalizationConfig);
@@ -1127,7 +1144,9 @@
             body: JSON.stringify({
                 normalization_config: normalizationConfig,
                 create_copy: true,
-                copy_name: datasetName
+                copy_name: datasetName,
+                copy_short_description: shortDescription,
+                copy_long_description: longDescription
             })
         });
         
@@ -1274,6 +1293,17 @@
             }
         }
         return cookieValue;
+    }
+    
+    // Actualizar contador de caracteres para descripción corta de normalización
+    function updateNormShortCharCount() {
+        const input = document.getElementById('new-dataset-short-description');
+        const charCount = document.getElementById('normShortCharCount');
+        if (input && charCount) {
+            const current = input.value.length;
+            charCount.textContent = `(${current}/80)`;
+            charCount.style.color = current >= 80 ? '#ff6b6b' : '#6c757d';
+        }
     }
 
     // Event listeners

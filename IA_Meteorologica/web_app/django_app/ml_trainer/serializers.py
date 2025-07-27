@@ -6,11 +6,16 @@ class DatasetSerializer(serializers.ModelSerializer):
     row_count = serializers.SerializerMethodField()
     column_count = serializers.SerializerMethodField()
     file_size = serializers.SerializerMethodField()
-    description = serializers.SerializerMethodField()
+    display_description = serializers.SerializerMethodField()
+    parent_dataset_name = serializers.SerializerMethodField()
+    upload_time = serializers.SerializerMethodField()
     
     class Meta:
         model = Dataset
-        fields = ['id', 'name', 'file', 'uploaded_at', 'row_count', 'column_count', 'file_size', 'description']
+        fields = ['id', 'name', 'short_description', 'long_description', 'file', 'uploaded_at', 
+                  'row_count', 'column_count', 'file_size', 'display_description', 
+                  'is_normalized', 'parent_dataset', 'parent_dataset_name', 
+                  'normalization_method', 'upload_time']
         read_only_fields = ['uploaded_at']
     
     def __init__(self, *args, **kwargs):
@@ -40,11 +45,25 @@ class DatasetSerializer(serializers.ModelSerializer):
         except:
             return 0
     
-    def get_description(self, obj):
-        # Generar descripción basada en el nombre
-        if '_normalized_' in obj.name:
+    def get_display_description(self, obj):
+        # Si el dataset tiene una descripción corta personalizada, usarla
+        if obj.short_description:
+            return obj.short_description
+        # Si no, generar descripción basada en el nombre y estado
+        if obj.is_normalized and obj.parent_dataset:
+            return f"Normalizado desde: {obj.parent_dataset.name}"
+        elif '_normalized_' in obj.name or '_normalizacion_' in obj.name:
             return f"Dataset normalizado"
         return "Dataset meteorológico"
+    
+    def get_parent_dataset_name(self, obj):
+        if obj.parent_dataset:
+            return obj.parent_dataset.name
+        return None
+    
+    def get_upload_time(self, obj):
+        # Devolver hora y minutos en formato HH:MM
+        return obj.uploaded_at.strftime('%H:%M') if obj.uploaded_at else ''
 
 
 class TrainingSessionSerializer(serializers.ModelSerializer):

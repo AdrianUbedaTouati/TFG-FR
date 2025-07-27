@@ -437,6 +437,44 @@
     </div>
 </div>
 
+<!-- Modal Información del Dataset -->
+<div class="modal fade" id="datasetInfoModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-info-circle"></i> Información del Dataset
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="datasetInfoForm">
+                    <div class="mb-3">
+                        <label for="datasetName" class="form-label">Nombre del Dataset</label>
+                        <input type="text" class="form-control" id="datasetName" required>
+                        <small class="text-muted">Si no especifica un nombre, se usará el nombre del archivo</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="datasetDescription" class="form-label">Descripción (opcional) <small class="text-muted" id="charCount">(0/80)</small></label>
+                        <textarea class="form-control" id="datasetDescription" rows="3" 
+                                  placeholder="Describa el contenido o propósito de este dataset..."
+                                  maxlength="80" oninput="updateCharCount()"></textarea>
+                    </div>
+                    <input type="hidden" id="pendingFile">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="proceedWithUpload()">
+                    <i class="bi bi-cloud-arrow-up"></i> Subir Dataset
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Upload Progress -->
 <div class="modal fade" id="uploadProgressModal" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog">
@@ -501,20 +539,16 @@ function normalizeDataset(datasetId) {
 
 // Charger les datasets
 function loadDatasets() {
-    showLoading();
-    
     return fetch('/api/datasets/')
         .then(response => response.json())
         .then(data => {
             datasets = data;
             displayDatasets(data);
             updateStats(data);
-            hideLoading();
             return data;
         })
         .catch(error => {
             console.error('Erreur:', error);
-            hideLoading();
             showNotification('Erreur', 'Impossible de charger les datasets', 'error');
             throw error;
         });
@@ -524,6 +558,9 @@ function loadDatasets() {
 function displayDatasets(datasetList) {
     const grid = document.getElementById('datasetsGrid');
     grid.innerHTML = '';
+    
+    // Debug: ver qué datos estamos recibiendo
+    console.log('Datasets recibidos:', datasetList);
     
     // Limpiar cualquier estado hover residual
     document.querySelectorAll('.dataset-card').forEach(card => {
@@ -587,15 +624,23 @@ function displayDatasets(datasetList) {
         // Crear el cuerpo de la tarjeta
         const cardBody = document.createElement('div');
         cardBody.className = 'card-body';
+        // Determinar si es un dataset normalizado
+        const isNormalized = dataset.is_normalized || dataset.name.includes('_normalizacion_');
+        
         cardBody.innerHTML = `
             <div class="dataset-icon">
-                <i class="bi bi-file-earmark-spreadsheet"></i>
+                <i class="bi ${isNormalized ? 'bi-sliders' : 'bi-file-earmark-spreadsheet'}"></i>
             </div>
             <h5 class="card-title text-center mb-2" style="font-weight: 600; font-size: 1.3rem;">
                 ${dataset.name}
             </h5>
+            ${dataset.is_normalized && dataset.parent_dataset_name ? `
+                <p class="text-center small mb-2" style="color: #00d4ff;">
+                    <i class="bi bi-arrow-return-right"></i> Normalizado desde: <strong>${dataset.parent_dataset_name}</strong>
+                </p>
+            ` : ''}
             <p class="text-muted small text-center mb-4" style="font-size: 0.85rem; opacity: 0.8;">
-                ${dataset.description || 'Dataset météorologique'}
+                ${dataset.short_description || dataset.display_description || 'Dataset météorologique'}
             </p>
             <div class="dataset-stats">
                 <div class="stat-item">
@@ -612,12 +657,13 @@ function displayDatasets(datasetList) {
                 </div>
             </div>
             <div class="text-center mt-4 pt-3" style="border-top: 1px solid rgba(0, 212, 255, 0.2); color: #00d4ff; font-size: 0.9rem;">
-                <i class="bi bi-calendar3"></i> 
-                Importé le ${dataset.uploaded_at ? new Date(dataset.uploaded_at).toLocaleDateString('fr-FR', { 
+                <i class="bi bi-clock"></i> 
+                ${dataset.uploaded_at ? new Date(dataset.uploaded_at).toLocaleDateString('fr-FR', { 
                     year: 'numeric', 
                     month: 'long', 
                     day: 'numeric' 
                 }) : 'Date inconnue'}
+                ${dataset.upload_time ? ` à ${dataset.upload_time}` : ''}
             </div>
         `;
         
@@ -662,6 +708,23 @@ function displayDatasets(datasetList) {
     
     // Agregar event listeners después de crear los elementos
     setupDatasetCardListeners();
+}
+
+// Función para truncar la descripción
+function truncateDescription(text, maxLength) {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+}
+
+// Actualizar contador de caracteres
+function updateCharCount() {
+    const textarea = document.getElementById('datasetDescription');
+    const charCount = document.getElementById('charCount');
+    if (textarea && charCount) {
+        const current = textarea.value.length;
+        charCount.textContent = `(${current}/80)`;
+        charCount.style.color = current >= 80 ? '#ff6b6b' : '#6c757d';
+    }
 }
 
 // Función vacía ya que los eventos se agregan directamente en displayDatasets
@@ -764,7 +827,42 @@ function displayDatasetDetails(dataset, data) {
     analysisCharts = {};
     analysisData = {};
     
-    // Preview de datos PRIMERO
+    // Información de descripciones
+    let descriptionsSection = `
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card bg-dark border-info">
+                    <div class="card-body">
+                        <h5 class="text-info mb-3"><i class="bi bi-info-circle"></i> Información del Dataset</h5>
+                        ${dataset.short_description || dataset.display_description ? `
+                            <div class="mb-2">
+                                <strong class="text-muted">Descripción corta:</strong>
+                                <p class="mb-0">${dataset.short_description || dataset.display_description || 'Sin descripción'}</p>
+                            </div>
+                        ` : ''}
+                        ${dataset.long_description ? `
+                            <div class="mb-2">
+                                <strong class="text-muted">Descripción detallada:</strong>
+                                <p class="mb-0">${dataset.long_description}</p>
+                            </div>
+                        ` : ''}
+                        ${dataset.is_normalized && dataset.parent_dataset_name ? `
+                            <div class="mb-2">
+                                <strong class="text-muted">Dataset origen:</strong>
+                                <p class="mb-0">${dataset.parent_dataset_name}</p>
+                            </div>
+                        ` : ''}
+                        <div>
+                            <strong class="text-muted">Fecha de creación:</strong>
+                            <p class="mb-0">${new Date(dataset.uploaded_at).toLocaleString('es-ES')}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Preview de datos
     let dataPreview = `
         <div class="row mb-4">
             <div class="col-md-12">
@@ -1082,7 +1180,7 @@ function displayDatasetDetails(dataset, data) {
     
     // Combinar todo
     document.getElementById('datasetDetailContent').innerHTML = 
-        dataPreview + variableSelector + generalInfo + detailedAnalysis;
+        descriptionsSection + dataPreview + variableSelector + generalInfo + detailedAnalysis;
     
     // Actualizar el botón de análisis para la primera variable
     setTimeout(() => {
@@ -1957,7 +2055,42 @@ function handleFileSelect(input) {
 
 // Traiter les fichiers
 function handleFiles(files) {
-    files.forEach(file => uploadFile(file));
+    // Por ahora solo manejar un archivo a la vez
+    if (files.length > 0) {
+        showDatasetInfoModal(files[0]);
+    }
+}
+
+// Variable global para almacenar archivos pendientes
+let pendingFiles = [];
+
+// Mostrar modal de información del dataset
+function showDatasetInfoModal(file) {
+    // Limpiar formulario
+    document.getElementById('datasetName').value = file.name.replace('.csv', '');
+    document.getElementById('datasetDescription').value = '';
+    
+    // Guardar archivo para uso posterior
+    pendingFiles = [file];
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('datasetInfoModal'));
+    modal.show();
+}
+
+// Proceder con la carga después de obtener la información
+function proceedWithUpload() {
+    const name = document.getElementById('datasetName').value.trim();
+    const description = document.getElementById('datasetDescription').value.trim();
+    
+    if (pendingFiles.length > 0) {
+        // Cerrar modal de información
+        const infoModal = bootstrap.Modal.getInstance(document.getElementById('datasetInfoModal'));
+        infoModal.hide();
+        
+        // Subir archivo con la información proporcionada
+        uploadFile(pendingFiles[0], name, description);
+    }
 }
 
 // Forcer la fermeture du modal d'upload
@@ -1975,7 +2108,7 @@ function forceCloseUploadModal() {
 }
 
 // Upload d'un fichier
-function uploadFile(file) {
+function uploadFile(file, customName, customDescription) {
     // Nettoyer les modals existants avant d'en créer un nouveau
     document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
     document.body.classList.remove('modal-open');
@@ -1995,9 +2128,10 @@ function uploadFile(file) {
     modal.show();
     
     const formData = new FormData();
-    formData.append('name', file.name.replace('.csv', ''));
+    formData.append('name', customName || file.name.replace('.csv', ''));
     formData.append('file', file);
-    formData.append('description', `Dataset importé depuis ${file.name}`);
+    formData.append('short_description', shortDescription || '');
+    formData.append('long_description', longDescription || '');
     
     // Simuler la progression
     let progress = 0;
