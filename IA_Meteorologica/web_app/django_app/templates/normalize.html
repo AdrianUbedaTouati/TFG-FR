@@ -618,7 +618,7 @@
 </div>
 
 <!-- Modal de progreso de normalización -->
-<div class="modal fade" id="progressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+<div class="modal fade" id="progressModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content" style="background: var(--dark-color); border: 1px solid rgba(0, 212, 255, 0.3);">
             <div class="modal-header" style="border-bottom: 1px solid rgba(0, 212, 255, 0.3);">
@@ -1011,8 +1011,16 @@
         // Inicializar gráfico
         initializeProgressChart(columns);
         
-        // Mostrar modal
-        const modal = new bootstrap.Modal(document.getElementById('progressModal'));
+        // Mostrar modal sin backdrop
+        const modalElement = document.getElementById('progressModal');
+        let modal = bootstrap.Modal.getInstance(modalElement);
+        
+        if (!modal) {
+            modal = new bootstrap.Modal(modalElement, {
+                backdrop: false,  // Sin backdrop para evitar el filtro gris
+                keyboard: true
+            });
+        }
         modal.show();
         
         // Configurar botón de cancelar
@@ -1022,10 +1030,17 @@
     }
     
     function hideProgressModal() {
-        const modal = bootstrap.Modal.getInstance(document.getElementById('progressModal'));
+        const modalElement = document.getElementById('progressModal');
+        const modal = bootstrap.Modal.getInstance(modalElement);
         if (modal) {
             modal.hide();
+            modal.dispose();
         }
+        // Clean up any lingering backdrops
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
     }
     
     function initializeProgressChart(columns) {

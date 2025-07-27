@@ -1,0 +1,54 @@
+<!-- 
+    Modal Template - Copy this when creating new modals
+    IMPORTANT: No backdrop to prevent gray overlay issues
+-->
+
+<!-- Modal HTML -->
+<div class="modal fade" id="myModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-white">
+                    <i class="bi bi-info-circle"></i> Modal Title
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Modal content here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="handleSave()">
+                    <i class="bi bi-save"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript to show modal -->
+<script>
+// Correct way to show this modal
+function showMyModal() {
+    // Option 1: Use the helper (recommended)
+    showModal('myModal');
+    
+    // Option 2: Use createModal
+    // const modal = createModal(document.getElementById('myModal'));
+    // modal.show();
+}
+
+// Handle save action
+function handleSave() {
+    // Your save logic here
+    
+    // Close modal properly
+    const modalElement = document.getElementById('myModal');
+    const modal = bootstrap.Modal.getInstance(modalElement);
+    if (modal) {
+        modal.hide();
+        modal.dispose();
+    }
+    cleanupModals();
+}
+</script>

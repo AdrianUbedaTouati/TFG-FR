@@ -413,7 +413,11 @@ function selectPrediction(pred) {
 // Afficher les détails d'une prédiction
 function showPredictionDetails(pred) {
     const accuracy = pred.accuracy || Math.random() * 20 + 80;
-    const modal = new bootstrap.Modal(document.getElementById('predictionDetailModal'));
+    const modalElement = document.getElementById('predictionDetailModal');
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: false,  // Sin backdrop
+        keyboard: true
+    });
     
     document.getElementById('predictionDetailContent').innerHTML = `
         <div class="row">

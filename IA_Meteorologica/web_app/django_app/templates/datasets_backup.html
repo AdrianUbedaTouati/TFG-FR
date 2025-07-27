@@ -424,7 +424,7 @@ function showDatasetDetails(datasetId) {
         let modal = bootstrap.Modal.getInstance(modalElement);
         if (!modal) {
             modal = new bootstrap.Modal(modalElement, {
-                backdrop: 'static',
+                backdrop: false,  // Sin backdrop
                 keyboard: true
             });
         }
@@ -761,8 +761,8 @@ function uploadFile(file) {
     let modal = bootstrap.Modal.getInstance(modalElement);
     if (!modal) {
         modal = new bootstrap.Modal(modalElement, {
-            backdrop: 'static',
-            keyboard: false
+            backdrop: false,  // Sin backdrop
+            keyboard: true
         });
     }
     document.getElementById('uploadFileName').textContent = file.name;

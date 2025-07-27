@@ -445,6 +445,16 @@
             max-width: 90%;
         }
         
+        /* Ensure no modal backdrops are visible */
+        .modal-backdrop {
+            display: none !important;
+        }
+        
+        /* Modal background styling when no backdrop */
+        .modal.show {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        
         @media (max-width: 768px) {
             .modal-dialog {
                 margin-top: 80px;
@@ -580,6 +590,70 @@
                 confirmButtonColor: '#6366f1'
             });
         }
+        
+        // IMPORTANT: Always use this function to create modals
+        // This ensures no gray backdrop issues in the future
+        function createModal(modalElement, options = {}) {
+            // Force backdrop to false to prevent gray overlay
+            const safeOptions = {
+                backdrop: false,
+                keyboard: true,
+                focus: true,
+                ...options
+            };
+            
+            // Always override backdrop to false
+            safeOptions.backdrop = false;
+            
+            // Clean up any existing instance
+            const existingModal = bootstrap.Modal.getInstance(modalElement);
+            if (existingModal) {
+                existingModal.dispose();
+            }
+            
+            // Clean up any lingering backdrops
+            cleanupModals();
+            
+            return new bootstrap.Modal(modalElement, safeOptions);
+        }
+        
+        // Helper function to show a modal safely
+        function showModal(modalElementOrId) {
+            const modalElement = typeof modalElementOrId === 'string' 
+                ? document.getElementById(modalElementOrId) 
+                : modalElementOrId;
+                
+            if (!modalElement) {
+                console.error('Modal element not found');
+                return null;
+            }
+            
+            const modal = createModal(modalElement);
+            modal.show();
+            return modal;
+        }
+        
+        // Override Bootstrap Modal constructor to prevent backdrop issues
+        (function() {
+            const OriginalModal = bootstrap.Modal;
+            
+            bootstrap.Modal = function(element, config) {
+                // Log warning if someone tries to use static backdrop
+                if (config && (config.backdrop === 'static' || config.backdrop === true)) {
+                    console.warn('⚠️ Modal backdrop detected! Use backdrop: false to prevent gray overlay issues.');
+                    console.warn('Use createModal() helper function instead of new bootstrap.Modal()');
+                    
+                    // Force backdrop to false
+                    config.backdrop = false;
+                }
+                
+                return new OriginalModal(element, config);
+            };
+            
+            // Copy static methods
+            Object.setPrototypeOf(bootstrap.Modal, OriginalModal);
+            Object.setPrototypeOf(bootstrap.Modal.prototype, OriginalModal.prototype);
+        })();
     </script>
     {% block extra_js %}{% endblock %}
 </body>

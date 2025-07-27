@@ -33,6 +33,21 @@ Aplicación web Django para entrenar modelos de Machine Learning y Deep Learning
 - Visualización de predicciones en mapa
 - Exportación de resultados
 
+## ⚠️ Important: Modal Guidelines
+
+**This application does NOT use modal backdrops to prevent gray overlay issues.**
+
+When creating modals, ALWAYS use:
+```javascript
+// Use the helper function
+showModal('myModalId');
+
+// Or create with backdrop: false
+const modal = createModal(modalElement);
+```
+
+See `MODAL_GUIDELINES.md` for detailed instructions.
+
 ## Instalación
 
 ### Backend (Django)

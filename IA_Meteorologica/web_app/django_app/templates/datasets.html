@@ -1223,7 +1223,7 @@ function showDatasetDetails(datasetId) {
         let modal = bootstrap.Modal.getInstance(modalElement);
         if (!modal) {
             modal = new bootstrap.Modal(modalElement, {
-                backdrop: 'static',
+                backdrop: false,  // Sin backdrop
                 keyboard: true
             });
         }
@@ -2553,7 +2553,11 @@ function showDatasetInfoModal(file) {
     pendingFiles = [file];
     
     // Mostrar modal
-    const modal = new bootstrap.Modal(document.getElementById('datasetInfoModal'));
+    const modalElement = document.getElementById('datasetInfoModal');
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: false,  // Sin backdrop
+        keyboard: true
+    });
     modal.show();
 }
 
@@ -2599,8 +2603,8 @@ function uploadFile(file, customName, customDescription) {
     let modal = bootstrap.Modal.getInstance(modalElement);
     if (!modal) {
         modal = new bootstrap.Modal(modalElement, {
-            backdrop: 'static',
-            keyboard: false
+            backdrop: false,  // Sin backdrop
+            keyboard: true
         });
     }
     document.getElementById('uploadFileName').textContent = file.name;
@@ -2871,7 +2875,11 @@ function showUniqueValues(columnName) {
     document.body.insertAdjacentHTML('beforeend', modalContent);
     
     // Mostrar modal
-    const modal = new bootstrap.Modal(document.getElementById('uniqueValuesModal'));
+    const modalElement = document.getElementById('uniqueValuesModal');
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: false,  // Sin backdrop
+        keyboard: true
+    });
     modal.show();
     
     // Función para ordenar valores
@@ -3146,7 +3154,11 @@ function showOutliers(columnName) {
     document.body.insertAdjacentHTML('beforeend', modalContent);
     
     // Mostrar modal
-    const modal = new bootstrap.Modal(document.getElementById('outliersModal'));
+    const modalElement = document.getElementById('outliersModal');
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: false,  // Sin backdrop
+        keyboard: true
+    });
     modal.show();
     
     // Función para cargar outliers
