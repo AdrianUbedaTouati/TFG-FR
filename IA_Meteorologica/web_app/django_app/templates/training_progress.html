@@ -1,0 +1,547 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Progression de l'Entraînement{% endblock %}
+
+{% block extra_css %}
+<style>
+    .progress-container {
+        background: rgba(10, 14, 39, 0.8);
+        border: 2px solid rgba(0, 212, 255, 0.3);
+        border-radius: 20px;
+        padding: 30px;
+        margin-bottom: 30px;
+        backdrop-filter: blur(10px);
+    }
+    
+    .status-badge {
+        font-size: 1rem;
+        padding: 8px 20px;
+        border-radius: 30px;
+        font-weight: 600;
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    .status-pending {
+        background: rgba(255, 193, 7, 0.2);
+        color: #ffc107;
+        border: 2px solid rgba(255, 193, 7, 0.5);
+    }
+    
+    .status-training {
+        background: rgba(0, 212, 255, 0.2);
+        color: #00d4ff;
+        border: 2px solid rgba(0, 212, 255, 0.5);
+    }
+    
+    .status-completed {
+        background: rgba(40, 167, 69, 0.2);
+        color: #28a745;
+        border: 2px solid rgba(40, 167, 69, 0.5);
+    }
+    
+    .status-failed {
+        background: rgba(220, 53, 69, 0.2);
+        color: #dc3545;
+        border: 2px solid rgba(220, 53, 69, 0.5);
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.05); opacity: 0.8; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    
+    .metric-card {
+        background: rgba(0, 212, 255, 0.05);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    
+    .metric-card:hover {
+        background: rgba(0, 212, 255, 0.1);
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0, 212, 255, 0.3);
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #00d4ff;
+        margin: 10px 0;
+    }
+    
+    .metric-label {
+        color: #94a3b8;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .chart-container {
+        background: rgba(10, 14, 39, 0.6);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 15px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    
+    .log-container {
+        background: rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 10px;
+        padding: 15px;
+        max-height: 400px;
+        overflow-y: auto;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9rem;
+        color: #00ff88;
+    }
+    
+    .log-entry {
+        margin-bottom: 5px;
+        white-space: pre-wrap;
+    }
+    
+    .progress-bar-custom {
+        height: 30px;
+        border-radius: 15px;
+        overflow: hidden;
+        background: rgba(0, 212, 255, 0.1);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+    }
+    
+    .progress-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #00d4ff, #0099ff);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        transition: width 0.5s ease;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-4 text-white mb-4">
+                <i class="bi bi-cpu"></i> Progression de l'Entraînement
+            </h1>
+        </div>
+    </div>
+    
+    <!-- Informations du modèle -->
+    <div class="progress-container">
+        <div class="row">
+            <div class="col-md-8">
+                <h3 class="text-white mb-3">{{ session.name }}</h3>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p class="mb-2"><strong>Type de modèle:</strong> <span class="text-info">{{ session.get_model_type_display }}</span></p>
+                        <p class="mb-2"><strong>Dataset:</strong> <span class="text-info">{{ session.dataset.name }}</span></p>
+                        <p class="mb-2"><strong>Variable cible:</strong> <span class="text-info">{{ session.target_column }}</span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="mb-2"><strong>Variables prédictives:</strong></p>
+                        <div class="text-info" style="max-height: 100px; overflow-y: auto;">
+                            {% for col in session.predictor_columns %}
+                                <span class="badge bg-info me-1 mb-1">{{ col }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-center">
+                <h5 class="text-white mb-3">Statut</h5>
+                <span class="status-badge status-{{ session.status }}" id="status-badge">
+                    {% if session.status == 'pending' %}
+                        <i class="bi bi-hourglass-split"></i> En attente
+                    {% elif session.status == 'training' %}
+                        <i class="bi bi-arrow-repeat spin"></i> Entraînement en cours
+                    {% elif session.status == 'completed' %}
+                        <i class="bi bi-check-circle"></i> Terminé
+                    {% elif session.status == 'failed' %}
+                        <i class="bi bi-x-circle"></i> Échec
+                    {% else %}
+                        {{ session.status }}
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+        
+        <!-- Barre de progression -->
+        <div class="mt-4">
+            <h5 class="text-white mb-3">Progression globale</h5>
+            <div class="progress-bar-custom">
+                <div class="progress-bar-fill" id="progress-bar" style="width: 0%">
+                    0%
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Métriques en temps réel -->
+    <div class="row mb-4" id="metrics-container" style="display: none;">
+        <div class="col-12">
+            <h3 class="text-white mb-4">Métriques d'entraînement</h3>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card">
+                <div class="metric-label">Époque actuelle</div>
+                <div class="metric-value" id="current-epoch">0</div>
+                <div class="text-muted" id="total-epochs">/ 0</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card">
+                <div class="metric-label">Loss d'entraînement</div>
+                <div class="metric-value" id="train-loss">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card">
+                <div class="metric-label">Loss de validation</div>
+                <div class="metric-value" id="val-loss">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card">
+                <div class="metric-label">Temps écoulé</div>
+                <div class="metric-value" id="elapsed-time">00:00</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Graphiques -->
+    <div class="row mb-4" id="charts-container" style="display: none;">
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h5 class="text-white mb-3">Évolution du Loss</h5>
+                <canvas id="loss-chart" height="200"></canvas>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h5 class="text-white mb-3">Métriques de performance</h5>
+                <canvas id="metrics-chart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Logs d'entraînement -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h3 class="text-white mb-3">Logs d'entraînement</h3>
+            <div class="log-container" id="training-logs">
+                <div class="log-entry">Initialisation de l'entraînement...</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Boutons d'action -->
+    <div class="row">
+        <div class="col-12 text-center">
+            <button class="btn btn-secondary me-2" onclick="window.location.href='{% url 'models' %}'">
+                <i class="bi bi-arrow-left"></i> Retour aux modèles
+            </button>
+            <button class="btn btn-danger me-2" id="stop-training" style="display: none;" onclick="stopTraining()">
+                <i class="bi bi-stop-circle"></i> Arrêter l'entraînement
+            </button>
+            <button class="btn btn-success" id="view-results" style="display: none;" onclick="viewResults()">
+                <i class="bi bi-graph-up"></i> Voir les résultats
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js pour les graphiques -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// Variables globales
+let sessionId = {{ session_id }};
+let pollingInterval;
+let startTime = new Date();
+let lossChart, metricsChart;
+
+// Initialiser les graphiques
+function initCharts() {
+    // Graphique du loss
+    const lossCtx = document.getElementById('loss-chart').getContext('2d');
+    lossChart = new Chart(lossCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Loss d\'entraînement',
+                data: [],
+                borderColor: '#00d4ff',
+                backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                tension: 0.4
+            }, {
+                label: 'Loss de validation',
+                data: [],
+                borderColor: '#ff6b6b',
+                backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#f0f9ff'
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                },
+                y: {
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                }
+            }
+        }
+    });
+    
+    // Graphique des métriques
+    const metricsCtx = document.getElementById('metrics-chart').getContext('2d');
+    metricsChart = new Chart(metricsCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Précision',
+                data: [],
+                borderColor: '#00ff88',
+                backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#f0f9ff'
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                },
+                y: {
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                    min: 0,
+                    max: 1
+                }
+            }
+        }
+    });
+}
+
+// Mettre à jour le temps écoulé
+function updateElapsedTime() {
+    const now = new Date();
+    const elapsed = Math.floor((now - startTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    document.getElementById('elapsed-time').textContent = 
+        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// Ajouter un log
+function addLog(message) {
+    const logsContainer = document.getElementById('training-logs');
+    const logEntry = document.createElement('div');
+    logEntry.className = 'log-entry';
+    logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    logsContainer.appendChild(logEntry);
+    logsContainer.scrollTop = logsContainer.scrollHeight;
+}
+
+// Mettre à jour l'interface avec les données
+function updateUI(data) {
+    // Mettre à jour le statut
+    const statusBadge = document.getElementById('status-badge');
+    statusBadge.className = `status-badge status-${data.status}`;
+    
+    if (data.status === 'training') {
+        statusBadge.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Entraînement en cours';
+        document.getElementById('stop-training').style.display = 'inline-block';
+        document.getElementById('metrics-container').style.display = 'flex';
+        document.getElementById('charts-container').style.display = 'flex';
+    } else if (data.status === 'completed') {
+        statusBadge.innerHTML = '<i class="bi bi-check-circle"></i> Terminé';
+        document.getElementById('stop-training').style.display = 'none';
+        document.getElementById('view-results').style.display = 'inline-block';
+        clearInterval(pollingInterval);
+        addLog('Entraînement terminé avec succès!');
+    } else if (data.status === 'failed') {
+        statusBadge.innerHTML = '<i class="bi bi-x-circle"></i> Échec';
+        document.getElementById('stop-training').style.display = 'none';
+        clearInterval(pollingInterval);
+        addLog('Erreur: ' + (data.error_message || 'Erreur inconnue'));
+    }
+    
+    // Mettre à jour la progression
+    if (data.progress) {
+        const progressBar = document.getElementById('progress-bar');
+        const progress = Math.round(data.progress * 100);
+        progressBar.style.width = progress + '%';
+        progressBar.textContent = progress + '%';
+        
+        // Mettre à jour les métriques
+        if (data.current_epoch) {
+            document.getElementById('current-epoch').textContent = data.current_epoch;
+            document.getElementById('total-epochs').textContent = '/ ' + data.total_epochs;
+        }
+        
+        if (data.train_loss) {
+            document.getElementById('train-loss').textContent = data.train_loss.toFixed(4);
+        }
+        
+        if (data.val_loss) {
+            document.getElementById('val-loss').textContent = data.val_loss.toFixed(4);
+        }
+        
+        // Mettre à jour les graphiques
+        if (data.history) {
+            updateCharts(data.history);
+        }
+    }
+}
+
+// Mettre à jour les graphiques
+function updateCharts(history) {
+    if (!history || !history.epochs) return;
+    
+    // Mettre à jour le graphique du loss
+    lossChart.data.labels = history.epochs;
+    lossChart.data.datasets[0].data = history.train_loss || [];
+    lossChart.data.datasets[1].data = history.val_loss || [];
+    lossChart.update();
+    
+    // Mettre à jour le graphique des métriques
+    if (history.val_accuracy) {
+        metricsChart.data.labels = history.epochs;
+        metricsChart.data.datasets[0].data = history.val_accuracy;
+        metricsChart.update();
+    }
+}
+
+// Vérifier le statut de l'entraînement
+function checkTrainingStatus() {
+    fetch(`/api/training-sessions/${sessionId}/`)
+        .then(response => response.json())
+        .then(data => {
+            updateUI(data);
+        })
+        .catch(error => {
+            console.error('Erreur lors de la vérification du statut:', error);
+            addLog('Erreur de connexion au serveur');
+        });
+}
+
+// Lancer l'entraînement
+function startTraining() {
+    addLog('Démarrage de l\'entraînement...');
+    
+    fetch(`/api/training-sessions/${sessionId}/train/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        addLog('Entraînement démarré');
+        // Commencer le polling
+        pollingInterval = setInterval(checkTrainingStatus, 2000);
+    })
+    .catch(error => {
+        console.error('Erreur lors du démarrage:', error);
+        addLog('Erreur lors du démarrage de l\'entraînement');
+    });
+}
+
+// Arrêter l'entraînement
+function stopTraining() {
+    if (confirm('Êtes-vous sûr de vouloir arrêter l\'entraînement?')) {
+        addLog('Arrêt de l\'entraînement...');
+        
+        fetch(`/api/training-sessions/${sessionId}/stop/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            addLog('Entraînement arrêté');
+            clearInterval(pollingInterval);
+        })
+        .catch(error => {
+            console.error('Erreur lors de l\'arrêt:', error);
+            addLog('Erreur lors de l\'arrêt de l\'entraînement');
+        });
+    }
+}
+
+// Voir les résultats
+function viewResults() {
+    window.location.href = `/models/`;
+}
+
+// Fonction utilitaire pour obtenir le cookie CSRF
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Initialisation
+document.addEventListener('DOMContentLoaded', function() {
+    initCharts();
+    
+    // Mettre à jour le temps toutes les secondes
+    setInterval(updateElapsedTime, 1000);
+    
+    // Vérifier le statut initial
+    checkTrainingStatus();
+    
+    // Si le statut est pending, lancer l'entraînement automatiquement
+    if ('{{ session.status }}' === 'pending') {
+        startTraining();
+    } else if ('{{ session.status }}' === 'training') {
+        // Si déjà en cours, commencer le polling
+        pollingInterval = setInterval(checkTrainingStatus, 2000);
+    }
+});
+</script>
+{% endblock %}

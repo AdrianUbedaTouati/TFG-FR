@@ -15,6 +15,46 @@
         backdrop-filter: blur(10px);
     }
     
+    /* Estilos para las checkboxes de variables */
+    .predictor-checkbox:checked {
+        background-color: #00d4ff;
+        border-color: #00d4ff;
+    }
+    
+    .predictor-checkbox:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .form-check-label {
+        user-select: none;
+        transition: all 0.2s ease;
+    }
+    
+    .form-check:hover .form-check-label {
+        color: #00d4ff;
+    }
+    
+    .form-check.text-muted .form-check-label {
+        text-decoration: line-through;
+        opacity: 0.6;
+    }
+    
+    #predictorVariables {
+        min-height: 150px;
+    }
+    
+    #predictorVariables .form-check {
+        padding: 8px 12px;
+        margin: 4px 0;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+    
+    #predictorVariables .form-check:hover {
+        background: rgba(0, 212, 255, 0.1);
+    }
+    
     .metric-card::before {
         content: '';
         position: absolute;
@@ -418,17 +458,24 @@
                             </div>
                             <div class="mb-3">
                                 <label for="dataset" class="form-label">Dataset</label>
-                                <select class="form-select" id="dataset" required>
+                                <select class="form-select" id="dataset" required onchange="loadDatasetColumns()">
                                     <option value="">Sélectionner un dataset...</option>
                                 </select>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="targetColumn" class="form-label">Colonne Cible</label>
-                                <select class="form-select" id="targetColumn" required>
-                                    <option value="">Sélectionner la variable à prédire...</option>
+                                <label for="targetColumn" class="form-label">Colonne Cible (à prédire)</label>
+                                <select class="form-select" id="targetColumn" required disabled>
+                                    <option value="">Sélectionnez d'abord un dataset</option>
                                 </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Variables Prédictives</label>
+                                <div id="predictorVariables" class="border rounded p-3" style="max-height: 200px; overflow-y: auto; background: rgba(0, 212, 255, 0.05); border-color: rgba(0, 212, 255, 0.3) !important;">
+                                    <p class="text-muted">Sélectionnez d'abord un dataset</p>
+                                </div>
+                                <small class="text-muted">Cliquez pour sélectionner/désélectionner les variables</small>
                             </div>
                             <div class="mb-3">
                                 <label for="testSize" class="form-label">Taille du Test (%)</label>
@@ -668,6 +715,12 @@ function showTrainModelModal() {
     document.body.style.removeProperty('padding-right');
     hideLoading();
     
+    // Réinitialiser le formulaire
+    document.getElementById('trainModelForm').reset();
+    document.getElementById('targetColumn').disabled = true;
+    document.getElementById('targetColumn').innerHTML = '<option value="">Sélectionnez d\'abord un dataset</option>';
+    document.getElementById('predictorVariables').innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+    
     loadDatasets();
     const modalElement = document.getElementById('trainModelModal');
     const modal = new bootstrap.Modal(modalElement, {
@@ -720,6 +773,110 @@ function loadModels() {
             });
         })
         .catch(error => console.error('Erreur:', error));
+}
+
+// Charger les colonnes du dataset sélectionné
+function loadDatasetColumns() {
+    const datasetId = document.getElementById('dataset').value;
+    const targetSelect = document.getElementById('targetColumn');
+    const predictorDiv = document.getElementById('predictorVariables');
+    
+    if (!datasetId) {
+        targetSelect.disabled = true;
+        targetSelect.innerHTML = '<option value="">Sélectionnez d\'abord un dataset</option>';
+        predictorDiv.innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+        return;
+    }
+    
+    // Afficher un message de chargement
+    targetSelect.disabled = true;
+    targetSelect.innerHTML = '<option value="">Chargement des colonnes...</option>';
+    predictorDiv.innerHTML = '<p class="text-muted"><i class="bi bi-hourglass-split"></i> Chargement des colonnes...</p>';
+    
+    fetch(`/api/datasets/${datasetId}/columns/`)
+        .then(response => {
+            console.log('Response status:', response.status);
+            console.log('Response headers:', response.headers);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Données reçues:', data); // Debug
+            
+            // La réponse contient un objet avec 'columns' et 'dtypes'
+            const columns = data.columns || [];
+            const dtypes = data.dtypes || {};
+            
+            // Activer et mettre à jour le select de la colonne cible
+            targetSelect.disabled = false;
+            targetSelect.innerHTML = '<option value="">Sélectionner la variable à prédire...</option>';
+            
+            // Créer les checkboxes pour les variables prédictives
+            predictorDiv.innerHTML = '';
+            
+            if (columns.length === 0) {
+                predictorDiv.innerHTML = '<p class="text-warning">Aucune colonne trouvée dans ce dataset</p>';
+                return;
+            }
+            
+            columns.forEach(columnName => {
+                const dtype = dtypes[columnName] || 'unknown';
+                
+                // Ajouter au select de la colonne cible
+                const option = document.createElement('option');
+                option.value = columnName;
+                option.textContent = `${columnName} (${dtype})`;
+                targetSelect.appendChild(option);
+                
+                // Créer une checkbox pour les variables prédictives
+                const checkboxDiv = document.createElement('div');
+                checkboxDiv.className = 'form-check mb-2';
+                
+                // Créer un ID unique pour la checkbox
+                const checkboxId = `pred_${columnName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                
+                checkboxDiv.innerHTML = `
+                    <input class="form-check-input predictor-checkbox" type="checkbox" 
+                           value="${columnName}" id="${checkboxId}" checked>
+                    <label class="form-check-label" for="${checkboxId}" style="cursor: pointer;">
+                        ${columnName} <span class="text-muted small">(${dtype})</span>
+                    </label>
+                `;
+                predictorDiv.appendChild(checkboxDiv);
+            });
+            
+            // Retirer le listener existant avant d'en ajouter un nouveau
+            targetSelect.removeEventListener('change', updatePredictorCheckboxes);
+            targetSelect.addEventListener('change', updatePredictorCheckboxes);
+            
+            showNotification('Succès', `${columns.length} colonnes chargées`, 'success');
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des colonnes:', error);
+            targetSelect.disabled = false;
+            targetSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+            predictorDiv.innerHTML = '<p class="text-danger">Erreur lors du chargement des colonnes</p>';
+            showNotification('Erreur', 'Impossible de charger les colonnes du dataset: ' + error.message, 'error');
+        });
+}
+
+// Mettre à jour les checkboxes des prédicteurs quand la cible change
+function updatePredictorCheckboxes() {
+    const targetColumn = document.getElementById('targetColumn').value;
+    const checkboxes = document.querySelectorAll('.predictor-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        if (checkbox.value === targetColumn) {
+            checkbox.checked = false;
+            checkbox.disabled = true;
+            checkbox.parentElement.classList.add('text-muted');
+        } else {
+            checkbox.disabled = false;
+            checkbox.parentElement.classList.remove('text-muted');
+        }
+    });
 }
 
 // Upload dataset
@@ -811,11 +968,22 @@ function uploadDataset() {
 
 // Entraîner modèle
 function trainModel() {
+    // Collecter les variables prédictives sélectionnées
+    const predictorCheckboxes = document.querySelectorAll('.predictor-checkbox:checked:not(:disabled)');
+    const predictorColumns = Array.from(predictorCheckboxes).map(cb => cb.value);
+    
+    // Validation
+    if (predictorColumns.length === 0) {
+        showNotification('Erreur', 'Veuillez sélectionner au moins une variable prédictive', 'error');
+        return;
+    }
+    
     const data = {
         name: document.getElementById('modelName').value,
         model_type: document.getElementById('modelType').value,
         dataset: document.getElementById('dataset').value,
         target_column: document.getElementById('targetColumn').value,
+        predictor_columns: predictorColumns,
         test_size: document.getElementById('testSize').value / 100,
         config: {
             epochs: document.getElementById('epochs').value
@@ -826,6 +994,7 @@ function trainModel() {
     
     const csrfToken = getCookie('csrftoken');
     
+    // Créer la session d'entraînement
     fetch('/api/training-sessions/', {
         method: 'POST',
         headers: {
@@ -836,24 +1005,16 @@ function trainModel() {
     })
     .then(response => response.json())
     .then(session => {
-        // Lancer l'entraînement
-        return fetch(`/api/training-sessions/${session.id}/train/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrfToken
-            }
-        });
-    })
-    .then(response => response.json())
-    .then(data => {
+        // Fermer le modal et rediriger vers la page de progression
         hideLoading();
-        showNotification('Succès!', 'Entraînement lancé avec succès', 'success');
         bootstrap.Modal.getInstance(document.getElementById('trainModelModal')).hide();
-        updateDashboard();
+        
+        // Rediriger vers la page de progression de l'entraînement
+        window.location.href = `/training-progress/${session.id}/`;
     })
     .catch(error => {
         hideLoading();
-        showNotification('Erreur', 'Erreur lors de l\'entraînement: ' + error, 'error');
+        showNotification('Erreur', 'Erreur lors de la création de la session: ' + error, 'error');
     });
 }
 
@@ -929,22 +1090,6 @@ function updateDashboard() {
             document.getElementById('predictionsToday').textContent = todayPredictions;
         });
 }
-
-// Charger les colonnes quand un dataset est sélectionné
-document.getElementById('dataset').addEventListener('change', function() {
-    const datasetId = this.value;
-    if (datasetId) {
-        fetch(`/api/datasets/${datasetId}/columns/`)
-            .then(response => response.json())
-            .then(columns => {
-                const select = document.getElementById('targetColumn');
-                select.innerHTML = '<option value="">Sélectionner la variable à prédire...</option>';
-                columns.forEach(column => {
-                    select.innerHTML += `<option value="${column}">${column}</option>`;
-                });
-            });
-    }
-});
 
 // Initialiser le dashboard
 document.addEventListener('DOMContentLoaded', function() {

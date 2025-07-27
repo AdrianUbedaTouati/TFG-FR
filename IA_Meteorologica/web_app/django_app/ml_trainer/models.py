@@ -74,6 +74,7 @@ class Dataset(models.Model):
 
 
 class TrainingSession(models.Model):
+    name = models.CharField(max_length=200)
     dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
     model_type = models.CharField(max_length=50, choices=ModelType.choices)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -82,6 +83,7 @@ class TrainingSession(models.Model):
     # Variable selection
     predictor_columns = models.JSONField(default=list)
     target_columns = models.JSONField(default=list)
+    target_column = models.CharField(max_length=100, default='')
     
     # Normalization
     normalization_method = models.CharField(
@@ -92,11 +94,13 @@ class TrainingSession(models.Model):
     
     # Hyperparameters (stored as JSON for flexibility)
     hyperparameters = models.JSONField(default=dict)
+    config = models.JSONField(default=dict)  # For additional configuration like epochs
     
     # Train/Val/Test split
     train_split = models.FloatField(default=0.7)
     val_split = models.FloatField(default=0.15)
     test_split = models.FloatField(default=0.15)
+    test_size = models.FloatField(default=0.2)  # For simpler train/test split
     
     # Metrics
     selected_metrics = models.JSONField(default=list)

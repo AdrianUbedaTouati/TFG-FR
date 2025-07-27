@@ -11,6 +11,7 @@ urlpatterns = [
     path('models/', views.models, name='models'),
     path('datasets/', views.datasets, name='datasets'),
     path('datasets/<int:dataset_id>/normalize/', views.dataset_normalize, name='dataset-normalize'),
+    path('training-progress/<int:session_id>/', views.training_progress, name='training-progress'),
     path('admin/', admin.site.urls),
     path('api/', include('ml_trainer.urls')),
 ]

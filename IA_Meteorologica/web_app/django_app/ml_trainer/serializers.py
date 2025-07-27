@@ -82,9 +82,9 @@ class TrainingSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = TrainingSession
         fields = [
-            'id', 'dataset', 'dataset_name', 'model_type', 'created_at',
-            'predictor_columns', 'target_columns', 'normalization_method',
-            'hyperparameters', 'train_split', 'val_split', 'test_split',
+            'id', 'name', 'dataset', 'dataset_name', 'model_type', 'created_at',
+            'predictor_columns', 'target_columns', 'target_column', 'normalization_method',
+            'hyperparameters', 'config', 'train_split', 'val_split', 'test_split', 'test_size',
             'selected_metrics', 'training_history', 'test_results',
             'status', 'error_message'
         ]
