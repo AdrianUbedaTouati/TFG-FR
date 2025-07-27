@@ -57,8 +57,12 @@ class DatasetSerializer(serializers.ModelSerializer):
         return "Dataset meteorológico"
     
     def get_parent_dataset_name(self, obj):
+        # Primero intentar obtener del dataset padre si existe
         if obj.parent_dataset:
             return obj.parent_dataset.name
+        # Si no existe el dataset padre pero tenemos el nombre guardado, usarlo
+        elif obj.parent_dataset_name:
+            return obj.parent_dataset_name
         return None
     
     def get_upload_time(self, obj):

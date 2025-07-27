@@ -2086,6 +2086,7 @@ class DatasetNormalizationView(APIView):
                     long_description=copy_long_description if copy_long_description else f"Dataset normalizado desde {dataset.name} aplicando los siguientes métodos: {', '.join(set(normalization_config.values()))}. Procesado el {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}.",
                     is_normalized=True,
                     parent_dataset=dataset,
+                    parent_dataset_name=dataset.name,  # Guardar el nombre del dataset padre
                     normalization_method=str(normalization_config)
                 )
                 

@@ -40,6 +40,7 @@ class Dataset(models.Model):
     # Campos para normalización
     is_normalized = models.BooleanField(default=False)
     parent_dataset = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='normalized_copies')
+    parent_dataset_name = models.CharField(max_length=255, null=True, blank=True, help_text="Nombre del dataset padre (se mantiene aunque se borre el original)")
     normalization_method = models.CharField(max_length=255, null=True, blank=True)
     
     def __str__(self):
