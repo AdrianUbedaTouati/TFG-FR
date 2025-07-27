@@ -16,7 +16,7 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        height: 100%;
+        height: 450px;
         width: 350px;
         min-width: 350px;
         max-width: 350px;
@@ -378,9 +378,8 @@
         gap: 20px;
         overflow-x: auto;
         padding: 10px 0;
-        align-items: stretch;
-        min-height: 450px;
-        max-height: 500px;
+        align-items: flex-start;
+        height: 470px;
     }
     
     .dataset-cards-container::-webkit-scrollbar {
@@ -682,6 +681,25 @@ function loadDatasets() {
         });
 }
 
+// Encontrar el dataset original raíz
+function findRootParent(datasetList, dataset) {
+    if (!dataset.is_normalized || !dataset.parent_dataset) {
+        return dataset;
+    }
+    
+    const parent = datasetList.find(d => d.id === dataset.parent_dataset);
+    if (!parent) {
+        return null;
+    }
+    
+    // Si el padre también es normalizado, buscar recursivamente
+    if (parent.is_normalized && parent.parent_dataset) {
+        return findRootParent(datasetList, parent);
+    }
+    
+    return parent;
+}
+
 // Afficher les datasets
 function displayDatasets(datasetList) {
     console.log('displayDatasets called with:', datasetList);
@@ -728,8 +746,17 @@ function displayDatasets(datasetList) {
     // Luego asignar datasets normalizados a sus originales
     datasetList.forEach(dataset => {
         if (dataset.is_normalized && dataset.parent_dataset) {
+            console.log(`Dataset normalizado: ${dataset.name}, parent: ${dataset.parent_dataset}`);
             if (datasetGroups[dataset.parent_dataset]) {
                 datasetGroups[dataset.parent_dataset].normalized.push(dataset);
+            } else {
+                // Si el padre no está en el grupo (porque también es normalizado), 
+                // buscar el dataset original raíz
+                let rootParent = findRootParent(datasetList, dataset);
+                if (rootParent && datasetGroups[rootParent.id]) {
+                    console.log(`Asignando ${dataset.name} al grupo raíz: ${rootParent.name}`);
+                    datasetGroups[rootParent.id].normalized.push(dataset);
+                }
             }
         }
     });
@@ -914,15 +941,15 @@ function createDatasetCard(dataset, type = 'original') {
         <div class="dataset-icon">
             <i class="bi ${isNormalized ? 'bi-sliders' : 'bi-file-earmark-spreadsheet'}"></i>
         </div>
-        <h5 class="card-title text-center mb-2" style="font-weight: 600; font-size: 1.3rem;">
+        <h5 class="card-title text-center mb-2" style="font-weight: 600; font-size: 1.3rem; height: 60px; display: flex; align-items: center; justify-content: center;">
             ${dataset.name}
         </h5>
         ${dataset.is_normalized && dataset.parent_dataset_name ? `
-            <p class="text-center small mb-2" style="color: #00d4ff;">
-                <i class="bi bi-arrow-return-right"></i> Normalizado desde: <strong>${dataset.parent_dataset_name}</strong>
+            <p class="text-center small mb-2" style="color: #00d4ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                <i class="bi bi-arrow-return-right"></i> Desde: <strong>${dataset.parent_dataset_name}</strong>
             </p>
-        ` : ''}
-        <p class="text-muted small text-center mb-4" style="font-size: 0.85rem; opacity: 0.8;">
+        ` : '<div style="height: 24px;"></div>'}
+        <p class="text-muted small text-center mb-4" style="font-size: 0.85rem; opacity: 0.8; height: 60px; overflow-y: auto;">
             ${dataset.short_description || dataset.display_description || 'Dataset météorologique'}
         </p>
         <div class="dataset-stats">
@@ -3268,7 +3295,21 @@ document.addEventListener('DOMContentLoaded', function() {
         // Verificar si hay un dataset específico para abrir
         const urlParams = new URLSearchParams(window.location.search);
         const datasetToOpen = urlParams.get('open');
+        const shouldRefresh = urlParams.get('refresh');
         const hash = window.location.hash;
+        
+        // Si viene de una normalización, limpiar la URL y recargar
+        if (shouldRefresh === 'true') {
+            // Limpiar el parámetro de la URL
+            const newUrl = window.location.pathname + window.location.hash;
+            window.history.replaceState({}, document.title, newUrl);
+            
+            // Forzar recarga de datasets después de un breve delay
+            setTimeout(() => {
+                console.log('Forcing dataset reload after normalization...');
+                loadDatasets();
+            }, 500);
+        }
         
         if (datasetToOpen) {
             // Abrir dataset desde parámetro URL

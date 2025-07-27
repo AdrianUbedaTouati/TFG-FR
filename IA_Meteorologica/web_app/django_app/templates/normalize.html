@@ -1175,9 +1175,9 @@
         normalizationConfig = {};
         loadDatasetInfo();
         
-        // Redirigir después de 2 segundos
+        // Redirigir después de 2 segundos con parámetro para forzar recarga
         setTimeout(() => {
-            window.location.href = `/datasets/`;
+            window.location.href = `/datasets/?refresh=true`;
         }, 2000);
     }
     
