@@ -322,6 +322,56 @@
         }
     }
     
+    /* Framework selection modal styles */
+    .framework-btn {
+        height: 120px;
+        border-radius: 15px;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .framework-btn:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    }
+    
+    .framework-btn i {
+        font-size: 2rem;
+        margin-bottom: 10px;
+    }
+    
+    .framework-btn.btn-outline-primary:hover {
+        background: linear-gradient(135deg, rgba(13, 110, 253, 0.9), rgba(13, 110, 253, 0.7));
+        border-color: #0d6efd;
+        color: white;
+    }
+    
+    .framework-btn.btn-outline-warning:hover {
+        background: linear-gradient(135deg, rgba(255, 193, 7, 0.9), rgba(255, 193, 7, 0.7));
+        border-color: #ffc107;
+        color: #000;
+    }
+    
+    #frameworkSelectionModal .modal-content {
+        background: rgba(10, 14, 39, 0.95);
+        border: 1px solid rgba(138, 43, 226, 0.3);
+        border-radius: 20px;
+        backdrop-filter: blur(10px);
+    }
+    
+    #frameworkSelectionModal .modal-header {
+        border-bottom: 1px solid rgba(138, 43, 226, 0.2);
+    }
+    
+    #frameworkSelectionModal .modal-footer {
+        border-top: 1px solid rgba(138, 43, 226, 0.2);
+    }
+    
     /* Layer builder styles for expert mode */
     .layer-item {
         background: rgba(0, 212, 255, 0.1);
@@ -838,6 +888,48 @@
                 <button type="button" class="btn btn-primary" onclick="createModelOnly()">
                     <i class="bi bi-save"></i> Créer le Modèle
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Framework Selection Modal -->
+<div class="modal fade" id="frameworkSelectionModal" tabindex="-1" aria-labelledby="frameworkSelectionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="frameworkSelectionModalLabel">
+                    <i class="bi bi-code-square"></i> Choisir le Framework
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <p class="mb-4">Sélectionnez le framework pour générer le code:</p>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <button type="button" class="btn btn-outline-primary w-100 framework-btn" data-framework="keras">
+                            <i class="bi bi-layers"></i>
+                            <div class="mt-2">
+                                <strong>Keras</strong>
+                                <br>
+                                <small class="text-muted">TensorFlow/Keras</small>
+                            </div>
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button type="button" class="btn btn-outline-warning w-100 framework-btn" data-framework="pytorch">
+                            <i class="bi bi-fire"></i>
+                            <div class="mt-2">
+                                <strong>PyTorch</strong>
+                                <br>
+                                <small class="text-muted">PyTorch</small>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
             </div>
         </div>
     </div>
@@ -2470,62 +2562,149 @@ function updateFrameworkOptions() {
 
 // Export model code
 function exportModelCode(modelId) {
-    const framework = prompt('Choose framework (keras/pytorch):', 'keras');
-    if (!framework) return;
-    
-    // Download the code file
-    window.location.href = `/api/models/${modelId}/export-code/?framework=${framework}`;
-    
-    showNotification('Succès', 'Code du modèle exporté avec succès', 'success');
+    // Show framework selection modal
+    showFrameworkSelectionModal(modelId, 'export');
 }
 
 // Import model code
 function importModelCode(modelId) {
+    // Show framework selection modal
+    showFrameworkSelectionModal(modelId, 'import');
+}
+
+// Show framework selection modal
+function showFrameworkSelectionModal(modelId, action) {
+    // Clean up any existing modals first
+    cleanupModals();
+    
+    const modalElement = document.getElementById('frameworkSelectionModal');
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: true,
+        keyboard: true,
+        focus: true
+    });
+    
+    // Update modal title based on action
+    const title = document.getElementById('frameworkSelectionModalLabel');
+    if (action === 'export') {
+        title.innerHTML = '<i class="bi bi-download"></i> Exporter le Code du Modèle';
+    } else if (action === 'import') {
+        title.innerHTML = '<i class="bi bi-upload"></i> Importer le Code du Modèle';
+    }
+    
+    // Add click handlers to framework buttons
+    const frameworkButtons = modalElement.querySelectorAll('.framework-btn');
+    frameworkButtons.forEach(btn => {
+        // Remove existing listeners
+        btn.replaceWith(btn.cloneNode(true));
+    });
+    
+    // Add new listeners
+    modalElement.querySelectorAll('.framework-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const framework = this.dataset.framework;
+            modal.hide();
+            
+            if (action === 'export') {
+                performExportModelCode(modelId, framework);
+            } else if (action === 'import') {
+                performImportModelCode(modelId, framework);
+            }
+        });
+    });
+    
+    modal.show();
+}
+
+// Perform the actual model code export
+function performExportModelCode(modelId, framework) {
+    showLoading();
+    
+    fetch(`/api/models/${modelId}/export-code/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ framework: framework })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        hideLoading();
+        
+        if (data.success === false) {
+            throw new Error(data.error || 'Error exporting code');
+        }
+        
+        // Create a blob from the code string
+        const codeBlob = new Blob([data.code], { type: 'text/plain' });
+        
+        // Create download link
+        const url = window.URL.createObjectURL(codeBlob);
+        const a = document.createElement('a');
+        const model = modelsList.find(m => m.id === modelId);
+        const filename = `${model ? model.name : 'model'}_${framework}.py`;
+        
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        showNotification('Succès', `Code ${framework} exporté avec succès!`, 'success');
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('Erreur:', error);
+        showNotification('Erreur', `Impossible d'exporter le code: ${error.message}`, 'error');
+    });
+}
+
+// Perform the actual model code import
+function performImportModelCode(modelId, framework) {
     // Create file input
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.py';
     
-    input.onchange = async (e) => {
-        const file = e.target.files[0];
+    input.onchange = function(event) {
+        const file = event.target.files[0];
         if (!file) return;
         
-        const framework = prompt('Choose framework (keras/pytorch):', 'keras');
-        if (!framework) return;
+        const formData = new FormData();
+        formData.append('code_file', file);
+        formData.append('framework', framework);
         
-        // Read file content
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            const code = event.target.result;
-            
-            try {
-                const response = await fetch(`/api/models/${modelId}/import-code/`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({
-                        code: code,
-                        framework: framework
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok && result.success) {
-                    showNotification('Succès', 'Architecture importée avec succès', 'success');
-                    loadModels(); // Reload models to show updates
-                } else {
-                    showNotification('Erreur', result.error || 'Erreur lors de l\'importation', 'error');
-                }
-            } catch (error) {
-                console.error('Import error:', error);
-                showNotification('Erreur', 'Erreur lors de l\'importation du code', 'error');
+        showLoading();
+        
+        fetch(`/api/models/${modelId}/import-code/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                showNotification('Succès', 'Code importé et modèle mis à jour avec succès!', 'success');
+                loadModels(); // Refresh the models list
+            } else {
+                showNotification('Erreur', data.error || 'Erreur lors de l\'import', 'error');
             }
-        };
-        
-        reader.readAsText(file);
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Erreur:', error);
+            showNotification('Erreur', 'Impossible d\'importer le code', 'error');
+        });
     };
     
     input.click();
