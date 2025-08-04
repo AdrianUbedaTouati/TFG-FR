@@ -65,11 +65,14 @@ def generate_keras_code(model_def) -> str:
             params = layer.get('params', {})
             layer_name = layer.get('name', f'{layer_type} Layer {i+1}')
             
+            # Normalize layer type to uppercase for consistency
+            layer_type_normalized = layer_type.upper() if layer_type else None
+            
             code_lines.append(f"    # Layer {i+1}: {layer_name}")
             
             if i == 0:
                 # First layer needs input_shape
-                if layer_type == 'Dense':
+                if layer_type_normalized == 'DENSE':
                     code_lines.extend([
                         "    model.add(layers.Dense(",
                         f"        units={params.get('units', 32)},",
@@ -82,7 +85,7 @@ def generate_keras_code(model_def) -> str:
                         ""
                     ])
                     
-                elif layer_type == 'LSTM':
+                elif layer_type_normalized == 'LSTM':
                     code_lines.extend([
                         "    model.add(layers.LSTM(",
                         f"        units={params.get('units', 50)},",
@@ -97,7 +100,7 @@ def generate_keras_code(model_def) -> str:
                         ""
                     ])
                     
-                elif layer_type == 'GRU':
+                elif layer_type_normalized == 'GRU':
                     code_lines.extend([
                         "    model.add(layers.GRU(",
                         f"        units={params.get('units', 50)},",
@@ -112,7 +115,7 @@ def generate_keras_code(model_def) -> str:
                         ""
                     ])
                     
-                elif layer_type == 'Conv1D':
+                elif layer_type_normalized == 'CONV1D':
                     code_lines.extend([
                         "    model.add(layers.Conv1D(",
                         f"        filters={params.get('filters', 32)},",
@@ -127,7 +130,7 @@ def generate_keras_code(model_def) -> str:
                     ])
             else:
                 # Subsequent layers - no input_shape needed
-                if layer_type == 'Dense':
+                if layer_type_normalized == 'DENSE':
                     code_lines.extend([
                         "    model.add(layers.Dense(",
                         f"        units={params.get('units', 32)},",
@@ -139,7 +142,7 @@ def generate_keras_code(model_def) -> str:
                         ""
                     ])
                     
-                elif layer_type == 'LSTM':
+                elif layer_type_normalized == 'LSTM':
                     code_lines.extend([
                         "    model.add(layers.LSTM(",
                         f"        units={params.get('units', 50)},",
@@ -153,7 +156,7 @@ def generate_keras_code(model_def) -> str:
                         ""
                     ])
                     
-                elif layer_type == 'GRU':
+                elif layer_type_normalized == 'GRU':
                     code_lines.extend([
                         "    model.add(layers.GRU(",
                         f"        units={params.get('units', 50)},",
@@ -167,7 +170,7 @@ def generate_keras_code(model_def) -> str:
                         ""
                     ])
                     
-                elif layer_type == 'Conv1D':
+                elif layer_type_normalized == 'CONV1D':
                     code_lines.extend([
                         "    model.add(layers.Conv1D(",
                         f"        filters={params.get('filters', 32)},",
@@ -180,7 +183,7 @@ def generate_keras_code(model_def) -> str:
                         ""
                     ])
                     
-                elif layer_type == 'Dropout':
+                elif layer_type_normalized == 'DROPOUT':
                     code_lines.extend([
                         "    model.add(layers.Dropout(",
                         f"        rate={params.get('rate', 0.5)},",
@@ -189,7 +192,7 @@ def generate_keras_code(model_def) -> str:
                         ""
                     ])
                     
-                elif layer_type == 'BatchNormalization':
+                elif layer_type_normalized == 'BATCHNORMALIZATION':
                     code_lines.extend([
                         "    model.add(layers.BatchNormalization(",
                         f"        momentum={params.get('momentum', 0.99)},",
@@ -199,7 +202,7 @@ def generate_keras_code(model_def) -> str:
                         ""
                     ])
                     
-                elif layer_type == 'Flatten':
+                elif layer_type_normalized == 'FLATTEN':
                     code_lines.extend([
                         "    model.add(layers.Flatten(",
                         f"        name='{layer_name.replace(' ', '_').lower()}'",
@@ -207,7 +210,7 @@ def generate_keras_code(model_def) -> str:
                         ""
                     ])
                     
-                elif layer_type == 'MaxPooling1D':
+                elif layer_type_normalized == 'MAXPOOLING1D':
                     code_lines.extend([
                         "    model.add(layers.MaxPooling1D(",
                         f"        pool_size={params.get('pool_size', 2)},",
@@ -218,7 +221,7 @@ def generate_keras_code(model_def) -> str:
                         ""
                     ])
                     
-                elif layer_type == 'GlobalMaxPooling1D':
+                elif layer_type_normalized == 'GLOBALMAXPOOLING1D':
                     code_lines.extend([
                         "    model.add(layers.GlobalMaxPooling1D(",
                         f"        name='{layer_name.replace(' ', '_').lower()}'",
@@ -226,7 +229,7 @@ def generate_keras_code(model_def) -> str:
                         ""
                     ])
                     
-                elif layer_type == 'GlobalAveragePooling1D':
+                elif layer_type_normalized == 'GLOBALAVERAGEPOOLING1D':
                     code_lines.extend([
                         "    model.add(layers.GlobalAveragePooling1D(",
                         f"        name='{layer_name.replace(' ', '_').lower()}'",
@@ -836,7 +839,10 @@ import torch.nn.functional as F
             params = layer.get('params', {})
             layer_name = f"layer{i+1}"
             
-            if layer_type == 'Dense':
+            # Normalize layer type to uppercase for consistency
+            layer_type_normalized = layer_type.upper() if layer_type else None
+            
+            if layer_type_normalized == 'DENSE':
                 units = params.get('units', 32)
                 if prev_size is None:
                     code += f"        self.{layer_name} = nn.Linear(input_size, {units})\n"
@@ -845,7 +851,7 @@ import torch.nn.functional as F
                 prev_size = units
                 layer_names.append((layer_name, 'linear', params.get('activation', 'relu')))
                 
-            elif layer_type == 'LSTM':
+            elif layer_type_normalized == 'LSTM':
                 units = params.get('units', 50)
                 if prev_size is None:
                     code += f"        self.{layer_name} = nn.LSTM(input_size, {units}, batch_first=True)\n"
@@ -854,7 +860,7 @@ import torch.nn.functional as F
                 prev_size = units
                 layer_names.append((layer_name, 'lstm', None))
                 
-            elif layer_type == 'GRU':
+            elif layer_type_normalized == 'GRU':
                 units = params.get('units', 50)
                 if prev_size is None:
                     code += f"        self.{layer_name} = nn.GRU(input_size, {units}, batch_first=True)\n"
@@ -863,11 +869,11 @@ import torch.nn.functional as F
                 prev_size = units
                 layer_names.append((layer_name, 'gru', None))
                 
-            elif layer_type == 'Dropout':
+            elif layer_type_normalized == 'DROPOUT':
                 code += f"        self.{layer_name} = nn.Dropout({params.get('rate', 0.5)})\n"
                 layer_names.append((layer_name, 'dropout', None))
                 
-            elif layer_type == 'BatchNormalization':
+            elif layer_type_normalized == 'BATCHNORMALIZATION':
                 if prev_size:
                     code += f"        self.{layer_name} = nn.BatchNorm1d({prev_size})\n"
                 layer_names.append((layer_name, 'batchnorm', None))
