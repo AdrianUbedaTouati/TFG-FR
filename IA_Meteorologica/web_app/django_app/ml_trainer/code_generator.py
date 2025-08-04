@@ -1,10 +1,43 @@
 """
-Code generation and parsing for neural network architectures - FIXED LINE BREAKS VERSION
+Neural Network Code Generation and Parsing Module
+
+This module provides functionality to generate executable Keras/TensorFlow and PyTorch code
+from model definitions, as well as parse existing code back into architecture definitions.
+
+Main functions:
+- generate_keras_code(): Generate Keras/TensorFlow model code
+- generate_pytorch_code(): Generate PyTorch model code  
+- parse_keras_code(): Parse Keras code back to architecture
+- parse_pytorch_code(): Parse PyTorch code back to architecture
+- validate_architecture(): Validate architecture definitions
 """
 import json
 import ast
 import re
 from typing import Dict, List, Any
+
+# Constants for better maintainability
+DEFAULT_LAYER_PARAMS = {
+    'DENSE': {'units': 32, 'activation': 'relu', 'use_bias': True, 'kernel_initializer': 'glorot_uniform'},
+    'LSTM': {'units': 50, 'activation': 'tanh', 'recurrent_activation': 'sigmoid', 'return_sequences': False, 'dropout': 0.0, 'recurrent_dropout': 0.0},
+    'GRU': {'units': 50, 'activation': 'tanh', 'recurrent_activation': 'sigmoid', 'return_sequences': False, 'dropout': 0.0, 'recurrent_dropout': 0.0},
+    'CONV1D': {'filters': 32, 'kernel_size': 3, 'strides': 1, 'padding': 'valid', 'activation': 'relu'},
+    'DROPOUT': {'rate': 0.5},
+    'BATCHNORMALIZATION': {'momentum': 0.99, 'epsilon': 0.001}
+}
+
+SUPPORTED_LAYER_TYPES = {'DENSE', 'LSTM', 'GRU', 'CONV1D', 'DROPOUT', 'BATCHNORMALIZATION', 'FLATTEN', 'MAXPOOLING1D', 'GLOBALMAXPOOLING1D', 'GLOBALAVERAGEPOOLING1D'}
+
+
+def _normalize_layer_type(layer_type: str) -> str:
+    """Normalize layer type to uppercase for consistent comparison"""
+    return layer_type.upper() if layer_type else None
+
+
+def _get_layer_params(layer_type_normalized: str, params: Dict) -> Dict:
+    """Get layer parameters with defaults applied"""
+    defaults = DEFAULT_LAYER_PARAMS.get(layer_type_normalized, {})
+    return {key: params.get(key, default_value) for key, default_value in defaults.items()}
 
 
 def generate_keras_code(model_def) -> str:
@@ -66,7 +99,7 @@ def generate_keras_code(model_def) -> str:
             layer_name = layer.get('name', f'{layer_type} Layer {i+1}')
             
             # Normalize layer type to uppercase for consistency
-            layer_type_normalized = layer_type.upper() if layer_type else None
+            layer_type_normalized = _normalize_layer_type(layer_type)
             
             code_lines.append(f"    # Layer {i+1}: {layer_name}")
             
@@ -840,7 +873,7 @@ import torch.nn.functional as F
             layer_name = f"layer{i+1}"
             
             # Normalize layer type to uppercase for consistency
-            layer_type_normalized = layer_type.upper() if layer_type else None
+            layer_type_normalized = _normalize_layer_type(layer_type)
             
             if layer_type_normalized == 'DENSE':
                 units = params.get('units', 32)
