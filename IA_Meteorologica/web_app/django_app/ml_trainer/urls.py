@@ -19,6 +19,8 @@ urlpatterns = [
     path('models/<int:pk>/', views.ModelDefinitionDetailView.as_view(), name='model-detail'),
     path('models/<int:pk>/trainings/', views.ModelDefinitionTrainingsView.as_view(), name='model-trainings'),
     path('models/<int:pk>/clone/', views.CloneModelDefinitionView.as_view(), name='model-clone'),
+    path('models/<int:pk>/export-code/', views.ExportModelCodeView.as_view(), name='model-export-code'),
+    path('models/<int:pk>/import-code/', views.ImportModelCodeView.as_view(), name='model-import-code'),
     
     # Training session endpoints
     path('training-sessions/', views.TrainingSessionListCreateView.as_view(), name='training-session-list-create'),
@@ -29,6 +31,7 @@ urlpatterns = [
     path('model-configs/', views.ModelConfigView.as_view(), name='model-configs'),
     path('normalization-methods/<str:model_type>/', views.NormalizationMethodsView.as_view(), name='normalization-methods'),
     path('metrics/<str:model_type>/', views.MetricsView.as_view(), name='metrics'),
+    path('frameworks/<str:model_type>/', views.ModelFrameworkView.as_view(), name='model-frameworks'),
     
     # Prediction endpoints
     path('predictions/', views.PredictionListCreateView.as_view(), name='prediction-list-create'),

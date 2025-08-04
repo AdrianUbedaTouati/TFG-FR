@@ -6,11 +6,18 @@ import json
 
 class ModelType(models.TextChoices):
     LSTM = 'lstm', 'LSTM'
+    GRU = 'gru', 'GRU'
     CNN = 'cnn', 'CNN'
     DECISION_TREE = 'decision_tree', 'Árbol de Decisiones'
     TRANSFORMER = 'transformer', 'Transformer'
     RANDOM_FOREST = 'random_forest', 'Random Forest'
     XGB = 'xgboost', 'XGBoost'
+
+
+class FrameworkType(models.TextChoices):
+    KERAS = 'keras', 'TensorFlow/Keras'
+    PYTORCH = 'pytorch', 'PyTorch'
+    SKLEARN = 'sklearn', 'Scikit-learn'
 
 
 class NormalizationMethod(models.TextChoices):
@@ -98,6 +105,18 @@ class ModelDefinition(models.Model):
     custom_architecture = models.JSONField(null=True, blank=True)
     use_custom_architecture = models.BooleanField(default=False)
     
+    # Framework selection
+    framework = models.CharField(
+        max_length=20,
+        choices=FrameworkType.choices,
+        default=FrameworkType.KERAS,
+        help_text="Deep learning framework to use"
+    )
+    
+    # Code export/import
+    exported_code = models.TextField(null=True, blank=True, help_text="Last exported Python code")
+    code_version = models.IntegerField(default=1, help_text="Version of the exported code")
+    
     # Estadísticas
     training_count = models.IntegerField(default=0)
     best_score = models.FloatField(null=True, blank=True)
@@ -148,6 +167,13 @@ class TrainingSession(models.Model):
     # Custom architecture for expert mode
     custom_architecture = models.JSONField(null=True, blank=True)
     use_custom_architecture = models.BooleanField(default=False)
+    
+    # Framework
+    framework = models.CharField(
+        max_length=20,
+        choices=FrameworkType.choices,
+        default=FrameworkType.KERAS
+    )
     
     # Train/Val/Test split
     train_split = models.FloatField(default=0.7)

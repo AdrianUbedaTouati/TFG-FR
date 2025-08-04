@@ -17,9 +17,10 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Lasso
 from sklearn.model_selection import train_test_split
-from .models import Dataset, TrainingSession, WeatherPrediction, ModelType, NormalizationMethod, MetricType, ModelDefinition
+from .models import Dataset, TrainingSession, WeatherPrediction, ModelType, NormalizationMethod, MetricType, ModelDefinition, FrameworkType
 from .serializers import DatasetSerializer, TrainingSessionSerializer, WeatherPredictionSerializer, ModelDefinitionSerializer
 from .ml_utils import get_model_config, get_normalization_methods, get_metrics, train_model, make_predictions
+from .code_generator import generate_keras_code, generate_pytorch_code, parse_keras_code, parse_pytorch_code, validate_architecture
 try:
     # Intentar importar desde el módulo local primero
     from .normalization_methods import NumNorm, TextNorm, Normalizador
@@ -2296,3 +2297,145 @@ class CloneModelDefinitionView(APIView):
         
         serializer = ModelDefinitionSerializer(new_model)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ExportModelCodeView(APIView):
+    """Export model architecture as Python code"""
+    
+    def get(self, request, pk):
+        model_def = get_object_or_404(ModelDefinition, pk=pk)
+        framework = request.query_params.get('framework', model_def.framework)
+        
+        # Generate code based on framework
+        if framework == 'pytorch':
+            code = generate_pytorch_code(model_def)
+        else:
+            code = generate_keras_code(model_def)
+        
+        # Update model with exported code
+        model_def.exported_code = code
+        model_def.code_version += 1
+        model_def.save()
+        
+        # Return as downloadable file
+        response = HttpResponse(code, content_type='text/plain')
+        response['Content-Disposition'] = f'attachment; filename="{model_def.name.replace(" ", "_")}_model.py"'
+        
+        return response
+    
+    def post(self, request, pk):
+        """Alternative method to get code as JSON response"""
+        model_def = get_object_or_404(ModelDefinition, pk=pk)
+        framework = request.data.get('framework', model_def.framework)
+        
+        # Generate code based on framework
+        if framework == 'pytorch':
+            code = generate_pytorch_code(model_def)
+        else:
+            code = generate_keras_code(model_def)
+        
+        # Update model with exported code
+        model_def.exported_code = code
+        model_def.code_version += 1
+        model_def.save()
+        
+        return Response({
+            'code': code,
+            'framework': framework,
+            'model_name': model_def.name,
+            'version': model_def.code_version
+        })
+
+
+class ImportModelCodeView(APIView):
+    """Import model architecture from Python code"""
+    
+    def post(self, request, pk):
+        model_def = get_object_or_404(ModelDefinition, pk=pk)
+        
+        # Get code from request
+        code = request.data.get('code', '')
+        framework = request.data.get('framework', 'keras')
+        
+        if not code:
+            # Try to get from file upload
+            if 'file' in request.FILES:
+                uploaded_file = request.FILES['file']
+                code = uploaded_file.read().decode('utf-8')
+        
+        if not code:
+            return Response(
+                {'error': 'No code provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Parse code based on framework
+        try:
+            if framework == 'pytorch':
+                parsed = parse_pytorch_code(code)
+            else:
+                parsed = parse_keras_code(code)
+            
+            if not parsed:
+                return Response(
+                    {'error': 'Failed to parse code'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate architecture
+            architecture = parsed.get('architecture', [])
+            if not validate_architecture(architecture):
+                return Response(
+                    {'error': 'Invalid architecture detected'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update model definition
+            model_def.custom_architecture = architecture
+            model_def.use_custom_architecture = True
+            model_def.framework = framework
+            
+            # Update hyperparameters if found
+            if parsed.get('hyperparameters'):
+                model_def.hyperparameters.update(parsed['hyperparameters'])
+            
+            # Store the imported code
+            model_def.exported_code = code
+            model_def.code_version += 1
+            
+            model_def.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Model architecture imported successfully',
+                'architecture': architecture,
+                'framework': framework,
+                'version': model_def.code_version
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Error parsing code: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class ModelFrameworkView(APIView):
+    """Get available frameworks for a model type"""
+    
+    def get(self, request, model_type):
+        # Neural networks can use Keras or PyTorch
+        if model_type in ['lstm', 'gru', 'cnn', 'transformer']:
+            frameworks = [
+                {'value': 'keras', 'label': 'TensorFlow/Keras'},
+                {'value': 'pytorch', 'label': 'PyTorch'}
+            ]
+        # Traditional ML models use sklearn
+        elif model_type in ['decision_tree', 'random_forest', 'xgboost']:
+            frameworks = [
+                {'value': 'sklearn', 'label': 'Scikit-learn'}
+            ]
+        else:
+            frameworks = []
+        
+        return Response(frameworks)

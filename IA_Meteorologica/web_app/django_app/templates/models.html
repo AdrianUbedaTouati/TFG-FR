@@ -607,7 +607,7 @@
                             </div>
                             <div class="mb-3">
                                 <label for="modelType" class="form-label">Type de Modèle</label>
-                                <select class="form-select" id="modelType" required>
+                                <select class="form-select" id="modelType" required onchange="updateFrameworkOptions()">
                                     <option value="">Sélectionner...</option>
                                     <option value="random_forest">Random Forest</option>
                                     <option value="lstm">LSTM (Deep Learning)</option>
@@ -615,6 +615,14 @@
                                     <option value="xgboost">XGBoost</option>
                                     <option value="gradient_boosting">Gradient Boosting</option>
                                 </select>
+                            </div>
+                            <div class="mb-3" id="frameworkSelection" style="display: none;">
+                                <label for="framework" class="form-label">Framework</label>
+                                <select class="form-select" id="framework">
+                                    <option value="keras">TensorFlow/Keras</option>
+                                    <option value="pytorch">PyTorch</option>
+                                </select>
+                                <small class="text-muted">Choisissez le framework pour votre modèle de deep learning</small>
                             </div>
                             <div class="mb-3">
                                 <label for="dataset" class="form-label">Dataset</label>
@@ -981,6 +989,16 @@ function createModelCard(model) {
                     onclick="event.stopPropagation(); trainModel(${model.id})" 
                     title="Entraîner">
                 <i class="bi bi-play-fill"></i>
+            </button>
+            <button type="button" class="action-btn" data-action="export" 
+                    onclick="event.stopPropagation(); exportModelCode(${model.id})" 
+                    title="Exporter Code">
+                <i class="bi bi-download"></i>
+            </button>
+            <button type="button" class="action-btn" data-action="import" 
+                    onclick="event.stopPropagation(); importModelCode(${model.id})" 
+                    title="Importer Code">
+                <i class="bi bi-upload"></i>
             </button>
             <button type="button" class="action-btn" data-action="clone" 
                     onclick="event.stopPropagation(); cloneModel(${model.id})" 
@@ -2305,5 +2323,97 @@ document.addEventListener('DOMContentLoaded', function() {
     // Actualiser toutes les 30 secondes
     setInterval(loadModels, 30000);
 });
+
+// Framework selection
+function updateFrameworkOptions() {
+    const modelType = document.getElementById('modelType').value;
+    const frameworkDiv = document.getElementById('frameworkSelection');
+    
+    // Show framework selection only for neural networks
+    if (['lstm', 'gru', 'cnn', 'transformer'].includes(modelType)) {
+        frameworkDiv.style.display = 'block';
+    } else {
+        frameworkDiv.style.display = 'none';
+    }
+}
+
+// Export model code
+function exportModelCode(modelId) {
+    const framework = prompt('Choose framework (keras/pytorch):', 'keras');
+    if (!framework) return;
+    
+    // Download the code file
+    window.location.href = `/api/models/${modelId}/export-code/?framework=${framework}`;
+    
+    showNotification('Succès', 'Code du modèle exporté avec succès', 'success');
+}
+
+// Import model code
+function importModelCode(modelId) {
+    // Create file input
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.py';
+    
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const framework = prompt('Choose framework (keras/pytorch):', 'keras');
+        if (!framework) return;
+        
+        // Read file content
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const code = event.target.result;
+            
+            try {
+                const response = await fetch(`/api/models/${modelId}/import-code/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        code: code,
+                        framework: framework
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    showNotification('Succès', 'Architecture importée avec succès', 'success');
+                    loadModels(); // Reload models to show updates
+                } else {
+                    showNotification('Erreur', result.error || 'Erreur lors de l\'importation', 'error');
+                }
+            } catch (error) {
+                console.error('Import error:', error);
+                showNotification('Erreur', 'Erreur lors de l\'importation du code', 'error');
+            }
+        };
+        
+        reader.readAsText(file);
+    };
+    
+    input.click();
+}
+
+// Helper function to get CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
 </script>
 {% endblock %}
