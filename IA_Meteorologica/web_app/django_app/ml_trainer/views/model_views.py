@@ -1,0 +1,147 @@
+"""
+Model definition and management views
+"""
+from rest_framework import generics, status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from typing import Dict, Any
+
+from ..models import ModelDefinition, ModelType, FrameworkType
+from ..serializers import ModelDefinitionSerializer
+from ..ml_utils import get_model_config, get_normalization_methods, get_metrics
+from ..utils import error_response, success_response
+from ..constants import (
+    NEURAL_NETWORK_MODELS, TRADITIONAL_ML_MODELS,
+    SUCCESS_MODEL_CREATED, ERROR_INVALID_MODEL_TYPE
+)
+
+
+class ModelDefinitionListCreateView(generics.ListCreateAPIView):
+    """List all model definitions or create a new one"""
+    queryset = ModelDefinition.objects.all()
+    serializer_class = ModelDefinitionSerializer
+    
+    def perform_create(self, serializer):
+        """Add user to model definition if authenticated"""
+        if self.request.user.is_authenticated:
+            serializer.save(user=self.request.user)
+        else:
+            serializer.save()
+
+
+class ModelDefinitionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update or delete a model definition"""
+    queryset = ModelDefinition.objects.all()
+    serializer_class = ModelDefinitionSerializer
+
+
+class ModelDefinitionTrainingsView(APIView):
+    """Get all training sessions for a model definition"""
+    
+    def get(self, request, pk):
+        model_def = get_object_or_404(ModelDefinition, pk=pk)
+        
+        # Get all training sessions
+        trainings = model_def.trainingsession_set.all().order_by('-created_at')
+        
+        # Format response
+        training_data = []
+        for training in trainings:
+            training_data.append({
+                'id': training.id,
+                'name': training.name,
+                'status': training.status,
+                'created_at': training.created_at,
+                'framework': getattr(training, 'framework', 'keras'),
+                'metrics': training.test_results,
+                'epochs': training.hyperparameters.get('epochs', 0),
+                'error_message': training.error_message
+            })
+        
+        return success_response({
+            'model_id': model_def.id,
+            'model_name': model_def.name,
+            'total_trainings': len(training_data),
+            'trainings': training_data
+        })
+
+
+class CloneModelDefinitionView(APIView):
+    """Clone an existing model definition"""
+    
+    def post(self, request, pk):
+        original = get_object_or_404(ModelDefinition, pk=pk)
+        
+        # Create clone
+        new_model = ModelDefinition.objects.create(
+            name=f"{original.name} (Copy)",
+            description=original.description,
+            model_type=original.model_type,
+            dataset=original.dataset,
+            predictor_columns=original.predictor_columns,
+            target_columns=original.target_columns,
+            default_config=original.default_config,
+            hyperparameters=original.hyperparameters,
+            custom_architecture=original.custom_architecture,
+            use_custom_architecture=original.use_custom_architecture,
+            framework=original.framework,
+            user=request.user if request.user.is_authenticated else None
+        )
+        
+        serializer = ModelDefinitionSerializer(new_model)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ModelConfigView(APIView):
+    """Get default configurations for all model types"""
+    
+    def get(self, request):
+        configs = {}
+        for model_type in ModelType:
+            configs[model_type.value] = get_model_config(model_type.value)
+        
+        return success_response(configs)
+
+
+class NormalizationMethodsView(APIView):
+    """Get available normalization methods for a model type"""
+    
+    def get(self, request, model_type):
+        if model_type not in [mt.value for mt in ModelType]:
+            return error_response(ERROR_INVALID_MODEL_TYPE.format(model_type))
+        
+        methods = get_normalization_methods(model_type)
+        return success_response({'methods': methods})
+
+
+class MetricsView(APIView):
+    """Get available metrics for a model type"""
+    
+    def get(self, request, model_type):
+        if model_type not in [mt.value for mt in ModelType]:
+            return error_response(ERROR_INVALID_MODEL_TYPE.format(model_type))
+        
+        metrics = get_metrics(model_type)
+        return success_response({'metrics': metrics})
+
+
+class ModelFrameworkView(APIView):
+    """Get available frameworks for a model type"""
+    
+    def get(self, request, model_type):
+        # Neural networks can use Keras or PyTorch
+        if model_type in NEURAL_NETWORK_MODELS:
+            frameworks = [
+                {'value': 'keras', 'label': 'TensorFlow/Keras'},
+                {'value': 'pytorch', 'label': 'PyTorch'}
+            ]
+        # Traditional ML models use sklearn
+        elif model_type in TRADITIONAL_ML_MODELS:
+            frameworks = [
+                {'value': 'sklearn', 'label': 'Scikit-learn'}
+            ]
+        else:
+            frameworks = []
+        
+        return success_response({'frameworks': frameworks})

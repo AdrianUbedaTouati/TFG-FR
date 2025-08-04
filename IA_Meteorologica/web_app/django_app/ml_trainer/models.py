@@ -129,14 +129,8 @@ class ModelDefinition(models.Model):
         return f"{self.name} ({self.get_model_type_display()})"
     
     def get_latest_training(self):
+        """Get the most recent training session for this model"""
         return self.trainingsession_set.order_by('-created_at').first()
-    
-    def get_best_training(self):
-        # Obtener el mejor entrenamiento basado en la métrica principal
-        return self.trainingsession_set.filter(
-            status='completed',
-            test_results__isnull=False
-        ).order_by('-test_results__primary_metric').first()
 
 
 class TrainingSession(models.Model):
