@@ -55,22 +55,30 @@ class DatasetColumnsView(APIView):
         if df is None:
             return error_response(ERROR_PARSING_FAILED)
         
-        # Analyze columns
-        columns_info = []
-        for col in df.columns:
-            col_info = detect_column_type(df[col])
-            col_info['name'] = col
-            columns_info.append(col_info)
+        # Get columns and dtypes - ensure they are strings
+        columns = [str(col) for col in df.columns if col and str(col).strip()]
+        dtypes = {str(col): str(df[col].dtype) for col in columns}
         
-        # Calculate basic statistics
-        stats = {
+        # Simple response for column loading
+        response_data = {
+            'columns': columns,
+            'dtypes': dtypes,
             'total_rows': len(df),
-            'total_columns': len(df.columns),
-            'memory_usage': get_memory_usage(df),
-            'columns': columns_info
+            'total_columns': len(columns)
         }
         
-        return success_response(stats)
+        # Add detailed analysis if requested
+        if request.query_params.get('detailed', False):
+            columns_info = []
+            for col in columns:
+                col_info = detect_column_type(df[col])
+                col_info['name'] = col
+                columns_info.append(col_info)
+            
+            response_data['detailed_info'] = columns_info
+            response_data['memory_usage'] = get_memory_usage(df)
+        
+        return success_response(response_data)
 
 
 class DatasetColumnDetailsView(APIView):

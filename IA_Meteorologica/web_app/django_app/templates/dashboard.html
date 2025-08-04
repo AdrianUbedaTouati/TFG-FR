@@ -1087,7 +1087,8 @@ function loadDatasetColumns() {
             console.log('Données reçues:', data); // Debug
             
             // La réponse contient un objet avec 'columns' et 'dtypes'
-            const columns = data.columns || [];
+            // Filtrer les colonnes pour s'assurer qu'elles sont valides
+            const columns = (data.columns || []).filter(col => col && typeof col === 'string');
             const dtypes = data.dtypes || {};
             
             // Créer les checkboxes pour les variables cibles et prédictives
@@ -1101,6 +1102,12 @@ function loadDatasetColumns() {
             }
             
             columns.forEach(columnName => {
+                // Skip if columnName is undefined or null
+                if (!columnName) {
+                    console.warn('Colonne vide ou non définie trouvée, ignorée');
+                    return;
+                }
+                
                 const dtype = dtypes[columnName] || 'unknown';
                 const safeId = columnName.replace(/[^a-zA-Z0-9]/g, '_');
                 

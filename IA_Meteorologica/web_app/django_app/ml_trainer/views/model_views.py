@@ -145,3 +145,41 @@ class ModelFrameworkView(APIView):
             frameworks = []
         
         return success_response({'frameworks': frameworks})
+
+
+class ImplementedModelsView(APIView):
+    """Get list of actually implemented model types"""
+    
+    def get(self, request):
+        """Return model types that are actually implemented"""
+        implemented_models = []
+        
+        # Check which models are implemented
+        # Neural network models (all implemented with Keras/PyTorch)
+        neural_models = [
+            {'value': 'lstm', 'label': 'LSTM (Deep Learning)', 'category': 'neural', 'implemented': True},
+            {'value': 'gru', 'label': 'GRU (Deep Learning)', 'category': 'neural', 'implemented': True},
+            {'value': 'cnn', 'label': 'CNN (Deep Learning)', 'category': 'neural', 'implemented': True},
+            {'value': 'transformer', 'label': 'Transformer', 'category': 'neural', 'implemented': True}
+        ]
+        
+        # Traditional ML models
+        ml_models = [
+            {'value': 'random_forest', 'label': 'Random Forest', 'category': 'ml', 'implemented': True},
+            {'value': 'xgboost', 'label': 'XGBoost', 'category': 'ml', 'implemented': True},
+            {'value': 'decision_tree', 'label': 'Decision Tree', 'category': 'ml', 'implemented': True}
+        ]
+        
+        # Models not yet implemented (for future reference)
+        future_models = [
+            {'value': 'gradient_boosting', 'label': 'Gradient Boosting', 'category': 'ml', 'implemented': False},
+            {'value': 'svm', 'label': 'Support Vector Machine', 'category': 'ml', 'implemented': False}
+        ]
+        
+        # Only return implemented models
+        implemented_models = [m for m in (neural_models + ml_models) if m['implemented']]
+        
+        return success_response({
+            'models': implemented_models,
+            'total': len(implemented_models)
+        })

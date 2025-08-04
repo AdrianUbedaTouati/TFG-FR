@@ -29,6 +29,7 @@ urlpatterns = [
     
     # Model configuration endpoints
     path('model-configs/', views.ModelConfigView.as_view(), name='model-configs'),
+    path('implemented-models/', views.ImplementedModelsView.as_view(), name='implemented-models'),
     path('normalization-methods/<str:model_type>/', views.NormalizationMethodsView.as_view(), name='normalization-methods'),
     path('metrics/<str:model_type>/', views.MetricsView.as_view(), name='metrics'),
     path('frameworks/<str:model_type>/', views.ModelFrameworkView.as_view(), name='model-frameworks'),

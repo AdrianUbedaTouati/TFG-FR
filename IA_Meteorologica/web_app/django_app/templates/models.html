@@ -502,11 +502,7 @@
                             <label for="typeFilter" class="form-label text-info">Type de modèle</label>
                             <select class="form-select" id="typeFilter" onchange="filterModels()">
                                 <option value="">Tous les types</option>
-                                <option value="random_forest">Random Forest</option>
-                                <option value="lstm">LSTM</option>
-                                <option value="gru">GRU</option>
-                                <option value="xgboost">XGBoost</option>
-                                <option value="gradient_boosting">Gradient Boosting</option>
+                                <!-- Options will be loaded dynamically -->
                             </select>
                         </div>
                         <div class="col-md-4">
@@ -609,11 +605,7 @@
                                 <label for="modelType" class="form-label">Type de Modèle</label>
                                 <select class="form-select" id="modelType" required onchange="updateFrameworkOptions()">
                                     <option value="">Sélectionner...</option>
-                                    <option value="random_forest">Random Forest</option>
-                                    <option value="lstm">LSTM (Deep Learning)</option>
-                                    <option value="gru">GRU (Deep Learning)</option>
-                                    <option value="xgboost">XGBoost</option>
-                                    <option value="gradient_boosting">Gradient Boosting</option>
+                                    <!-- Options will be loaded dynamically -->
                                 </select>
                             </div>
                             <div class="mb-3" id="frameworkSelection" style="display: none;">
@@ -1293,13 +1285,17 @@ function editModel(modelId) {
                 setTimeout(() => {
                     // Sélectionner les variables cibles
                     model.target_columns.forEach(col => {
-                        const checkbox = document.querySelector(`#target_${col.replace(/[^a-zA-Z0-9]/g, '_')}`);
+                        if (!col) return; // Skip invalid column names
+                        const safeId = col.replace(/[^a-zA-Z0-9]/g, '_');
+                        const checkbox = document.querySelector(`#target_${safeId}`);
                         if (checkbox) checkbox.checked = true;
                     });
                     
                     // Sélectionner les variables prédictives
                     model.predictor_columns.forEach(col => {
-                        const checkbox = document.querySelector(`#pred_${col.replace(/[^a-zA-Z0-9]/g, '_')}`);
+                        if (!col) return; // Skip invalid column names
+                        const safeId = col.replace(/[^a-zA-Z0-9]/g, '_');
+                        const checkbox = document.querySelector(`#pred_${safeId}`);
                         if (checkbox) checkbox.checked = true;
                     });
                     
@@ -1813,8 +1809,23 @@ function loadDatasetColumns() {
         .then(data => {
             console.log('Données reçues:', data); // Debug
             
+            // Vérifier la structure de la réponse
+            if (!data || typeof data !== 'object') {
+                throw new Error('Réponse invalide du serveur');
+            }
+            
             // La réponse contient un objet avec 'columns' et 'dtypes'
-            const columns = data.columns || [];
+            // Filtrer les colonnes pour s'assurer qu'elles sont valides
+            const rawColumns = data.columns || [];
+            console.log('Colonnes brutes:', rawColumns);
+            
+            const columns = rawColumns.filter(col => col && typeof col === 'string');
+            console.log('Colonnes filtrées:', columns);
+            
+            if (rawColumns.length !== columns.length) {
+                console.warn(`${rawColumns.length - columns.length} colonnes invalides ont été filtrées`);
+            }
+            
             const dtypes = data.dtypes || {};
             
             // Créer les checkboxes pour les variables cibles et prédictives
@@ -1828,17 +1839,25 @@ function loadDatasetColumns() {
             }
             
             columns.forEach(columnName => {
-                const dtype = dtypes[columnName] || 'unknown';
-                const safeId = columnName.replace(/[^a-zA-Z0-9]/g, '_');
+                // Skip if columnName is undefined or null
+                if (!columnName) {
+                    console.warn('Colonne vide ou non définie trouvée, ignorée');
+                    return;
+                }
+                
+                // Ensure columnName is a string
+                const colName = String(columnName);
+                const dtype = dtypes[colName] || 'unknown';
+                const safeId = colName.replace(/[^a-zA-Z0-9]/g, '_');
                 
                 // Créer une checkbox pour les variables cibles
                 const targetCheckboxDiv = document.createElement('div');
                 targetCheckboxDiv.className = 'form-check mb-2';
                 targetCheckboxDiv.innerHTML = `
                     <input class="form-check-input target-checkbox" type="checkbox" 
-                           value="${columnName}" id="target_${safeId}">
+                           value="${colName}" id="target_${safeId}">
                     <label class="form-check-label" for="target_${safeId}" style="cursor: pointer;">
-                        ${columnName} <span class="text-muted small">(${dtype})</span>
+                        ${colName} <span class="text-muted small">(${dtype})</span>
                     </label>
                 `;
                 targetDiv.appendChild(targetCheckboxDiv);
@@ -1848,9 +1867,9 @@ function loadDatasetColumns() {
                 predCheckboxDiv.className = 'form-check mb-2';
                 predCheckboxDiv.innerHTML = `
                     <input class="form-check-input predictor-checkbox" type="checkbox" 
-                           value="${columnName}" id="pred_${safeId}" checked>
+                           value="${colName}" id="pred_${safeId}" checked>
                     <label class="form-check-label" for="pred_${safeId}" style="cursor: pointer;">
-                        ${columnName} <span class="text-muted small">(${dtype})</span>
+                        ${colName} <span class="text-muted small">(${dtype})</span>
                     </label>
                 `;
                 predictorDiv.appendChild(predCheckboxDiv);
@@ -1863,9 +1882,18 @@ function loadDatasetColumns() {
         })
         .catch(error => {
             console.error('Erreur lors du chargement des colonnes:', error);
-            targetDiv.innerHTML = '<p class="text-danger">Erreur lors du chargement des colonnes</p>';
-            predictorDiv.innerHTML = '<p class="text-danger">Erreur lors du chargement des colonnes</p>';
-            showNotification('Erreur', 'Impossible de charger les colonnes du dataset: ' + error.message, 'error');
+            console.error('Stack trace:', error.stack);
+            
+            // Message d'erreur plus détaillé
+            let errorMessage = 'Impossible de charger les colonnes du dataset';
+            if (error.message) {
+                errorMessage += ': ' + error.message;
+            }
+            
+            targetDiv.innerHTML = `<p class="text-danger">Erreur lors du chargement des colonnes: ${error.message || 'Erreur inconnue'}</p>`;
+            predictorDiv.innerHTML = `<p class="text-danger">Erreur lors du chargement des colonnes: ${error.message || 'Erreur inconnue'}</p>`;
+            
+            showNotification('Erreur', errorMessage, 'error');
         });
 }
 
@@ -2318,11 +2346,114 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Initialisation
 document.addEventListener('DOMContentLoaded', function() {
+    loadImplementedModels(); // Load model types first
     loadModels();
+    loadDatasets();
     
     // Actualiser toutes les 30 secondes
     setInterval(loadModels, 30000);
 });
+
+// Load implemented model types from backend
+function loadImplementedModels() {
+    fetch('/api/implemented-models/')
+        .then(response => response.json())
+        .then(data => {
+            const modelTypeSelect = document.getElementById('modelType');
+            const typeFilter = document.getElementById('typeFilter');
+            
+            // Clear existing options (keep first "Select..." option)
+            while (modelTypeSelect.options.length > 1) {
+                modelTypeSelect.remove(1);
+            }
+            
+            // Clear filter options (keep first "All types" option)
+            while (typeFilter.options.length > 1) {
+                typeFilter.remove(1);
+            }
+            
+            // Group models by category
+            const neuralModels = data.models.filter(m => m.category === 'neural');
+            const mlModels = data.models.filter(m => m.category === 'ml');
+            
+            // Add neural network models
+            if (neuralModels.length > 0) {
+                const neuralGroup = document.createElement('optgroup');
+                neuralGroup.label = 'Deep Learning';
+                neuralModels.forEach(model => {
+                    const option = new Option(model.label, model.value);
+                    neuralGroup.appendChild(option);
+                    
+                    // Also add to filter
+                    const filterOption = new Option(model.label, model.value);
+                    typeFilter.appendChild(filterOption);
+                });
+                modelTypeSelect.appendChild(neuralGroup);
+            }
+            
+            // Add ML models
+            if (mlModels.length > 0) {
+                const mlGroup = document.createElement('optgroup');
+                mlGroup.label = 'Machine Learning Classique';
+                mlModels.forEach(model => {
+                    const option = new Option(model.label, model.value);
+                    mlGroup.appendChild(option);
+                    
+                    // Also add to filter
+                    const filterOption = new Option(model.label, model.value);
+                    typeFilter.appendChild(filterOption);
+                });
+                modelTypeSelect.appendChild(mlGroup);
+            }
+            
+            console.log(`Loaded ${data.total} implemented model types`);
+        })
+        .catch(error => {
+            console.error('Error loading model types:', error);
+            // Fallback to basic models if API fails
+            const fallbackModels = [
+                {value: 'lstm', label: 'LSTM'},
+                {value: 'gru', label: 'GRU'},
+                {value: 'random_forest', label: 'Random Forest'},
+                {value: 'xgboost', label: 'XGBoost'}
+            ];
+            
+            const modelTypeSelect = document.getElementById('modelType');
+            fallbackModels.forEach(model => {
+                const option = new Option(model.label, model.value);
+                modelTypeSelect.appendChild(option);
+            });
+        });
+}
+
+// Load available datasets
+function loadDatasets() {
+    fetch('/api/datasets/')
+        .then(response => response.json())
+        .then(datasets => {
+            const datasetSelect = document.getElementById('dataset');
+            
+            // Clear existing options (keep first)
+            while (datasetSelect.options.length > 1) {
+                datasetSelect.remove(1);
+            }
+            
+            // Add datasets
+            datasets.forEach(dataset => {
+                const option = new Option(
+                    `${dataset.name} (${dataset.uploaded_at ? new Date(dataset.uploaded_at).toLocaleDateString() : 'N/A'})`,
+                    dataset.id
+                );
+                datasetSelect.appendChild(option);
+            });
+            
+            console.log(`Loaded ${datasets.length} datasets`);
+        })
+        .catch(error => {
+            console.error('Error loading datasets:', error);
+            showNotification('Erreur', 'Impossible de charger les datasets', 'error');
+        });
+}
 
 // Framework selection
 function updateFrameworkOptions() {

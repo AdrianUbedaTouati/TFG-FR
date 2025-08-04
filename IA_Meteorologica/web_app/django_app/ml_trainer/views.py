@@ -57,7 +57,8 @@ class DatasetColumnsView(APIView):
         dataset = get_object_or_404(Dataset, pk=pk)
         try:
             df = pd.read_csv(dataset.file.path)
-            columns = df.columns.tolist()
+            # Filtrer les colonnes pour s'assurer qu'elles sont valides (non vides)
+            columns = [col for col in df.columns.tolist() if col and str(col).strip()]
             dtypes = {col: str(df[col].dtype) for col in columns}
             
             # Análisis estadístico básico
