@@ -765,6 +765,291 @@
                         </div>
                     </div>
                     
+                    <!-- Configuration Random Forest -->
+                    <div id="randomForestConfiguration" class="mt-4" style="display: none;">
+                        <h5 class="text-success mb-3"><i class="bi bi-tree"></i> Configuration Random Forest</h5>
+                        
+                        <!-- Preset Selector -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="rfPreset" class="form-label">Configuration prédéfinie</label>
+                                <select class="form-select" id="rfPreset" onchange="applyRandomForestPreset()">
+                                    <option value="balanceado">Balanceado (recommandé)</option>
+                                    <option value="rapido">Rapide</option>
+                                    <option value="preciso">Précis (lent)</option>
+                                </select>
+                                <small class="text-muted">Rapide: moins d'arbres, plus rapide. Balanceado: bon compromis. Précis: plus d'arbres, meilleure qualité.</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="rfProblemType" class="form-label">Type de problème</label>
+                                <select class="form-select" id="rfProblemType" onchange="updateRandomForestOptions()">
+                                    <option value="regression">Régression</option>
+                                    <option value="classification">Classification</option>
+                                </select>
+                                <small class="text-muted">Classification pour prédire des catégories, Régression pour des valeurs numériques</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Options de base -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0">🟢 Options sencillas</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="rfNEstimators" class="form-label">
+                                                Nombre d'arbres 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Plus d'arbres = meilleure stabilité, mais plus de temps d'entraînement"></i>
+                                            </label>
+                                            <input type="range" class="form-range mb-2" id="rfNEstimators" min="50" max="1000" step="50" value="300" oninput="updateRangeValue('rfNEstimators', 'rfNEstimatorsValue')">
+                                            <div class="d-flex justify-content-between">
+                                                <small>50</small>
+                                                <span id="rfNEstimatorsValue" class="badge bg-primary">300</span>
+                                                <small>1000</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="rfMaxDepthEnabled" onchange="toggleRandomForestMaxDepth()">
+                                                <label class="form-check-label" for="rfMaxDepthEnabled">
+                                                    Limiter la profondeur 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Limiter la profondeur réduit le surapprentissage et accélère l'entraînement"></i>
+                                                </label>
+                                            </div>
+                                            <input type="number" class="form-control mt-2" id="rfMaxDepth" min="2" max="50" value="10" disabled>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="rfMaxFeatures" class="form-label">
+                                                Caractéristiques par division 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="sqrt pour classification, 1.0 (toutes) pour régression"></i>
+                                            </label>
+                                            <select class="form-select" id="rfMaxFeatures" onchange="toggleCustomMaxFeatures()">
+                                                <option value="sqrt">sqrt (recommandé pour classification)</option>
+                                                <option value="log2">log2</option>
+                                                <option value="1.0">1.0 (toutes - recommandé pour régression)</option>
+                                                <option value="custom">Fraction personnalisée</option>
+                                            </select>
+                                            <input type="range" class="form-range mt-2" id="rfMaxFeaturesFraction" min="0.1" max="1.0" step="0.1" value="0.5" style="display: none;" oninput="updateRangeValue('rfMaxFeaturesFraction', 'rfMaxFeaturesFractionValue')">
+                                            <div id="rfMaxFeaturesFractionContainer" class="d-flex justify-content-between mt-1" style="display: none;">
+                                                <small>0.1</small>
+                                                <span id="rfMaxFeaturesFractionValue" class="badge bg-primary">0.5</span>
+                                                <small>1.0</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="rfCriterion" class="form-label">
+                                                Critère de division 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Automatique sélectionne le meilleur selon le type de problème"></i>
+                                            </label>
+                                            <select class="form-select" id="rfCriterion">
+                                                <option value="auto">Automatique (recommandé)</option>
+                                                <option value="gini">Gini (classification)</option>
+                                                <option value="entropy">Entropie (classification)</option>
+                                                <option value="squared_error">Erreur quadratique (régression)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6" id="rfClassWeightContainer" style="display: none;">
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="rfClassWeightBalanced">
+                                                <label class="form-check-label" for="rfClassWeightBalanced">
+                                                    Équilibrer les classes automatiquement 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Utile quand vous avez des classes déséquilibrées en classification"></i>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="rfValidationMethod" class="form-label">
+                                                Méthode de validation 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Seulement pour évaluation; n'affecte pas le modèle final"></i>
+                                            </label>
+                                            <select class="form-select" id="rfValidationMethod">
+                                                <option value="holdout">Hold-out 80/20</option>
+                                                <option value="cv">Validation croisée k-fold (k=5)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Options avancées -->
+                        <div class="card">
+                            <div class="card-header bg-warning text-white">
+                                <h6 class="mb-0">
+                                    <button class="btn btn-link text-white p-0" type="button" data-bs-toggle="collapse" data-bs-target="#rfAdvancedOptions" aria-expanded="false">
+                                        ⚙️ Options avancées <i class="bi bi-chevron-down"></i>
+                                    </button>
+                                </h6>
+                            </div>
+                            <div class="collapse" id="rfAdvancedOptions">
+                                <div class="card-body">
+                                    <p class="text-muted mb-3">Configuration détaillée pour affiner les performances du modèle Random Forest.</p>
+                                    
+                                    <!-- Structure de l'arbre -->
+                                    <h6 class="text-info">Structure de l'arbre et divisions</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="rfMinSamplesSplit" class="form-label">
+                                                    Min échantillons pour diviser 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Valeurs plus élevées préviennent le surapprentissage"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="rfMinSamplesSplit" min="2" max="50" value="2">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="rfMinSamplesLeaf" class="form-label">
+                                                    Min échantillons dans une feuille 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Valeurs plus élevées lissent le modèle"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="rfMinSamplesLeaf" min="1" max="50" value="1">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="rfMinWeightFractionLeaf" class="form-label">
+                                                    Fraction min poids dans feuille 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Pour datasets avec poids d'échantillon inégaux"></i>
+                                                </label>
+                                                <input type="range" class="form-range mb-2" id="rfMinWeightFractionLeaf" min="0" max="0.5" step="0.01" value="0.0" oninput="updateRangeValue('rfMinWeightFractionLeaf', 'rfMinWeightFractionLeafValue')">
+                                                <div class="d-flex justify-content-between">
+                                                    <small>0.0</small>
+                                                    <span id="rfMinWeightFractionLeafValue" class="badge bg-primary">0.0</span>
+                                                    <small>0.5</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="rfMinImpurityDecrease" class="form-label">
+                                                    Décrement min impureté 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Divise seulement si réduit l'impureté d'au moins cette valeur"></i>
+                                                </label>
+                                                <input type="range" class="form-range mb-2" id="rfMinImpurityDecrease" min="0" max="0.1" step="0.001" value="0.0" oninput="updateRangeValue('rfMinImpurityDecrease', 'rfMinImpurityDecreaseValue')">
+                                                <div class="d-flex justify-content-between">
+                                                    <small>0.0</small>
+                                                    <span id="rfMinImpurityDecreaseValue" class="badge bg-primary">0.0</span>
+                                                    <small>0.1</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Échantillonnage et OOB -->
+                                    <h6 class="text-info">Échantillonnage et OOB</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="rfBootstrap" checked onchange="toggleBootstrapOptions()">
+                                                    <label class="form-check-label" for="rfBootstrap">
+                                                        Bootstrap 
+                                                        <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Désactiver fait que chaque arbre utilise tout le dataset"></i>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3" id="rfOobScoreContainer">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="rfOobScore">
+                                                    <label class="form-check-label" for="rfOobScore">
+                                                        Calculer score OOB 
+                                                        <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Valide sans séparer des données supplémentaires. Seulement avec Bootstrap."></i>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Parallélisme et reproducibilité -->
+                                    <h6 class="text-info">Parallélisme et reproducibilité</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="rfNJobs" class="form-label">
+                                                    Travaux parallèles 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="-1 utilise tous les cœurs disponibles"></i>
+                                                </label>
+                                                <select class="form-select" id="rfNJobs">
+                                                    <option value="-1">Utiliser tous les cœurs</option>
+                                                    <option value="1">1 cœur</option>
+                                                    <option value="2">2 cœurs</option>
+                                                    <option value="4">4 cœurs</option>
+                                                    <option value="8">8 cœurs</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="rfRandomState" class="form-label">
+                                                    Graine aléatoire 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Utiliser la même graine garantit des résultats reproductibles"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="rfRandomState" min="0" max="999999" placeholder="Laisser vide pour aléatoire">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Réglages de classification -->
+                                    <div id="rfClassificationSettings" style="display: none;">
+                                        <h6 class="text-info">Réglages de classification</h6>
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="rfDecisionThreshold" class="form-label">
+                                                        Seuil de décision 
+                                                        <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Seulement pour classification binaire. Valeurs > 0.5 favorisent la spécificité"></i>
+                                                    </label>
+                                                    <input type="range" class="form-range mb-2" id="rfDecisionThreshold" min="0.1" max="0.9" step="0.05" value="0.5" oninput="updateRangeValue('rfDecisionThreshold', 'rfDecisionThresholdValue')">
+                                                    <div class="d-flex justify-content-between">
+                                                        <small>0.1</small>
+                                                        <span id="rfDecisionThresholdValue" class="badge bg-primary">0.5</span>
+                                                        <small>0.9</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="rfOutputType" class="form-label">
+                                                        Type de sortie 
+                                                        <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Classe pour décisions finales, Probabilités pour analyse"></i>
+                                                    </label>
+                                                    <select class="form-select" id="rfOutputType">
+                                                        <option value="class">Classe prédite</option>
+                                                        <option value="proba">Probabilités</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Architecture du Réseau (Mode Expert) -->
                     <div id="networkArchitecture" class="mt-4" style="display: none;">
                         <h5 class="text-info mb-3"><i class="bi bi-diagram-3"></i> Architecture du Réseau</h5>
@@ -1411,6 +1696,14 @@ function editModel(modelId) {
         </button>
     `;
     
+    // Charger la configuration Random Forest si applicable
+    if (model.model_type === 'random_forest' && model.hyperparameters) {
+        loadRandomForestConfiguration(model.hyperparameters);
+    }
+    
+    // Trigger la mise à jour des options selon le type de modèle
+    updateFrameworkOptions();
+    
     // Afficher le modal
     const modalElement = document.getElementById('createModelModal');
     const modal = new bootstrap.Modal(modalElement, {
@@ -1480,6 +1773,11 @@ function updateModel(modelId) {
         // Configuration de sortie
         modelConfig.output_activation = document.getElementById('outputActivation').value;
         modelConfig.output_units = parseInt(document.getElementById('outputUnits').value);
+    }
+    
+    // Configuration Random Forest
+    if (modelType === 'random_forest') {
+        modelConfig = { ...modelConfig, ...getRandomForestConfig() };
     }
     
     // Architecture personnalisée en mode expert
@@ -2072,10 +2370,21 @@ function toggleExpertMode() {
     const expertMode = document.getElementById('expertMode').checked;
     const modelType = document.getElementById('modelType').value;
     
-    // Afficher/masquer les sections selon le mode
-    document.getElementById('modelConfiguration').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
-    document.getElementById('networkArchitecture').style.display = expertMode ? 'block' : 'none';
-    document.getElementById('metricsCallbacks').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
+    // Afficher/masquer les sections selon le mode et le type de modèle
+    if (modelType === 'random_forest') {
+        // Pour Random Forest, ne montrer que sa configuration spécifique
+        document.getElementById('modelConfiguration').style.display = 'none';
+        document.getElementById('networkArchitecture').style.display = 'none';
+        document.getElementById('metricsCallbacks').style.display = 'none';
+        document.getElementById('randomForestConfiguration').style.display = 'block';
+        updateRandomForestOptions();
+    } else {
+        // Pour les autres modèles, logique normale
+        document.getElementById('modelConfiguration').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
+        document.getElementById('networkArchitecture').style.display = expertMode ? 'block' : 'none';
+        document.getElementById('metricsCallbacks').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
+        document.getElementById('randomForestConfiguration').style.display = 'none';
+    }
     
     // Si on désactive le mode expert, réinitialiser l'architecture personnalisée
     if (!expertMode) {
@@ -2282,6 +2591,11 @@ function createModelOnly() {
         // Configuration de sortie
         modelConfig.output_activation = document.getElementById('outputActivation').value;
         modelConfig.output_units = parseInt(document.getElementById('outputUnits').value);
+    }
+    
+    // Configuration Random Forest
+    if (modelType === 'random_forest') {
+        modelConfig = { ...modelConfig, ...getRandomForestConfig() };
     }
     
     // Architecture personnalisée en mode expert
@@ -2558,6 +2872,25 @@ function updateFrameworkOptions() {
     } else {
         frameworkDiv.style.display = 'none';
     }
+    
+    // Configurar las secciones según el tipo de modelo
+    if (modelType === 'random_forest') {
+        // Para Random Forest, ocultar secciones de redes neuronales
+        document.getElementById('modelConfiguration').style.display = 'none';
+        document.getElementById('networkArchitecture').style.display = 'none';
+        document.getElementById('metricsCallbacks').style.display = 'none';
+        document.getElementById('randomForestConfiguration').style.display = 'block';
+        updateRandomForestOptions();
+    } else {
+        // Para otros modèles, ocultar Random Forest y mostrar según corresponda
+        document.getElementById('randomForestConfiguration').style.display = 'none';
+        
+        // Aplicar lógica normal para modelos de deep learning
+        const expertMode = document.getElementById('expertMode').checked;
+        document.getElementById('modelConfiguration').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
+        document.getElementById('metricsCallbacks').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
+        document.getElementById('networkArchitecture').style.display = expertMode ? 'block' : 'none';
+    }
 }
 
 // Export model code
@@ -2576,6 +2909,20 @@ function importModelCode(modelId) {
 function showFrameworkSelectionModal(modelId, action) {
     // Clean up any existing modals first
     cleanupModals();
+    
+    // Get the model to check its type
+    const model = modelsList.find(m => m.id === modelId);
+    
+    // For models that only support sklearn, directly perform the action
+    if (model && ['random_forest', 'decision_tree', 'xgboost'].includes(model.model_type)) {
+        if (action === 'export') {
+            performExportModelCode(modelId, 'sklearn');
+        } else if (action === 'import') {
+            // For import, we still need sklearn parsing support, so show only sklearn option
+            showSklearnOnlyModal(modelId, action);
+        }
+        return;
+    }
     
     const modalElement = document.getElementById('frameworkSelectionModal');
     const modal = new bootstrap.Modal(modalElement, {
@@ -2614,6 +2961,15 @@ function showFrameworkSelectionModal(modelId, action) {
     });
     
     modal.show();
+}
+
+// Show modal with only sklearn option
+function showSklearnOnlyModal(modelId, action) {
+    showNotification('Information', 'Ce modèle utilise scikit-learn. Import de code scikit-learn en cours de développement.', 'info');
+    // For now, just use sklearn
+    if (action === 'import') {
+        performImportModelCode(modelId, 'sklearn');
+    }
 }
 
 // Perform the actual model code export
@@ -2724,6 +3080,237 @@ function getCookie(name) {
         }
     }
     return cookieValue;
+}
+
+// ===== RANDOM FOREST CONFIGURATION FUNCTIONS =====
+
+// Presets for Random Forest
+const randomForestPresets = {
+    rapido: {
+        n_estimators: 150,
+        max_depth_enabled: true,
+        max_depth: 10,
+        max_features: 'sqrt',
+        bootstrap: true,
+        oob_score: false,
+        n_jobs: -1
+    },
+    balanceado: {
+        n_estimators: 300,
+        max_depth_enabled: false,
+        max_features: 'sqrt',
+        bootstrap: true,
+        oob_score: false,
+        n_jobs: -1
+    },
+    preciso: {
+        n_estimators: 600,
+        max_depth_enabled: false,
+        max_features: 'sqrt',
+        bootstrap: true,
+        oob_score: true,
+        min_samples_leaf: 2,
+        n_jobs: -1
+    }
+};
+
+// Apply Random Forest preset
+function applyRandomForestPreset() {
+    const preset = document.getElementById('rfPreset').value;
+    const config = randomForestPresets[preset];
+    
+    if (config) {
+        // Apply basic settings
+        document.getElementById('rfNEstimators').value = config.n_estimators;
+        updateRangeValue('rfNEstimators', 'rfNEstimatorsValue');
+        
+        document.getElementById('rfMaxDepthEnabled').checked = config.max_depth_enabled;
+        toggleRandomForestMaxDepth();
+        if (config.max_depth_enabled && config.max_depth) {
+            document.getElementById('rfMaxDepth').value = config.max_depth;
+        }
+        
+        document.getElementById('rfMaxFeatures').value = config.max_features;
+        toggleCustomMaxFeatures();
+        
+        // Apply advanced settings
+        if (config.min_samples_leaf) {
+            document.getElementById('rfMinSamplesLeaf').value = config.min_samples_leaf;
+        }
+        
+        document.getElementById('rfBootstrap').checked = config.bootstrap;
+        toggleBootstrapOptions();
+        
+        document.getElementById('rfOobScore').checked = config.oob_score;
+        document.getElementById('rfNJobs').value = config.n_jobs;
+    }
+}
+
+// Update Random Forest options based on problem type
+function updateRandomForestOptions() {
+    const problemType = document.getElementById('rfProblemType').value;
+    
+    // Show/hide classification-specific options
+    document.getElementById('rfClassWeightContainer').style.display = problemType === 'classification' ? 'block' : 'none';
+    document.getElementById('rfClassificationSettings').style.display = problemType === 'classification' ? 'block' : 'none';
+    
+    // Update max_features default based on problem type
+    const maxFeatures = document.getElementById('rfMaxFeatures');
+    if (problemType === 'classification' && maxFeatures.value === '1.0') {
+        maxFeatures.value = 'sqrt';
+    } else if (problemType === 'regression' && maxFeatures.value === 'sqrt') {
+        maxFeatures.value = '1.0';
+    }
+    
+    // Update criterion options
+    const criterion = document.getElementById('rfCriterion');
+    if (criterion.value === 'auto') {
+        // Auto will be handled by backend
+    }
+}
+
+// Toggle Random Forest max depth
+function toggleRandomForestMaxDepth() {
+    const enabled = document.getElementById('rfMaxDepthEnabled').checked;
+    document.getElementById('rfMaxDepth').disabled = !enabled;
+}
+
+// Toggle custom max features
+function toggleCustomMaxFeatures() {
+    const maxFeatures = document.getElementById('rfMaxFeatures').value;
+    const isCustom = maxFeatures === 'custom';
+    
+    document.getElementById('rfMaxFeaturesFraction').style.display = isCustom ? 'block' : 'none';
+    document.getElementById('rfMaxFeaturesFractionContainer').style.display = isCustom ? 'flex' : 'none';
+}
+
+// Toggle bootstrap-dependent options
+function toggleBootstrapOptions() {
+    const bootstrap = document.getElementById('rfBootstrap').checked;
+    const oobContainer = document.getElementById('rfOobScoreContainer');
+    const oobCheckbox = document.getElementById('rfOobScore');
+    
+    if (!bootstrap) {
+        oobCheckbox.checked = false;
+        oobContainer.style.opacity = '0.5';
+        oobCheckbox.disabled = true;
+    } else {
+        oobContainer.style.opacity = '1';
+        oobCheckbox.disabled = false;
+    }
+}
+
+// Update range value display
+function updateRangeValue(rangeId, displayId) {
+    const range = document.getElementById(rangeId);
+    const display = document.getElementById(displayId);
+    if (range && display) {
+        display.textContent = range.value;
+    }
+}
+
+// Get Random Forest configuration
+function getRandomForestConfig() {
+    return {
+        preset: document.getElementById('rfPreset').value,
+        problem_type: document.getElementById('rfProblemType').value,
+        n_estimators: parseInt(document.getElementById('rfNEstimators').value),
+        max_depth_enabled: document.getElementById('rfMaxDepthEnabled').checked,
+        max_depth: document.getElementById('rfMaxDepthEnabled').checked ? parseInt(document.getElementById('rfMaxDepth').value) : null,
+        max_features: document.getElementById('rfMaxFeatures').value === 'custom' ? 
+            parseFloat(document.getElementById('rfMaxFeaturesFraction').value) : 
+            document.getElementById('rfMaxFeatures').value,
+        max_features_fraction: document.getElementById('rfMaxFeatures').value === 'custom' ? 
+            parseFloat(document.getElementById('rfMaxFeaturesFraction').value) : null,
+        criterion: document.getElementById('rfCriterion').value,
+        class_weight_balanced: document.getElementById('rfClassWeightBalanced').checked,
+        validation_method: document.getElementById('rfValidationMethod').value,
+        
+        // Advanced options
+        min_samples_split: parseInt(document.getElementById('rfMinSamplesSplit').value),
+        min_samples_leaf: parseInt(document.getElementById('rfMinSamplesLeaf').value),
+        min_weight_fraction_leaf: parseFloat(document.getElementById('rfMinWeightFractionLeaf').value),
+        min_impurity_decrease: parseFloat(document.getElementById('rfMinImpurityDecrease').value),
+        bootstrap: document.getElementById('rfBootstrap').checked,
+        oob_score: document.getElementById('rfOobScore').checked,
+        n_jobs: parseInt(document.getElementById('rfNJobs').value),
+        random_state: document.getElementById('rfRandomState').value ? parseInt(document.getElementById('rfRandomState').value) : null,
+        
+        // Classification settings
+        decision_threshold: parseFloat(document.getElementById('rfDecisionThreshold').value),
+        output_type: document.getElementById('rfOutputType').value
+    };
+}
+
+// Load Random Forest configuration for editing
+function loadRandomForestConfiguration(hyperparams) {
+    if (!hyperparams) return;
+    
+    // Load basic settings
+    if (hyperparams.preset) document.getElementById('rfPreset').value = hyperparams.preset;
+    if (hyperparams.problem_type) document.getElementById('rfProblemType').value = hyperparams.problem_type;
+    
+    if (hyperparams.n_estimators) {
+        document.getElementById('rfNEstimators').value = hyperparams.n_estimators;
+        updateRangeValue('rfNEstimators', 'rfNEstimatorsValue');
+    }
+    
+    if (hyperparams.max_depth_enabled !== undefined) {
+        document.getElementById('rfMaxDepthEnabled').checked = hyperparams.max_depth_enabled;
+        toggleRandomForestMaxDepth();
+    }
+    
+    if (hyperparams.max_depth && hyperparams.max_depth_enabled) {
+        document.getElementById('rfMaxDepth').value = hyperparams.max_depth;
+    }
+    
+    if (hyperparams.max_features) {
+        const maxFeatures = typeof hyperparams.max_features === 'number' ? 'custom' : hyperparams.max_features;
+        document.getElementById('rfMaxFeatures').value = maxFeatures;
+        if (maxFeatures === 'custom' && hyperparams.max_features_fraction) {
+            document.getElementById('rfMaxFeaturesFraction').value = hyperparams.max_features_fraction;
+            updateRangeValue('rfMaxFeaturesFraction', 'rfMaxFeaturesFractionValue');
+        }
+        toggleCustomMaxFeatures();
+    }
+    
+    if (hyperparams.criterion) document.getElementById('rfCriterion').value = hyperparams.criterion;
+    if (hyperparams.class_weight_balanced !== undefined) document.getElementById('rfClassWeightBalanced').checked = hyperparams.class_weight_balanced;
+    if (hyperparams.validation_method) document.getElementById('rfValidationMethod').value = hyperparams.validation_method;
+    
+    // Load advanced settings
+    if (hyperparams.min_samples_split) document.getElementById('rfMinSamplesSplit').value = hyperparams.min_samples_split;
+    if (hyperparams.min_samples_leaf) document.getElementById('rfMinSamplesLeaf').value = hyperparams.min_samples_leaf;
+    
+    if (hyperparams.min_weight_fraction_leaf !== undefined) {
+        document.getElementById('rfMinWeightFractionLeaf').value = hyperparams.min_weight_fraction_leaf;
+        updateRangeValue('rfMinWeightFractionLeaf', 'rfMinWeightFractionLeafValue');
+    }
+    
+    if (hyperparams.min_impurity_decrease !== undefined) {
+        document.getElementById('rfMinImpurityDecrease').value = hyperparams.min_impurity_decrease;
+        updateRangeValue('rfMinImpurityDecrease', 'rfMinImpurityDecreaseValue');
+    }
+    
+    if (hyperparams.bootstrap !== undefined) {
+        document.getElementById('rfBootstrap').checked = hyperparams.bootstrap;
+        toggleBootstrapOptions();
+    }
+    
+    if (hyperparams.oob_score !== undefined) document.getElementById('rfOobScore').checked = hyperparams.oob_score;
+    if (hyperparams.n_jobs) document.getElementById('rfNJobs').value = hyperparams.n_jobs;
+    if (hyperparams.random_state) document.getElementById('rfRandomState').value = hyperparams.random_state;
+    
+    // Load classification settings
+    if (hyperparams.decision_threshold !== undefined) {
+        document.getElementById('rfDecisionThreshold').value = hyperparams.decision_threshold;
+        updateRangeValue('rfDecisionThreshold', 'rfDecisionThresholdValue');
+    }
+    
+    if (hyperparams.output_type) document.getElementById('rfOutputType').value = hyperparams.output_type;
+    
+    // Update UI based on problem type
+    updateRandomForestOptions();
 }
 </script>
 {% endblock %}

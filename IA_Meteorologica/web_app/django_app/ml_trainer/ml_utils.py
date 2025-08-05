@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
 from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import xgboost as xgb
 import json
@@ -88,11 +88,35 @@ def get_model_config(model_type):
             'sequence_length': 10
         },
         'random_forest': {
-            'n_estimators': 100,
-            'max_depth': 10,
+            # Basic options with new defaults
+            'preset': 'balanceado',
+            'problem_type': 'regression',
+            'n_estimators': 300,
+            'max_depth_enabled': False,
+            'max_depth': None,
+            'max_features': '1.0',  # Default for regression
+            'criterion': 'squared_error',
+            'class_weight_balanced': False,
+            'validation_method': 'holdout',
+            
+            # Advanced options with scikit-learn defaults
             'min_samples_split': 2,
             'min_samples_leaf': 1,
-            'max_features': 'auto'
+            'min_weight_fraction_leaf': 0.0,
+            'min_impurity_decrease': 0.0,
+            'max_leaf_nodes': None,
+            'ccp_alpha': 0.0,
+            'criterion_advanced': 'default',
+            'bootstrap': True,
+            'max_samples': None,
+            'oob_score': False,
+            'n_jobs': -1,
+            'random_state': None,
+            'verbose': 0,
+            'warm_start': False,
+            'class_weight_custom': False,
+            'decision_threshold': 0.5,
+            'output_type': 'class'
         },
         'xgboost': {
             'n_estimators': 100,
@@ -539,12 +563,74 @@ def train_neural_network(session, model_type, hyperparams, X_train, y_train, X_v
     return model, history.history
 
 
+def _prepare_random_forest_params(hyperparams):
+    """Prepare Random Forest parameters for scikit-learn"""
+    # Start with a copy of hyperparams
+    clean_params = hyperparams.copy()
+    
+    # Remove UI-specific parameters that don't belong to scikit-learn
+    ui_only_params = [
+        'preset', 'problem_type', 'max_depth_enabled', 'class_weight_balanced', 
+        'validation_method', 'criterion_advanced', 'class_weight_custom',
+        'decision_threshold', 'output_type', 'max_features_fraction'
+    ]
+    for param in ui_only_params:
+        clean_params.pop(param, None)
+    
+    # Handle max_depth logic
+    if not hyperparams.get('max_depth_enabled', False):
+        clean_params['max_depth'] = None
+    
+    # Handle max_features conversion
+    max_features = hyperparams.get('max_features', 'sqrt')
+    if max_features == 'custom':
+        max_features = hyperparams.get('max_features_fraction', 0.5)
+    elif max_features == '1.0':
+        max_features = 1.0
+    clean_params['max_features'] = max_features
+    
+    # Handle criterion selection
+    criterion_advanced = hyperparams.get('criterion_advanced', 'default')
+    if criterion_advanced != 'default':
+        clean_params['criterion'] = criterion_advanced
+    elif hyperparams.get('criterion') == 'auto':
+        # Auto criterion was already resolved in frontend, but fallback logic
+        problem_type = hyperparams.get('problem_type', 'regression')
+        if problem_type == 'classification':
+            clean_params['criterion'] = 'gini'
+        else:
+            clean_params['criterion'] = 'squared_error'
+    
+    # Handle class_weight
+    if hyperparams.get('class_weight_balanced', False):
+        clean_params['class_weight'] = 'balanced'
+    else:
+        clean_params.pop('class_weight', None)
+    
+    # Handle null values properly for scikit-learn
+    for key, value in clean_params.items():
+        if value is None or value == 'None':
+            if key in ['max_depth', 'max_leaf_nodes', 'random_state', 'max_samples']:
+                clean_params[key] = None
+            else:
+                clean_params.pop(key, None)
+    
+    return clean_params
+
+
 def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val):
     """Train scikit-learn models"""
     if model_type == 'decision_tree':
         model = DecisionTreeRegressor(**hyperparams)
     elif model_type == 'random_forest':
-        model = RandomForestRegressor(**hyperparams)
+        # Determine if it's classification or regression
+        problem_type = hyperparams.get('problem_type', 'regression')
+        clean_params = _prepare_random_forest_params(hyperparams)
+        
+        if problem_type == 'classification':
+            model = RandomForestClassifier(**clean_params)
+        else:
+            model = RandomForestRegressor(**clean_params)
     elif model_type == 'xgboost':
         model = xgb.XGBRegressor(**hyperparams)
     else:
@@ -554,10 +640,31 @@ def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val)
     
     # Calculate validation metrics
     val_pred = model.predict(X_val)
-    history = {
-        'train_loss': [mean_squared_error(y_train, model.predict(X_train))],
-        'val_loss': [mean_squared_error(y_val, val_pred)]
-    }
+    
+    # Choose appropriate metrics based on problem type
+    if model_type == 'random_forest' and hyperparams.get('problem_type') == 'classification':
+        from sklearn.metrics import accuracy_score, log_loss
+        try:
+            train_pred = model.predict(X_train)
+            history = {
+                'train_accuracy': [accuracy_score(y_train, train_pred)],
+                'val_accuracy': [accuracy_score(y_val, val_pred)],
+                'train_loss': [log_loss(y_train, model.predict_proba(X_train))],
+                'val_loss': [log_loss(y_val, model.predict_proba(X_val))]
+            }
+        except:
+            # Fallback to basic accuracy if log_loss fails
+            train_pred = model.predict(X_train)
+            history = {
+                'train_accuracy': [accuracy_score(y_train, train_pred)],
+                'val_accuracy': [accuracy_score(y_val, val_pred)]
+            }
+    else:
+        # Regression metrics
+        history = {
+            'train_loss': [mean_squared_error(y_train, model.predict(X_train))],
+            'val_loss': [mean_squared_error(y_val, val_pred)]
+        }
     
     return model, history
 

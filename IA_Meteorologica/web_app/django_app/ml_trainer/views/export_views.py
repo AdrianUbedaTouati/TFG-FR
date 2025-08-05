@@ -8,7 +8,7 @@ from django.http import HttpResponse
 
 from ..models import ModelDefinition
 from ..code_generator import (
-    generate_keras_code, generate_pytorch_code,
+    generate_keras_code, generate_pytorch_code, generate_sklearn_code,
     parse_keras_code, parse_pytorch_code,
     validate_architecture
 )
@@ -68,6 +68,11 @@ class ExportModelCodeView(APIView):
             return generate_pytorch_code(model_def)
         elif framework == 'keras':
             return generate_keras_code(model_def)
+        elif framework == 'sklearn' or framework == 'scikit-learn':
+            return generate_sklearn_code(model_def)
+        # For models that only support sklearn (like random_forest), use sklearn
+        elif model_def.model_type in ['random_forest', 'decision_tree', 'xgboost']:
+            return generate_sklearn_code(model_def)
         return None
     
     def _update_exported_code(self, model_def, code):
