@@ -81,7 +81,7 @@ def generate_keras_code(model_def) -> str:
         '    Returns:',
         '        Compiled Keras model ready for training',
         '    """',
-        '    print(f"Creating model with input_shape={input_shape} and output_shape={output_shape}")',
+        '    print(f"Creating model with input_shape={{input_shape}} and output_shape={{output_shape}}")',
         '    '
     ])
     
@@ -1189,6 +1189,348 @@ def validate_architecture(architecture: List[Dict]) -> bool:
             layer['params'] = {}
     
     return True
+
+
+def _generate_sklearn_header(model_def) -> List[str]:
+    """Generate header and imports for sklearn code"""
+    model_type = model_def.model_type
+    hyperparams = model_def.hyperparameters or {}
+    
+    header_lines = [
+        '"""',
+        f'Auto-generated scikit-learn {model_type.upper()} model code',
+        f'Model: {model_def.name}',
+        f'Type: {model_def.model_type.upper()}',
+        f'Generated at: {model_def.updated_at}',
+        '',
+        'Configuration:',
+        f'- Target columns: {model_def.target_columns}',
+        f'- Predictor columns: {len(model_def.predictor_columns)} features',
+        '"""',
+        '',
+        'import numpy as np',
+        'import pandas as pd',
+        'import joblib',
+        'import json',
+        'from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV',
+        'from sklearn.preprocessing import StandardScaler, LabelEncoder',
+        'from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score',
+        'from sklearn.metrics import accuracy_score, classification_report, confusion_matrix',
+        ''
+    ]
+    
+    # Import model-specific libraries
+    if model_type == 'random_forest':
+        problem_type = hyperparams.get('problem_type', 'regression')
+        if problem_type == 'classification':
+            header_lines.append('from sklearn.ensemble import RandomForestClassifier')
+        else:
+            header_lines.append('from sklearn.ensemble import RandomForestRegressor')
+    elif model_type == 'decision_tree':
+        header_lines.append('from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier')
+    elif model_type == 'xgboost':
+        header_lines.append('import xgboost as xgb')
+    
+    header_lines.extend(['', '', ''])
+    return header_lines
+
+
+def _generate_random_forest_params(hyperparams) -> List[str]:
+    """Generate Random Forest parameter configuration"""
+    problem_type = hyperparams.get('problem_type', 'regression')
+    params_lines = ['    # Model parameters', '    params = {']
+    
+    # Basic parameters
+    if hyperparams.get('n_estimators'):
+        params_lines.append(f'        "n_estimators": {hyperparams["n_estimators"]},')
+    
+    # Handle max_depth
+    if hyperparams.get('max_depth_enabled', False) and hyperparams.get('max_depth'):
+        params_lines.append(f'        "max_depth": {hyperparams["max_depth"]},')
+    else:
+        params_lines.append('        "max_depth": None,')
+    
+    # Handle max_features
+    max_features = hyperparams.get('max_features', 'sqrt')
+    if isinstance(max_features, str) and max_features != 'custom':
+        if max_features == '1.0':
+            params_lines.append('        "max_features": 1.0,')
+        else:
+            params_lines.append(f'        "max_features": "{max_features}",')
+    elif hyperparams.get('max_features_fraction'):
+        params_lines.append(f'        "max_features": {hyperparams["max_features_fraction"]},')
+    
+    # Handle criterion
+    criterion = hyperparams.get('criterion', 'auto')
+    if criterion == 'auto':
+        if problem_type == 'classification':
+            params_lines.append('        "criterion": "gini",')
+        else:
+            params_lines.append('        "criterion": "squared_error",')
+    else:
+        params_lines.append(f'        "criterion": "{criterion}",')
+    
+    # Tree structure parameters
+    if hyperparams.get('min_samples_split'):
+        params_lines.append(f'        "min_samples_split": {hyperparams["min_samples_split"]},')
+    if hyperparams.get('min_samples_leaf'):
+        params_lines.append(f'        "min_samples_leaf": {hyperparams["min_samples_leaf"]},')
+    if hyperparams.get('min_weight_fraction_leaf'):
+        params_lines.append(f'        "min_weight_fraction_leaf": {hyperparams["min_weight_fraction_leaf"]},')
+    if hyperparams.get('min_impurity_decrease'):
+        params_lines.append(f'        "min_impurity_decrease": {hyperparams["min_impurity_decrease"]},')
+    
+    # Sampling parameters
+    params_lines.append(f'        "bootstrap": {hyperparams.get("bootstrap", True)},')
+    if hyperparams.get('oob_score'):
+        params_lines.append(f'        "oob_score": {hyperparams["oob_score"]},')
+    
+    # Performance parameters
+    params_lines.append(f'        "n_jobs": {hyperparams.get("n_jobs", -1)},')
+    if hyperparams.get('random_state') is not None:
+        params_lines.append(f'        "random_state": {hyperparams["random_state"]},')
+    
+    # Class weight for classification
+    if problem_type == 'classification' and hyperparams.get('class_weight_balanced'):
+        params_lines.append('        "class_weight": "balanced",')
+    
+    # Remove trailing comma from last line
+    if params_lines[-1].endswith(','):
+        params_lines[-1] = params_lines[-1][:-1]
+    
+    params_lines.append('    }')
+    params_lines.append('')
+    
+    # Create model instance
+    if problem_type == 'classification':
+        params_lines.append('    model = RandomForestClassifier(**params)')
+    else:
+        params_lines.append('    model = RandomForestRegressor(**params)')
+    
+    return params_lines
+
+
+def _generate_model_creation_code(model_type, hyperparams) -> List[str]:
+    """Generate model creation code based on model type"""
+    if model_type == 'random_forest':
+        return _generate_random_forest_params(hyperparams)
+        
+    elif model_type == 'decision_tree':
+        return [
+            '    # Model parameters',
+            '    params = {',
+            f'        "max_depth": {hyperparams.get("max_depth", 10)},',
+            f'        "min_samples_split": {hyperparams.get("min_samples_split", 2)},',
+            f'        "min_samples_leaf": {hyperparams.get("min_samples_leaf", 1)},',
+            f'        "max_features": "{0}"'.format(hyperparams.get("max_features", "auto")),
+            '    }',
+            '',
+            '    model = DecisionTreeRegressor(**params)'
+        ]
+        
+    elif model_type == 'xgboost':
+        return [
+            '    # Model parameters',
+            '    params = {',
+            f'        "n_estimators": {hyperparams.get("n_estimators", 100)},',
+            f'        "max_depth": {hyperparams.get("max_depth", 6)},',
+            f'        "learning_rate": {hyperparams.get("learning_rate", 0.3)},',
+            f'        "subsample": {hyperparams.get("subsample", 0.8)},',
+            f'        "colsample_bytree": {hyperparams.get("colsample_bytree", 0.8)}',
+            '    }',
+            '',
+            '    model = xgb.XGBRegressor(**params)'
+        ]
+    
+    return []
+
+
+def _generate_data_loading_function(model_def) -> List[str]:
+    """Generate data loading and preprocessing function"""
+    predictor_columns = [str(col) for col in model_def.predictor_columns]
+    target_columns = [str(col) for col in model_def.target_columns]
+    
+    return [
+        'def load_and_preprocess_data(file_path):',
+        '    """',
+        '    Load and preprocess the dataset',
+        '    """',
+        '    print(f"Loading data from: {{file_path}}")',
+        '    df = pd.read_csv(file_path)',
+        '    print(f"Dataset shape: {{df.shape}}")',
+        '    print(f"Columns: {{list(df.columns)}}")',
+        '',
+        '    # Define columns',
+        f'    predictor_columns = {predictor_columns}',
+        f'    target_columns = {target_columns}',
+        '',
+        '    # Validate columns',
+        '    missing_predictors = [col for col in predictor_columns if col not in df.columns]',
+        '    missing_targets = [col for col in target_columns if col not in df.columns]',
+        '    ',
+        '    if missing_predictors:',
+        '        raise ValueError(f"Missing predictor columns: {missing_predictors}")',
+        '    if missing_targets:',
+        '        raise ValueError(f"Missing target columns: {missing_targets}")',
+        '',
+        '    # Extract features and target',
+        '    X = df[predictor_columns]',
+        '    y = df[target_columns[0]] if len(target_columns) == 1 else df[target_columns]',
+        '',
+        '    # Handle missing values',
+        '    print("\\nHandling missing values...")',
+        '    print(f"Missing values in features: {{X.isnull().sum().sum()}}")',
+        '    print(f"Missing values in target: {{y.isnull().sum() if hasattr(y, \'isnull\') else 0}}")',
+        '',
+        '    # Fill missing values',
+        '    X = X.fillna(X.mean())',
+        '    if hasattr(y, \'fillna\'):',
+        '        y = y.fillna(y.mean())',
+        '',
+        '    return X, y, predictor_columns, target_columns',
+        '',
+        ''
+    ]
+
+
+def _generate_training_function() -> List[str]:
+    """Generate model training function"""
+    return [
+        'def train_model(model, X, y, test_size=0.2, cv_folds=None):',
+        '    """',
+        '    Train the model with optional cross-validation',
+        '    """',
+        '    # Split the data',
+        '    X_train, X_test, y_train, y_test = train_test_split(',
+        '        X, y, test_size=test_size, random_state=42',
+        '    )',
+        '    ',
+        '    print(f"\\nTraining set size: {{X_train.shape}}")',
+        '    print(f"Test set size: {{X_test.shape}}")',
+        '',
+        '    # Perform cross-validation if requested',
+        '    if cv_folds:',
+        '        print(f"\\nPerforming {{cv_folds}}-fold cross-validation...")',
+        '        cv_scores = cross_val_score(model, X_train, y_train, cv=cv_folds, scoring=\'neg_mean_squared_error\')',
+        '        print(f"CV MSE: {{-cv_scores.mean():.4f}} (+/- {{cv_scores.std() * 2:.4f}})")',
+        '',
+        '    # Train the model',
+        '    print("\\nTraining model...")',
+        '    model.fit(X_train, y_train)',
+        '    ',
+        '    # Make predictions',
+        '    y_pred_train = model.predict(X_train)',
+        '    y_pred_test = model.predict(X_test)',
+        '    ',
+        '    return X_train, X_test, y_train, y_test, y_pred_train, y_pred_test',
+        '',
+        ''
+    ]
+
+
+def _generate_evaluation_function(model_type, hyperparams) -> List[str]:
+    """Generate model evaluation function"""
+    problem_type = hyperparams.get('problem_type', 'regression')
+    
+    lines = [
+        'def evaluate_model(model, y_true, y_pred, dataset_name="Dataset"):',
+        '    """',
+        '    Evaluate model performance',
+        '    """',
+        '    print(f"\\n=== {{dataset_name}} Evaluation ===")',
+        ''
+    ]
+    
+    if model_type == 'random_forest' and problem_type == 'classification':
+        lines.extend([
+            '    # Classification metrics',
+            '    accuracy = accuracy_score(y_true, y_pred)',
+            '    print(f"Accuracy: {{accuracy:.4f}}")',
+            '    print("\\nClassification Report:")',
+            '    print(classification_report(y_true, y_pred))',
+            '    print("\\nConfusion Matrix:")',
+            '    print(confusion_matrix(y_true, y_pred))',
+            '    ',
+            '    return {"accuracy": accuracy}'
+        ])
+    else:
+        lines.extend([
+            '    # Regression metrics',
+            '    mae = mean_absolute_error(y_true, y_pred)',
+            '    mse = mean_squared_error(y_true, y_pred)',
+            '    rmse = np.sqrt(mse)',
+            '    r2 = r2_score(y_true, y_pred)',
+            '    ',
+            '    print(f"MAE: {{mae:.4f}}")',
+            '    print(f"MSE: {{mse:.4f}}")',
+            '    print(f"RMSE: {{rmse:.4f}}")',
+            '    print(f"R²: {{r2:.4f}}")',
+            '    ',
+            '    return {"mae": mae, "mse": mse, "rmse": rmse, "r2": r2}'
+        ])
+    
+    lines.extend(['', ''])
+    return lines
+
+
+def _generate_main_function() -> List[str]:
+    """Generate main execution function"""
+    return [
+        'def main():',
+        '    """',
+        '    Main execution function',
+        '    """',
+        '    # Configuration',
+        '    data_file = "your_dataset.csv"  # Update with your file path',
+        '    model_file = "trained_model.pkl"',
+        '    test_size = 0.2',
+        '    cv_folds = 5  # Set to None to skip cross-validation',
+        '    ',
+        '    try:',
+        '        # Create model',
+        '        model = create_model()',
+        '        ',
+        '        # Load and preprocess data',
+        '        X, y, predictor_cols, target_cols = load_and_preprocess_data(data_file)',
+        '        ',
+        '        # Train model',
+        '        X_train, X_test, y_train, y_test, y_pred_train, y_pred_test = train_model(',
+        '            model, X, y, test_size, cv_folds',
+        '        )',
+        '        ',
+        '        # Evaluate model',
+        '        print("\\n" + "="*50)',
+        '        train_metrics = evaluate_model(model, y_train, y_pred_train, "Training Set")',
+        '        test_metrics = evaluate_model(model, y_test, y_pred_test, "Test Set")',
+        '        ',
+        '        # Feature importance (if available)',
+        '        if hasattr(model, \'feature_importances_\'):',
+        '            print("\\n=== Feature Importance ===")',
+        '            feature_importance = pd.DataFrame({',
+        '                \'feature\': predictor_cols,',
+        '                \'importance\': model.feature_importances_',
+        '            }).sort_values(\'importance\', ascending=False)',
+        '            print(feature_importance.head(10))',
+        '        ',
+        '        # Save model',
+        '        print(f"\\nSaving model to: {{model_file}}")',
+        '        joblib.dump({',
+        '            \'model\': model,',
+        '            \'predictor_columns\': predictor_cols,',
+        '            \'target_columns\': target_cols,',
+        '            \'metrics\': dict(train=train_metrics, test=test_metrics)',
+        '        }, model_file)',
+        '        print("Model saved successfully!")',
+        '        ',
+        '    except Exception as e:',
+        '        print(f"\\nError: {{str(e)}}")',
+        '        import traceback',
+        '        traceback.print_exc()',
+        '',
+        '',
+        'if __name__ == "__main__":',
+        '    main()'
+    ]
 
 
 def generate_sklearn_code(model_def) -> str:

@@ -1589,61 +1589,107 @@ function trainModel(modelId) {
 }
 
 // Éditer le modèle
+// Helper function to load model form data
+function loadModelFormData(model) {
+    document.getElementById('modelName').value = model.name;
+    document.getElementById('modelType').value = model.model_type;
+    document.getElementById('epochs').value = model.hyperparameters?.epochs || 50;
+    document.getElementById('testSize').value = (model.hyperparameters?.test_size || 0.2) * 100;
+}
+
+// Helper function to load hyperparameters
+function loadModelHyperparameters(hyperparams) {
+    if (!hyperparams) return;
+    
+    const paramMapping = {
+        'loss_function': 'lossFunction',
+        'optimizer': 'optimizer',
+        'learning_rate': 'learningRate',
+        'batch_size': 'batchSize',
+        'output_activation': 'outputActivation',
+        'output_units': 'outputUnits'
+    };
+    
+    Object.entries(paramMapping).forEach(([key, elementId]) => {
+        if (hyperparams[key]) {
+            const element = document.getElementById(elementId);
+            if (element) element.value = hyperparams[key];
+        }
+    });
+}
+
+// Helper function to load custom architecture
+function loadCustomArchitecture(model) {
+    if (model.use_custom_architecture && model.custom_architecture?.length > 0) {
+        document.getElementById('expertMode').checked = true;
+        toggleExpertMode();
+        renderLayers();
+    }
+}
+
+// Helper function to select dataset columns
+function selectDatasetColumns(model) {
+    // Sélectionner les variables cibles
+    model.target_columns.forEach(col => {
+        if (!col) return;
+        const safeId = col.replace(/[^a-zA-Z0-9]/g, '_');
+        const checkbox = document.querySelector(`#target_${safeId}`);
+        if (checkbox) checkbox.checked = true;
+    });
+    
+    // Sélectionner les variables prédictives
+    model.predictor_columns.forEach(col => {
+        if (!col) return;
+        const safeId = col.replace(/[^a-zA-Z0-9]/g, '_');
+        const checkbox = document.querySelector(`#pred_${safeId}`);
+        if (checkbox) checkbox.checked = true;
+    });
+    
+    applyModelRules();
+}
+
+// Helper function to setup edit modal UI
+function setupEditModalUI(model, modelId) {
+    // Changer le titre du modal
+    document.querySelector('#createModelModal .modal-title').innerHTML = `
+        <i class="bi bi-pencil-square"></i> Éditer le Modèle - ${model.name}
+    `;
+    
+    // Changer le bouton pour sauvegarder
+    const footer = document.querySelector('#createModelModal .modal-footer');
+    footer.innerHTML = `
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-primary" onclick="updateModel(${modelId})">
+            <i class="bi bi-save"></i> Sauvegarder les modifications
+        </button>
+    `;
+}
+
+// Refactored editModel function
 function editModel(modelId) {
     const model = modelsList.find(m => m.id === modelId);
     if (!model) return;
     
     selectedModel = model;
     
-    // Clean up any existing modals first
+    // Clean up and reset
     cleanupModals();
-    
-    // Réinitialiser le formulaire
     document.getElementById('createModelForm').reset();
     networkLayers = model.custom_architecture || [];
     layerIdCounter = networkLayers.length;
     
-    // Charger les valeurs du modèle
-    document.getElementById('modelName').value = model.name;
-    document.getElementById('modelType').value = model.model_type;
-    document.getElementById('epochs').value = model.hyperparameters?.epochs || 50;
-    document.getElementById('testSize').value = (model.hyperparameters?.test_size || 0.2) * 100;
+    // Load model data
+    loadModelFormData(model);
+    loadModelHyperparameters(model.hyperparameters);
+    loadCustomArchitecture(model);
     
-    // Si c'est un modèle de deep learning, charger la configuration
-    if (model.hyperparameters) {
-        if (model.hyperparameters.loss_function) {
-            document.getElementById('lossFunction').value = model.hyperparameters.loss_function;
-        }
-        if (model.hyperparameters.optimizer) {
-            document.getElementById('optimizer').value = model.hyperparameters.optimizer;
-        }
-        if (model.hyperparameters.learning_rate) {
-            document.getElementById('learningRate').value = model.hyperparameters.learning_rate;
-        }
-        if (model.hyperparameters.batch_size) {
-            document.getElementById('batchSize').value = model.hyperparameters.batch_size;
-        }
-        if (model.hyperparameters.output_activation) {
-            document.getElementById('outputActivation').value = model.hyperparameters.output_activation;
-        }
-        if (model.hyperparameters.output_units) {
-            document.getElementById('outputUnits').value = model.hyperparameters.output_units;
-        }
-    }
-    
-    // Activer le mode expert si nécessaire
-    if (model.use_custom_architecture && model.custom_architecture?.length > 0) {
-        document.getElementById('expertMode').checked = true;
-        toggleExpertMode();
-        renderLayers();
-    }
-    
-    // Charger les datasets et sélectionner le bon
+    // Load datasets and select the right one
     fetch('/api/datasets/')
         .then(response => response.json())
         .then(datasets => {
             const select = document.getElementById('dataset');
             select.innerHTML = '<option value="">Sélectionner un dataset...</option>';
+            
             datasets.forEach(dataset => {
                 const option = document.createElement('option');
                 option.value = dataset.id;
@@ -1654,64 +1700,26 @@ function editModel(modelId) {
                 select.appendChild(option);
             });
             
-            // Charger les colonnes du dataset sélectionné
+            // Load dataset columns if dataset is selected
             if (model.dataset) {
                 loadDatasetColumns();
                 
-                // Après le chargement des colonnes, sélectionner les bonnes
-                setTimeout(() => {
-                    // Sélectionner les variables cibles
-                    model.target_columns.forEach(col => {
-                        if (!col) return; // Skip invalid column names
-                        const safeId = col.replace(/[^a-zA-Z0-9]/g, '_');
-                        const checkbox = document.querySelector(`#target_${safeId}`);
-                        if (checkbox) checkbox.checked = true;
-                    });
-                    
-                    // Sélectionner les variables prédictives
-                    model.predictor_columns.forEach(col => {
-                        if (!col) return; // Skip invalid column names
-                        const safeId = col.replace(/[^a-zA-Z0-9]/g, '_');
-                        const checkbox = document.querySelector(`#pred_${safeId}`);
-                        if (checkbox) checkbox.checked = true;
-                    });
-                    
-                    // Appliquer les règles du modèle
-                    applyModelRules();
-                }, 1000);
+                // Select appropriate columns after loading
+                setTimeout(() => selectDatasetColumns(model), 1000);
             }
         });
     
-    // Changer le titre du modal
-    document.querySelector('#createModelModal .modal-title').innerHTML = `
-        <i class="bi bi-pencil-square"></i> Éditer le Modèle - ${model.name}
-    `;
+    // Setup modal UI for editing
+    setupEditModalUI(model, modelId);
     
-    // Changer le bouton pour sauvegarder au lieu de créer
-    const footer = document.querySelector('#createModelModal .modal-footer');
-    footer.innerHTML = `
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-        <button type="button" class="btn btn-primary" onclick="updateModel(${modelId})">
-            <i class="bi bi-save"></i> Sauvegarder les modifications
-        </button>
-    `;
-    
-    // Charger la configuration Random Forest si applicable
+    // Load model-specific configurations
     if (model.model_type === 'random_forest' && model.hyperparameters) {
         loadRandomForestConfiguration(model.hyperparameters);
     }
     
-    // Trigger la mise à jour des options selon le type de modèle
+    // Update framework options and show modal
     updateFrameworkOptions();
-    
-    // Afficher le modal
-    const modalElement = document.getElementById('createModelModal');
-    const modal = new bootstrap.Modal(modalElement, {
-        backdrop: false,
-        keyboard: true,
-        focus: true
-    });
-    modal.show();
+    showModalSafely('createModelModal');
 }
 
 // Mettre à jour le modèle
@@ -2681,48 +2689,70 @@ function createModelOnly() {
     });
 }
 
+// Utility function to safely show modals
+function showModalSafely(modalId, options = {}) {
+    // Default options
+    const defaultOptions = {
+        backdrop: false,
+        keyboard: true,
+        focus: true
+    };
+    
+    // Clean up first
+    cleanupModals();
+    
+    // Small delay to ensure cleanup is complete
+    setTimeout(() => {
+        const modalElement = document.getElementById(modalId);
+        if (modalElement) {
+            const modal = new bootstrap.Modal(modalElement, {...defaultOptions, ...options});
+            modal.show();
+        }
+    }, 100);
+}
+
 // Fonction pour afficher le modal de création
 function showCreateModelModal() {
-    // Ensure page is clean
-    setTimeout(() => {
-        // Clean up any existing modals first
-        cleanupModals();
-        hideLoading();
-        
-        // Réinitialiser le formulaire
-        document.getElementById('createModelForm').reset();
-        document.getElementById('targetVariables').innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
-        document.getElementById('predictorVariables').innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
-        document.getElementById('modelRequirements').style.display = 'none';
-        networkLayers = [];
-        layerIdCounter = 0;
-        
-        // Charger les datasets disponibles
-        fetch('/api/datasets/')
-            .then(response => response.json())
-            .then(datasets => {
-                const select = document.getElementById('dataset');
-                select.innerHTML = '<option value="">Sélectionner un dataset...</option>';
-                datasets.forEach(dataset => {
-                    const option = document.createElement('option');
-                    option.value = dataset.id;
-                    option.textContent = dataset.name;
-                    select.appendChild(option);
-                });
-            })
-            .catch(error => {
-                console.error('Erreur lors du chargement des datasets:', error);
-            });
-        
-        // Show modal
-        const modalElement = document.getElementById('createModelModal');
-        const modal = new bootstrap.Modal(modalElement, {
-            backdrop: false,
-            keyboard: true,
-            focus: true
+    // Reset form and state
+    resetCreateModelForm();
+    
+    // Load datasets
+    loadDatasetsForModal()
+        .then(() => {
+            // Show modal after datasets are loaded
+            showModalSafely('createModelModal');
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des datasets:', error);
+            showNotification('Erreur', 'Impossible de charger les datasets', 'error');
         });
-        modal.show();
-    }, 100);
+}
+
+// Helper function to reset create model form
+function resetCreateModelForm() {
+    hideLoading();
+    document.getElementById('createModelForm').reset();
+    document.getElementById('targetVariables').innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+    document.getElementById('predictorVariables').innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+    document.getElementById('modelRequirements').style.display = 'none';
+    networkLayers = [];
+    layerIdCounter = 0;
+}
+
+// Helper function to load datasets for modal
+function loadDatasetsForModal() {
+    return fetch('/api/datasets/')
+        .then(response => response.json())
+        .then(datasets => {
+            const select = document.getElementById('dataset');
+            select.innerHTML = '<option value="">Sélectionner un dataset...</option>';
+            datasets.forEach(dataset => {
+                const option = document.createElement('option');
+                option.value = dataset.id;
+                option.textContent = dataset.name;
+                select.appendChild(option);
+            });
+        });
 }
 
 // Ajouter des listeners pour les changements
@@ -2913,14 +2943,9 @@ function showFrameworkSelectionModal(modelId, action) {
     // Get the model to check its type
     const model = modelsList.find(m => m.id === modelId);
     
-    // For models that only support sklearn, directly perform the action
+    // For models that only support sklearn, show sklearn-only modal
     if (model && ['random_forest', 'decision_tree', 'xgboost'].includes(model.model_type)) {
-        if (action === 'export') {
-            performExportModelCode(modelId, 'sklearn');
-        } else if (action === 'import') {
-            // For import, we still need sklearn parsing support, so show only sklearn option
-            showSklearnOnlyModal(modelId, action);
-        }
+        showSklearnOnlyModal(modelId, action, model);
         return;
     }
     
@@ -2937,6 +2962,30 @@ function showFrameworkSelectionModal(modelId, action) {
         title.innerHTML = '<i class="bi bi-download"></i> Exporter le Code du Modèle';
     } else if (action === 'import') {
         title.innerHTML = '<i class="bi bi-upload"></i> Importer le Code du Modèle';
+    }
+    
+    // Restore modal for neural networks
+    const kerasCol = modalElement.querySelector('[data-framework="keras"]')?.closest('.col-6');
+    const pytorchCol = modalElement.querySelector('[data-framework="pytorch"]')?.closest('.col-6');
+    const sklearnCol = modalElement.querySelector('[data-framework="sklearn"]')?.closest('.col-12');
+    
+    // Show Keras and PyTorch buttons, hide sklearn
+    if (kerasCol) {
+        kerasCol.style.display = 'block';
+        kerasCol.className = 'col-6';
+    }
+    if (pytorchCol) {
+        pytorchCol.style.display = 'block';
+        pytorchCol.className = 'col-6';
+    }
+    if (sklearnCol) {
+        sklearnCol.style.display = 'none';
+    }
+    
+    // Restore modal text
+    const modalText = modalElement.querySelector('.modal-body p');
+    if (modalText) {
+        modalText.textContent = 'Sélectionnez le framework pour générer le code:';
     }
     
     // Add click handlers to framework buttons
@@ -2964,12 +3013,88 @@ function showFrameworkSelectionModal(modelId, action) {
 }
 
 // Show modal with only sklearn option
-function showSklearnOnlyModal(modelId, action) {
-    showNotification('Information', 'Ce modèle utilise scikit-learn. Import de code scikit-learn en cours de développement.', 'info');
-    // For now, just use sklearn
-    if (action === 'import') {
-        performImportModelCode(modelId, 'sklearn');
+function showSklearnOnlyModal(modelId, action, model) {
+    cleanupModals();
+    
+    // Clone the framework selection modal but modify it for sklearn only
+    const modalElement = document.getElementById('frameworkSelectionModal');
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: true,
+        keyboard: true,
+        focus: true
+    });
+    
+    // Update modal title based on action
+    const title = document.getElementById('frameworkSelectionModalLabel');
+    if (action === 'export') {
+        title.innerHTML = '<i class="bi bi-download"></i> Exporter le Code du Modèle';
+    } else if (action === 'import') {
+        title.innerHTML = '<i class="bi bi-upload"></i> Importer le Code du Modèle';
     }
+    
+    // Hide Keras and PyTorch buttons
+    const kerasCol = modalElement.querySelector('[data-framework="keras"]')?.closest('.col-6');
+    const pytorchCol = modalElement.querySelector('[data-framework="pytorch"]')?.closest('.col-6');
+    if (kerasCol) kerasCol.style.display = 'none';
+    if (pytorchCol) pytorchCol.style.display = 'none';
+    
+    // Check if sklearn button exists, if not create it
+    let sklearnBtn = modalElement.querySelector('[data-framework="sklearn"]');
+    let sklearnCol;
+    
+    if (!sklearnBtn) {
+        // Create sklearn button container
+        const buttonsContainer = modalElement.querySelector('.modal-body .row');
+        sklearnCol = document.createElement('div');
+        sklearnCol.className = 'col-12';
+        sklearnCol.innerHTML = `
+            <button type="button" class="btn btn-outline-warning w-100 framework-btn" data-framework="sklearn" 
+                    style="padding: 20px;">
+                <i class="bi bi-graph-up" style="font-size: 2rem;"></i>
+                <div class="mt-2">
+                    <strong>Scikit-learn</strong>
+                    <br>
+                    <small class="text-muted">Machine Learning en Python</small>
+                    <br>
+                    <small class="text-muted">${model ? model.model_type.toUpperCase() : 'Random Forest'}</small>
+                </div>
+            </button>
+        `;
+        buttonsContainer.appendChild(sklearnCol);
+        sklearnBtn = sklearnCol.querySelector('.framework-btn');
+    } else {
+        // Make sure sklearn button is visible and full width
+        sklearnCol = sklearnBtn.closest('.col-6') || sklearnBtn.closest('.col-12');
+        if (sklearnCol) {
+            sklearnCol.style.display = 'block';
+            sklearnCol.className = 'col-12';
+        }
+    }
+    
+    // Update modal text for ML models
+    const modalText = modalElement.querySelector('.modal-body p');
+    if (modalText) {
+        modalText.textContent = 'Ce modèle utilise scikit-learn pour le Machine Learning:';
+    }
+    
+    // Remove any existing click handlers
+    const newSklearnBtn = sklearnBtn.cloneNode(true);
+    sklearnBtn.parentNode.replaceChild(newSklearnBtn, sklearnBtn);
+    
+    // Add click handler
+    newSklearnBtn.addEventListener('click', function() {
+        modal.hide();
+        
+        if (action === 'export') {
+            performExportModelCode(modelId, 'sklearn');
+        } else if (action === 'import') {
+            // Show info message for import (not fully implemented yet)
+            showNotification('Information', 'Import de code scikit-learn en cours de développement.', 'info');
+            // performImportModelCode(modelId, 'sklearn');
+        }
+    });
+    
+    modal.show();
 }
 
 // Perform the actual model code export
@@ -3243,71 +3368,81 @@ function getRandomForestConfig() {
 }
 
 // Load Random Forest configuration for editing
+// Helper function to set value and update range display
+function setValueWithRangeUpdate(elementId, value, rangeDisplayId) {
+    const element = document.getElementById(elementId);
+    if (element && value !== undefined && value !== null) {
+        element.value = value;
+        if (rangeDisplayId) {
+            updateRangeValue(elementId, rangeDisplayId);
+        }
+    }
+}
+
+// Helper function to set checkbox value
+function setCheckboxValue(elementId, value, callback) {
+    const element = document.getElementById(elementId);
+    if (element && value !== undefined) {
+        element.checked = value;
+        if (callback) callback();
+    }
+}
+
+// Helper function to load Random Forest parameters
 function loadRandomForestConfiguration(hyperparams) {
     if (!hyperparams) return;
     
-    // Load basic settings
-    if (hyperparams.preset) document.getElementById('rfPreset').value = hyperparams.preset;
-    if (hyperparams.problem_type) document.getElementById('rfProblemType').value = hyperparams.problem_type;
+    // Parameter mapping for simple values
+    const simpleParams = {
+        'rfPreset': hyperparams.preset,
+        'rfProblemType': hyperparams.problem_type,
+        'rfCriterion': hyperparams.criterion,
+        'rfValidationMethod': hyperparams.validation_method,
+        'rfMinSamplesSplit': hyperparams.min_samples_split,
+        'rfMinSamplesLeaf': hyperparams.min_samples_leaf,
+        'rfNJobs': hyperparams.n_jobs,
+        'rfRandomState': hyperparams.random_state,
+        'rfOutputType': hyperparams.output_type
+    };
     
-    if (hyperparams.n_estimators) {
-        document.getElementById('rfNEstimators').value = hyperparams.n_estimators;
-        updateRangeValue('rfNEstimators', 'rfNEstimatorsValue');
-    }
+    // Set simple parameters
+    Object.entries(simpleParams).forEach(([elementId, value]) => {
+        setValueWithRangeUpdate(elementId, value);
+    });
     
-    if (hyperparams.max_depth_enabled !== undefined) {
-        document.getElementById('rfMaxDepthEnabled').checked = hyperparams.max_depth_enabled;
-        toggleRandomForestMaxDepth();
-    }
+    // Parameters with range displays
+    const rangeParams = {
+        'rfNEstimators': { value: hyperparams.n_estimators, display: 'rfNEstimatorsValue' },
+        'rfMinWeightFractionLeaf': { value: hyperparams.min_weight_fraction_leaf, display: 'rfMinWeightFractionLeafValue' },
+        'rfMinImpurityDecrease': { value: hyperparams.min_impurity_decrease, display: 'rfMinImpurityDecreaseValue' },
+        'rfDecisionThreshold': { value: hyperparams.decision_threshold, display: 'rfDecisionThresholdValue' }
+    };
     
+    Object.entries(rangeParams).forEach(([elementId, config]) => {
+        setValueWithRangeUpdate(elementId, config.value, config.display);
+    });
+    
+    // Checkbox parameters
+    setCheckboxValue('rfMaxDepthEnabled', hyperparams.max_depth_enabled, toggleRandomForestMaxDepth);
+    setCheckboxValue('rfClassWeightBalanced', hyperparams.class_weight_balanced);
+    setCheckboxValue('rfBootstrap', hyperparams.bootstrap, toggleBootstrapOptions);
+    setCheckboxValue('rfOobScore', hyperparams.oob_score);
+    
+    // Special handling for max_depth
     if (hyperparams.max_depth && hyperparams.max_depth_enabled) {
-        document.getElementById('rfMaxDepth').value = hyperparams.max_depth;
+        setValueWithRangeUpdate('rfMaxDepth', hyperparams.max_depth);
     }
     
+    // Special handling for max_features
     if (hyperparams.max_features) {
         const maxFeatures = typeof hyperparams.max_features === 'number' ? 'custom' : hyperparams.max_features;
-        document.getElementById('rfMaxFeatures').value = maxFeatures;
+        setValueWithRangeUpdate('rfMaxFeatures', maxFeatures);
+        
         if (maxFeatures === 'custom' && hyperparams.max_features_fraction) {
-            document.getElementById('rfMaxFeaturesFraction').value = hyperparams.max_features_fraction;
-            updateRangeValue('rfMaxFeaturesFraction', 'rfMaxFeaturesFractionValue');
+            setValueWithRangeUpdate('rfMaxFeaturesFraction', hyperparams.max_features_fraction, 'rfMaxFeaturesFractionValue');
         }
         toggleCustomMaxFeatures();
     }
-    
-    if (hyperparams.criterion) document.getElementById('rfCriterion').value = hyperparams.criterion;
-    if (hyperparams.class_weight_balanced !== undefined) document.getElementById('rfClassWeightBalanced').checked = hyperparams.class_weight_balanced;
-    if (hyperparams.validation_method) document.getElementById('rfValidationMethod').value = hyperparams.validation_method;
-    
-    // Load advanced settings
-    if (hyperparams.min_samples_split) document.getElementById('rfMinSamplesSplit').value = hyperparams.min_samples_split;
-    if (hyperparams.min_samples_leaf) document.getElementById('rfMinSamplesLeaf').value = hyperparams.min_samples_leaf;
-    
-    if (hyperparams.min_weight_fraction_leaf !== undefined) {
-        document.getElementById('rfMinWeightFractionLeaf').value = hyperparams.min_weight_fraction_leaf;
-        updateRangeValue('rfMinWeightFractionLeaf', 'rfMinWeightFractionLeafValue');
-    }
-    
-    if (hyperparams.min_impurity_decrease !== undefined) {
-        document.getElementById('rfMinImpurityDecrease').value = hyperparams.min_impurity_decrease;
-        updateRangeValue('rfMinImpurityDecrease', 'rfMinImpurityDecreaseValue');
-    }
-    
-    if (hyperparams.bootstrap !== undefined) {
-        document.getElementById('rfBootstrap').checked = hyperparams.bootstrap;
-        toggleBootstrapOptions();
-    }
-    
-    if (hyperparams.oob_score !== undefined) document.getElementById('rfOobScore').checked = hyperparams.oob_score;
-    if (hyperparams.n_jobs) document.getElementById('rfNJobs').value = hyperparams.n_jobs;
-    if (hyperparams.random_state) document.getElementById('rfRandomState').value = hyperparams.random_state;
-    
-    // Load classification settings
-    if (hyperparams.decision_threshold !== undefined) {
-        document.getElementById('rfDecisionThreshold').value = hyperparams.decision_threshold;
-        updateRangeValue('rfDecisionThreshold', 'rfDecisionThresholdValue');
-    }
-    
-    if (hyperparams.output_type) document.getElementById('rfOutputType').value = hyperparams.output_type;
     
     // Update UI based on problem type
     updateRandomForestOptions();

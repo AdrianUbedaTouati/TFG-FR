@@ -8,6 +8,7 @@ import xgboost as xgb
 import json
 import joblib
 import os
+import requests
 from datetime import datetime, timedelta
 from django.utils import timezone
 import tensorflow as tf
@@ -931,41 +932,161 @@ def make_predictions(session, input_file):
 
 
 def generate_weather_map_data(session, date):
-    """Generate predictions for weather map visualization"""
+    """Generate predictions for weather map visualization using real weather data"""
+    import requests
+    from datetime import datetime
+    import os
+    
     # Define grid points for Spain and France
-    spain_france_grid = [
+    cities = [
         # Spain major cities
-        {'region': 'Madrid', 'latitude': 40.4168, 'longitude': -3.7038},
-        {'region': 'Barcelona', 'latitude': 41.3851, 'longitude': 2.1734},
-        {'region': 'Valencia', 'latitude': 39.4699, 'longitude': -0.3763},
-        {'region': 'Sevilla', 'latitude': 37.3891, 'longitude': -5.9845},
-        {'region': 'Bilbao', 'latitude': 43.2630, 'longitude': -2.9350},
+        {'region': 'Madrid', 'latitude': 40.4168, 'longitude': -3.7038, 'country': 'ES'},
+        {'region': 'Barcelona', 'latitude': 41.3851, 'longitude': 2.1734, 'country': 'ES'},
+        {'region': 'Valencia', 'latitude': 39.4699, 'longitude': -0.3763, 'country': 'ES'},
+        {'region': 'Sevilla', 'latitude': 37.3891, 'longitude': -5.9845, 'country': 'ES'},
+        {'region': 'Bilbao', 'latitude': 43.2630, 'longitude': -2.9350, 'country': 'ES'},
         # France major cities
-        {'region': 'Paris', 'latitude': 48.8566, 'longitude': 2.3522},
-        {'region': 'Lyon', 'latitude': 45.7640, 'longitude': 4.8357},
-        {'region': 'Marseille', 'latitude': 43.2965, 'longitude': 5.3698},
-        {'region': 'Toulouse', 'latitude': 43.6047, 'longitude': 1.4442},
-        {'region': 'Bordeaux', 'latitude': 44.8378, 'longitude': -0.5792},
+        {'region': 'Paris', 'latitude': 48.8566, 'longitude': 2.3522, 'country': 'FR'},
+        {'region': 'Lyon', 'latitude': 45.7640, 'longitude': 4.8357, 'country': 'FR'},
+        {'region': 'Marseille', 'latitude': 43.2965, 'longitude': 5.3698, 'country': 'FR'},
+        {'region': 'Toulouse', 'latitude': 43.6047, 'longitude': 1.4442, 'country': 'FR'},
+        {'region': 'Bordeaux', 'latitude': 44.8378, 'longitude': -0.5792, 'country': 'FR'},
     ]
     
-    # Generate synthetic input data for prediction
-    # In real implementation, this would come from weather APIs or historical patterns
     predictions = []
-    for point in spain_france_grid:
-        # Create prediction record
-        pred = WeatherPrediction(
-            training_session=session,
-            prediction_date=date,
-            region=point['region'],
-            latitude=point['latitude'],
-            longitude=point['longitude'],
-            predictions={
-                'temperature': np.random.uniform(10, 30),
-                'humidity': np.random.uniform(40, 80),
-                'pressure': np.random.uniform(1000, 1030),
-                'wind_speed': np.random.uniform(0, 20)
-            }
-        )
-        predictions.append(pred)
+    
+    # Get weather data from OpenWeatherMap API (free tier)
+    # You need to set OPENWEATHER_API_KEY in environment variables
+    api_key = os.environ.get('OPENWEATHER_API_KEY', '')
+    
+    if not api_key:
+        # Fallback to OpenMeteo API (no key required)
+        for city in cities:
+            try:
+                # OpenMeteo API for current weather
+                url = f"https://api.open-meteo.com/v1/forecast"
+                params = {
+                    'latitude': city['latitude'],
+                    'longitude': city['longitude'],
+                    'current_weather': True,
+                    'hourly': 'temperature_2m,relativehumidity_2m,surface_pressure,windspeed_10m',
+                    'forecast_days': 1
+                }
+                
+                response = requests.get(url, params=params, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    current = data.get('current_weather', {})
+                    hourly = data.get('hourly', {})
+                    
+                    # Get the current hour's data
+                    current_hour = datetime.now().hour
+                    
+                    pred = WeatherPrediction(
+                        training_session=session,
+                        prediction_date=date,
+                        region=city['region'],
+                        latitude=city['latitude'],
+                        longitude=city['longitude'],
+                        predictions={
+                            'temperature': current.get('temperature', hourly['temperature_2m'][current_hour] if hourly else 20),
+                            'humidity': hourly['relativehumidity_2m'][current_hour] if 'relativehumidity_2m' in hourly else 60,
+                            'pressure': hourly['surface_pressure'][current_hour] if 'surface_pressure' in hourly else 1013,
+                            'wind_speed': current.get('windspeed', hourly['windspeed_10m'][current_hour] if hourly else 5)
+                        }
+                    )
+                else:
+                    # Fallback prediction if API fails
+                    pred = _create_fallback_prediction(session, date, city)
+                    
+            except Exception as e:
+                print(f"Error fetching weather data for {city['region']}: {str(e)}")
+                pred = _create_fallback_prediction(session, date, city)
+                
+            predictions.append(pred)
+    else:
+        # Use OpenWeatherMap API
+        for city in cities:
+            try:
+                url = f"https://api.openweathermap.org/data/2.5/weather"
+                params = {
+                    'lat': city['latitude'],
+                    'lon': city['longitude'],
+                    'appid': api_key,
+                    'units': 'metric'
+                }
+                
+                response = requests.get(url, params=params, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    main = data.get('main', {})
+                    wind = data.get('wind', {})
+                    
+                    pred = WeatherPrediction(
+                        training_session=session,
+                        prediction_date=date,
+                        region=city['region'],
+                        latitude=city['latitude'],
+                        longitude=city['longitude'],
+                        predictions={
+                            'temperature': main.get('temp', 20),
+                            'humidity': main.get('humidity', 60),
+                            'pressure': main.get('pressure', 1013),
+                            'wind_speed': wind.get('speed', 5) * 3.6  # Convert m/s to km/h
+                        }
+                    )
+                else:
+                    pred = _create_fallback_prediction(session, date, city)
+                    
+            except Exception as e:
+                print(f"Error fetching weather data for {city['region']}: {str(e)}")
+                pred = _create_fallback_prediction(session, date, city)
+                
+            predictions.append(pred)
     
     return predictions
+
+
+def _create_fallback_prediction(session, date, city):
+    """Create a fallback prediction with seasonal averages"""
+    from datetime import datetime
+    
+    # Get month to determine season
+    month = date.month if hasattr(date, 'month') else datetime.now().month
+    
+    # Seasonal temperature averages (approximate)
+    seasonal_temps = {
+        'ES': {  # Spain
+            'winter': 12, 'spring': 18, 'summer': 28, 'autumn': 20
+        },
+        'FR': {  # France
+            'winter': 8, 'spring': 15, 'summer': 25, 'autumn': 16
+        }
+    }
+    
+    # Determine season
+    if month in [12, 1, 2]:
+        season = 'winter'
+    elif month in [3, 4, 5]:
+        season = 'spring'
+    elif month in [6, 7, 8]:
+        season = 'summer'
+    else:
+        season = 'autumn'
+    
+    country = city.get('country', 'ES')
+    base_temp = seasonal_temps.get(country, seasonal_temps['ES'])[season]
+    
+    return WeatherPrediction(
+        training_session=session,
+        prediction_date=date,
+        region=city['region'],
+        latitude=city['latitude'],
+        longitude=city['longitude'],
+        predictions={
+            'temperature': base_temp + np.random.uniform(-3, 3),
+            'humidity': 60 + np.random.uniform(-15, 15),
+            'pressure': 1013 + np.random.uniform(-10, 10),
+            'wind_speed': 10 + np.random.uniform(-5, 10)
+        }
+    )
