@@ -10,7 +10,8 @@ import numpy as np
 from datetime import datetime
 
 from ..models import Dataset
-from ..normalization_methods import NumNorm, TextNorm, Normalizador
+from ..normalization_methods import DISPATCH_NUM, DISPATCH_TEXT
+from ..normalization_mappings import get_numeric_enum, get_text_enum
 from ..utils import (
     load_dataset, error_response, success_response,
     validate_dataframe, detect_column_type
@@ -85,13 +86,16 @@ class DatasetNormalizationView(APIView):
             
             if col_info.get('type') == 'numeric':
                 # Apply numeric normalization
-                normalizer = NumNorm(method)
-                normalized_df[column] = normalizer.normalize(df[column])
+                norm_enum = get_numeric_enum(method)
+                if norm_enum in DISPATCH_NUM:
+                    func = DISPATCH_NUM[norm_enum]
+                    normalized_df[column] = func(df[column])
             elif col_info.get('type') in ['categorical', 'text']:
                 # Apply text normalization if applicable
-                if method in ['onehot', 'label']:
-                    normalizer = TextNorm(method)
-                    normalized_df[column] = normalizer.normalize(df[column])
+                text_enum = get_text_enum(method)
+                if text_enum in DISPATCH_TEXT:
+                    func = DISPATCH_TEXT[text_enum]
+                    normalized_df[column] = func(df[column])
         
         return normalized_df
     

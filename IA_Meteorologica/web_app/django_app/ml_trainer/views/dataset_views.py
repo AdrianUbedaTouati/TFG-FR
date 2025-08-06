@@ -8,8 +8,6 @@ from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 import pandas as pd
 import numpy as np
-import json
-import mimetypes
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -23,7 +21,7 @@ from ..serializers import DatasetSerializer
 from ..utils import (
     load_dataset, detect_column_type, calculate_correlation_matrix,
     error_response, success_response, validate_dataframe,
-    safe_json_response, get_memory_usage, validate_columns
+    get_memory_usage
 )
 from ..constants import (
     HISTOGRAM_BINS, DEFAULT_FIGURE_SIZE, HEATMAP_FIGURE_SIZE,
@@ -102,26 +100,12 @@ class DatasetColumnDetailsView(APIView):
         
         # Add histogram for numeric columns
         if details.get('type') == 'numeric':
-            details['histogram'] = self._generate_histogram(series)
+            # Create a temporary base view instance to use its methods
+            base_view = DatasetAnalysisBaseView()
+            details['histogram'] = base_view.create_histogram(series)
         
         return success_response(details)
     
-    def _generate_histogram(self, series: pd.Series) -> str:
-        """Generate base64 encoded histogram"""
-        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
-        ax.hist(series.dropna(), bins=HISTOGRAM_BINS, edgecolor='black')
-        ax.set_xlabel(series.name)
-        ax.set_ylabel('Frequency')
-        ax.set_title(f'Distribution of {series.name}')
-        
-        # Convert to base64
-        buffer = BytesIO()
-        plt.savefig(buffer, format='png', bbox_inches='tight')
-        buffer.seek(0)
-        image_base64 = base64.b64encode(buffer.getvalue()).decode()
-        plt.close()
-        
-        return f"data:image/png;base64,{image_base64}"
 
 
 class DatasetDownloadView(APIView):
@@ -170,6 +154,17 @@ class DatasetAnalysisBaseView(APIView):
         image_base64 = base64.b64encode(buffer.getvalue()).decode()
         plt.close(fig)
         return f"data:image/png;base64,{image_base64}"
+    
+    def create_histogram(self, series: pd.Series, title: str = None, alpha: float = 0.7) -> str:
+        """Create a histogram for a pandas Series"""
+        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
+        ax.hist(series.dropna(), bins=HISTOGRAM_BINS, edgecolor='black', alpha=alpha)
+        ax.set_xlabel(series.name)
+        ax.set_ylabel('Frequency')
+        ax.set_title(title or f'Distribution of {series.name}')
+        ax.grid(True, alpha=0.3)
+        
+        return self.generate_plot_base64(fig)
 
 
 class DatasetVariableAnalysisView(DatasetAnalysisBaseView):
@@ -211,16 +206,9 @@ class DatasetVariableAnalysisView(DatasetAnalysisBaseView):
     
     def _create_histogram(self, series: pd.Series) -> Dict[str, str]:
         """Create histogram visualization"""
-        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
-        ax.hist(series.dropna(), bins=HISTOGRAM_BINS, edgecolor='black', alpha=0.7)
-        ax.set_xlabel(series.name)
-        ax.set_ylabel('Frequency')
-        ax.set_title(f'Histogram of {series.name}')
-        ax.grid(True, alpha=0.3)
-        
         return {
             'type': 'histogram',
-            'image': self.generate_plot_base64(fig)
+            'image': self.create_histogram(series, f'Histogram of {series.name}')
         }
     
     def _create_boxplot(self, series: pd.Series) -> Dict[str, str]:
