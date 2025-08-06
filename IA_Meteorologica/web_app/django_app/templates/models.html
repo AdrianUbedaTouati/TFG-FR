@@ -2004,7 +2004,7 @@ let selectedModel = null;
 
 // Charger les modèles
 function loadModels() {
-    showLoading();
+    showLoading('Chargement des modèles...', 'Récupération de vos modèles d\'IA');
     
     fetch('/api/models/')
         .then(response => {
@@ -2235,7 +2235,7 @@ function showTrainingHistory(modelId) {
         <i class="bi bi-clock-history"></i> Historique - ${model.name}
     `;
     
-    showLoading();
+    showLoading('Chargement de l\'historique...', 'Récupération des sessions d\'entraînement');
     
     fetch(`/api/models/${modelId}/trainings/`)
         .then(response => response.json())
@@ -2339,7 +2339,7 @@ function trainModel(modelId) {
         use_custom_architecture: model.use_custom_architecture
     };
     
-    showLoading();
+    showLoading('Initialisation de l\'entraînement...', 'Préparation de votre modèle d\'IA');
     
     fetch('/api/training-sessions/', {
         method: 'POST',

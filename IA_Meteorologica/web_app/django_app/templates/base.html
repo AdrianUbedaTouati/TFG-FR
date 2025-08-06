@@ -323,10 +323,59 @@
             transform: translate(-50%, -50%);
             z-index: 999; /* Menor que el backdrop del modal (1040) */
             pointer-events: none; /* Permite clicks a través del spinner */
+            text-align: center;
+            background: rgba(10, 14, 39, 0.95);
+            padding: 40px 60px;
+            border-radius: 20px;
+            border: 2px solid rgba(0, 212, 255, 0.5);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 212, 255, 0.6);
+            animation: pulseGlow 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulseGlow {
+            0%, 100% { 
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 212, 255, 0.6);
+                transform: translate(-50%, -50%) scale(1);
+            }
+            50% { 
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 60px rgba(0, 212, 255, 0.8);
+                transform: translate(-50%, -50%) scale(1.02);
+            }
         }
         
         .loading-spinner.active {
             display: block;
+        }
+        
+        .loading-spinner-icon {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(0, 212, 255, 0.3);
+            border-top-color: #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-spinner-text {
+            color: #00d4ff;
+            font-size: 1.2rem;
+            font-weight: 600;
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.8);
+            letter-spacing: 1px;
+            margin-top: 15px;
+        }
+        
+        .loading-spinner-subtext {
+            color: rgba(240, 249, 255, 0.7);
+            font-size: 0.95rem;
+            margin-top: 10px;
+            font-weight: 300;
         }
         
         /* Estilos mejorados para modales - IMPORTANTE: Fix para el overlay */
@@ -665,9 +714,9 @@
 
     <!-- Loading Spinner -->
     <div class="loading-spinner">
-        <div class="spinner-border text-light" style="width: 3rem; height: 3rem;" role="status">
-            <span class="visually-hidden">Chargement...</span>
-        </div>
+        <div class="loading-spinner-icon"></div>
+        <div class="loading-spinner-text">Traitement en cours...</div>
+        <div class="loading-spinner-subtext">Veuillez patienter quelques instants</div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -703,9 +752,26 @@
         });
         
         // Fonction pour afficher le spinner de chargement
-        function showLoading() {
+        // Exemples d'utilisation avec messages personnalisés:
+        // showLoading('Analyse en cours...', 'Traitement de vos données météorologiques');
+        // showLoading('Entraînement du modèle...', 'Cela peut prendre plusieurs minutes');
+        // showLoading('Génération des graphiques...', 'Préparation de vos visualisations');
+        // showLoading('Sauvegarde...', 'Enregistrement de vos modifications');
+        // showLoading('Connexion au serveur...', 'Établissement de la connexion');
+        function showLoading(mainText = 'Traitement en cours...', subText = 'Veuillez patienter quelques instants') {
             const spinner = document.querySelector('.loading-spinner');
             if (spinner) {
+                // Update the text if custom messages are provided
+                const mainTextElement = spinner.querySelector('.loading-spinner-text');
+                const subTextElement = spinner.querySelector('.loading-spinner-subtext');
+                
+                if (mainTextElement) {
+                    mainTextElement.textContent = mainText;
+                }
+                if (subTextElement) {
+                    subTextElement.textContent = subText;
+                }
+                
                 spinner.classList.add('active');
             }
         }
@@ -714,6 +780,19 @@
             const spinner = document.querySelector('.loading-spinner');
             if (spinner) {
                 spinner.classList.remove('active');
+                
+                // Reset to default messages after hiding
+                setTimeout(() => {
+                    const mainTextElement = spinner.querySelector('.loading-spinner-text');
+                    const subTextElement = spinner.querySelector('.loading-spinner-subtext');
+                    
+                    if (mainTextElement) {
+                        mainTextElement.textContent = 'Traitement en cours...';
+                    }
+                    if (subTextElement) {
+                        subTextElement.textContent = 'Veuillez patienter quelques instants';
+                    }
+                }, 300);
             }
             // Also ensure no modal backdrops are stuck
             setTimeout(() => {

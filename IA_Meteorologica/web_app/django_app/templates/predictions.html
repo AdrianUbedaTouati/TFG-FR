@@ -272,7 +272,7 @@ function initMap() {
 
 // Charger les prédictions
 function loadPredictions() {
-    showLoading();
+    showLoading('Chargement des prédictions...', 'Récupération de l\'historique des prédictions');
     
     fetch('/api/predictions/')
         .then(response => response.json())

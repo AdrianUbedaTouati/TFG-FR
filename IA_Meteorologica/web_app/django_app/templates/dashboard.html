@@ -1542,7 +1542,7 @@ function uploadDataset() {
     const progressBar = document.querySelector('#uploadProgress .progress-bar');
     document.getElementById('uploadProgress').classList.remove('d-none');
     
-    showLoading();
+    showLoading('Téléversement en cours...', 'Envoi de votre fichier de données');
     
     const csrfToken = getCookie('csrftoken');
     

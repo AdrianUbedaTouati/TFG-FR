@@ -685,16 +685,19 @@ function normalizeDataset(datasetId) {
 
 // Charger les datasets
 function loadDatasets() {
+    showLoading('Chargement des datasets...', 'Récupération de vos fichiers de données');
     return fetch('/api/datasets/')
         .then(response => response.json())
         .then(data => {
             datasets = data;
             displayDatasets(data);
             updateStats(data);
+            hideLoading();
             return data;
         })
         .catch(error => {
             console.error('Erreur:', error);
+            hideLoading();
             showNotification('Erreur', 'Impossible de charger les datasets', 'error');
             throw error;
         });
@@ -2750,7 +2753,7 @@ function deleteDataset(datasetId) {
         cancelButtonText: 'Annuler'
     }).then((result) => {
         if (result.isConfirmed) {
-            showLoading();
+            showLoading('Suppression en cours...', 'Suppression du dataset de votre collection');
             
             fetch(`/api/datasets/${dataset.id}/`, {
                 method: 'DELETE',
