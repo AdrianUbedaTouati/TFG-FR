@@ -2888,6 +2888,14 @@ const modelRules = {
         minPredictors: 1,
         allowSameVarAsBoth: false,
         description: 'Méthode d\'ensemble par boosting. Nécessite exactement 1 variable cible et au moins 1 variable prédictive distincte.'
+    },
+    'decision_tree': {
+        name: 'Decision Tree',
+        minTargets: 1,
+        maxTargets: 1,
+        minPredictors: 1,
+        allowSameVarAsBoth: false,
+        description: 'Arbre de décision pour classification/régression. Modèle interprétable nécessitant exactement 1 variable cible.'
     }
 };
 
