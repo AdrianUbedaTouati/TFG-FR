@@ -1235,6 +1235,101 @@ def _generate_sklearn_header(model_def) -> List[str]:
     return header_lines
 
 
+def _generate_decision_tree_params(hyperparams) -> List[str]:
+    """Generate Decision Tree parameter configuration"""
+    problem_type = hyperparams.get('problem_type', 'regression')
+    params_lines = ['    # Model parameters', '    params = {']
+    
+    # Criterion
+    criterion = hyperparams.get('criterion', 'squared_error' if problem_type == 'regression' else 'gini')
+    params_lines.append(f'        "criterion": "{criterion}",')
+    
+    # Splitter
+    params_lines.append(f'        "splitter": "{hyperparams.get("splitter", "best")}",')
+    
+    # Handle max_depth
+    if hyperparams.get('max_depth_enabled', True) and hyperparams.get('max_depth'):
+        params_lines.append(f'        "max_depth": {hyperparams["max_depth"]},')
+    else:
+        params_lines.append('        "max_depth": None,')
+    
+    # Min samples split and leaf
+    params_lines.append(f'        "min_samples_split": {hyperparams.get("min_samples_split", 2)},')
+    
+    # Handle min_samples_leaf (can be int or float)
+    min_samples_leaf = hyperparams.get('min_samples_leaf', 1)
+    if isinstance(min_samples_leaf, float) and min_samples_leaf < 1:
+        params_lines.append(f'        "min_samples_leaf": {min_samples_leaf},')
+    else:
+        params_lines.append(f'        "min_samples_leaf": {int(min_samples_leaf)},')
+    
+    # Min weight fraction leaf
+    params_lines.append(f'        "min_weight_fraction_leaf": {hyperparams.get("min_weight_fraction_leaf", 0.0)},')
+    
+    # Max features
+    max_features = hyperparams.get('max_features')
+    if max_features is None:
+        params_lines.append('        "max_features": None,')
+    elif isinstance(max_features, (int, float)):
+        params_lines.append(f'        "max_features": {max_features},')
+    else:
+        params_lines.append(f'        "max_features": "{max_features}",')
+    
+    # Max leaf nodes
+    if hyperparams.get('max_leaf_nodes'):
+        params_lines.append(f'        "max_leaf_nodes": {hyperparams["max_leaf_nodes"]},')
+    else:
+        params_lines.append('        "max_leaf_nodes": None,')
+    
+    # Min impurity decrease
+    params_lines.append(f'        "min_impurity_decrease": {hyperparams.get("min_impurity_decrease", 0.0)},')
+    
+    # CCP alpha
+    params_lines.append(f'        "ccp_alpha": {hyperparams.get("ccp_alpha", 0.0)},')
+    
+    # Classification specific - class weight
+    if problem_type == 'classification' and hyperparams.get('class_weight'):
+        class_weight = hyperparams['class_weight']
+        if class_weight == 'balanced':
+            params_lines.append('        "class_weight": "balanced",')
+        elif class_weight != 'None':
+            params_lines.append(f'        "class_weight": {class_weight},')
+    
+    # Random state
+    if hyperparams.get('random_state') is not None:
+        params_lines.append(f'        "random_state": {hyperparams["random_state"]},')
+    
+    # Remove trailing comma from last parameter
+    if params_lines[-1].endswith(','):
+        params_lines[-1] = params_lines[-1][:-1]
+    
+    params_lines.append('    }')
+    params_lines.append('')
+    
+    # Model creation
+    if problem_type == 'classification':
+        params_lines.append('    model = DecisionTreeClassifier(**params)')
+    else:
+        params_lines.append('    model = DecisionTreeRegressor(**params)')
+    
+    params_lines.append('')
+    params_lines.append('    # Train model')
+    params_lines.append('    model.fit(X_train, y_train)')
+    
+    # Add validation method code if specified
+    validation_method = hyperparams.get('validation_method', 'holdout')
+    if validation_method == 'cv':
+        params_lines.extend([
+            '',
+            '    # Cross-validation (opcional)',
+            '    from sklearn.model_selection import cross_val_score',
+            '    cv_scores = cross_val_score(model, X_train, y_train, cv=5)',
+            '    print(f"CV Score: {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")'
+        ])
+    
+    return params_lines
+
+
 def _generate_xgboost_params(hyperparams) -> List[str]:
     """Generate XGBoost parameter configuration"""
     problem_type = hyperparams.get('problem_type', 'regression')
@@ -1438,17 +1533,7 @@ def _generate_model_creation_code(model_type, hyperparams) -> List[str]:
         return _generate_random_forest_params(hyperparams)
         
     elif model_type == 'decision_tree':
-        return [
-            '    # Model parameters',
-            '    params = {',
-            f'        "max_depth": {hyperparams.get("max_depth", 10)},',
-            f'        "min_samples_split": {hyperparams.get("min_samples_split", 2)},',
-            f'        "min_samples_leaf": {hyperparams.get("min_samples_leaf", 1)},',
-            f'        "max_features": "{0}"'.format(hyperparams.get("max_features", "auto")),
-            '    }',
-            '',
-            '    model = DecisionTreeRegressor(**params)'
-        ]
+        return _generate_decision_tree_params(hyperparams)
         
     elif model_type == 'xgboost':
         return _generate_xgboost_params(hyperparams)

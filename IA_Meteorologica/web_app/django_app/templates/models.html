@@ -1505,6 +1505,325 @@
                         </div>
                     </div>
                     
+                    <!-- Configuration Decision Tree -->
+                    <div id="decisionTreeConfiguration" class="mt-4" style="display: none;">
+                        <h5 class="text-warning mb-3"><i class="bi bi-diagram-3"></i> Configuration Decision Tree</h5>
+                        
+                        <!-- Preset Selector -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="dtPreset" class="form-label">Configuration prédéfinie</label>
+                                <select class="form-select" id="dtPreset" onchange="applyDecisionTreePreset()">
+                                    <option value="rapido">Rapide</option>
+                                    <option value="balanceado" selected>Balancé (recommandé)</option>
+                                    <option value="preciso">Précis (contrôlé)</option>
+                                </select>
+                                <small class="text-muted">Rapide: arbre simple. Balancé: bon compromis. Précis: arbre complet avec validation.</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="dtProblemType" class="form-label">Type de problème</label>
+                                <select class="form-select" id="dtProblemType" onchange="updateDecisionTreeOptions()">
+                                    <option value="regression">Régression</option>
+                                    <option value="classification">Classification</option>
+                                </select>
+                                <small class="text-muted">Classification pour prédire des catégories, Régression pour des valeurs numériques</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Options de base -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0">🟢 Options sencillas</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="dtCriterion" class="form-label">
+                                                Critère de division 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Mesure de qualité d'une division"></i>
+                                            </label>
+                                            <select class="form-select" id="dtCriterion">
+                                                <option value="gini">Gini (classification)</option>
+                                                <option value="entropy">Entropie (classification)</option>
+                                                <option value="squared_error">Erreur quadratique (régression)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="dtMaxDepthEnabled" onchange="toggleDecisionTreeMaxDepth()">
+                                                <label class="form-check-label" for="dtMaxDepthEnabled">
+                                                    Limiter la profondeur 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Limiter la profondeur réduit le surapprentissage"></i>
+                                                </label>
+                                            </div>
+                                            <input type="number" class="form-control mt-2" id="dtMaxDepth" min="2" max="50" value="12" disabled>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="dtMinSamplesLeaf" class="form-label">
+                                                Min échantillons par feuille 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Mínimo de muestras por hoja; subirlo suaviza el árbol"></i>
+                                            </label>
+                                            <div class="input-group">
+                                                <input type="range" class="form-range" id="dtMinSamplesLeaf" min="1" max="50" value="1" oninput="updateDecisionTreeMinSamplesLeaf()">
+                                                <span class="input-group-text" id="dtMinSamplesLeafValue" style="width: 60px;">1</span>
+                                            </div>
+                                            <div class="form-check mt-1">
+                                                <input class="form-check-input" type="checkbox" id="dtMinSamplesLeafFraction" onchange="toggleMinSamplesLeafType()">
+                                                <label class="form-check-label" for="dtMinSamplesLeafFraction">
+                                                    Utiliser fraction (0-0.5) au lieu d'entier
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="dtMaxFeatures" class="form-label">
+                                                Features par division 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Límite de variables consideradas por división"></i>
+                                            </label>
+                                            <select class="form-select" id="dtMaxFeatures" onchange="toggleDecisionTreeMaxFeatures()">
+                                                <option value="None" selected>Toutes</option>
+                                                <option value="sqrt">sqrt</option>
+                                                <option value="log2">log2</option>
+                                                <option value="int">Nombre fixe</option>
+                                                <option value="float">Fraction (0-1)</option>
+                                            </select>
+                                            <input type="number" class="form-control mt-2" id="dtMaxFeaturesValue" style="display: none;" min="1" value="5">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            <label for="dtValidationMethod" class="form-label">
+                                                Validation rapide 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Pour évaluer; ne change pas l'arbre final sauf si vous l'appliquez"></i>
+                                            </label>
+                                            <select class="form-select" id="dtValidationMethod">
+                                                <option value="holdout">Hold-out 80/20</option>
+                                                <option value="cv">Validation croisée k-fold (k=5)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Options avancées -->
+                        <div class="card">
+                            <div class="card-header bg-warning text-white">
+                                <h6 class="mb-0">
+                                    <button class="btn btn-link text-white p-0" type="button" data-bs-toggle="collapse" data-bs-target="#dtAdvancedOptions" aria-expanded="false">
+                                        ⚙️ Options avancées <i class="bi bi-chevron-down"></i>
+                                    </button>
+                                </h6>
+                            </div>
+                            <div class="collapse" id="dtAdvancedOptions">
+                                <div class="card-body">
+                                    <p class="text-muted mb-3">Afinado fino et casos especiales pour Decision Tree.</p>
+                                    
+                                    <!-- Structure et divisions -->
+                                    <h6 class="text-info">Structure et divisions</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="dtSplitter" class="form-label">
+                                                    Splitter 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Best: meilleure division. Random: division aléatoire"></i>
+                                                </label>
+                                                <select class="form-select" id="dtSplitter">
+                                                    <option value="best" selected>Best (recommandé)</option>
+                                                    <option value="random">Random</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="dtMinSamplesSplit" class="form-label">
+                                                    Min échantillons pour diviser 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Minimum pour diviser un nœud"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="dtMinSamplesSplit" min="2" max="100" value="2">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="dtMinWeightFractionLeaf" class="form-label">
+                                                    Fraction min poids dans feuille 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Fraction minimale de poids dans une feuille"></i>
+                                                </label>
+                                                <input type="range" class="form-range mb-2" id="dtMinWeightFractionLeaf" min="0" max="0.5" step="0.01" value="0.0" oninput="updateRangeValue('dtMinWeightFractionLeaf', 'dtMinWeightFractionLeafValue')">
+                                                <div class="d-flex justify-content-between">
+                                                    <small>0.0</small>
+                                                    <span id="dtMinWeightFractionLeafValue" class="badge bg-primary">0.0</span>
+                                                    <small>0.5</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="dtMinImpurityDecrease" class="form-label">
+                                                    Décrement min impureté 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Umbral de ganancia mínima para aceptar una división"></i>
+                                                </label>
+                                                <input type="range" class="form-range mb-2" id="dtMinImpurityDecrease" min="0" max="0.1" step="0.001" value="0.0" oninput="updateRangeValue('dtMinImpurityDecrease', 'dtMinImpurityDecreaseValue')">
+                                                <div class="d-flex justify-content-between">
+                                                    <small>0.0</small>
+                                                    <span id="dtMinImpurityDecreaseValue" class="badge bg-primary">0.0</span>
+                                                    <small>0.1</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="dtMaxLeafNodes" class="form-label">
+                                                    Max nœuds feuilles 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Nombre maximum de feuilles. Laisser vide pour pas de limite"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="dtMaxLeafNodes" min="2" placeholder="Sans limite">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="dtCcpAlpha" class="form-label">
+                                                    CCP Alpha 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Poda por coste-complejidad (post-pruning)"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="dtCcpAlpha" min="0" step="0.0001" value="0.0">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Critères complets -->
+                                    <h6 class="text-info">Critères complets</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-12">
+                                            <div class="mb-3">
+                                                <label for="dtCriterionAdvanced" class="form-label">
+                                                    Critère avancé 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Options avancées de critères"></i>
+                                                </label>
+                                                <select class="form-select" id="dtCriterionAdvanced">
+                                                    <option value="default">Utiliser le critère basique</option>
+                                                    <optgroup label="Classification">
+                                                        <option value="gini">Gini</option>
+                                                        <option value="entropy">Entropie</option>
+                                                        <option value="log_loss">Log Loss</option>
+                                                    </optgroup>
+                                                    <optgroup label="Régression">
+                                                        <option value="squared_error">Erreur quadratique</option>
+                                                        <option value="absolute_error">Erreur absolue</option>
+                                                        <option value="friedman_mse">Friedman MSE</option>
+                                                        <option value="poisson">Poisson (y ≥ 0)</option>
+                                                    </optgroup>
+                                                </select>
+                                                <small class="text-warning" id="dtPoissonWarning" style="display: none;">
+                                                    <i class="bi bi-exclamation-triangle"></i> Poisson requiert des valeurs cibles ≥ 0
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Classification spécifique -->
+                                    <div id="dtClassificationSettings" style="display: none;">
+                                        <h6 class="text-info">Options de classification</h6>
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="dtClassWeight" class="form-label">
+                                                        Poids des classes 
+                                                        <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Pour gérer les classes déséquilibrées"></i>
+                                                    </label>
+                                                    <select class="form-select" id="dtClassWeight">
+                                                        <option value="None">Aucun</option>
+                                                        <option value="balanced">Équilibré automatiquement</option>
+                                                        <option value="custom">Personnalisé</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="dtDecisionThreshold" class="form-label">
+                                                        Seuil de décision 
+                                                        <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Pour convertir probabilités en classe"></i>
+                                                    </label>
+                                                    <input type="range" class="form-range mb-2" id="dtDecisionThreshold" min="0" max="1" step="0.05" value="0.5" oninput="updateRangeValue('dtDecisionThreshold', 'dtDecisionThresholdValue')">
+                                                    <div class="d-flex justify-content-between">
+                                                        <small>0.0</small>
+                                                        <span id="dtDecisionThresholdValue" class="badge bg-primary">0.5</span>
+                                                        <small>1.0</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="dtOutputType" class="form-label">
+                                                        Type de sortie 
+                                                        <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Classe pour décisions finales, Probabilités pour analyse"></i>
+                                                    </label>
+                                                    <select class="form-select" id="dtOutputType">
+                                                        <option value="class">Classe prédite</option>
+                                                        <option value="proba">Probabilités</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Reproductibilité -->
+                                    <h6 class="text-info">Reproductibilité et verbosité</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="dtRandomState" class="form-label">
+                                                    Random state 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Semilla (relevante si splitter='random')"></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="dtRandomState" min="0" max="999999" placeholder="Laisser vide pour aléatoire">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Presets de complexité -->
+                                    <h6 class="text-info">Presets de complexité</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-12">
+                                            <div class="btn-group" role="group">
+                                                <button type="button" class="btn btn-outline-secondary" onclick="applyDecisionTreeComplexityPreset('simple')">
+                                                    <i class="bi bi-tree"></i> Plus simple
+                                                </button>
+                                                <button type="button" class="btn btn-outline-secondary" onclick="applyDecisionTreeComplexityPreset('flexible')">
+                                                    <i class="bi bi-diagram-3-fill"></i> Plus flexible
+                                                </button>
+                                            </div>
+                                            <small class="text-muted d-block mt-1">
+                                                Simple: profondeur limitée, feuilles min 2. Flexible: sans limites.
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Architecture du Réseau (Mode Expert) -->
                     <div id="networkArchitecture" class="mt-4" style="display: none;">
                         <h5 class="text-info mb-3"><i class="bi bi-diagram-3"></i> Architecture du Réseau</h5>
@@ -2172,6 +2491,8 @@ function editModel(modelId) {
         loadRandomForestConfiguration(model.hyperparameters);
     } else if (model.model_type === 'xgboost' && model.hyperparameters) {
         loadXGBoostConfiguration(model.hyperparameters);
+    } else if (model.model_type === 'decision_tree' && model.hyperparameters) {
+        loadDecisionTreeConfiguration(model.hyperparameters);
     }
     
     // Update framework options and show modal
@@ -2248,6 +2569,11 @@ function updateModel(modelId) {
     // Configuration XGBoost
     if (modelType === 'xgboost') {
         modelConfig = { ...modelConfig, ...getXGBoostConfig() };
+    }
+    
+    // Configuration Decision Tree
+    if (modelType === 'decision_tree') {
+        modelConfig = { ...modelConfig, ...getDecisionTreeConfig() };
     }
     
     // Architecture personnalisée en mode expert
@@ -3073,6 +3399,11 @@ function createModelOnly() {
         modelConfig = { ...modelConfig, ...getXGBoostConfig() };
     }
     
+    // Configuration Decision Tree
+    if (modelType === 'decision_tree') {
+        modelConfig = { ...modelConfig, ...getDecisionTreeConfig() };
+    }
+    
     // Architecture personnalisée en mode expert
     if (expertMode && networkLayers.length > 0) {
         modelConfig.custom_architecture = networkLayers;
@@ -3380,6 +3711,7 @@ function updateFrameworkOptions() {
         document.getElementById('metricsCallbacks').style.display = 'none';
         document.getElementById('randomForestConfiguration').style.display = 'block';
         document.getElementById('xgboostConfiguration').style.display = 'none';
+        document.getElementById('decisionTreeConfiguration').style.display = 'none';
         epochsContainer.style.display = 'none';
         expertModeContainer.style.display = 'none';
         updateRandomForestOptions();
@@ -3390,16 +3722,32 @@ function updateFrameworkOptions() {
         document.getElementById('metricsCallbacks').style.display = 'none';
         document.getElementById('randomForestConfiguration').style.display = 'none';
         document.getElementById('xgboostConfiguration').style.display = 'block';
+        document.getElementById('decisionTreeConfiguration').style.display = 'none';
         epochsContainer.style.display = 'none';
         expertModeContainer.style.display = 'none';
         
         // Asegurar que el modo experto esté desactivado
         document.getElementById('expertMode').checked = false;
         updateXGBoostOptions();
-    } else {
-        // Para otros modelos (redes neuronales y decision tree)
+    } else if (modelType === 'decision_tree') {
+        // Para Decision Tree, ocultar secciones de redes neuronales y opciones no relevantes
+        document.getElementById('modelConfiguration').style.display = 'none';
+        document.getElementById('networkArchitecture').style.display = 'none';
+        document.getElementById('metricsCallbacks').style.display = 'none';
         document.getElementById('randomForestConfiguration').style.display = 'none';
         document.getElementById('xgboostConfiguration').style.display = 'none';
+        document.getElementById('decisionTreeConfiguration').style.display = 'block';
+        epochsContainer.style.display = 'none';
+        expertModeContainer.style.display = 'none';
+        
+        // Asegurar que el modo experto esté desactivado
+        document.getElementById('expertMode').checked = false;
+        updateDecisionTreeOptions();
+    } else {
+        // Para otros modelos (redes neuronales)
+        document.getElementById('randomForestConfiguration').style.display = 'none';
+        document.getElementById('xgboostConfiguration').style.display = 'none';
+        document.getElementById('decisionTreeConfiguration').style.display = 'none';
         epochsContainer.style.display = isDeepLearningModel(modelType) ? 'block' : 'none';
         expertModeContainer.style.display = isDeepLearningModel(modelType) ? 'block' : 'none';
         
@@ -4186,6 +4534,327 @@ function loadXGBoostConfiguration(hyperparams) {
     
     // Update UI based on problem type
     updateXGBoostOptions();
+}
+
+// ===== Decision Tree Configuration Functions =====
+
+// Update Decision Tree options based on problem type
+function updateDecisionTreeOptions() {
+    const problemType = document.getElementById('dtProblemType').value;
+    const classificationSettings = document.getElementById('dtClassificationSettings');
+    const criterion = document.getElementById('dtCriterion');
+    
+    if (problemType === 'classification') {
+        classificationSettings.style.display = 'block';
+        
+        // Update criterion options for classification
+        criterion.innerHTML = `
+            <option value="gini">Gini (recommandé)</option>
+            <option value="entropy">Entropie</option>
+        `;
+    } else {
+        classificationSettings.style.display = 'none';
+        
+        // Update criterion options for regression
+        criterion.innerHTML = `
+            <option value="squared_error">Erreur quadratique (recommandé)</option>
+        `;
+    }
+    
+    // Update advanced criterion if needed
+    updateDecisionTreeCriterionAdvanced();
+}
+
+// Update advanced criterion based on problem type
+function updateDecisionTreeCriterionAdvanced() {
+    const criterionAdvanced = document.getElementById('dtCriterionAdvanced');
+    const currentValue = criterionAdvanced.value;
+    
+    if (currentValue === 'poisson') {
+        document.getElementById('dtPoissonWarning').style.display = 'block';
+    } else {
+        document.getElementById('dtPoissonWarning').style.display = 'none';
+    }
+}
+
+// Apply Decision Tree preset configuration
+function applyDecisionTreePreset() {
+    const preset = document.getElementById('dtPreset').value;
+    
+    const presets = {
+        'rapido': {
+            max_depth_enabled: true,
+            max_depth: 8,
+            min_samples_leaf: 2,
+            ccp_alpha: 0
+        },
+        'balanceado': {
+            max_depth_enabled: true,
+            max_depth: 12,
+            min_samples_leaf: 2,
+            max_features: 'sqrt',
+            ccp_alpha: 0
+        },
+        'preciso': {
+            max_depth_enabled: false,
+            max_depth: null,
+            min_samples_leaf: 1,
+            ccp_alpha: 0.0001
+        }
+    };
+    
+    const config = presets[preset];
+    if (config) {
+        // Max depth
+        document.getElementById('dtMaxDepthEnabled').checked = config.max_depth_enabled;
+        toggleDecisionTreeMaxDepth();
+        if (config.max_depth_enabled && config.max_depth) {
+            document.getElementById('dtMaxDepth').value = config.max_depth;
+        }
+        
+        // Min samples leaf
+        document.getElementById('dtMinSamplesLeaf').value = config.min_samples_leaf;
+        updateDecisionTreeMinSamplesLeaf();
+        
+        // Max features
+        if (config.max_features) {
+            document.getElementById('dtMaxFeatures').value = config.max_features;
+            toggleDecisionTreeMaxFeatures();
+        }
+        
+        // CCP alpha
+        document.getElementById('dtCcpAlpha').value = config.ccp_alpha;
+    }
+}
+
+// Toggle max depth
+function toggleDecisionTreeMaxDepth() {
+    const enabled = document.getElementById('dtMaxDepthEnabled').checked;
+    document.getElementById('dtMaxDepth').disabled = !enabled;
+}
+
+// Update min samples leaf display
+function updateDecisionTreeMinSamplesLeaf() {
+    const value = document.getElementById('dtMinSamplesLeaf').value;
+    const isFraction = document.getElementById('dtMinSamplesLeafFraction').checked;
+    
+    if (isFraction) {
+        const fractionValue = value / 100; // Convert to 0-0.5 range
+        document.getElementById('dtMinSamplesLeafValue').textContent = fractionValue.toFixed(2);
+    } else {
+        document.getElementById('dtMinSamplesLeafValue').textContent = value;
+    }
+}
+
+// Toggle min samples leaf type (int vs fraction)
+function toggleMinSamplesLeafType() {
+    const isFraction = document.getElementById('dtMinSamplesLeafFraction').checked;
+    const slider = document.getElementById('dtMinSamplesLeaf');
+    
+    if (isFraction) {
+        slider.min = 0;
+        slider.max = 50; // Represents 0-0.5
+        slider.value = Math.min(slider.value, 50);
+    } else {
+        slider.min = 1;
+        slider.max = 50;
+        slider.value = Math.max(1, slider.value);
+    }
+    
+    updateDecisionTreeMinSamplesLeaf();
+}
+
+// Toggle max features input
+function toggleDecisionTreeMaxFeatures() {
+    const maxFeatures = document.getElementById('dtMaxFeatures').value;
+    const valueInput = document.getElementById('dtMaxFeaturesValue');
+    
+    if (maxFeatures === 'int' || maxFeatures === 'float') {
+        valueInput.style.display = 'block';
+        if (maxFeatures === 'float') {
+            valueInput.type = 'number';
+            valueInput.min = '0';
+            valueInput.max = '1';
+            valueInput.step = '0.1';
+            valueInput.value = '0.5';
+        } else {
+            valueInput.type = 'number';
+            valueInput.min = '1';
+            valueInput.max = '';
+            valueInput.step = '1';
+            valueInput.value = '5';
+        }
+    } else {
+        valueInput.style.display = 'none';
+    }
+}
+
+// Apply complexity preset
+function applyDecisionTreeComplexityPreset(type) {
+    if (type === 'simple') {
+        document.getElementById('dtMaxDepthEnabled').checked = true;
+        toggleDecisionTreeMaxDepth();
+        document.getElementById('dtMaxDepth').value = 10;
+        document.getElementById('dtMinSamplesLeaf').value = 2;
+        updateDecisionTreeMinSamplesLeaf();
+    } else if (type === 'flexible') {
+        document.getElementById('dtMaxDepthEnabled').checked = false;
+        toggleDecisionTreeMaxDepth();
+        document.getElementById('dtMinSamplesLeaf').value = 1;
+        updateDecisionTreeMinSamplesLeaf();
+    }
+}
+
+// Get Decision Tree configuration
+function getDecisionTreeConfig() {
+    const config = {
+        preset: document.getElementById('dtPreset').value,
+        problem_type: document.getElementById('dtProblemType').value,
+        criterion: document.getElementById('dtCriterion').value,
+        splitter: document.getElementById('dtSplitter').value,
+        max_depth_enabled: document.getElementById('dtMaxDepthEnabled').checked,
+        max_depth: document.getElementById('dtMaxDepthEnabled').checked ? 
+            parseInt(document.getElementById('dtMaxDepth').value) : null,
+        
+        // Handle min_samples_leaf (int or fraction)
+        min_samples_leaf_fraction: document.getElementById('dtMinSamplesLeafFraction').checked,
+        min_samples_leaf: document.getElementById('dtMinSamplesLeafFraction').checked ?
+            parseFloat(document.getElementById('dtMinSamplesLeaf').value) / 100 :
+            parseInt(document.getElementById('dtMinSamplesLeaf').value),
+        
+        // Handle max_features
+        max_features: getDecisionTreeMaxFeatures(),
+        
+        min_samples_split: parseInt(document.getElementById('dtMinSamplesSplit').value),
+        min_weight_fraction_leaf: parseFloat(document.getElementById('dtMinWeightFractionLeaf').value),
+        min_impurity_decrease: parseFloat(document.getElementById('dtMinImpurityDecrease').value),
+        max_leaf_nodes: document.getElementById('dtMaxLeafNodes').value ? 
+            parseInt(document.getElementById('dtMaxLeafNodes').value) : null,
+        ccp_alpha: parseFloat(document.getElementById('dtCcpAlpha').value),
+        
+        // Advanced criterion
+        criterion_advanced: document.getElementById('dtCriterionAdvanced').value,
+        
+        // Classification specific
+        class_weight: document.getElementById('dtProblemType').value === 'classification' ?
+            document.getElementById('dtClassWeight').value : null,
+        decision_threshold: document.getElementById('dtProblemType').value === 'classification' ?
+            parseFloat(document.getElementById('dtDecisionThreshold').value) : null,
+        output_type: document.getElementById('dtProblemType').value === 'classification' ?
+            document.getElementById('dtOutputType').value : null,
+        
+        // Other
+        random_state: document.getElementById('dtRandomState').value ? 
+            parseInt(document.getElementById('dtRandomState').value) : null,
+        validation_method: document.getElementById('dtValidationMethod').value
+    };
+    
+    // Override criterion if advanced is selected
+    if (config.criterion_advanced !== 'default') {
+        config.criterion = config.criterion_advanced;
+    }
+    
+    return config;
+}
+
+// Get max features value based on selection
+function getDecisionTreeMaxFeatures() {
+    const maxFeatures = document.getElementById('dtMaxFeatures').value;
+    
+    if (maxFeatures === 'None') {
+        return null;
+    } else if (maxFeatures === 'int') {
+        return parseInt(document.getElementById('dtMaxFeaturesValue').value);
+    } else if (maxFeatures === 'float') {
+        return parseFloat(document.getElementById('dtMaxFeaturesValue').value);
+    } else {
+        return maxFeatures; // 'sqrt' or 'log2'
+    }
+}
+
+// Load Decision Tree configuration for editing
+function loadDecisionTreeConfiguration(hyperparams) {
+    if (!hyperparams) return;
+    
+    // Basic parameters
+    setValueWithRangeUpdate('dtPreset', hyperparams.preset || 'balanceado');
+    setValueWithRangeUpdate('dtProblemType', hyperparams.problem_type || 'regression');
+    setValueWithRangeUpdate('dtSplitter', hyperparams.splitter || 'best');
+    
+    // Criterion
+    if (hyperparams.criterion) {
+        // Check if it's an advanced criterion
+        const basicCriteria = ['gini', 'entropy', 'squared_error'];
+        if (!basicCriteria.includes(hyperparams.criterion)) {
+            setValueWithRangeUpdate('dtCriterionAdvanced', hyperparams.criterion);
+        } else {
+            setValueWithRangeUpdate('dtCriterion', hyperparams.criterion);
+        }
+    }
+    
+    // Max depth
+    setCheckboxValue('dtMaxDepthEnabled', hyperparams.max_depth_enabled !== false, toggleDecisionTreeMaxDepth);
+    if (hyperparams.max_depth) {
+        setValueWithRangeUpdate('dtMaxDepth', hyperparams.max_depth);
+    }
+    
+    // Min samples leaf
+    if (hyperparams.min_samples_leaf_fraction) {
+        setCheckboxValue('dtMinSamplesLeafFraction', true, toggleMinSamplesLeafType);
+        setValueWithRangeUpdate('dtMinSamplesLeaf', hyperparams.min_samples_leaf * 100);
+    } else {
+        setCheckboxValue('dtMinSamplesLeafFraction', false, toggleMinSamplesLeafType);
+        setValueWithRangeUpdate('dtMinSamplesLeaf', hyperparams.min_samples_leaf || 1);
+    }
+    updateDecisionTreeMinSamplesLeaf();
+    
+    // Max features
+    if (hyperparams.max_features !== null && hyperparams.max_features !== undefined) {
+        if (typeof hyperparams.max_features === 'number') {
+            if (hyperparams.max_features <= 1) {
+                setValueWithRangeUpdate('dtMaxFeatures', 'float');
+                setValueWithRangeUpdate('dtMaxFeaturesValue', hyperparams.max_features);
+            } else {
+                setValueWithRangeUpdate('dtMaxFeatures', 'int');
+                setValueWithRangeUpdate('dtMaxFeaturesValue', hyperparams.max_features);
+            }
+        } else {
+            setValueWithRangeUpdate('dtMaxFeatures', hyperparams.max_features);
+        }
+        toggleDecisionTreeMaxFeatures();
+    }
+    
+    // Other parameters
+    setValueWithRangeUpdate('dtMinSamplesSplit', hyperparams.min_samples_split || 2);
+    setValueWithRangeUpdate('dtMinWeightFractionLeaf', hyperparams.min_weight_fraction_leaf || 0, 'dtMinWeightFractionLeafValue');
+    setValueWithRangeUpdate('dtMinImpurityDecrease', hyperparams.min_impurity_decrease || 0, 'dtMinImpurityDecreaseValue');
+    
+    if (hyperparams.max_leaf_nodes) {
+        setValueWithRangeUpdate('dtMaxLeafNodes', hyperparams.max_leaf_nodes);
+    }
+    
+    setValueWithRangeUpdate('dtCcpAlpha', hyperparams.ccp_alpha || 0);
+    
+    // Classification specific
+    if (hyperparams.class_weight) {
+        setValueWithRangeUpdate('dtClassWeight', hyperparams.class_weight);
+    }
+    if (hyperparams.decision_threshold !== undefined) {
+        setValueWithRangeUpdate('dtDecisionThreshold', hyperparams.decision_threshold, 'dtDecisionThresholdValue');
+    }
+    if (hyperparams.output_type) {
+        setValueWithRangeUpdate('dtOutputType', hyperparams.output_type);
+    }
+    
+    // Random state
+    if (hyperparams.random_state !== null && hyperparams.random_state !== undefined) {
+        setValueWithRangeUpdate('dtRandomState', hyperparams.random_state);
+    }
+    
+    setValueWithRangeUpdate('dtValidationMethod', hyperparams.validation_method || 'holdout');
+    
+    // Update UI based on problem type
+    updateDecisionTreeOptions();
 }
 </script>
 {% endblock %}

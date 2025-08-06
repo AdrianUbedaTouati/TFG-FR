@@ -71,10 +71,35 @@ def get_model_config(model_type):
             'sequence_length': 10
         },
         'decision_tree': {
-            'max_depth': 10,
-            'min_samples_split': 2,
+            # Basic parameters
+            'preset': 'balanceado',
+            'problem_type': 'regression',
+            'criterion': 'squared_error',
+            'splitter': 'best',
+            'max_depth_enabled': True,
+            'max_depth': 12,
             'min_samples_leaf': 1,
-            'max_features': 'auto'
+            'min_samples_leaf_fraction': False,
+            'max_features': None,
+            
+            # Advanced parameters
+            'min_samples_split': 2,
+            'min_weight_fraction_leaf': 0.0,
+            'min_impurity_decrease': 0.0,
+            'max_leaf_nodes': None,
+            'ccp_alpha': 0.0,
+            
+            # Advanced criterion
+            'criterion_advanced': 'default',
+            
+            # Classification specific
+            'class_weight': None,
+            'decision_threshold': 0.5,
+            'output_type': 'class',
+            
+            # Other
+            'random_state': None,
+            'validation_method': 'holdout'
         },
         'transformer': {
             'd_model': 128,
@@ -660,6 +685,52 @@ def _prepare_random_forest_params(hyperparams):
     return clean_params
 
 
+def _prepare_decision_tree_params(hyperparams):
+    """Prepare Decision Tree parameters for scikit-learn"""
+    # Start with a copy of hyperparams
+    clean_params = hyperparams.copy()
+    
+    # Remove UI-specific parameters that don't belong to scikit-learn
+    ui_only_params = [
+        'preset', 'problem_type', 'max_depth_enabled', 'min_samples_leaf_fraction',
+        'validation_method', 'criterion_advanced', 'decision_threshold', 'output_type'
+    ]
+    for param in ui_only_params:
+        clean_params.pop(param, None)
+    
+    # Handle max_depth logic
+    if not hyperparams.get('max_depth_enabled', True):
+        clean_params['max_depth'] = None
+    
+    # Handle criterion selection
+    criterion_advanced = hyperparams.get('criterion_advanced', 'default')
+    if criterion_advanced != 'default':
+        clean_params['criterion'] = criterion_advanced
+    
+    # Handle max_features conversion
+    if clean_params.get('max_features') == 'None':
+        clean_params['max_features'] = None
+    
+    # Handle class_weight
+    if hyperparams.get('problem_type') == 'classification':
+        class_weight = hyperparams.get('class_weight', None)
+        if class_weight == 'None':
+            clean_params['class_weight'] = None
+        elif class_weight == 'balanced':
+            clean_params['class_weight'] = 'balanced'
+        else:
+            clean_params.pop('class_weight', None)
+    else:
+        clean_params.pop('class_weight', None)
+    
+    # Remove None values where appropriate
+    for key in list(clean_params.keys()):
+        if clean_params[key] is None and key not in ['max_depth', 'max_leaf_nodes', 'random_state', 'max_features']:
+            clean_params.pop(key)
+    
+    return clean_params
+
+
 def _prepare_xgboost_params(hyperparams):
     """Prepare XGBoost parameters for training"""
     # Start with a copy of hyperparams
@@ -728,7 +799,15 @@ def _prepare_xgboost_params(hyperparams):
 def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val):
     """Train scikit-learn models"""
     if model_type == 'decision_tree':
-        model = DecisionTreeRegressor(**hyperparams)
+        # Determine if it's classification or regression
+        problem_type = hyperparams.get('problem_type', 'regression')
+        clean_params = _prepare_decision_tree_params(hyperparams)
+        
+        if problem_type == 'classification':
+            from sklearn.tree import DecisionTreeClassifier
+            model = DecisionTreeClassifier(**clean_params)
+        else:
+            model = DecisionTreeRegressor(**clean_params)
     elif model_type == 'random_forest':
         # Determine if it's classification or regression
         problem_type = hyperparams.get('problem_type', 'regression')
@@ -773,7 +852,7 @@ def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val)
     val_pred = model.predict(X_val)
     
     # Choose appropriate metrics based on problem type
-    if (model_type in ['random_forest', 'xgboost'] and 
+    if (model_type in ['random_forest', 'xgboost', 'decision_tree'] and 
         hyperparams.get('problem_type') == 'classification'):
         from sklearn.metrics import accuracy_score, log_loss
         try:
