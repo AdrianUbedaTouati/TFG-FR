@@ -1279,7 +1279,8 @@ function displayDatasetDetails(dataset, data) {
     const stats = data.stats || {};
     const preview = data.preview || {};
     const columns = data.columns || [];
-    const memoryUsage = data.memory_usage ? data.memory_usage.toFixed(2) : '0';
+    const memoryUsage = data.memory_usage ? 
+        (typeof data.memory_usage === 'object' ? data.memory_usage.total_mb : data.memory_usage).toFixed(2) : '0';
     const totalNulls = data.total_null_count || 0;
     
     // Guardar datos en variable global para uso posterior
@@ -3098,16 +3099,17 @@ function showOutliers(columnName) {
                                         <p class="mb-2">
                                             <i class="bi bi-arrow-down-circle"></i> 
                                             <strong>Valores por debajo:</strong> 
-                                            ${colStats.min < lowerBound ? 
-                                                `<span class="text-danger">Sí (min: ${colStats.min.toFixed(2)})</span>` : 
-                                                '<span class="text-success">No</span>'}
+                                            <span class="text-info" id="outliersBelowCount">0</span>
                                         </p>
                                         <p class="mb-2">
                                             <i class="bi bi-arrow-up-circle"></i> 
                                             <strong>Valores por encima:</strong> 
-                                            ${colStats.max > upperBound ? 
-                                                `<span class="text-danger">Sí (max: ${colStats.max.toFixed(2)})</span>` : 
-                                                '<span class="text-success">No</span>'}
+                                            <span class="text-warning" id="outliersAboveCount">0</span>
+                                        </p>
+                                        <p class="mb-0">
+                                            <i class="bi bi-sum"></i> 
+                                            <strong>Total outliers:</strong> 
+                                            <span class="text-danger" id="outliersTotal">0</span>
                                         </p>
                                     </div>
                                 </div>
@@ -3120,7 +3122,7 @@ function showOutliers(columnName) {
                         </div>
                         
                         <h6 class="text-primary mb-3">Valores Outliers Detectados</h6>
-                        <div id="outlierValuesContent" style="max-height: 300px; overflow-y: auto;">
+                        <div id="outlierValuesContent" style="max-height: 500px; overflow-y: auto; border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 5px; padding: 10px;">
                             <div class="text-center p-3">
                                 <div class="spinner-border text-primary" role="status">
                                     <span class="visually-hidden">Cargando...</span>
@@ -3181,18 +3183,15 @@ function showOutliers(columnName) {
                     renderOutliers();
                     
                     // Actualizar estadísticas en el DOM
-                    if (outlierInfo) {
-                        // Actualizar el contador de outliers
-                        const outlierCountEl = document.querySelector('.card-body .text-danger');
-                        if (outlierCountEl) {
-                            outlierCountEl.textContent = outlierInfo.outlier_count;
-                        }
+                    if (outlierInfo && outlierValues.length > 0) {
+                        // Calcular outliers por encima y por debajo
+                        const belowCount = outlierValues.filter(v => v < outlierInfo.lower_bound).length;
+                        const aboveCount = outlierValues.filter(v => v > outlierInfo.upper_bound).length;
                         
-                        // Actualizar el porcentaje
-                        const outlierPercentEl = document.querySelector('.card-body .text-warning');
-                        if (outlierPercentEl) {
-                            outlierPercentEl.textContent = outlierInfo.outlier_percentage.toFixed(2) + '%';
-                        }
+                        // Actualizar contadores
+                        document.getElementById('outliersBelowCount').textContent = belowCount;
+                        document.getElementById('outliersAboveCount').textContent = aboveCount;
+                        document.getElementById('outliersTotal').textContent = outlierValues.length;
                     }
                     
                     // Crear box plot

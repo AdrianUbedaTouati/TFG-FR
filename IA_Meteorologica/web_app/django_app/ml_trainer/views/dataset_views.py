@@ -57,24 +57,42 @@ class DatasetColumnsView(APIView):
         columns = [str(col) for col in df.columns if col and str(col).strip()]
         dtypes = {str(col): str(df[col].dtype) for col in columns}
         
-        # Simple response for column loading
+        # Generate stats for each column
+        stats = {}
+        for col in columns:
+            col_info = detect_column_type(df[col])
+            stats[col] = col_info
+        
+        # Generate preview data (first 10 rows)
+        preview = {}
+        for col in columns:
+            preview[col] = df[col].head(10).tolist()
+        
+        # Calculate total null count
+        total_null_count = df.isnull().sum().sum()
+        
+        # Complete response data
         response_data = {
             'columns': columns,
             'dtypes': dtypes,
+            'shape': [len(df), len(columns)],
             'total_rows': len(df),
-            'total_columns': len(columns)
+            'total_columns': len(columns),
+            'stats': stats,
+            'preview': preview,
+            'memory_usage': get_memory_usage(df),
+            'total_null_count': int(total_null_count)
         }
         
         # Add detailed analysis if requested
         if request.query_params.get('detailed', False):
             columns_info = []
             for col in columns:
-                col_info = detect_column_type(df[col])
+                col_info = stats[col].copy()
                 col_info['name'] = col
                 columns_info.append(col_info)
             
             response_data['detailed_info'] = columns_info
-            response_data['memory_usage'] = get_memory_usage(df)
         
         return success_response(response_data)
 
@@ -98,11 +116,62 @@ class DatasetColumnDetailsView(APIView):
         series = df[column_name]
         details = detect_column_type(series)
         
-        # Add histogram for numeric columns
+        # Add total count
+        details['total_count'] = len(series)
+        
+        # Add column name to response
+        details['column'] = column_name
+        
+        # Add frequency data
+        value_counts = series.value_counts(dropna=False)
+        total_non_null = series.notna().sum()
+        
+        frequency_data = []
+        for value, count in value_counts.items():
+            # Handle NaN values
+            display_value = 'NaN' if pd.isna(value) else str(value)
+            percentage = (count / len(series)) * 100 if len(series) > 0 else 0
+            
+            frequency_data.append({
+                'value': display_value,
+                'count': int(count),
+                'percentage': round(percentage, 2)
+            })
+        
+        # Sort by count (frequency) descending
+        frequency_data.sort(key=lambda x: x['count'], reverse=True)
+        details['frequency_data'] = frequency_data
+        
+        # Add histogram and outlier analysis for numeric columns
         if details.get('type') == 'numeric':
             # Create a temporary base view instance to use its methods
             base_view = DatasetAnalysisBaseView()
             details['histogram'] = base_view.create_histogram(series)
+            
+            # Add outlier analysis
+            valid_data = series.dropna()
+            if len(valid_data) > 0:
+                # Calculate IQR and bounds
+                q1 = valid_data.quantile(0.25)
+                q3 = valid_data.quantile(0.75)
+                iqr = q3 - q1
+                lower_bound = q1 - 1.5 * iqr
+                upper_bound = q3 + 1.5 * iqr
+                
+                # Find outliers
+                outliers = valid_data[(valid_data < lower_bound) | (valid_data > upper_bound)]
+                outlier_values = sorted(outliers.tolist())
+                
+                details['outlier_info'] = {
+                    'q1': float(q1),
+                    'q3': float(q3),
+                    'iqr': float(iqr),
+                    'lower_bound': float(lower_bound),
+                    'upper_bound': float(upper_bound),
+                    'outlier_count': len(outliers),
+                    'outlier_percentage': (len(outliers) / len(valid_data)) * 100 if len(valid_data) > 0 else 0,
+                    'outlier_values': outlier_values
+                }
         
         return success_response(details)
     

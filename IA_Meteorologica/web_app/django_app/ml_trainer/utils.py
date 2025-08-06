@@ -56,9 +56,13 @@ def detect_column_type(series: pd.Series) -> Dict[str, Any]:
     Returns:
         Dictionary with type information and statistics
     """
+    null_count = int(series.isnull().sum())
+    total_count = len(series)
+    
     result = {
         'dtype': str(series.dtype),
-        'null_count': int(series.isnull().sum()),
+        'null_count': null_count,
+        'null_percentage': (null_count / total_count * 100) if total_count > 0 else 0,
         'unique_count': int(series.nunique()),
         'sample_values': series.dropna().head(5).tolist()
     }
@@ -93,25 +97,70 @@ def detect_column_type(series: pd.Series) -> Dict[str, Any]:
         # It's categorical
         if series.nunique() < MAX_CATEGORICAL_VALUES:
             result['type'] = 'categorical'
-            result['categories'] = series.value_counts().head(10).to_dict()
+            value_counts = series.value_counts().head(10)
+            result['categories'] = value_counts.to_dict()
+            result['top_values'] = {
+                'values': value_counts.index.tolist(),
+                'counts': value_counts.values.tolist()
+            }
         else:
             result['type'] = 'text'
+            # Even for text, provide top values if possible
+            value_counts = series.value_counts().head(10)
+            if len(value_counts) > 0:
+                result['top_values'] = {
+                    'values': value_counts.index.tolist(),
+                    'counts': value_counts.values.tolist()
+                }
     
     elif pd.api.types.is_numeric_dtype(series):
         result['type'] = 'numeric'
-        result['statistics'] = {
-            'mean': float(series.mean()),
-            'std': float(series.std()),
-            'min': float(series.min()),
-            'max': float(series.max()),
-            'q25': float(series.quantile(0.25)),
-            'q50': float(series.quantile(0.50)),
-            'q75': float(series.quantile(0.75))
-        }
+        result['mean'] = float(series.mean())
+        result['std'] = float(series.std())
+        result['min'] = float(series.min())
+        result['max'] = float(series.max())
+        result['q25'] = float(series.quantile(0.25))
+        result['q50'] = float(series.quantile(0.50))
+        result['q75'] = float(series.quantile(0.75))
         
-        # Detect outliers
-        outliers = detect_outliers(series)
-        result['outlier_count'] = len(outliers)
+        # Generate histogram data
+        valid_data = series.dropna()
+        if len(valid_data) > 0:
+            hist, bins = np.histogram(valid_data, bins=20)
+            result['histogram'] = {
+                'bins': bins.tolist(),
+                'counts': hist.tolist()
+            }
+            
+            # Detect outliers
+            Q1 = result['q25']
+            Q3 = result['q75']
+            IQR = Q3 - Q1
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+            
+            outliers = valid_data[(valid_data < lower_bound) | (valid_data > upper_bound)]
+            outlier_count = len(outliers)
+            
+            result['histogram']['outliers_info'] = {
+                'outlier_count': outlier_count,
+                'outlier_percentage': (outlier_count / len(valid_data)) * 100,
+                'lower_bound': lower_bound,
+                'upper_bound': upper_bound,
+                'q1': Q1,
+                'q3': Q3,
+                'iqr': IQR
+            }
+            
+            # Generate histogram without outliers if there are any
+            if outlier_count > 0:
+                data_no_outliers = valid_data[(valid_data >= lower_bound) & (valid_data <= upper_bound)]
+                if len(data_no_outliers) > 0:
+                    hist_no_outliers, bins_no_outliers = np.histogram(data_no_outliers, bins=20)
+                    result['histogram']['bins_no_outliers'] = bins_no_outliers.tolist()
+                    result['histogram']['counts_no_outliers'] = hist_no_outliers.tolist()
+        
+        result['outlier_count'] = len(detect_outliers(series))
         
     return result
 
