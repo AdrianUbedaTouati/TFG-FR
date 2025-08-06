@@ -120,11 +120,52 @@ def get_model_config(model_type):
             'output_type': 'class'
         },
         'xgboost': {
-            'n_estimators': 100,
+            # Basic parameters
+            'preset': 'balanceado',
+            'problem_type': 'regression',
+            'n_estimators': 500,
+            'learning_rate': 0.05,
             'max_depth': 6,
-            'learning_rate': 0.3,
             'subsample': 0.8,
-            'colsample_bytree': 0.8
+            'colsample_bytree': 0.8,
+            'eval_metric': 'rmse',
+            
+            # Early stopping
+            'early_stopping_enabled': True,
+            'early_stopping_rounds': 50,
+            
+            # Advanced parameters
+            'min_child_weight': 1,
+            'gamma': 0,
+            'reg_lambda': 1,
+            'reg_alpha': 0,
+            'max_delta_step': 0,
+            
+            # Column sampling
+            'colsample_bylevel': 1.0,
+            'colsample_bynode': 1.0,
+            
+            # Tree method
+            'tree_method': 'auto',
+            'max_bin': 256,
+            'grow_policy': 'depthwise',
+            'max_leaves': None,
+            
+            # Classification specific
+            'scale_pos_weight': 1,
+            
+            # Booster
+            'booster': 'gbtree',
+            'rate_drop': 0.1,
+            'skip_drop': 0.5,
+            
+            # Execution
+            'random_state': None,
+            'n_jobs': -1,
+            'verbosity': 1,
+            'use_gpu': False,
+            'device': 'cpu',
+            'objective': 'reg:squarederror'
         }
     }
     return configs.get(model_type, {})
@@ -619,6 +660,71 @@ def _prepare_random_forest_params(hyperparams):
     return clean_params
 
 
+def _prepare_xgboost_params(hyperparams):
+    """Prepare XGBoost parameters for training"""
+    # Start with a copy of hyperparams
+    clean_params = hyperparams.copy()
+    
+    # Remove UI-specific parameters that don't belong to XGBoost
+    ui_only_params = [
+        'preset', 'problem_type', 'early_stopping_enabled', 'use_gpu', 
+        'max_features_fraction', 'decision_threshold', 'output_type'
+    ]
+    for param in ui_only_params:
+        clean_params.pop(param, None)
+    
+    # Handle max_depth (0 means no limit in XGBoost)
+    if clean_params.get('max_depth') == 0:
+        clean_params.pop('max_depth', None)
+    
+    # Handle GPU configuration
+    if hyperparams.get('use_gpu', False):
+        clean_params['device'] = 'cuda'
+        if clean_params.get('tree_method') == 'auto':
+            clean_params['tree_method'] = 'hist'
+    else:
+        clean_params['device'] = 'cpu'
+    
+    # Handle objective based on problem type
+    problem_type = hyperparams.get('problem_type', 'regression')
+    if problem_type == 'classification':
+        # This will be adjusted for multiclass in the training function
+        clean_params['objective'] = 'binary:logistic'
+    else:
+        clean_params['objective'] = 'reg:squarederror'
+    
+    # Handle eval_metric
+    if clean_params.get('eval_metric') == 'auto':
+        if problem_type == 'classification':
+            clean_params['eval_metric'] = 'logloss'
+        else:
+            clean_params['eval_metric'] = 'rmse'
+    
+    # Handle booster-specific parameters
+    booster = clean_params.get('booster', 'gbtree')
+    if booster != 'dart':
+        # Remove DART-specific parameters if not using DART
+        clean_params.pop('rate_drop', None)
+        clean_params.pop('skip_drop', None)
+    
+    # Handle grow_policy specific parameters
+    if clean_params.get('grow_policy') != 'lossguide':
+        clean_params.pop('max_leaves', None)
+    
+    # Handle classification-specific parameters
+    if problem_type != 'classification':
+        clean_params.pop('scale_pos_weight', None)
+    
+    # Remove None values
+    clean_params = {k: v for k, v in clean_params.items() if v is not None}
+    
+    # Handle random_state
+    if 'random_state' in clean_params and clean_params['random_state'] is None:
+        clean_params.pop('random_state', None)
+    
+    return clean_params
+
+
 def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val):
     """Train scikit-learn models"""
     if model_type == 'decision_tree':
@@ -633,17 +739,42 @@ def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val)
         else:
             model = RandomForestRegressor(**clean_params)
     elif model_type == 'xgboost':
-        model = xgb.XGBRegressor(**hyperparams)
+        # Prepare XGBoost parameters
+        problem_type = hyperparams.get('problem_type', 'regression')
+        clean_params = _prepare_xgboost_params(hyperparams)
+        
+        # Check if multiclass
+        is_multiclass = problem_type == 'classification' and len(np.unique(y_train)) > 2
+        
+        if problem_type == 'classification':
+            if is_multiclass:
+                clean_params['objective'] = 'multi:softprob'
+                clean_params['num_class'] = len(np.unique(y_train))
+                if clean_params.get('eval_metric') == 'logloss':
+                    clean_params['eval_metric'] = 'mlogloss'
+            model = xgb.XGBClassifier(**clean_params)
+        else:
+            model = xgb.XGBRegressor(**clean_params)
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
     
-    model.fit(X_train, y_train)
+    # Handle early stopping for XGBoost
+    if model_type == 'xgboost' and hyperparams.get('early_stopping_enabled', True):
+        early_stopping_rounds = hyperparams.get('early_stopping_rounds', 50)
+        eval_set = [(X_val, y_val)]
+        model.fit(X_train, y_train, 
+                  eval_set=eval_set, 
+                  early_stopping_rounds=early_stopping_rounds,
+                  verbose=False)
+    else:
+        model.fit(X_train, y_train)
     
     # Calculate validation metrics
     val_pred = model.predict(X_val)
     
     # Choose appropriate metrics based on problem type
-    if model_type == 'random_forest' and hyperparams.get('problem_type') == 'classification':
+    if (model_type in ['random_forest', 'xgboost'] and 
+        hyperparams.get('problem_type') == 'classification'):
         from sklearn.metrics import accuracy_score, log_loss
         try:
             train_pred = model.predict(X_train)

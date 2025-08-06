@@ -1235,6 +1235,128 @@ def _generate_sklearn_header(model_def) -> List[str]:
     return header_lines
 
 
+def _generate_xgboost_params(hyperparams) -> List[str]:
+    """Generate XGBoost parameter configuration"""
+    problem_type = hyperparams.get('problem_type', 'regression')
+    params_lines = ['    # Model parameters', '    params = {']
+    
+    # Basic parameters
+    params_lines.append(f'        "n_estimators": {hyperparams.get("n_estimators", 500)},')
+    params_lines.append(f'        "learning_rate": {hyperparams.get("learning_rate", 0.05)},')
+    
+    # Handle max_depth (0 means no limit in XGBoost)
+    max_depth = hyperparams.get('max_depth', 6)
+    if max_depth and max_depth > 0:
+        params_lines.append(f'        "max_depth": {max_depth},')
+    
+    params_lines.append(f'        "subsample": {hyperparams.get("subsample", 0.8)},')
+    params_lines.append(f'        "colsample_bytree": {hyperparams.get("colsample_bytree", 0.8)},')
+    
+    # Objective and eval_metric
+    if problem_type == 'classification':
+        params_lines.append('        "objective": "binary:logistic",  # Adjust for multiclass')
+    else:
+        params_lines.append('        "objective": "reg:squarederror",')
+    
+    eval_metric = hyperparams.get('eval_metric', 'rmse' if problem_type == 'regression' else 'logloss')
+    params_lines.append(f'        "eval_metric": "{eval_metric}",')
+    
+    # Advanced parameters
+    params_lines.append(f'        "min_child_weight": {hyperparams.get("min_child_weight", 1)},')
+    params_lines.append(f'        "gamma": {hyperparams.get("gamma", 0)},')
+    params_lines.append(f'        "reg_lambda": {hyperparams.get("reg_lambda", 1)},')
+    params_lines.append(f'        "reg_alpha": {hyperparams.get("reg_alpha", 0)},')
+    
+    if hyperparams.get('max_delta_step', 0) > 0:
+        params_lines.append(f'        "max_delta_step": {hyperparams["max_delta_step"]},')
+    
+    # Column sampling
+    if hyperparams.get('colsample_bylevel', 1.0) != 1.0:
+        params_lines.append(f'        "colsample_bylevel": {hyperparams["colsample_bylevel"]},')
+    if hyperparams.get('colsample_bynode', 1.0) != 1.0:
+        params_lines.append(f'        "colsample_bynode": {hyperparams["colsample_bynode"]},')
+    
+    # Tree method and device
+    tree_method = hyperparams.get('tree_method', 'auto')
+    if tree_method != 'auto':
+        params_lines.append(f'        "tree_method": "{tree_method}",')
+    
+    if hyperparams.get('use_gpu', False):
+        params_lines.append('        "device": "cuda",')
+        if tree_method == 'auto':
+            params_lines.append('        "tree_method": "hist",')
+    
+    # Booster
+    booster = hyperparams.get('booster', 'gbtree')
+    if booster != 'gbtree':
+        params_lines.append(f'        "booster": "{booster}",')
+        
+    # DART parameters
+    if booster == 'dart':
+        params_lines.append(f'        "rate_drop": {hyperparams.get("rate_drop", 0.1)},')
+        params_lines.append(f'        "skip_drop": {hyperparams.get("skip_drop", 0.5)},')
+    
+    # Growth policy
+    grow_policy = hyperparams.get('grow_policy', 'depthwise')
+    if grow_policy != 'depthwise':
+        params_lines.append(f'        "grow_policy": "{grow_policy}",')
+        if grow_policy == 'lossguide' and hyperparams.get('max_leaves'):
+            params_lines.append(f'        "max_leaves": {hyperparams["max_leaves"]},')
+    
+    # Classification specific
+    if problem_type == 'classification' and hyperparams.get('scale_pos_weight', 1) != 1:
+        params_lines.append(f'        "scale_pos_weight": {hyperparams["scale_pos_weight"]},')
+    
+    # Other parameters
+    if hyperparams.get('max_bin', 256) != 256:
+        params_lines.append(f'        "max_bin": {hyperparams["max_bin"]},')
+    
+    # Execution parameters
+    params_lines.append(f'        "n_jobs": {hyperparams.get("n_jobs", -1)},')
+    params_lines.append(f'        "verbosity": {hyperparams.get("verbosity", 1)},')
+    
+    if hyperparams.get('random_state') is not None:
+        params_lines.append(f'        "random_state": {hyperparams["random_state"]},')
+    
+    # Remove trailing comma from last parameter
+    if params_lines[-1].endswith(','):
+        params_lines[-1] = params_lines[-1][:-1]
+    
+    params_lines.append('    }')
+    params_lines.append('')
+    
+    # Model creation
+    if problem_type == 'classification':
+        params_lines.append('    # Check if multiclass')
+        params_lines.append('    n_classes = len(np.unique(y_train))')
+        params_lines.append('    if n_classes > 2:')
+        params_lines.append('        params["objective"] = "multi:softprob"')
+        params_lines.append('        params["num_class"] = n_classes')
+        params_lines.append('        if params.get("eval_metric") == "logloss":')
+        params_lines.append('            params["eval_metric"] = "mlogloss"')
+        params_lines.append('')
+        params_lines.append('    model = xgb.XGBClassifier(**params)')
+    else:
+        params_lines.append('    model = xgb.XGBRegressor(**params)')
+    
+    # Early stopping code
+    if hyperparams.get('early_stopping_enabled', True):
+        params_lines.append('')
+        params_lines.append('    # Train with early stopping')
+        params_lines.append(f'    early_stopping_rounds = {hyperparams.get("early_stopping_rounds", 50)}')
+        params_lines.append('    eval_set = [(X_val, y_val)]')
+        params_lines.append('    model.fit(X_train, y_train,')
+        params_lines.append('              eval_set=eval_set,')
+        params_lines.append('              early_stopping_rounds=early_stopping_rounds,')
+        params_lines.append('              verbose=True)')
+    else:
+        params_lines.append('')
+        params_lines.append('    # Train model')
+        params_lines.append('    model.fit(X_train, y_train)')
+    
+    return params_lines
+
+
 def _generate_random_forest_params(hyperparams) -> List[str]:
     """Generate Random Forest parameter configuration"""
     problem_type = hyperparams.get('problem_type', 'regression')
@@ -1329,18 +1451,7 @@ def _generate_model_creation_code(model_type, hyperparams) -> List[str]:
         ]
         
     elif model_type == 'xgboost':
-        return [
-            '    # Model parameters',
-            '    params = {',
-            f'        "n_estimators": {hyperparams.get("n_estimators", 100)},',
-            f'        "max_depth": {hyperparams.get("max_depth", 6)},',
-            f'        "learning_rate": {hyperparams.get("learning_rate", 0.3)},',
-            f'        "subsample": {hyperparams.get("subsample", 0.8)},',
-            f'        "colsample_bytree": {hyperparams.get("colsample_bytree", 0.8)}',
-            '    }',
-            '',
-            '    model = xgb.XGBRegressor(**params)'
-        ]
+        return _generate_xgboost_params(hyperparams)
     
     return []
 

@@ -696,7 +696,7 @@
                                 <label for="testSize" class="form-label">Taille du Test (%)</label>
                                 <input type="number" class="form-control" id="testSize" min="10" max="50" value="20" required>
                             </div>
-                            <div class="mb-3">
+                            <div class="mb-3" id="epochsContainer">
                                 <label for="epochs" class="form-label">Époques (pour Deep Learning)</label>
                                 <input type="number" class="form-control" id="epochs" min="1" max="1000" value="50">
                             </div>
@@ -704,7 +704,7 @@
                     </div>
                     
                     <!-- Mode Expert Toggle -->
-                    <div class="row mt-4">
+                    <div class="row mt-4" id="expertModeContainer">
                         <div class="col-12">
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="expertMode" onchange="toggleExpertMode()">
@@ -1042,6 +1042,461 @@
                                                         <option value="proba">Probabilités</option>
                                                     </select>
                                                 </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Configuration XGBoost -->
+                    <div id="xgboostConfiguration" class="mt-4" style="display: none;">
+                        <h5 class="text-info mb-3"><i class="bi bi-lightning"></i> Configuration XGBoost</h5>
+                        
+                        <!-- Preset Selector -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="xgbPreset" class="form-label">Configuration prédéfinie</label>
+                                <select class="form-select" id="xgbPreset" onchange="applyXGBoostPreset()">
+                                    <option value="rapido">Rapide</option>
+                                    <option value="balanceado" selected>Balancé (recommandé)</option>
+                                    <option value="preciso">Précis (lent)</option>
+                                </select>
+                                <small class="text-muted">Rapide: entraînement rapide. Balancé: bon compromis. Précis: meilleure qualité.</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="xgbProblemType" class="form-label">Type de problème</label>
+                                <select class="form-select" id="xgbProblemType" onchange="updateXGBoostOptions()">
+                                    <option value="regression">Régression</option>
+                                    <option value="classification">Classification</option>
+                                </select>
+                                <small class="text-muted">Classification pour prédire des catégories, Régression pour des valeurs numériques</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Options de base -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0">🟢 Options sencillas</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="xgbNEstimators" class="form-label">
+                                                Nombre d'arbres (n_estimators) 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Plus d'arbres = meilleur modèle mais plus lent. Active early stopping pour optimiser."></i>
+                                            </label>
+                                            <input type="range" class="form-range mb-2" id="xgbNEstimators" min="100" max="3000" step="50" value="500" oninput="updateRangeValue('xgbNEstimators', 'xgbNEstimatorsValue')">
+                                            <div class="d-flex justify-content-between">
+                                                <small>100</small>
+                                                <span id="xgbNEstimatorsValue" class="badge bg-primary">500</span>
+                                                <small>3000</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="xgbLearningRate" class="form-label">
+                                                Taux d'apprentissage (eta) 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Contrôle la contribution de chaque arbre. Valeurs plus faibles = plus robuste mais nécessite plus d'arbres."></i>
+                                            </label>
+                                            <select class="form-select" id="xgbLearningRate">
+                                                <option value="0.005">0.005 (très lent, très précis)</option>
+                                                <option value="0.01">0.01</option>
+                                                <option value="0.05" selected>0.05 (recommandé)</option>
+                                                <option value="0.1">0.1</option>
+                                                <option value="0.3">0.3 (rapide, moins stable)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="xgbMaxDepth" class="form-label">
+                                                Profondeur maximale 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Contrôle la complexité des arbres. 0 = pas de limite."></i>
+                                            </label>
+                                            <select class="form-select" id="xgbMaxDepth">
+                                                <option value="0">Sans limite</option>
+                                                <option value="3">3 (peu profond)</option>
+                                                <option value="6" selected>6 (recommandé)</option>
+                                                <option value="8">8</option>
+                                                <option value="10">10</option>
+                                                <option value="12">12</option>
+                                                <option value="16">16 (très profond)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="xgbSubsample" class="form-label">
+                                                Échantillonnage lignes (subsample) 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Fraction des données utilisées pour chaque arbre. Réduit le surapprentissage."></i>
+                                            </label>
+                                            <input type="range" class="form-range mb-2" id="xgbSubsample" min="0.5" max="1.0" step="0.05" value="0.8" oninput="updateRangeValue('xgbSubsample', 'xgbSubsampleValue')">
+                                            <div class="d-flex justify-content-between">
+                                                <small>0.5</small>
+                                                <span id="xgbSubsampleValue" class="badge bg-primary">0.8</span>
+                                                <small>1.0</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="xgbColsampleBytree" class="form-label">
+                                                Échantillonnage colonnes (colsample_bytree) 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Fraction des features utilisées pour chaque arbre."></i>
+                                            </label>
+                                            <input type="range" class="form-range mb-2" id="xgbColsampleBytree" min="0.5" max="1.0" step="0.05" value="0.8" oninput="updateRangeValue('xgbColsampleBytree', 'xgbColsampleBytreeValue')">
+                                            <div class="d-flex justify-content-between">
+                                                <small>0.5</small>
+                                                <span id="xgbColsampleBytreeValue" class="badge bg-primary">0.8</span>
+                                                <small>1.0</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="xgbEvalMetric" class="form-label">
+                                                Métrique d'évaluation 
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Métrique utilisée pour early stopping et évaluation."></i>
+                                            </label>
+                                            <select class="form-select" id="xgbEvalMetric">
+                                                <option value="auto">Automatique (recommandé)</option>
+                                                <option value="rmse">RMSE (régression)</option>
+                                                <option value="mae">MAE (régression)</option>
+                                                <option value="logloss">LogLoss (classification binaire)</option>
+                                                <option value="auc">AUC (classification binaire)</option>
+                                                <option value="mlogloss">MultiLogLoss (multiclasse)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Early Stopping -->
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="xgbEarlyStoppingEnabled" checked onchange="toggleXGBoostEarlyStopping()">
+                                                <label class="form-check-label" for="xgbEarlyStoppingEnabled">
+                                                    Activer Early Stopping 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Arrête l'entraînement quand le modèle n'améliore plus. Très recommandé!"></i>
+                                                </label>
+                                            </div>
+                                            <div class="mt-2" id="xgbEarlyStoppingContainer">
+                                                <label for="xgbEarlyStoppingRounds" class="form-label">Rounds de patience</label>
+                                                <input type="number" class="form-control" id="xgbEarlyStoppingRounds" min="10" max="500" value="50">
+                                                <small class="text-muted">Nombre d'itérations sans amélioration avant d'arrêter</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- GPU Acceleration -->
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="xgbUseGPU">
+                                                <label class="form-check-label" for="xgbUseGPU">
+                                                    Utiliser GPU (CUDA) 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Accélère significativement l'entraînement si GPU disponible."></i>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Options avancées -->
+                        <div class="card">
+                            <div class="card-header bg-warning text-white">
+                                <h6 class="mb-0">
+                                    <button class="btn btn-link text-white p-0" type="button" data-bs-toggle="collapse" data-bs-target="#xgbAdvancedOptions" aria-expanded="false">
+                                        ⚙️ Options avancées <i class="bi bi-chevron-down"></i>
+                                    </button>
+                                </h6>
+                            </div>
+                            <div class="collapse" id="xgbAdvancedOptions">
+                                <div class="card-body">
+                                    <p class="text-muted mb-3">Configuration détaillée pour affiner les performances du modèle XGBoost.</p>
+                                    
+                                    <!-- Régularisation et complexité -->
+                                    <h6 class="text-info">Régularisation et contrôle de complexité</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbMinChildWeight" class="form-label">
+                                                    Min child weight 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Somme minimale de poids (hessian) nécessaire dans un enfant."></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="xgbMinChildWeight" min="0" max="10" step="0.5" value="1">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbGamma" class="form-label">
+                                                    Gamma (min_split_loss) 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Réduction minimale de perte pour faire une partition."></i>
+                                                </label>
+                                                <input type="range" class="form-range mb-2" id="xgbGamma" min="0" max="1" step="0.01" value="0" oninput="updateRangeValue('xgbGamma', 'xgbGammaValue')">
+                                                <div class="d-flex justify-content-between">
+                                                    <small>0</small>
+                                                    <span id="xgbGammaValue" class="badge bg-primary">0</span>
+                                                    <small>1</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbRegLambda" class="form-label">
+                                                    Lambda (L2 régularisation) 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Terme de régularisation L2 sur les poids."></i>
+                                                </label>
+                                                <input type="range" class="form-range mb-2" id="xgbRegLambda" min="0" max="10" step="0.1" value="1" oninput="updateRangeValue('xgbRegLambda', 'xgbRegLambdaValue')">
+                                                <div class="d-flex justify-content-between">
+                                                    <small>0</small>
+                                                    <span id="xgbRegLambdaValue" class="badge bg-primary">1</span>
+                                                    <small>10</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbRegAlpha" class="form-label">
+                                                    Alpha (L1 régularisation) 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Terme de régularisation L1 sur les poids. Peut créer de la sparsité."></i>
+                                                </label>
+                                                <input type="range" class="form-range mb-2" id="xgbRegAlpha" min="0" max="10" step="0.1" value="0" oninput="updateRangeValue('xgbRegAlpha', 'xgbRegAlphaValue')">
+                                                <div class="d-flex justify-content-between">
+                                                    <small>0</small>
+                                                    <span id="xgbRegAlphaValue" class="badge bg-primary">0</span>
+                                                    <small>10</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbMaxDeltaStep" class="form-label">
+                                                    Max delta step 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Utile pour classes très déséquilibrées. 0 = pas de contrainte."></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="xgbMaxDeltaStep" min="0" max="10" step="0.5" value="0">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Échantillonnage avancé -->
+                                    <h6 class="text-info">Échantillonnage de colonnes et lignes</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbColsampleBylevel" class="form-label">
+                                                    Colsample by level 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Échantillonnage des colonnes pour chaque niveau."></i>
+                                                </label>
+                                                <input type="range" class="form-range mb-2" id="xgbColsampleBylevel" min="0.3" max="1.0" step="0.05" value="1.0" oninput="updateRangeValue('xgbColsampleBylevel', 'xgbColsampleBylevelValue')">
+                                                <div class="d-flex justify-content-between">
+                                                    <small>0.3</small>
+                                                    <span id="xgbColsampleBylevelValue" class="badge bg-primary">1.0</span>
+                                                    <small>1.0</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbColsampleBynode" class="form-label">
+                                                    Colsample by node 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Échantillonnage des colonnes pour chaque split."></i>
+                                                </label>
+                                                <input type="range" class="form-range mb-2" id="xgbColsampleBynode" min="0.3" max="1.0" step="0.05" value="1.0" oninput="updateRangeValue('xgbColsampleBynode', 'xgbColsampleBynodeValue')">
+                                                <div class="d-flex justify-content-between">
+                                                    <small>0.3</small>
+                                                    <span id="xgbColsampleBynodeValue" class="badge bg-primary">1.0</span>
+                                                    <small>1.0</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Méthode de construction -->
+                                    <h6 class="text-info">Méthode de construction et performance</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbTreeMethod" class="form-label">
+                                                    Tree method 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Algorithme de construction des arbres."></i>
+                                                </label>
+                                                <select class="form-select" id="xgbTreeMethod">
+                                                    <option value="auto">Auto (recommandé)</option>
+                                                    <option value="hist">Hist (rapide)</option>
+                                                    <option value="approx">Approx</option>
+                                                    <option value="exact">Exact (petits datasets)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbMaxBin" class="form-label">
+                                                    Max bin 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Nombre max de bins pour hist/approx. Plus = précis mais lent."></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="xgbMaxBin" min="16" max="512" value="256">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbGrowPolicy" class="form-label">
+                                                    Grow policy 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Politique de croissance des arbres."></i>
+                                                </label>
+                                                <select class="form-select" id="xgbGrowPolicy" onchange="toggleMaxLeaves()">
+                                                    <option value="depthwise">Depthwise (par défaut)</option>
+                                                    <option value="lossguide">Lossguide</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3" id="xgbMaxLeavesContainer" style="display: none;">
+                                                <label for="xgbMaxLeaves" class="form-label">
+                                                    Max leaves 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Nombre max de feuilles (lossguide uniquement)."></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="xgbMaxLeaves" min="0" max="1024" value="0">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Classification déséquilibrée -->
+                                    <div id="xgbClassificationSettings" style="display: none;">
+                                        <h6 class="text-info">Classification déséquilibrée</h6>
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="xgbScalePosWeight" class="form-label">
+                                                        Scale pos weight 
+                                                        <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Poids de la classe positive. Suggéré: #négatifs/#positifs"></i>
+                                                    </label>
+                                                    <input type="number" class="form-control" id="xgbScalePosWeight" min="0" max="100" step="0.1" value="1">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Booster et variantes -->
+                                    <h6 class="text-info">Booster et variantes</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbBooster" class="form-label">
+                                                    Booster 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Type de booster à utiliser."></i>
+                                                </label>
+                                                <select class="form-select" id="xgbBooster" onchange="toggleBoosterOptions()">
+                                                    <option value="gbtree" selected>GBTree (par défaut)</option>
+                                                    <option value="dart">DART (avec dropout)</option>
+                                                    <option value="gblinear">GBLinear</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- DART parameters -->
+                                    <div id="xgbDartParameters" style="display: none;">
+                                        <h6 class="text-info">Paramètres DART</h6>
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="xgbRateDrop" class="form-label">
+                                                        Rate drop 
+                                                        <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Fraction d'arbres à abandonner."></i>
+                                                    </label>
+                                                    <input type="range" class="form-range mb-2" id="xgbRateDrop" min="0" max="1" step="0.05" value="0.1" oninput="updateRangeValue('xgbRateDrop', 'xgbRateDropValue')">
+                                                    <div class="d-flex justify-content-between">
+                                                        <small>0</small>
+                                                        <span id="xgbRateDropValue" class="badge bg-primary">0.1</span>
+                                                        <small>1</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="xgbSkipDrop" class="form-label">
+                                                        Skip drop 
+                                                        <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Probabilité de ne pas faire de dropout."></i>
+                                                    </label>
+                                                    <input type="range" class="form-range mb-2" id="xgbSkipDrop" min="0" max="1" step="0.05" value="0.5" oninput="updateRangeValue('xgbSkipDrop', 'xgbSkipDropValue')">
+                                                    <div class="d-flex justify-content-between">
+                                                        <small>0</small>
+                                                        <span id="xgbSkipDropValue" class="badge bg-primary">0.5</span>
+                                                        <small>1</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Reproducibilité et exécution -->
+                                    <h6 class="text-info">Reproducibilité et exécution</h6>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbRandomState" class="form-label">
+                                                    Random state / seed 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Graine pour la reproductibilité."></i>
+                                                </label>
+                                                <input type="number" class="form-control" id="xgbRandomState" min="0" max="999999" placeholder="Laisser vide pour aléatoire">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbNJobs" class="form-label">
+                                                    Threads (n_jobs) 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="-1 utilise tous les cœurs disponibles."></i>
+                                                </label>
+                                                <select class="form-select" id="xgbNJobs">
+                                                    <option value="-1">Utiliser tous les cœurs</option>
+                                                    <option value="1">1 cœur</option>
+                                                    <option value="2">2 cœurs</option>
+                                                    <option value="4">4 cœurs</option>
+                                                    <option value="8">8 cœurs</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="xgbVerbosity" class="form-label">
+                                                    Verbosity 
+                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Niveau de détail des messages."></i>
+                                                </label>
+                                                <select class="form-select" id="xgbVerbosity">
+                                                    <option value="0">0 - Silencieux</option>
+                                                    <option value="1" selected>1 - Avertissements</option>
+                                                    <option value="2">2 - Info</option>
+                                                    <option value="3">3 - Debug</option>
+                                                </select>
                                             </div>
                                         </div>
                                     </div>
@@ -1715,6 +2170,8 @@ function editModel(modelId) {
     // Load model-specific configurations
     if (model.model_type === 'random_forest' && model.hyperparameters) {
         loadRandomForestConfiguration(model.hyperparameters);
+    } else if (model.model_type === 'xgboost' && model.hyperparameters) {
+        loadXGBoostConfiguration(model.hyperparameters);
     }
     
     // Update framework options and show modal
@@ -1786,6 +2243,11 @@ function updateModel(modelId) {
     // Configuration Random Forest
     if (modelType === 'random_forest') {
         modelConfig = { ...modelConfig, ...getRandomForestConfig() };
+    }
+    
+    // Configuration XGBoost
+    if (modelType === 'xgboost') {
+        modelConfig = { ...modelConfig, ...getXGBoostConfig() };
     }
     
     // Architecture personnalisée en mode expert
@@ -2606,6 +3068,11 @@ function createModelOnly() {
         modelConfig = { ...modelConfig, ...getRandomForestConfig() };
     }
     
+    // Configuration XGBoost
+    if (modelType === 'xgboost') {
+        modelConfig = { ...modelConfig, ...getXGBoostConfig() };
+    }
+    
     // Architecture personnalisée en mode expert
     if (expertMode && networkLayers.length > 0) {
         modelConfig.custom_architecture = networkLayers;
@@ -2895,6 +3362,8 @@ function loadDatasets() {
 function updateFrameworkOptions() {
     const modelType = document.getElementById('modelType').value;
     const frameworkDiv = document.getElementById('frameworkSelection');
+    const epochsContainer = document.getElementById('epochsContainer');
+    const expertModeContainer = document.getElementById('expertModeContainer');
     
     // Show framework selection only for neural networks
     if (['lstm', 'gru', 'cnn', 'transformer'].includes(modelType)) {
@@ -2910,10 +3379,29 @@ function updateFrameworkOptions() {
         document.getElementById('networkArchitecture').style.display = 'none';
         document.getElementById('metricsCallbacks').style.display = 'none';
         document.getElementById('randomForestConfiguration').style.display = 'block';
+        document.getElementById('xgboostConfiguration').style.display = 'none';
+        epochsContainer.style.display = 'none';
+        expertModeContainer.style.display = 'none';
         updateRandomForestOptions();
-    } else {
-        // Para otros modèles, ocultar Random Forest y mostrar según corresponda
+    } else if (modelType === 'xgboost') {
+        // Para XGBoost, ocultar secciones de redes neuronales y opciones no relevantes
+        document.getElementById('modelConfiguration').style.display = 'none';
+        document.getElementById('networkArchitecture').style.display = 'none';
+        document.getElementById('metricsCallbacks').style.display = 'none';
         document.getElementById('randomForestConfiguration').style.display = 'none';
+        document.getElementById('xgboostConfiguration').style.display = 'block';
+        epochsContainer.style.display = 'none';
+        expertModeContainer.style.display = 'none';
+        
+        // Asegurar que el modo experto esté desactivado
+        document.getElementById('expertMode').checked = false;
+        updateXGBoostOptions();
+    } else {
+        // Para otros modelos (redes neuronales y decision tree)
+        document.getElementById('randomForestConfiguration').style.display = 'none';
+        document.getElementById('xgboostConfiguration').style.display = 'none';
+        epochsContainer.style.display = isDeepLearningModel(modelType) ? 'block' : 'none';
+        expertModeContainer.style.display = isDeepLearningModel(modelType) ? 'block' : 'none';
         
         // Aplicar lógica normal para modelos de deep learning
         const expertMode = document.getElementById('expertMode').checked;
@@ -3446,6 +3934,258 @@ function loadRandomForestConfiguration(hyperparams) {
     
     // Update UI based on problem type
     updateRandomForestOptions();
+}
+
+// ===== XGBoost Configuration Functions =====
+
+// Update XGBoost options based on problem type
+function updateXGBoostOptions() {
+    const problemType = document.getElementById('xgbProblemType').value;
+    const classificationSettings = document.getElementById('xgbClassificationSettings');
+    
+    if (problemType === 'classification') {
+        classificationSettings.style.display = 'block';
+        
+        // Update eval metric options
+        const evalMetric = document.getElementById('xgbEvalMetric');
+        if (evalMetric.value === 'rmse' || evalMetric.value === 'mae') {
+            evalMetric.value = 'auto';
+        }
+    } else {
+        classificationSettings.style.display = 'none';
+        
+        // Update eval metric options
+        const evalMetric = document.getElementById('xgbEvalMetric');
+        if (evalMetric.value === 'logloss' || evalMetric.value === 'auc' || evalMetric.value === 'mlogloss') {
+            evalMetric.value = 'auto';
+        }
+    }
+}
+
+// Apply XGBoost preset configuration
+function applyXGBoostPreset() {
+    const preset = document.getElementById('xgbPreset').value;
+    
+    const presets = {
+        'rapido': {
+            n_estimators: 100,
+            learning_rate: 0.1,
+            max_depth: 3,
+            subsample: 0.8,
+            colsample_bytree: 0.8,
+            early_stopping_rounds: 30
+        },
+        'balanceado': {
+            n_estimators: 500,
+            learning_rate: 0.05,
+            max_depth: 6,
+            subsample: 0.8,
+            colsample_bytree: 0.8,
+            early_stopping_rounds: 50
+        },
+        'preciso': {
+            n_estimators: 1000,
+            learning_rate: 0.01,
+            max_depth: 8,
+            subsample: 0.9,
+            colsample_bytree: 0.9,
+            early_stopping_rounds: 100
+        }
+    };
+    
+    const config = presets[preset];
+    if (config) {
+        document.getElementById('xgbNEstimators').value = config.n_estimators;
+        updateRangeValue('xgbNEstimators', 'xgbNEstimatorsValue');
+        
+        document.getElementById('xgbLearningRate').value = config.learning_rate;
+        document.getElementById('xgbMaxDepth').value = config.max_depth;
+        
+        document.getElementById('xgbSubsample').value = config.subsample;
+        updateRangeValue('xgbSubsample', 'xgbSubsampleValue');
+        
+        document.getElementById('xgbColsampleBytree').value = config.colsample_bytree;
+        updateRangeValue('xgbColsampleBytree', 'xgbColsampleBytreeValue');
+        
+        document.getElementById('xgbEarlyStoppingRounds').value = config.early_stopping_rounds;
+    }
+}
+
+// Toggle early stopping options
+function toggleXGBoostEarlyStopping() {
+    const enabled = document.getElementById('xgbEarlyStoppingEnabled').checked;
+    const container = document.getElementById('xgbEarlyStoppingContainer');
+    container.style.display = enabled ? 'block' : 'none';
+}
+
+// Toggle max leaves option based on grow policy
+function toggleMaxLeaves() {
+    const growPolicy = document.getElementById('xgbGrowPolicy').value;
+    const maxLeavesContainer = document.getElementById('xgbMaxLeavesContainer');
+    maxLeavesContainer.style.display = growPolicy === 'lossguide' ? 'block' : 'none';
+}
+
+// Toggle booster-specific options
+function toggleBoosterOptions() {
+    const booster = document.getElementById('xgbBooster').value;
+    const dartParams = document.getElementById('xgbDartParameters');
+    dartParams.style.display = booster === 'dart' ? 'block' : 'none';
+}
+
+// Get XGBoost configuration
+function getXGBoostConfig() {
+    const config = {
+        preset: document.getElementById('xgbPreset').value,
+        problem_type: document.getElementById('xgbProblemType').value,
+        n_estimators: parseInt(document.getElementById('xgbNEstimators').value),
+        learning_rate: parseFloat(document.getElementById('xgbLearningRate').value),
+        max_depth: parseInt(document.getElementById('xgbMaxDepth').value),
+        subsample: parseFloat(document.getElementById('xgbSubsample').value),
+        colsample_bytree: parseFloat(document.getElementById('xgbColsampleBytree').value),
+        eval_metric: document.getElementById('xgbEvalMetric').value,
+        
+        // Early stopping
+        early_stopping_enabled: document.getElementById('xgbEarlyStoppingEnabled').checked,
+        early_stopping_rounds: document.getElementById('xgbEarlyStoppingEnabled').checked ? 
+            parseInt(document.getElementById('xgbEarlyStoppingRounds').value) : null,
+        
+        // GPU
+        use_gpu: document.getElementById('xgbUseGPU').checked,
+        
+        // Advanced options
+        min_child_weight: parseFloat(document.getElementById('xgbMinChildWeight').value),
+        gamma: parseFloat(document.getElementById('xgbGamma').value),
+        reg_lambda: parseFloat(document.getElementById('xgbRegLambda').value),
+        reg_alpha: parseFloat(document.getElementById('xgbRegAlpha').value),
+        max_delta_step: parseFloat(document.getElementById('xgbMaxDeltaStep').value),
+        
+        // Column sampling
+        colsample_bylevel: parseFloat(document.getElementById('xgbColsampleBylevel').value),
+        colsample_bynode: parseFloat(document.getElementById('xgbColsampleBynode').value),
+        
+        // Tree method
+        tree_method: document.getElementById('xgbTreeMethod').value,
+        max_bin: parseInt(document.getElementById('xgbMaxBin').value),
+        grow_policy: document.getElementById('xgbGrowPolicy').value,
+        max_leaves: document.getElementById('xgbGrowPolicy').value === 'lossguide' ? 
+            parseInt(document.getElementById('xgbMaxLeaves').value) : null,
+        
+        // Classification settings
+        scale_pos_weight: document.getElementById('xgbProblemType').value === 'classification' ? 
+            parseFloat(document.getElementById('xgbScalePosWeight').value) : null,
+        
+        // Booster
+        booster: document.getElementById('xgbBooster').value,
+        
+        // DART parameters
+        rate_drop: document.getElementById('xgbBooster').value === 'dart' ? 
+            parseFloat(document.getElementById('xgbRateDrop').value) : null,
+        skip_drop: document.getElementById('xgbBooster').value === 'dart' ? 
+            parseFloat(document.getElementById('xgbSkipDrop').value) : null,
+        
+        // Execution
+        random_state: document.getElementById('xgbRandomState').value ? 
+            parseInt(document.getElementById('xgbRandomState').value) : null,
+        n_jobs: parseInt(document.getElementById('xgbNJobs').value),
+        verbosity: parseInt(document.getElementById('xgbVerbosity').value)
+    };
+    
+    // Set device based on GPU usage
+    if (config.use_gpu) {
+        config.device = 'cuda';
+        if (config.tree_method === 'auto') {
+            config.tree_method = 'hist';
+        }
+    }
+    
+    // Set objective based on problem type
+    if (config.problem_type === 'classification') {
+        config.objective = 'binary:logistic';  // Will be adjusted for multiclass in backend
+    } else {
+        config.objective = 'reg:squarederror';
+    }
+    
+    // Auto-select eval metric if needed
+    if (config.eval_metric === 'auto') {
+        if (config.problem_type === 'classification') {
+            config.eval_metric = 'logloss';
+        } else {
+            config.eval_metric = 'rmse';
+        }
+    }
+    
+    return config;
+}
+
+// Load XGBoost configuration for editing
+function loadXGBoostConfiguration(hyperparams) {
+    if (!hyperparams) return;
+    
+    // Basic parameters
+    setValueWithRangeUpdate('xgbPreset', hyperparams.preset || 'balanceado');
+    setValueWithRangeUpdate('xgbProblemType', hyperparams.problem_type || 'regression');
+    setValueWithRangeUpdate('xgbNEstimators', hyperparams.n_estimators, 'xgbNEstimatorsValue');
+    setValueWithRangeUpdate('xgbLearningRate', hyperparams.learning_rate);
+    setValueWithRangeUpdate('xgbMaxDepth', hyperparams.max_depth);
+    setValueWithRangeUpdate('xgbSubsample', hyperparams.subsample, 'xgbSubsampleValue');
+    setValueWithRangeUpdate('xgbColsampleBytree', hyperparams.colsample_bytree, 'xgbColsampleBytreeValue');
+    setValueWithRangeUpdate('xgbEvalMetric', hyperparams.eval_metric || 'auto');
+    
+    // Early stopping
+    setCheckboxValue('xgbEarlyStoppingEnabled', hyperparams.early_stopping_enabled !== false, toggleXGBoostEarlyStopping);
+    if (hyperparams.early_stopping_rounds) {
+        setValueWithRangeUpdate('xgbEarlyStoppingRounds', hyperparams.early_stopping_rounds);
+    }
+    
+    // GPU
+    setCheckboxValue('xgbUseGPU', hyperparams.use_gpu || hyperparams.device === 'cuda');
+    
+    // Advanced parameters
+    setValueWithRangeUpdate('xgbMinChildWeight', hyperparams.min_child_weight || 1);
+    setValueWithRangeUpdate('xgbGamma', hyperparams.gamma || 0, 'xgbGammaValue');
+    setValueWithRangeUpdate('xgbRegLambda', hyperparams.reg_lambda || 1, 'xgbRegLambdaValue');
+    setValueWithRangeUpdate('xgbRegAlpha', hyperparams.reg_alpha || 0, 'xgbRegAlphaValue');
+    setValueWithRangeUpdate('xgbMaxDeltaStep', hyperparams.max_delta_step || 0);
+    
+    // Column sampling
+    setValueWithRangeUpdate('xgbColsampleBylevel', hyperparams.colsample_bylevel || 1, 'xgbColsampleBylevelValue');
+    setValueWithRangeUpdate('xgbColsampleBynode', hyperparams.colsample_bynode || 1, 'xgbColsampleBynodeValue');
+    
+    // Tree method
+    setValueWithRangeUpdate('xgbTreeMethod', hyperparams.tree_method || 'auto');
+    setValueWithRangeUpdate('xgbMaxBin', hyperparams.max_bin || 256);
+    setValueWithRangeUpdate('xgbGrowPolicy', hyperparams.grow_policy || 'depthwise');
+    if (hyperparams.max_leaves) {
+        setValueWithRangeUpdate('xgbMaxLeaves', hyperparams.max_leaves);
+    }
+    toggleMaxLeaves();
+    
+    // Classification settings
+    if (hyperparams.scale_pos_weight) {
+        setValueWithRangeUpdate('xgbScalePosWeight', hyperparams.scale_pos_weight);
+    }
+    
+    // Booster
+    setValueWithRangeUpdate('xgbBooster', hyperparams.booster || 'gbtree');
+    toggleBoosterOptions();
+    
+    // DART parameters
+    if (hyperparams.rate_drop !== undefined) {
+        setValueWithRangeUpdate('xgbRateDrop', hyperparams.rate_drop, 'xgbRateDropValue');
+    }
+    if (hyperparams.skip_drop !== undefined) {
+        setValueWithRangeUpdate('xgbSkipDrop', hyperparams.skip_drop, 'xgbSkipDropValue');
+    }
+    
+    // Execution
+    if (hyperparams.random_state) {
+        setValueWithRangeUpdate('xgbRandomState', hyperparams.random_state);
+    }
+    setValueWithRangeUpdate('xgbNJobs', hyperparams.n_jobs || -1);
+    setValueWithRangeUpdate('xgbVerbosity', hyperparams.verbosity || 1);
+    
+    // Update UI based on problem type
+    updateXGBoostOptions();
 }
 </script>
 {% endblock %}
