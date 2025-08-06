@@ -3060,8 +3060,11 @@ function showOutliers(columnName) {
     const lowerBound = colStats.q25 - (1.5 * iqr);
     const upperBound = colStats.q75 + (1.5 * iqr);
     
-    // Variables para scroll infinito
+    // Variables para scroll infinito y filtrado
     let outlierValues = [];
+    let filteredOutlierValues = [];
+    let currentFilter = 'all';
+    let outlierInfo = null;
     let currentPage = 0;
     const itemsPerPage = 20;
     let isLoading = false;
@@ -3122,6 +3125,28 @@ function showOutliers(columnName) {
                         </div>
                         
                         <h6 class="text-primary mb-3">Valores Outliers Detectados</h6>
+                        
+                        <!-- Controles de filtrado -->
+                        <div class="mb-3">
+                            <div class="btn-group btn-group-sm w-100" role="group">
+                                <button type="button" class="btn btn-outline-info active" id="filterAll" onclick="filterOutliers('all')">
+                                    <i class="bi bi-list"></i> Todos
+                                </button>
+                                <button type="button" class="btn btn-outline-info" id="filterBelow" onclick="filterOutliers('below')">
+                                    <i class="bi bi-arrow-down-circle"></i> Por debajo
+                                </button>
+                                <button type="button" class="btn btn-outline-info" id="filterAbove" onclick="filterOutliers('above')">
+                                    <i class="bi bi-arrow-up-circle"></i> Por encima
+                                </button>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    Mostrando: <span id="outlierFilterStatus" class="text-info">Todos los outliers</span> | 
+                                    Total visible: <span id="visibleOutliersCount" class="text-warning">0</span>
+                                </small>
+                            </div>
+                        </div>
+                        
                         <div id="outlierValuesContent" style="max-height: 500px; overflow-y: auto; border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 5px; padding: 10px;">
                             <div class="text-center p-3">
                                 <div class="spinner-border text-primary" role="status">
@@ -3260,17 +3285,62 @@ function showOutliers(columnName) {
             });
     }
     
+    // Función para filtrar outliers
+    window.filterOutliers = function(type) {
+        currentFilter = type;
+        currentPage = 0;
+        
+        // Actualizar botones activos
+        document.querySelectorAll('#outliersModal .btn-group button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        if (type === 'all') {
+            document.getElementById('filterAll').classList.add('active');
+            document.getElementById('outlierFilterStatus').textContent = 'Todos los outliers';
+            filteredOutlierValues = outlierValues;
+        } else if (type === 'below') {
+            document.getElementById('filterBelow').classList.add('active');
+            document.getElementById('outlierFilterStatus').textContent = 'Outliers por debajo del límite inferior';
+            const lowerBound = colStats.q25 - (1.5 * (colStats.q75 - colStats.q25));
+            filteredOutlierValues = outlierValues.filter(v => v < lowerBound);
+        } else if (type === 'above') {
+            document.getElementById('filterAbove').classList.add('active');
+            document.getElementById('outlierFilterStatus').textContent = 'Outliers por encima del límite superior';
+            const upperBound = colStats.q75 + (1.5 * (colStats.q75 - colStats.q25));
+            filteredOutlierValues = outlierValues.filter(v => v > upperBound);
+        }
+        
+        // Re-renderizar
+        const container = document.getElementById('outlierValuesContent');
+        container.innerHTML = '';
+        renderOutliers();
+    };
+    
     // Función para renderizar outliers
     function renderOutliers() {
         const container = document.getElementById('outlierValuesContent');
+        const valuesToRender = filteredOutlierValues.length > 0 || currentFilter !== 'all' ? filteredOutlierValues : outlierValues;
         const startIdx = currentPage * itemsPerPage;
-        const endIdx = Math.min(startIdx + itemsPerPage, outlierValues.length);
+        const endIdx = Math.min(startIdx + itemsPerPage, valuesToRender.length);
+        
+        // Actualizar contador de visibles
+        document.getElementById('visibleOutliersCount').textContent = valuesToRender.length;
         
         if (currentPage === 0) {
             if (outlierValues.length === 0) {
                 container.innerHTML = `
                     <div class="alert alert-success">
                         <i class="bi bi-check-circle"></i> No se detectaron outliers en esta variable
+                    </div>
+                `;
+                return;
+            }
+            
+            if (valuesToRender.length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> No se encontraron outliers con los filtros actuales
                     </div>
                 `;
                 return;
@@ -3305,7 +3375,7 @@ function showOutliers(columnName) {
         const upperBound = colStats.q75 + (1.5 * iqr);
         
         for (let i = startIdx; i < endIdx; i++) {
-            const value = outlierValues[i];
+            const value = valuesToRender[i];
             const type = value < lowerBound ? 'Bajo' : 'Alto';
             const typeClass = value < lowerBound ? 'text-info' : 'text-warning';
             
@@ -3322,7 +3392,7 @@ function showOutliers(columnName) {
         const scrollContainer = document.getElementById('outlierValuesContent');
         scrollContainer.onscroll = function() {
             if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 50) {
-                if (currentPage * itemsPerPage < outlierValues.length) {
+                if (currentPage * itemsPerPage < valuesToRender.length) {
                     currentPage++;
                     document.getElementById('outlierLoadingIndicator').style.display = 'block';
                     setTimeout(() => {

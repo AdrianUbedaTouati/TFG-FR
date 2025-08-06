@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
 import base64
+import json
 
 from ..models import Dataset
 from ..utils import (
@@ -50,6 +51,43 @@ class DatasetReportView(APIView):
         # Return as HTML response
         response = HttpResponse(html_content, content_type='text/html')
         response['Content-Disposition'] = f'inline; filename="{dataset.name}_report.html"'
+        
+        return response
+    
+    def post(self, request, pk):
+        """Generate report with custom chart data from frontend"""
+        dataset = get_object_or_404(Dataset, pk=pk)
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Validate dataset
+        is_valid, error_msg = validate_dataframe(df)
+        if not is_valid:
+            return error_response(error_msg)
+        
+        # Get chart data from request
+        try:
+            request_data = json.loads(request.body)
+            charts_data = request_data.get('charts', {})
+        except:
+            charts_data = {}
+        
+        # Generate report data
+        report_data = self._generate_report_data(dataset, df)
+        
+        # Add custom charts from frontend
+        if charts_data:
+            report_data['custom_charts'] = charts_data
+        
+        # Generate HTML report
+        html_content = self._generate_html_report(report_data)
+        
+        # Return as HTML response
+        response = HttpResponse(html_content, content_type='text/html')
+        response['Content-Disposition'] = f'attachment; filename="{dataset.name}_report.html"'
         
         return response
     
@@ -222,6 +260,31 @@ class DatasetReportView(APIView):
             # Fallback to inline HTML generation
             return self._generate_inline_html(report_data)
     
+    def _generate_custom_charts_html(self, custom_charts):
+        """Generate HTML for custom charts from frontend"""
+        if not custom_charts:
+            return ""
+        
+        html = "<h2>Analysis Charts</h2>"
+        for chart_id, chart_data in custom_charts.items():
+            variable = chart_data.get('variable', 'Unknown')
+            chart_image = chart_data.get('chartImage', '')
+            
+            html += f'<div class="visualization">'
+            html += f'<h3>Analysis: {variable}</h3>'
+            if chart_image:
+                html += f'<img src="{chart_image}" />'
+            
+            # Add outlier info if available
+            outlier_info = chart_data.get('outlierInfo')
+            if outlier_info:
+                html += f'<p>Outliers detected: {outlier_info.get("outlier_count", 0)} '
+                html += f'({outlier_info.get("outlier_percentage", 0):.2f}% of data)</p>'
+            
+            html += '</div>'
+        
+        return html
+    
     def _generate_inline_html(self, data):
         """Generate HTML report inline (fallback)"""
         html = f"""
@@ -270,6 +333,8 @@ class DatasetReportView(APIView):
             
             <h2>Visualizations</h2>
             {self._generate_visualizations_html(data['visualizations'])}
+            
+            {self._generate_custom_charts_html(data.get('custom_charts', {}))}
             
             <h2>Column Details</h2>
             {self._generate_columns_table(data['column_analysis'])}
