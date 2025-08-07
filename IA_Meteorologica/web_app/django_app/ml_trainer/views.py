@@ -1,8 +1,10 @@
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.parsers import JSONParser
+from rest_framework.renderers import JSONRenderer
 from django.shortcuts import get_object_or_404
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 import pandas as pd
 import numpy as np
 import json
@@ -21,6 +23,27 @@ from .models import Dataset, TrainingSession, WeatherPrediction, ModelType, Norm
 from .serializers import DatasetSerializer, TrainingSessionSerializer, WeatherPredictionSerializer, ModelDefinitionSerializer
 from .ml_utils import get_model_config, get_normalization_methods, get_metrics, train_model, make_predictions
 from .code_generator import generate_keras_code, generate_pytorch_code, parse_keras_code, parse_pytorch_code, validate_architecture
+
+def clean_nan_values(obj):
+    """Recursively clean NaN values from nested structures"""
+    if isinstance(obj, float):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return obj
+    elif isinstance(obj, np.floating):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return float(obj)
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.ndarray):
+        return clean_nan_values(obj.tolist())
+    elif isinstance(obj, list):
+        return [clean_nan_values(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {key: clean_nan_values(value) for key, value in obj.items()}
+    else:
+        return obj
 try:
     # Intentar importar desde el módulo local primero
     from .normalization_methods import NumNorm, TextNorm, Normalizador
@@ -1554,6 +1577,9 @@ class DatasetVariableAnalysisView(APIView):
 
 
 class DatasetGeneralAnalysisView(APIView):
+    renderer_classes = [JSONRenderer]
+    parser_classes = [JSONParser]
+    
     def get(self, request, pk):
         dataset = get_object_or_404(Dataset, pk=pk)
         analysis_type = request.query_params.get('type', 'correlation')
@@ -1592,17 +1618,18 @@ class DatasetGeneralAnalysisView(APIView):
     
     def generate_correlation_matrix(self, df):
         """Genera una matriz de correlación para variables numéricas"""
-        # Seleccionar solo columnas numéricas
-        numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
-        
-        if len(numeric_columns) < 2:
-            return Response(
-                {'error': 'At least 2 numeric columns are required for correlation matrix'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Calcular matriz de correlación
-        corr_matrix = df[numeric_columns].corr()
+        try:
+            # Seleccionar solo columnas numéricas
+            numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+            
+            if len(numeric_columns) < 2:
+                return Response(
+                    {'error': 'At least 2 numeric columns are required for correlation matrix'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calcular matriz de correlación
+            corr_matrix = df[numeric_columns].corr()
         
         # Crear figura
         plt.figure(figsize=(12, 10))
@@ -1635,31 +1662,41 @@ class DatasetGeneralAnalysisView(APIView):
                         'correlation': float(corr_value)
                     })
         
-        strong_correlations.sort(key=lambda x: abs(x['correlation']), reverse=True)
-        
-        return Response({
-            'analysis_type': 'correlation_matrix',
-            'image': f'data:image/png;base64,{image_base64}',
-            'statistics': {
-                'numeric_columns': numeric_columns,
-                'column_count': len(numeric_columns),
-                'strong_correlations': strong_correlations[:10]  # Top 10
-            }
-        })
+            strong_correlations.sort(key=lambda x: abs(x['correlation']), reverse=True)
+            
+            # Limpiar valores NaN antes de devolver
+            return Response({
+                'analysis_type': 'correlation_matrix',
+                'image': f'data:image/png;base64,{image_base64}',
+                'statistics': {
+                    'numeric_columns': numeric_columns,
+                    'column_count': len(numeric_columns),
+                    'strong_correlations': strong_correlations[:10]  # Top 10
+                }
+            })
+        except Exception as e:
+            import traceback
+            print(f"Error in generate_correlation_matrix: {e}")
+            print(traceback.format_exc())
+            return Response(
+                {'error': f'Error generating correlation matrix: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def generate_pca_analysis(self, df):
         """Genera análisis PCA para reducción de dimensionalidad"""
-        # Seleccionar solo columnas numéricas
-        numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
-        
-        if len(numeric_columns) < 3:
-            return Response(
-                {'error': 'At least 3 numeric columns are required for PCA'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Preparar datos
-        X = df[numeric_columns].dropna()
+        try:
+            # Seleccionar solo columnas numéricas
+            numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+            
+            if len(numeric_columns) < 3:
+                return Response(
+                    {'error': 'At least 3 numeric columns are required for PCA'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Preparar datos
+            X = df[numeric_columns].dropna()
         
         # Escalar datos
         scaler = StandardScaler()
@@ -1726,7 +1763,7 @@ class DatasetGeneralAnalysisView(APIView):
         # Componentes necesarios para 95% varianza
         n_components_95 = np.argmax(cumsum >= 0.95) + 1
         
-        return Response({
+        response_data = {
             'analysis_type': 'pca',
             'image': f'data:image/png;base64,{image_base64}',
             'statistics': {
@@ -1746,7 +1783,18 @@ class DatasetGeneralAnalysisView(APIView):
                     for i, var in enumerate(pca.explained_variance_ratio_[:3])
                 }
             }
-        })
+            }
+            
+            # Limpiar valores NaN/Inf antes de devolver
+            return Response(clean_nan_values(response_data))
+        except Exception as e:
+            import traceback
+            print(f"Error in generate_pca_analysis: {e}")
+            print(traceback.format_exc())
+            return Response(
+                {'error': f'Error generating PCA analysis: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def generate_lasso_analysis(self, df, target_column):
         """Genera análisis LASSO para selección de características"""

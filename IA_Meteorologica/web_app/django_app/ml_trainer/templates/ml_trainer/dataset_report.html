@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapport d'Analyse - {{ dataset_info.name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/@sgratzl/chartjs-chart-boxplot@3"></script>
+    <style>
+        :root {
+            --primary-color: #00d4ff;
+            --secondary-color: #0099ff;
+            --accent-color: #ff00ff;
+            --dark-color: #0a0e27;
+            --light-color: #f0f9ff;
+            --neon-glow: 0 0 20px rgba(0, 212, 255, 0.8);
+            --neon-glow-intense: 0 0 40px rgba(0, 212, 255, 1);
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: #0a0e27;
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+            color: var(--light-color);
+            margin: 0;
+            padding: 0;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(0, 212, 255, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(255, 0, 255, 0.2) 0%, transparent 50%),
+                radial-gradient(circle at 50% 100%, rgba(0, 153, 255, 0.2) 0%, transparent 50%);
+            pointer-events: none;
+            animation: backgroundPulse 10s ease-in-out infinite;
+        }
+        
+        @keyframes backgroundPulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.5; }
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--primary-color);
+        }
+        
+        /* Header like the page */
+        .page-header {
+            background: rgba(0, 212, 255, 0.05);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .page-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(0, 212, 255, 0.1) 0%, transparent 70%);
+            animation: rotate 20s linear infinite;
+        }
+        
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .page-header h1 {
+            font-weight: 700;
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: var(--neon-glow);
+            position: relative;
+            z-index: 1;
+        }
+        
+        .page-header p {
+            color: rgba(240, 249, 255, 0.8);
+            font-size: 1.2rem;
+            margin: 0;
+            position: relative;
+            z-index: 1;
+        }
+        /* Stats Grid - Matching page styles exactly */
+        .row {
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: rgba(0, 212, 255, 0.05);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 20px;
+            padding: 30px 20px;
+            height: 100%;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(0, 212, 255, 0.05) 0%, transparent 70%);
+            transition: all 0.3s ease;
+            opacity: 0;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--neon-glow);
+            border-color: var(--primary-color);
+        }
+        
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+        
+        .stat-card .card-body {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .stat-card i {
+            font-size: 2rem;
+            color: var(--primary-color);
+            text-shadow: var(--neon-glow);
+        }
+        
+        .stat-card h3 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 15px 0 5px 0;
+            color: white !important;
+        }
+        
+        .stat-card .text-muted {
+            color: rgba(240, 249, 255, 0.6) !important;
+            font-size: 0.9rem;
+        }
+        /* Tables matching page style */
+        .table {
+            background: transparent !important;
+            color: var(--light-color);
+            margin-top: 20px;
+        }
+        
+        .table thead th {
+            background-color: rgba(0, 212, 255, 0.1);
+            color: var(--primary-color);
+            border-color: rgba(0, 212, 255, 0.3);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 15px;
+        }
+        
+        .table tbody tr {
+            border-color: rgba(0, 212, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .table tbody tr:hover {
+            background-color: rgba(0, 212, 255, 0.05);
+            transform: translateX(5px);
+        }
+        
+        .table td {
+            border-color: rgba(0, 212, 255, 0.1);
+            padding: 12px 15px;
+            vertical-align: middle;
+        }
+        
+        .numeric {
+            text-align: right;
+            font-family: 'Monaco', 'Consolas', monospace;
+        }
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            color: #64748b;
+            font-size: 14px;
+            padding: 20px;
+            border-top: 1px solid rgba(0, 212, 255, 0.2);
+        }
+        .preview-section {
+            margin-top: 30px;
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 25px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        .preview-section h2 {
+            margin-top: 0;
+            color: #00d4ff;
+            border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .preview-table {
+            width: 100%;
+            background: rgba(15, 17, 20, 0.5);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .preview-table th {
+            background: rgba(0, 212, 255, 0.1);
+            color: #00d4ff;
+        }
+        .preview-table td {
+            padding: 10px;
+            border: 1px solid rgba(0, 212, 255, 0.1);
+        }
+        .null-badge {
+            background-color: #ef4444;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .type-badge {
+            background-color: #60a5fa;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        .chart-container {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        .chart-container h3 {
+            color: #00d4ff;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+            padding-bottom: 10px;
+        }
+        .chart-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        .icon {
+            margin-right: 8px;
+            color: #00d4ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="page-header">
+            <h1>Rapport d'Analyse du Dataset</h1>
+            <p>{{ dataset_info.name }} - Généré le {% now "d/m/Y à H:i" %}</p>
+        </div>
+        
+        <!-- Descriptions du dataset -->
+        <div class="stat-card mb-4">
+            <div class="card-body">
+                <h3><i class="bi bi-info-circle icon"></i>Informations du Dataset</h3>
+                <p><strong>Description courte:</strong> {{ dataset_info.description|default:"Aucune description disponible" }}</p>
+                {% if dataset_info.long_description %}
+                <p><strong>Description détaillée:</strong> {{ dataset_info.long_description }}</p>
+                {% endif %}
+                <p><strong>Date de création:</strong> {{ dataset_info.uploaded_at|date:"d/m/Y à H:i" }}</p>
+            </div>
+        </div>
+        
+        <!-- Stats Grid like in the page -->
+        <div class="row">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="card-body text-center">
+                        <i class="bi bi-table"></i>
+                        <h3>{{ dataset_info.shape.0|floatformat:0 }} × {{ dataset_info.shape.1 }}</h3>
+                        <p class="text-muted mb-0">Dimensions</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="card-body text-center">
+                        <i class="bi bi-hdd-fill"></i>
+                        <h3>{{ dataset_info.memory_usage.total_mb }} MB</h3>
+                        <p class="text-muted mb-0">Taille en mémoire</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="card-body text-center">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <h3>{{ missing_data.total_missing }}</h3>
+                        <p class="text-muted mb-0">Valeurs manquantes</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="card-body text-center">
+                        <i class="bi bi-calendar-check-fill"></i>
+                        <h3>{{ dataset_info.uploaded_at|date:"d/m/Y" }}</h3>
+                        <p class="text-muted mb-0">Date d'importation</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    
+        <!-- Analyse des Variables -->
+        <div class="mt-5">
+            <h2>Analyse des Variables</h2>
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Variable</th>
+                        <th>Type</th>
+                        <th>Valeurs uniques</th>
+                        <th>Valeurs nulles</th>
+                        <th>Statistiques</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for col in column_analysis %}
+                    <tr>
+                        <td><strong>{{ col.name }}</strong></td>
+                        <td><span class="type-badge">{{ col.type|title }}</span></td>
+                        <td class="numeric">{{ col.unique_count }}</td>
+                        <td class="numeric">
+                            {% if col.null_count > 0 %}
+                                <span class="null-badge">{{ col.null_count }} ({{ col.null_percentage|floatformat:1 }}%)</span>
+                            {% else %}
+                                0
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if col.type == 'numeric' %}
+                                μ={{ col.stats.mean|floatformat:2 }}, σ={{ col.stats.std|floatformat:2 }}<br>
+                                Min: {{ col.stats.min|floatformat:2 }}, Max: {{ col.stats.max|floatformat:2 }}<br>
+                                Q1: {{ col.stats.q1|floatformat:2 }}, Médiane: {{ col.stats.median|floatformat:2 }}, Q3: {{ col.stats.q3|floatformat:2 }}
+                            {% else %}
+                                {{ col.unique_count }} valeurs distinctes
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-info" onclick="showUniqueValues('{{ col.name }}')" title="Voir valeurs uniques">
+                                <i class="bi bi-list-ul"></i>
+                            </button>
+                            {% if col.type == 'numeric' and col.outliers_count > 0 %}
+                            <button class="btn btn-sm btn-outline-warning ms-1" onclick="showOutliers('{{ col.name }}')" title="Voir outliers">
+                                <i class="bi bi-exclamation-triangle"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Visualizations -->
+        <div class="mt-5">
+            <h2>Visualisations</h2>
+            
+            {% if visualizations.correlation_heatmap %}
+            <div class="chart-container">
+                <h3>Matrice de Corrélation</h3>
+                <img src="{{ visualizations.correlation_heatmap }}" alt="Matrice de corrélation">
+            </div>
+            {% endif %}
+            
+            {% if visualizations.missing_data %}
+            <div class="chart-container">
+                <h3>Données Manquantes par Colonne</h3>
+                <img src="{{ visualizations.missing_data }}" alt="Données manquantes">
+            </div>
+            {% endif %}
+            
+            {% if visualizations.pca_analysis %}
+            <div class="chart-container">
+                <h3>Analyse PCA</h3>
+                <img src="{{ visualizations.pca_analysis }}" alt="Analyse PCA">
+            </div>
+            {% endif %}
+            
+            {% for dist in visualizations.distributions %}
+            <div class="chart-container">
+                <h3>Distribution : {{ dist.column }}</h3>
+                <img src="{{ dist.plot }}" alt="Distribution de {{ dist.column }}">
+            </div>
+            {% endfor %}
+            
+            {% if custom_charts %}
+            <h2 class="mt-5">Analyses de Distribution Personnalisées</h2>
+            {% for chart_id, chart_data in custom_charts.items %}
+            <div class="chart-container">
+                <h3>{{ chart_data.title|default:"Analyse" }} - {{ chart_data.variable }}</h3>
+                <img src="{{ chart_data.chartImage }}" alt="{{ chart_data.title }}">
+                {% if chart_data.outlierInfo %}
+                <div class="mt-2">
+                    <p class="text-info">
+                        <i class="bi bi-info-circle"></i> 
+                        Outliers détectés: {{ chart_data.outlierInfo.outlier_count }} 
+                        ({{ chart_data.outlierInfo.outlier_percentage|floatformat:2 }}% des données)
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+
+        <!-- Data Preview -->
+        {% if data_preview %}
+        <div class="preview-section">
+            <h2>Aperçu des Données (10 premières lignes)</h2>
+            <div class="table-responsive">
+                <table class="table preview-table">
+                    <thead>
+                        <tr>
+                            {% for col in data_preview.columns %}
+                            <th>{{ col }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in data_preview.rows %}
+                        <tr>
+                            {% for value in row %}
+                            <td>
+                                {% if value == None %}
+                                    <span class="null-badge">NULL</span>
+                                {% else %}
+                                    {{ value }}
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <footer class="footer">
+            <p>Rapport généré le {% now "d/m/Y à H:i:s" %}</p>
+        </footer>
+    </div>
+
+    <!-- Modal Container -->
+    <div id="modalContainer"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Variable data for JavaScript
+        const variableData = {{ variable_data|safe }};
+        
+        // Function to show unique values modal
+        function showUniqueValues(variableName) {
+            const varData = variableData[variableName];
+            if (!varData) return;
+            
+            let currentPage = 0;
+            const itemsPerPage = 20;
+            let sortedData = [];
+            let currentSort = 'frequency';
+            
+            // Prepare sorted data
+            const prepareSortedData = () => {
+                sortedData = Object.entries(varData.value_counts || {}).map(([value, count]) => ({
+                    value: value,
+                    count: count,
+                    percentage: (count / varData.total_count) * 100
+                }));
+                
+                if (currentSort === 'frequency') {
+                    sortedData.sort((a, b) => b.count - a.count);
+                } else if (currentSort === 'value-asc') {
+                    sortedData.sort((a, b) => String(a.value).localeCompare(String(b.value)));
+                } else if (currentSort === 'value-desc') {
+                    sortedData.sort((a, b) => String(b.value).localeCompare(String(a.value)));
+                }
+            };
+            
+            prepareSortedData();
+            
+            let modalContent = `
+                <div class="modal fade" id="uniqueValuesModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content" style="background: #1a1a2e; border: 1px solid rgba(0, 212, 255, 0.3);">
+                            <div class="modal-header" style="border-bottom: 1px solid rgba(0, 212, 255, 0.2);">
+                                <h5 class="modal-title" style="color: #00d4ff;">
+                                    <i class="bi bi-list-ul"></i> Análisis de Valores - "${variableName}"
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body" style="color: #f0f9ff;">
+                                <div class="mb-3">
+                                    <span class="badge bg-info">Total: ${varData.unique_count || 0} valores únicos</span>
+                                    <span class="badge bg-warning ms-2">Nulos: ${varData.null_count || 0}</span>
+                                    <span class="badge bg-success ms-2">Total registros: ${varData.total_count || 0}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="text-primary mb-0">Distribución de frecuencias:</h6>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button type="button" class="btn btn-outline-info active" onclick="sortValues('frequency')" id="sortFrequency">
+                                            <i class="bi bi-sort-numeric-down"></i> Frecuencia
+                                        </button>
+                                        <button type="button" class="btn btn-outline-info" onclick="sortValues('value-asc')" id="sortValueAsc">
+                                            <i class="bi bi-sort-alpha-down"></i> Valor ↑
+                                        </button>
+                                        <button type="button" class="btn btn-outline-info" onclick="sortValues('value-desc')" id="sortValueDesc">
+                                            <i class="bi bi-sort-alpha-down-alt"></i> Valor ↓
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="uniqueValuesContent" style="max-height: 400px; overflow-y: auto;">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-hover table-dark">
+                                            <thead class="sticky-top" style="background: #0a0e27;">
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Valor</th>
+                                                    <th>Frecuencia</th>
+                                                    <th style="min-width: 200px;">Porcentaje</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="frequencyTableBody">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer" style="border-top: 1px solid rgba(0, 212, 255, 0.2);">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                    <i class="bi bi-x-circle"></i> Cerrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            
+            // Remove existing modal if any
+            const existingModal = document.getElementById('uniqueValuesModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // Add modal to container
+            document.getElementById('modalContainer').innerHTML = modalContent;
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('uniqueValuesModal'), {
+                backdrop: false,
+                keyboard: true
+            });
+            modal.show();
+            
+            // Sort function
+            window.sortValues = function(sortType) {
+                currentSort = sortType;
+                currentPage = 0;
+                
+                // Update active buttons
+                document.querySelectorAll('#uniqueValuesModal .btn-group button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                document.getElementById(sortType === 'frequency' ? 'sortFrequency' : 
+                    sortType === 'value-asc' ? 'sortValueAsc' : 'sortValueDesc').classList.add('active');
+                
+                prepareSortedData();
+                renderValues();
+            };
+            
+            // Render values function
+            const renderValues = () => {
+                const tbody = document.getElementById('frequencyTableBody');
+                tbody.innerHTML = '';
+                
+                const startIdx = currentPage * itemsPerPage;
+                const endIdx = Math.min(startIdx + itemsPerPage, sortedData.length);
+                
+                for (let i = startIdx; i < endIdx; i++) {
+                    const item = sortedData[i];
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="text-muted">${i + 1}</td>
+                        <td><code>${item.value}</code></td>
+                        <td>${item.count.toLocaleString()}</td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="progress flex-grow-1" style="height: 20px;">
+                                    <div class="progress-bar ${item.percentage > 10 ? 'bg-primary' : 'bg-info'}" 
+                                         role="progressbar" 
+                                         style="width: ${item.percentage}%">
+                                        ${item.percentage > 5 ? item.percentage.toFixed(2) + '%' : ''}
+                                    </div>
+                                </div>
+                                <span class="ms-2 text-nowrap" style="min-width: 60px; text-align: right;">
+                                    ${item.percentage.toFixed(2)}%
+                                </span>
+                            </div>
+                        </td>`;
+                    tbody.appendChild(row);
+                }
+                
+                // Infinite scroll
+                const scrollContainer = document.getElementById('uniqueValuesContent');
+                scrollContainer.onscroll = function() {
+                    if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 50) {
+                        if ((currentPage + 1) * itemsPerPage < sortedData.length) {
+                            currentPage++;
+                            renderValues();
+                        }
+                    }
+                };
+            };
+            
+            // Initial render
+            renderValues();
+        }
+        
+        // Function to show outliers modal
+        function showOutliers(variableName) {
+            const varData = variableData[variableName];
+            if (!varData || !varData.outliers) return;
+            
+            let currentFilter = 'all';
+            let filteredOutliers = [...(varData.outliers.values || [])];
+            let currentPage = 0;
+            const itemsPerPage = 20;
+            
+            const filterOutliers = (filter) => {
+                currentFilter = filter;
+                currentPage = 0;
+                
+                if (filter === 'all') {
+                    filteredOutliers = [...(varData.outliers.values || [])];
+                } else if (filter === 'below') {
+                    filteredOutliers = (varData.outliers.values || []).filter(o => o.value < varData.outliers.lower_bound);
+                } else if (filter === 'above') {
+                    filteredOutliers = (varData.outliers.values || []).filter(o => o.value > varData.outliers.upper_bound);
+                }
+                
+                renderOutliers();
+            };
+            
+            let modalContent = `
+                <div class="modal fade" id="outliersModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content" style="background: #1a1a2e; border: 1px solid rgba(0, 212, 255, 0.3);">
+                            <div class="modal-header" style="border-bottom: 1px solid rgba(0, 212, 255, 0.2);">
+                                <h5 class="modal-title" style="color: #00d4ff;">
+                                    <i class="bi bi-exclamation-triangle"></i> Análisis de Outliers - "${variableName}"
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body" style="color: #f0f9ff;">
+                                <div class="row mb-4">
+                                    <div class="col-md-6">
+                                        <div class="card bg-dark border-info">
+                                            <div class="card-body">
+                                                <h6 class="text-info">Método IQR (Rango Intercuartílico)</h6>
+                                                <p class="mb-2"><strong>Q1 (25%):</strong> ${varData.stats.q1.toFixed(2)}</p>
+                                                <p class="mb-2"><strong>Q3 (75%):</strong> ${varData.stats.q3.toFixed(2)}</p>
+                                                <p class="mb-2"><strong>IQR:</strong> ${varData.outliers.iqr.toFixed(2)}</p>
+                                                <hr>
+                                                <p class="mb-2"><strong>Límite inferior:</strong> ${varData.outliers.lower_bound.toFixed(2)}</p>
+                                                <p class="mb-0"><strong>Límite superior:</strong> ${varData.outliers.upper_bound.toFixed(2)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card bg-dark border-warning">
+                                            <div class="card-body">
+                                                <h6 class="text-warning">Resumen de Outliers</h6>
+                                                <p class="mb-2">
+                                                    <i class="bi bi-arrow-down-circle"></i> 
+                                                    <strong>Valores por debajo:</strong> 
+                                                    <span class="text-info">${(varData.outliers.values || []).filter(o => o.value < varData.outliers.lower_bound).length}</span>
+                                                </p>
+                                                <p class="mb-2">
+                                                    <i class="bi bi-arrow-up-circle"></i> 
+                                                    <strong>Valores por encima:</strong> 
+                                                    <span class="text-warning">${(varData.outliers.values || []).filter(o => o.value > varData.outliers.upper_bound).length}</span>
+                                                </p>
+                                                <p class="mb-0">
+                                                    <i class="bi bi-sum"></i> 
+                                                    <strong>Total outliers:</strong> 
+                                                    <span class="text-danger">${varData.outliers.count}</span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <h6 class="text-primary mb-3">Diagrama de Caja (Box Plot)</h6>
+                                <div class="text-center mb-4">
+                                    <canvas id="outlierBoxPlot" height="200"></canvas>
+                                </div>
+                                
+                                <h6 class="text-primary mb-3">Valores Outliers Detectados</h6>
+                                
+                                <!-- Controles de filtrado -->
+                                <div class="mb-3">
+                                    <div class="btn-group btn-group-sm w-100" role="group">
+                                        <button type="button" class="btn btn-outline-info active" id="filterAll" onclick="window.filterOutliers('all')">
+                                            <i class="bi bi-list"></i> Todos
+                                        </button>
+                                        <button type="button" class="btn btn-outline-info" id="filterBelow" onclick="window.filterOutliers('below')">
+                                            <i class="bi bi-arrow-down-circle"></i> Por debajo
+                                        </button>
+                                        <button type="button" class="btn btn-outline-info" id="filterAbove" onclick="window.filterOutliers('above')">
+                                            <i class="bi bi-arrow-up-circle"></i> Por encima
+                                        </button>
+                                    </div>
+                                    <div class="mt-2">
+                                        <small class="text-muted">
+                                            Mostrando: <span id="outlierFilterStatus" class="text-info">Todos los outliers</span> | 
+                                            Total visible: <span id="visibleOutliersCount" class="text-warning">${filteredOutliers.length}</span>
+                                        </small>
+                                    </div>
+                                </div>
+                                
+                                <div id="outlierValuesContent" style="max-height: 500px; overflow-y: auto; border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 5px; padding: 10px;">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-hover table-dark">
+                                            <thead class="sticky-top" style="background: #0a0e27;">
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Index</th>
+                                                    <th>Valor</th>
+                                                    <th>Desviación</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="outlierTableBody">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i> 
+                                        <strong>Rango de valores normales:</strong> [${varData.outliers.lower_bound.toFixed(2)}, ${varData.outliers.upper_bound.toFixed(2)}]
+                                        <br>
+                                        <small>Los valores fuera de este rango se consideran outliers potenciales.</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer" style="border-top: 1px solid rgba(0, 212, 255, 0.2);">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                    <i class="bi bi-x-circle"></i> Cerrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            
+            // Remove existing modal if any
+            const existingModal = document.getElementById('outliersModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // Add modal to container
+            document.getElementById('modalContainer').innerHTML = modalContent;
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('outliersModal'), {
+                backdrop: false,
+                keyboard: true
+            });
+            modal.show();
+            
+            // Filter function
+            window.filterOutliers = function(filter) {
+                // Update buttons
+                document.querySelectorAll('#outliersModal .btn-group button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                document.getElementById(filter === 'all' ? 'filterAll' : 
+                    filter === 'below' ? 'filterBelow' : 'filterAbove').classList.add('active');
+                
+                // Update status text
+                const statusText = filter === 'all' ? 'Todos los outliers' :
+                    filter === 'below' ? 'Outliers por debajo del límite' : 'Outliers por encima del límite';
+                document.getElementById('outlierFilterStatus').textContent = statusText;
+                
+                filterOutliers(filter);
+                document.getElementById('visibleOutliersCount').textContent = filteredOutliers.length;
+            };
+            
+            // Render outliers function
+            const renderOutliers = () => {
+                const tbody = document.getElementById('outlierTableBody');
+                tbody.innerHTML = '';
+                
+                const startIdx = currentPage * itemsPerPage;
+                const endIdx = Math.min(startIdx + itemsPerPage, filteredOutliers.length);
+                
+                for (let i = startIdx; i < endIdx; i++) {
+                    const outlier = filteredOutliers[i];
+                    const deviation = outlier.value < varData.outliers.lower_bound ? 
+                        (outlier.value - varData.outliers.lower_bound) : 
+                        (outlier.value - varData.outliers.upper_bound);
+                    
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="text-muted">${i + 1}</td>
+                        <td>${outlier.index}</td>
+                        <td><strong>${outlier.value.toFixed(2)}</strong></td>
+                        <td class="${deviation < 0 ? 'text-info' : 'text-warning'}">
+                            ${deviation > 0 ? '+' : ''}${deviation.toFixed(2)}
+                        </td>`;
+                    tbody.appendChild(row);
+                }
+                
+                // Infinite scroll
+                const scrollContainer = document.getElementById('outlierValuesContent');
+                scrollContainer.onscroll = function() {
+                    if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 50) {
+                        if ((currentPage + 1) * itemsPerPage < filteredOutliers.length) {
+                            currentPage++;
+                            renderOutliers();
+                        }
+                    }
+                };
+            };
+            
+            // Initial render
+            renderOutliers();
+            
+            // Create box plot after modal is shown
+            setTimeout(() => {
+                const ctx = document.getElementById('outlierBoxPlot').getContext('2d');
+                new Chart(ctx, {
+                    type: 'boxplot',
+                    data: {
+                        labels: [variableName],
+                        datasets: [{
+                            label: 'Distribution',
+                            data: [[
+                                varData.stats.min,
+                                varData.stats.q1,
+                                varData.stats.median,
+                                varData.stats.q3,
+                                varData.stats.max
+                            ]],
+                            backgroundColor: 'rgba(0, 212, 255, 0.2)',
+                            borderColor: 'rgba(0, 212, 255, 1)',
+                            borderWidth: 2,
+                            outlierColor: '#ff00ff',
+                            outlierBackgroundColor: 'rgba(255, 0, 255, 0.5)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                ticks: {
+                                    color: 'rgba(48, 48, 48, 0.8)'
+                                },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.1)'
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    color: 'rgba(48, 48, 48, 0.8)'
+                                }
+                            }
+                        }
+                    }
+                });
+            }, 100);
+        }
+    </script>
+</body>
+</html>

@@ -14,6 +14,8 @@ import seaborn as sns
 from io import BytesIO
 import base64
 import json
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
 from ..models import Dataset
 from ..utils import (
@@ -96,16 +98,19 @@ class DatasetReportView(APIView):
         return {
             'dataset_info': {
                 'name': dataset.name,
-                'description': dataset.long_description or dataset.short_description,
+                'description': dataset.short_description,
+                'long_description': dataset.long_description,
                 'uploaded_at': dataset.uploaded_at,
                 'shape': df.shape,
                 'memory_usage': get_memory_usage(df)
             },
             'basic_statistics': self._get_basic_statistics(df),
-            'column_analysis': self._analyze_columns(df),
+            'column_analysis': self._analyze_columns_enhanced(df),
             'missing_data': self._analyze_missing_data(df),
             'correlations': self._analyze_correlations(df),
-            'visualizations': self._generate_visualizations(df)
+            'visualizations': self._generate_visualizations(df),
+            'variable_data': self._generate_variable_data(df),
+            'data_preview': self._generate_data_preview(df)
         }
     
     def _get_basic_statistics(self, df):
@@ -131,6 +136,46 @@ class DatasetReportView(APIView):
         for col in df.columns:
             col_analysis = detect_column_type(df[col])
             col_analysis['name'] = col
+            columns_analysis.append(col_analysis)
+        
+        return columns_analysis
+    
+    def _analyze_columns_enhanced(self, df):
+        """Enhanced column analysis with statistics and outliers"""
+        columns_analysis = []
+        
+        for col in df.columns:
+            col_analysis = detect_column_type(df[col])
+            col_analysis['name'] = col
+            col_analysis['null_count'] = int(df[col].isnull().sum())
+            col_analysis['null_percentage'] = float((df[col].isnull().sum() / len(df)) * 100)
+            
+            if col_analysis['type'] == 'numeric':
+                # Calculate statistics
+                col_analysis['stats'] = {
+                    'mean': float(df[col].mean()),
+                    'std': float(df[col].std()),
+                    'min': float(df[col].min()),
+                    'max': float(df[col].max()),
+                    'q1': float(df[col].quantile(0.25)),
+                    'median': float(df[col].quantile(0.5)),
+                    'q3': float(df[col].quantile(0.75))
+                }
+                
+                # Calculate outliers
+                q1 = df[col].quantile(0.25)
+                q3 = df[col].quantile(0.75)
+                iqr = q3 - q1
+                lower_bound = q1 - 1.5 * iqr
+                upper_bound = q3 + 1.5 * iqr
+                outliers = df[(df[col] < lower_bound) | (df[col] > upper_bound)][col]
+                
+                col_analysis['outliers_count'] = int(len(outliers))
+                col_analysis['outliers_percentage'] = float((len(outliers) / len(df)) * 100)
+            else:
+                col_analysis['outliers_count'] = 0
+                col_analysis['outliers_percentage'] = 0.0
+            
             columns_analysis.append(col_analysis)
         
         return columns_analysis
@@ -189,6 +234,11 @@ class DatasetReportView(APIView):
         if missing.sum() > 0:
             visualizations['missing_data'] = self._create_missing_data_chart(missing)
         
+        # PCA analysis
+        pca_plot = self._create_pca_analysis(df)
+        if pca_plot:
+            visualizations['pca_analysis'] = pca_plot
+        
         # Distribution plots for numeric columns
         numeric_cols = df.select_dtypes(include=[np.number]).columns[:6]  # Limit to 6
         visualizations['distributions'] = []
@@ -202,44 +252,269 @@ class DatasetReportView(APIView):
     
     def _create_heatmap(self, corr_matrix):
         """Create correlation heatmap"""
-        fig, ax = plt.subplots(figsize=HEATMAP_FIGURE_SIZE)
-        sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm',
-                   center=0, ax=ax, cbar_kws={'label': 'Correlation'})
-        ax.set_title('Correlation Matrix')
+        plt.style.use('dark_background')
         
+        fig, ax = plt.subplots(figsize=HEATMAP_FIGURE_SIZE)
+        fig.patch.set_facecolor('#0a0e27')
+        ax.set_facecolor('#0a0e27')
+        
+        # Create custom colormap from blue to red
+        colors = ['#0099ff', '#00d4ff', '#ffffff', '#ff00ff', '#ff0066']
+        n_bins = 100
+        cmap = plt.cm.colors.LinearSegmentedColormap.from_list('custom', colors, N=n_bins)
+        
+        # Create heatmap
+        sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap=cmap,
+                   center=0, ax=ax, cbar_kws={'label': 'Corrélation'},
+                   linewidths=0.5, linecolor='#0a0e27',
+                   annot_kws={'size': 9, 'color': '#0a0e27', 'weight': 'bold'})
+        
+        ax.set_title('Matrice de Corrélation', color='#00d4ff', fontsize=16, fontweight='bold', pad=20)
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', color='#f0f9ff')
+        ax.set_yticklabels(ax.get_yticklabels(), rotation=0, color='#f0f9ff')
+        
+        # Style colorbar
+        cbar = ax.collections[0].colorbar
+        cbar.ax.yaxis.label.set_color('#00d4ff')
+        cbar.ax.tick_params(colors='#f0f9ff')
+        
+        plt.tight_layout()
         return self._fig_to_base64(fig)
     
     def _create_missing_data_chart(self, missing):
         """Create missing data visualization"""
         missing = missing[missing > 0].sort_values(ascending=False)
         
-        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
-        missing.plot(kind='barh', ax=ax, color='coral')
-        ax.set_xlabel('Number of Missing Values')
-        ax.set_title('Missing Data by Column')
-        ax.grid(True, alpha=0.3)
+        # Set dark style for consistency with report
+        plt.style.use('dark_background')
         
+        fig, ax = plt.subplots(figsize=(10, 6))
+        fig.patch.set_facecolor('#0a0e27')
+        ax.set_facecolor('#0a0e27')
+        
+        # Create bar plot with neon blue color
+        bars = ax.barh(range(len(missing)), missing.values, color='#00d4ff', edgecolor='#0099ff', linewidth=1)
+        
+        # Set y-axis labels with column names
+        ax.set_yticks(range(len(missing)))
+        ax.set_yticklabels(missing.index, color='#f0f9ff')
+        
+        # Add value labels on bars
+        for i, (col, value) in enumerate(missing.items()):
+            ax.text(value + 10, i, str(int(value)), 
+                   va='center', color='#f0f9ff', fontweight='bold')
+        
+        ax.set_xlabel('Nombre de valeurs manquantes', color='#00d4ff', fontsize=12)
+        ax.set_title('Données Manquantes par Colonne', color='#00d4ff', fontsize=16, fontweight='bold', pad=20)
+        
+        # Style grid
+        ax.grid(True, alpha=0.2, color='#00d4ff', linestyle='--')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_color('#00d4ff')
+        ax.spines['left'].set_color('#00d4ff')
+        
+        # Set tick colors
+        ax.tick_params(colors='#f0f9ff')
+        
+        plt.tight_layout()
         return self._fig_to_base64(fig)
     
     def _create_distribution_plot(self, series):
         """Create distribution plot for a series"""
+        plt.style.use('dark_background')
+        
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+        fig.patch.set_facecolor('#0a0e27')
+        ax1.set_facecolor('#0a0e27')
+        ax2.set_facecolor('#0a0e27')
         
         # Histogram
-        ax1.hist(series.dropna(), bins=HISTOGRAM_BINS, edgecolor='black', alpha=0.7)
-        ax1.set_xlabel(series.name)
-        ax1.set_ylabel('Frequency')
-        ax1.set_title(f'Histogram of {series.name}')
-        ax1.grid(True, alpha=0.3)
+        n, bins, patches = ax1.hist(series.dropna(), bins=HISTOGRAM_BINS, 
+                                   color='#00d4ff', edgecolor='#0099ff', 
+                                   alpha=0.8, linewidth=1)
+        
+        # Add gradient effect to bars
+        for i, patch in enumerate(patches):
+            patch.set_alpha(0.6 + 0.4 * (i / len(patches)))
+        
+        ax1.set_xlabel(series.name, color='#00d4ff', fontsize=12)
+        ax1.set_ylabel('Fréquence', color='#00d4ff', fontsize=12)
+        ax1.set_title(f'Histogramme - {series.name}', color='#00d4ff', fontsize=14, fontweight='bold')
+        ax1.grid(True, alpha=0.2, color='#00d4ff', linestyle='--')
+        ax1.tick_params(colors='#f0f9ff')
         
         # Box plot
-        ax2.boxplot(series.dropna())
-        ax2.set_ylabel(series.name)
-        ax2.set_title(f'Boxplot of {series.name}')
-        ax2.grid(True, alpha=0.3)
+        bp = ax2.boxplot(series.dropna(), patch_artist=True,
+                        boxprops=dict(facecolor='#00d4ff', alpha=0.3, linewidth=2),
+                        whiskerprops=dict(color='#00d4ff', linewidth=2),
+                        capprops=dict(color='#00d4ff', linewidth=2),
+                        medianprops=dict(color='#ff00ff', linewidth=3),
+                        flierprops=dict(marker='o', markerfacecolor='#ff00ff', 
+                                      markersize=8, alpha=0.7, markeredgecolor='#ff00ff'))
+        
+        ax2.set_ylabel(series.name, color='#00d4ff', fontsize=12)
+        ax2.set_title(f'Boîte à moustaches - {series.name}', color='#00d4ff', fontsize=14, fontweight='bold')
+        ax2.grid(True, alpha=0.2, color='#00d4ff', linestyle='--', axis='y')
+        ax2.tick_params(colors='#f0f9ff')
+        
+        # Style spines
+        for ax in [ax1, ax2]:
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['bottom'].set_color('#00d4ff')
+            ax.spines['left'].set_color('#00d4ff')
         
         plt.tight_layout()
         return self._fig_to_base64(fig)
+    
+    def _create_pca_analysis(self, df):
+        """Create PCA analysis visualization"""
+        # Select only numeric columns
+        numeric_df = df.select_dtypes(include=[np.number])
+        
+        if numeric_df.shape[1] < 2:
+            return None
+        
+        try:
+            plt.style.use('dark_background')
+            
+            # Standardize the data
+            scaler = StandardScaler()
+            scaled_data = scaler.fit_transform(numeric_df.dropna())
+            
+            # Apply PCA
+            pca = PCA()
+            pca.fit(scaled_data)
+            
+            # Create visualization
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+            fig.patch.set_facecolor('#0a0e27')
+            ax1.set_facecolor('#0a0e27')
+            ax2.set_facecolor('#0a0e27')
+            
+            # Scree plot
+            explained_variance_ratio = pca.explained_variance_ratio_
+            cumulative_variance_ratio = np.cumsum(explained_variance_ratio)
+            
+            components = range(1, min(len(explained_variance_ratio) + 1, 11))  # Limit to 10 components
+            
+            bars = ax1.bar(components, explained_variance_ratio[:10], 
+                          color='#00d4ff', edgecolor='#0099ff', 
+                          alpha=0.8, linewidth=1, label='Individuelle')
+            
+            # Add gradient effect
+            for i, bar in enumerate(bars):
+                bar.set_alpha(0.4 + 0.6 * (1 - i / len(bars)))
+            
+            ax1.plot(components, cumulative_variance_ratio[:10], 
+                    color='#ff00ff', marker='o', linewidth=3, 
+                    markersize=8, label='Cumulative', markeredgecolor='#ff00ff')
+            
+            ax1.set_xlabel('Composantes Principales', color='#00d4ff', fontsize=12)
+            ax1.set_ylabel('Ratio de Variance Expliquée', color='#00d4ff', fontsize=12)
+            ax1.set_title('Analyse PCA - Variance Expliquée', color='#00d4ff', fontsize=14, fontweight='bold')
+            ax1.legend(loc='center right', framealpha=0.9, facecolor='#0a0e27', edgecolor='#00d4ff')
+            ax1.grid(True, alpha=0.2, color='#00d4ff', linestyle='--')
+            ax1.tick_params(colors='#f0f9ff')
+            
+            # 2D projection on first two components
+            if scaled_data.shape[0] > 0:
+                pca_2d = PCA(n_components=2)
+                transformed = pca_2d.fit_transform(scaled_data)
+                
+                scatter = ax2.scatter(transformed[:, 0], transformed[:, 1], 
+                                    c=range(len(transformed)), cmap='plasma',
+                                    alpha=0.6, s=50, edgecolors='#00d4ff', linewidth=0.5)
+                
+                ax2.set_xlabel(f'PC1 ({pca_2d.explained_variance_ratio_[0]:.2%} variance)', 
+                             color='#00d4ff', fontsize=12)
+                ax2.set_ylabel(f'PC2 ({pca_2d.explained_variance_ratio_[1]:.2%} variance)', 
+                             color='#00d4ff', fontsize=12)
+                ax2.set_title('Projection PCA 2D', color='#00d4ff', fontsize=14, fontweight='bold')
+                ax2.grid(True, alpha=0.2, color='#00d4ff', linestyle='--')
+                ax2.tick_params(colors='#f0f9ff')
+            
+            # Style spines
+            for ax in [ax1, ax2]:
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                ax.spines['bottom'].set_color('#00d4ff')
+                ax.spines['left'].set_color('#00d4ff')
+            
+            plt.tight_layout()
+            return self._fig_to_base64(fig)
+        except Exception as e:
+            print(f"Error in PCA analysis: {e}")
+            return None
+    
+    def _generate_variable_data(self, df):
+        """Generate detailed data for each variable for JavaScript"""
+        variable_data = {}
+        
+        for col in df.columns:
+            col_data = {
+                'name': col,
+                'type': detect_column_type(df[col])['type'],
+                'unique_count': int(df[col].nunique()),
+                'total_count': int(len(df)),
+                'null_count': int(df[col].isnull().sum())
+            }
+            
+            # Get value counts (limit to top 100)
+            value_counts = df[col].value_counts().head(100)
+            col_data['value_counts'] = {str(k): int(v) for k, v in value_counts.to_dict().items()}
+            
+            # For numeric columns, add statistics and outliers
+            if col_data['type'] == 'numeric':
+                # Statistics
+                col_data['stats'] = {
+                    'mean': float(df[col].mean()),
+                    'std': float(df[col].std()),
+                    'min': float(df[col].min()),
+                    'max': float(df[col].max()),
+                    'q1': float(df[col].quantile(0.25)),
+                    'median': float(df[col].quantile(0.5)),
+                    'q3': float(df[col].quantile(0.75))
+                }
+                
+                # Outliers
+                q1 = df[col].quantile(0.25)
+                q3 = df[col].quantile(0.75)
+                iqr = q3 - q1
+                lower_bound = q1 - 1.5 * iqr
+                upper_bound = q3 + 1.5 * iqr
+                
+                outliers_mask = (df[col] < lower_bound) | (df[col] > upper_bound)
+                outliers_df = df[outliers_mask]
+                
+                col_data['outliers'] = {
+                    'count': int(outliers_mask.sum()),
+                    'percentage': float((outliers_mask.sum() / len(df)) * 100),
+                    'iqr': float(iqr),
+                    'lower_bound': float(lower_bound),
+                    'upper_bound': float(upper_bound),
+                    'values': [
+                        {'index': int(idx), 'value': float(val)}
+                        for idx, val in outliers_df[col].head(50).items()
+                    ]
+                }
+            
+            variable_data[col] = col_data
+        
+        return variable_data
+    
+    def _generate_data_preview(self, df, rows=10):
+        """Generate data preview for first N rows"""
+        preview_df = df.head(rows)
+        
+        return {
+            'columns': list(preview_df.columns),
+            'rows': [
+                [val if pd.notna(val) else None for val in row]
+                for row in preview_df.values
+            ]
+        }
     
     def _fig_to_base64(self, fig):
         """Convert matplotlib figure to base64 string"""
@@ -254,9 +529,14 @@ class DatasetReportView(APIView):
         """Generate HTML report from data"""
         # Use template if available, otherwise generate inline
         try:
-            html = render_to_string('ml_trainer/dataset_report.html', report_data)
+            # Convert variable_data to JSON for JavaScript
+            context = report_data.copy()
+            context['variable_data'] = json.dumps(report_data.get('variable_data', {}))
+            
+            html = render_to_string('ml_trainer/dataset_report.html', context)
             return html
-        except:
+        except Exception as e:
+            print(f"Error rendering template: {e}")
             # Fallback to inline HTML generation
             return self._generate_inline_html(report_data)
     
