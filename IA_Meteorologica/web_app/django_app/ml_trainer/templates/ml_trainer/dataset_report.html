@@ -613,10 +613,10 @@
                                         <table class="table table-sm table-hover table-dark">
                                             <thead class="sticky-top" style="background: #0a0e27;">
                                                 <tr>
-                                                    <th>#</th>
-                                                    <th>Valor</th>
-                                                    <th>Frecuencia</th>
-                                                    <th style="min-width: 200px;">Porcentaje</th>
+                                                    <th style="color: #00d4ff;">#</th>
+                                                    <th style="color: #00d4ff;">Valor</th>
+                                                    <th style="color: #00d4ff;">Frecuencia</th>
+                                                    <th style="min-width: 200px; color: #00d4ff;">Porcentaje</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="frequencyTableBody">
@@ -678,7 +678,7 @@
                     const item = sortedData[i];
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td class="text-muted">${i + 1}</td>
+                        <td style="color: #8a8a8a;">${i + 1}</td>
                         <td><code>${item.value}</code></td>
                         <td>${item.count.toLocaleString()}</td>
                         <td>
@@ -755,12 +755,12 @@
                                         <div class="card bg-dark border-info">
                                             <div class="card-body">
                                                 <h6 class="text-info">Método IQR (Rango Intercuartílico)</h6>
-                                                <p class="mb-2"><strong>Q1 (25%):</strong> ${varData.stats.q1.toFixed(2)}</p>
-                                                <p class="mb-2"><strong>Q3 (75%):</strong> ${varData.stats.q3.toFixed(2)}</p>
-                                                <p class="mb-2"><strong>IQR:</strong> ${varData.outliers.iqr.toFixed(2)}</p>
-                                                <hr>
-                                                <p class="mb-2"><strong>Límite inferior:</strong> ${varData.outliers.lower_bound.toFixed(2)}</p>
-                                                <p class="mb-0"><strong>Límite superior:</strong> ${varData.outliers.upper_bound.toFixed(2)}</p>
+                                                <p class="mb-2" style="color: #f0f9ff;"><strong>Q1 (25%):</strong> ${varData.stats.q1.toFixed(2)}</p>
+                                                <p class="mb-2" style="color: #f0f9ff;"><strong>Q3 (75%):</strong> ${varData.stats.q3.toFixed(2)}</p>
+                                                <p class="mb-2" style="color: #f0f9ff;"><strong>IQR:</strong> ${varData.outliers.iqr.toFixed(2)}</p>
+                                                <hr style="border-color: rgba(0, 212, 255, 0.3);">
+                                                <p class="mb-2" style="color: #f0f9ff;"><strong>Límite inferior:</strong> ${varData.outliers.lower_bound.toFixed(2)}</p>
+                                                <p class="mb-0" style="color: #f0f9ff;"><strong>Límite superior:</strong> ${varData.outliers.upper_bound.toFixed(2)}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -768,17 +768,17 @@
                                         <div class="card bg-dark border-warning">
                                             <div class="card-body">
                                                 <h6 class="text-warning">Resumen de Outliers</h6>
-                                                <p class="mb-2">
+                                                <p class="mb-2" style="color: #f0f9ff;">
                                                     <i class="bi bi-arrow-down-circle"></i> 
                                                     <strong>Valores por debajo:</strong> 
                                                     <span class="text-info">${(varData.outliers.values || []).filter(o => o.value < varData.outliers.lower_bound).length}</span>
                                                 </p>
-                                                <p class="mb-2">
+                                                <p class="mb-2" style="color: #f0f9ff;">
                                                     <i class="bi bi-arrow-up-circle"></i> 
                                                     <strong>Valores por encima:</strong> 
                                                     <span class="text-warning">${(varData.outliers.values || []).filter(o => o.value > varData.outliers.upper_bound).length}</span>
                                                 </p>
-                                                <p class="mb-0">
+                                                <p class="mb-0" style="color: #f0f9ff;">
                                                     <i class="bi bi-sum"></i> 
                                                     <strong>Total outliers:</strong> 
                                                     <span class="text-danger">${varData.outliers.count}</span>
@@ -821,10 +821,10 @@
                                         <table class="table table-sm table-hover table-dark">
                                             <thead class="sticky-top" style="background: #0a0e27;">
                                                 <tr>
-                                                    <th>#</th>
-                                                    <th>Index</th>
-                                                    <th>Valor</th>
-                                                    <th>Desviación</th>
+                                                    <th style="color: #00d4ff;">#</th>
+                                                    <th style="color: #00d4ff;">Index</th>
+                                                    <th style="color: #00d4ff;">Valor</th>
+                                                    <th style="color: #00d4ff;">Desviación</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="outlierTableBody">
@@ -834,7 +834,7 @@
                                 </div>
                                 
                                 <div class="mt-3">
-                                    <div class="alert alert-info">
+                                    <div class="alert alert-info" style="background-color: rgba(0, 212, 255, 0.1); border-color: rgba(0, 212, 255, 0.3); color: #f0f9ff;">
                                         <i class="bi bi-info-circle"></i> 
                                         <strong>Rango de valores normales:</strong> [${varData.outliers.lower_bound.toFixed(2)}, ${varData.outliers.upper_bound.toFixed(2)}]
                                         <br>
@@ -901,7 +901,7 @@
                     
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td class="text-muted">${i + 1}</td>
+                        <td style="color: #8a8a8a;">${i + 1}</td>
                         <td>${outlier.index}</td>
                         <td><strong>${outlier.value.toFixed(2)}</strong></td>
                         <td class="${deviation < 0 ? 'text-info' : 'text-warning'}">
@@ -954,20 +954,27 @@
                         plugins: {
                             legend: {
                                 display: false
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(26, 26, 46, 0.9)',
+                                titleColor: '#00d4ff',
+                                bodyColor: '#f0f9ff',
+                                borderColor: 'rgba(0, 212, 255, 0.3)',
+                                borderWidth: 1
                             }
                         },
                         scales: {
                             y: {
                                 ticks: {
-                                    color: 'rgba(48, 48, 48, 0.8)'
+                                    color: 'rgba(240, 249, 255, 0.8)'
                                 },
                                 grid: {
-                                    color: 'rgba(0, 0, 0, 0.1)'
+                                    color: 'rgba(0, 212, 255, 0.1)'
                                 }
                             },
                             x: {
                                 ticks: {
-                                    color: 'rgba(48, 48, 48, 0.8)'
+                                    color: 'rgba(240, 249, 255, 0.8)'
                                 }
                             }
                         }
