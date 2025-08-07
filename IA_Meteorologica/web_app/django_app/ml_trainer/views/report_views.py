@@ -215,9 +215,25 @@ class DatasetReportView(APIView):
                         'correlation': float(corr_val)
                     })
         
+        # Find strong correlations (|r| > 0.5)
+        strong_corr = []
+        for i in range(len(corr_matrix.columns)):
+            for j in range(i+1, len(corr_matrix.columns)):
+                corr_val = corr_matrix.iloc[i, j]
+                if abs(corr_val) > 0.5:
+                    strong_corr.append({
+                        'var1': corr_matrix.columns[i],
+                        'var2': corr_matrix.columns[j],
+                        'correlation': float(corr_val)
+                    })
+        
+        # Sort by absolute correlation value
+        strong_corr.sort(key=lambda x: abs(x['correlation']), reverse=True)
+        
         return {
             'matrix': corr_matrix.to_dict(),
-            'high_correlations': high_corr
+            'high_correlations': high_corr,
+            'strong_correlations': strong_corr
         }
     
     def _generate_visualizations(self, df):
@@ -235,9 +251,10 @@ class DatasetReportView(APIView):
             visualizations['missing_data'] = self._create_missing_data_chart(missing)
         
         # PCA analysis
-        pca_plot = self._create_pca_analysis(df)
-        if pca_plot:
-            visualizations['pca_analysis'] = pca_plot
+        pca_result = self._create_pca_analysis(df)
+        if pca_result:
+            visualizations['pca_analysis'] = pca_result['plot']
+            visualizations['pca_statistics'] = pca_result.get('statistics', {})
         
         # Distribution plots for numeric columns
         numeric_cols = df.select_dtypes(include=[np.number]).columns[:6]  # Limit to 6
@@ -443,7 +460,39 @@ class DatasetReportView(APIView):
                 ax.spines['left'].set_color('#00d4ff')
             
             plt.tight_layout()
-            return self._fig_to_base64(fig)
+            plot_base64 = self._fig_to_base64(fig)
+            
+            # Calculate PCA statistics
+            cumulative_variance = np.cumsum(explained_variance_ratio)
+            n_components_95 = int(np.argmax(cumulative_variance >= 0.95) + 1)
+            
+            # Get component contributions
+            components_info = []
+            for i in range(min(3, len(pca.components_))):  # Top 3 components
+                # Get top 5 contributing variables for this component
+                loadings = pca.components_[i]
+                contributions = [(numeric_df.columns[j], float(loadings[j])) 
+                               for j in range(len(loadings))]
+                contributions.sort(key=lambda x: abs(x[1]), reverse=True)
+                
+                components_info.append({
+                    'component': f'PC{i+1}',
+                    'variance_explained': float(explained_variance_ratio[i]),
+                    'top_contributors': contributions[:5]
+                })
+            
+            statistics = {
+                'total_variables': len(numeric_df.columns),
+                'n_components_95_variance': n_components_95,
+                'explained_variance_ratio': [float(x) for x in explained_variance_ratio[:10]],
+                'cumulative_variance': [float(x) for x in cumulative_variance[:10]],
+                'components_info': components_info
+            }
+            
+            return {
+                'plot': plot_base64,
+                'statistics': statistics
+            }
         except Exception as e:
             print(f"Error in PCA analysis: {e}")
             return None

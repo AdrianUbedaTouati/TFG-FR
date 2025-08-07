@@ -407,6 +407,32 @@
             <div class="chart-container">
                 <h3>Matrice de Corrélation</h3>
                 <img src="{{ visualizations.correlation_heatmap }}" alt="Matrice de corrélation">
+                
+                {% if correlations.strong_correlations %}
+                <div class="mt-3 p-3" style="background: rgba(0, 212, 255, 0.05); border-radius: 10px;">
+                    <h5 style="color: #00d4ff;">Corrélations Fortes (|r| > 0.5):</h5>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Variable 1</th>
+                                <th>Variable 2</th>
+                                <th>Corrélation</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for corr in correlations.strong_correlations|slice:":10" %}
+                            <tr>
+                                <td>{{ corr.var1 }}</td>
+                                <td>{{ corr.var2 }}</td>
+                                <td style="color: {% if corr.correlation > 0 %}#00ff88{% else %}#ff0066{% endif %};">
+                                    {{ corr.correlation|floatformat:3 }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
             </div>
             {% endif %}
             
@@ -421,6 +447,32 @@
             <div class="chart-container">
                 <h3>Analyse PCA</h3>
                 <img src="{{ visualizations.pca_analysis }}" alt="Analyse PCA">
+                
+                {% if visualizations.pca_statistics %}
+                <div class="mt-3 p-3" style="background: rgba(0, 212, 255, 0.05); border-radius: 10px;">
+                    <h5 style="color: #00d4ff;">
+                        Composantes nécessaires pour 95% de variance: 
+                        {{ visualizations.pca_statistics.n_components_95_variance }} sur {{ visualizations.pca_statistics.total_variables }}
+                    </h5>
+                    
+                    <h6 class="mt-3" style="color: #00d4ff;">Contribution des Variables aux Composantes Principales:</h6>
+                    {% for comp in visualizations.pca_statistics.components_info %}
+                    <div class="mb-3">
+                        <strong style="color: #ff00ff;">{{ comp.component }} ({% widthratio comp.variance_explained 1 100 %}% de variance)</strong>
+                        <ul class="list-unstyled ms-3">
+                            {% for var, loading in comp.top_contributors %}
+                            <li>
+                                <span style="color: #f0f9ff;">{{ var }}:</span> 
+                                <span style="color: {% if loading > 0 %}#00ff88{% else %}#ff0066{% endif %};">
+                                    {{ loading|floatformat:3 }}
+                                </span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
             {% endif %}
             
