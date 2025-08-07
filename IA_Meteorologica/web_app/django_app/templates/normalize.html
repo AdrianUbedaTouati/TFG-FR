@@ -416,6 +416,30 @@
         margin-top: 20px;
     }
 
+    .preview-table-container {
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 20px;
+    }
+
+    .preview-table-container::-webkit-scrollbar {
+        width: 10px;
+    }
+
+    .preview-table-container::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.3);
+    }
+
+    .preview-table-container::-webkit-scrollbar-thumb {
+        background: rgba(0, 212, 255, 0.5);
+        border-radius: 5px;
+    }
+
+    .preview-table-container::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 212, 255, 0.7);
+    }
+
     .preview-table th,
     .preview-table td {
         padding: 10px;
@@ -427,6 +451,11 @@
         background: rgba(0, 212, 255, 0.1);
         color: var(--primary-color);
         font-weight: 600;
+    }
+
+    .preview-table thead[style*="sticky"] th {
+        background: var(--dark-color);
+        border-bottom: 2px solid rgba(0, 212, 255, 0.3);
     }
 
     .preview-table tr:hover {
@@ -821,8 +850,10 @@
                     'X-CSRFToken': getCookie('csrftoken')
                 },
                 body: JSON.stringify({
-                    column: column,
-                    method: method
+                    normalization: {
+                        [column]: method
+                    },
+                    sample_size: 100
                 })
             });
             
@@ -854,12 +885,22 @@
         }
     }
 
-    function showPreview(preview) {
+    function showPreview(response) {
         const modal = document.getElementById('preview-modal');
         const body = document.getElementById('preview-body');
         const title = document.getElementById('preview-title');
         
-        title.textContent = `Previsualización: ${preview.column} (${preview.method})`;
+        // Extraer la columna del preview (asumimos que solo se envió una columna)
+        const columns = Object.keys(response.preview || {});
+        if (columns.length === 0) {
+            showNotification('No se recibieron datos de previsualización', 'error');
+            return;
+        }
+        
+        const column = columns[0];
+        const preview = response.preview[column];
+        
+        title.textContent = `Previsualización: ${column}`;
         
         let bodyHtml = '';
         
@@ -895,49 +936,113 @@
             `;
         } else {
             // Normal preview
-            bodyHtml = `
-                <h4>Comparación antes/después (${preview.sample_size} muestras):</h4>
-                <table class="preview-table">
-                    <thead>
-                        <tr>
-                            <th>Índice</th>
-                            <th>Antes</th>
-                            <th>Después</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${preview.before.map((val, idx) => `
-                            <tr>
-                                <td>${idx + 1}</td>
-                                <td>${val}</td>
-                                <td>${preview.after[idx]}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
+            const original = preview.original || {};
+            const normalized = preview.normalized || {};
+            const uniqueMapping = preview.unique_mapping || [];
+            const isCategorical = preview.is_categorical || false;
+            
+            if (isCategorical && uniqueMapping.length > 0) {
+                // Show unique value mapping for categorical data
+                bodyHtml = `
+                    <h4>Mapeo de valores únicos:</h4>
+                    <div class="preview-table-container" style="max-height: 400px; overflow-y: auto;">
+                        <table class="preview-table">
+                            <thead style="position: sticky; top: 0; background-color: white; z-index: 10;">
+                                <tr>
+                                    <th>Valor Original</th>
+                                    <th>Valor Normalizado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${uniqueMapping.map(item => `
+                                    <tr>
+                                        <td>${item.original}</td>
+                                        <td>${item.normalized}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top: 20px;">
+                        <h4>Muestras de datos (${(original.sample || []).length} valores):</h4>
+                        <div class="preview-table-container" style="max-height: 300px; overflow-y: auto;">
+                            <table class="preview-table">
+                                <thead style="position: sticky; top: 0; background-color: white; z-index: 10;">
+                                    <tr>
+                                        <th>Índice</th>
+                                        <th>Antes</th>
+                                        <th>Después</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${(original.sample || []).map((val, idx) => `
+                                        <tr>
+                                            <td>${idx + 1}</td>
+                                            <td>${val}</td>
+                                            <td>${normalized.sample && normalized.sample[idx] !== undefined ? normalized.sample[idx] : 'N/A'}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Regular numeric preview
+                bodyHtml = `
+                    <h4>Comparación antes/después (${(original.sample || []).length} muestras):</h4>
+                    <div class="preview-table-container" style="max-height: 400px; overflow-y: auto;">
+                        <table class="preview-table">
+                            <thead style="position: sticky; top: 0; background-color: white; z-index: 10;">
+                                <tr>
+                                    <th>Índice</th>
+                                    <th>Antes</th>
+                                    <th>Después</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${(original.sample || []).map((val, idx) => `
+                                    <tr>
+                                        <td>${idx + 1}</td>
+                                        <td>${typeof val === 'number' ? val.toFixed(4) : val}</td>
+                                        <td>${normalized.sample && normalized.sample[idx] !== undefined ? 
+                                            (typeof normalized.sample[idx] === 'number' ? normalized.sample[idx].toFixed(4) : normalized.sample[idx]) 
+                                            : 'N/A'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
             
             // Añadir estadísticas si están disponibles
-            if (preview.stats) {
+            if (original.stats || normalized.stats) {
                 bodyHtml += `
-                    <div class="stats-comparison">
+                    <div class="stats-comparison" style="margin-top: 20px;">
                         <div class="stats-box">
                             <h4>Estadísticas Originales</h4>
-                            ${Object.entries(preview.stats.before).map(([key, val]) => `
-                                <div class="stat-row">
-                                    <label>${key}:</label>
-                                    <value>${val !== null ? val.toFixed(4) : 'N/A'}</value>
-                                </div>
-                            `).join('')}
+                            ${original.stats ? Object.entries(original.stats).map(([key, val]) => {
+                                if (typeof val === 'object' && val !== null) return '';
+                                return `
+                                    <div class="stat-row">
+                                        <label>${key}:</label>
+                                        <value>${val !== null && typeof val === 'number' ? val.toFixed(4) : val || 'N/A'}</value>
+                                    </div>
+                                `;
+                            }).join('') : '<p>No disponibles</p>'}
                         </div>
                         <div class="stats-box">
                             <h4>Estadísticas Normalizadas</h4>
-                            ${Object.entries(preview.stats.after).map(([key, val]) => `
-                                <div class="stat-row">
-                                    <label>${key}:</label>
-                                    <value>${val !== null ? val.toFixed(4) : 'N/A'}</value>
-                                </div>
-                            `).join('')}
+                            ${normalized.stats ? Object.entries(normalized.stats).map(([key, val]) => {
+                                if (typeof val === 'object' && val !== null) return '';
+                                return `
+                                    <div class="stat-row">
+                                        <label>${key}:</label>
+                                        <value>${val !== null && typeof val === 'number' ? val.toFixed(4) : val || 'N/A'}</value>
+                                    </div>
+                                `;
+                            }).join('') : '<p>No disponibles</p>'}
                         </div>
                     </div>
                 `;
@@ -1172,12 +1277,17 @@
         }
         
         const result = await response.json();
+        console.log('Response from server:', result); // Debug log
         currentStep++;
         
         // Paso: Finalización
         updateProgress(currentStep, totalSteps, 'Finalizando...', 'Proceso completado exitosamente');
         addProgressLog(`✓ Dataset guardado como: ${result.dataset_name}`);
-        addProgressLog(`✓ Nuevas dimensiones: ${result.new_shape[0]} filas x ${result.new_shape[1]} columnas`);
+        if (result.new_shape && Array.isArray(result.new_shape) && result.new_shape.length >= 2) {
+            addProgressLog(`✓ Nuevas dimensiones: ${result.new_shape[0]} filas x ${result.new_shape[1]} columnas`);
+        } else {
+            addProgressLog(`✓ Dataset normalizado correctamente`);
+        }
         updateChartStep(columns.length + 2, 100);
         
         await delay(1000);

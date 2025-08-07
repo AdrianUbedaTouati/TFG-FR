@@ -16,6 +16,14 @@ NUMERIC_METHOD_MAPPING = {
     'transformer': NumNorm.TRANSFORMER,
     'tree': NumNorm.TREE,
     
+    # Uppercase versions (from frontend)
+    'MIN_MAX': NumNorm.MIN_MAX,
+    'Z_SCORE': NumNorm.Z_SCORE,
+    'LSTM_TCN': NumNorm.LSTM_TCN,
+    'CNN': NumNorm.CNN,
+    'TRANSFORMER': NumNorm.TRANSFORMER,
+    'TREE': NumNorm.TREE,
+    
     # Alternative names for compatibility
     'minmax': NumNorm.MIN_MAX,
     'standard': NumNorm.Z_SCORE,
@@ -31,6 +39,11 @@ TEXT_METHOD_MAPPING = {
     'lower': TextNorm.LOWER,
     'strip': TextNorm.STRIP,
     'one_hot': TextNorm.ONE_HOT,
+    
+    # Uppercase versions (from frontend)
+    'LOWER': TextNorm.LOWER,
+    'STRIP': TextNorm.STRIP,
+    'ONE_HOT': TextNorm.ONE_HOT,
     
     # Alternative names for compatibility
     'lowercase': TextNorm.LOWER,

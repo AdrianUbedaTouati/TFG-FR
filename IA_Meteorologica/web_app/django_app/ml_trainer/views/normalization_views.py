@@ -3,11 +3,15 @@ Dataset normalization views
 """
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.core.files.base import ContentFile
+from django.conf import settings
 import pandas as pd
 import numpy as np
 from datetime import datetime
+import os
 
 from ..models import Dataset
 from ..normalization_methods import DISPATCH_NUM, DISPATCH_TEXT
@@ -25,13 +29,130 @@ from ..constants import (
 class DatasetNormalizationView(APIView):
     """Apply normalization to a dataset"""
     
+    def get(self, request, pk):
+        """Obtiene información de normalización para un dataset"""
+        dataset = get_object_or_404(Dataset, pk=pk)
+        
+        try:
+            df = pd.read_csv(dataset.file.path)
+            
+            # Analizar cada columna para determinar métodos de normalización disponibles
+            normalization_info = {}
+            
+            for col in df.columns:
+                col_type = str(df[col].dtype)
+                
+                if df[col].dtype in ['int64', 'float64']:
+                    # Columna numérica
+                    normalization_info[col] = {
+                        'type': 'numeric',
+                        'primary_methods': [
+                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores al rango [0, 1]'},
+                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Estandariza a media 0 y desviación 1'},
+                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Escala al rango [-1, 1] para RNN/TCN'},
+                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Normalización Z-Score para CNN'},
+                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler resistente a outliers'},
+                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación (modelos de árbol)'}
+                        ],
+                        'secondary_methods': [
+                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte a minúsculas (si son texto)'},
+                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final'},
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos (0, 1, 2...)'}
+                        ],
+                        'stats': {
+                            'mean': float(df[col].mean()) if not df[col].isna().all() else None,
+                            'std': float(df[col].std()) if not df[col].isna().all() else None,
+                            'min': float(df[col].min()) if not df[col].isna().all() else None,
+                            'max': float(df[col].max()) if not df[col].isna().all() else None
+                        }
+                    }
+                elif df[col].dtype == 'object':
+                    # Columna de texto o objeto
+                    unique_values = df[col].nunique()
+                    sample_values = df[col].dropna().head(5).tolist()
+                    
+                    normalization_info[col] = {
+                        'type': 'text',
+                        'primary_methods': [
+                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte todo a minúsculas'},
+                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final'},
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': f'Convierte {unique_values} categorías a códigos numéricos (0, 1, 2...)'}
+                        ],
+                        'secondary_methods': [
+                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores (si son números como texto)'},
+                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Estandariza (si son números como texto)'},
+                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Escala [-1, 1] (si son números)'},
+                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Z-Score (si son números)'},
+                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler (si son números)'},
+                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación'}
+                        ],
+                        'stats': {
+                            'unique_count': unique_values,
+                            'sample_values': sample_values,
+                            'most_common': df[col].value_counts().head(3).to_dict() if unique_values < 100 else None
+                        }
+                    }
+                else:
+                    # Tipo desconocido o personalizado
+                    normalization_info[col] = {
+                        'type': 'unknown',
+                        'primary_methods': [
+                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Intenta escalar al rango [0, 1]'},
+                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Intenta estandarizar'},
+                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Intenta escalar a [-1, 1]'},
+                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Intenta Z-Score'},
+                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'Intenta RobustScaler'},
+                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación'},
+                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Intenta convertir a minúsculas'},
+                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Intenta eliminar espacios'},
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos'}
+                        ],
+                        'secondary_methods': [],
+                        'stats': {
+                            'dtype': col_type,
+                            'sample_values': df[col].dropna().head(5).astype(str).tolist()
+                        }
+                    }
+            
+            # Obtener copias normalizadas existentes
+            normalized_copies = Dataset.objects.filter(
+                parent_dataset=dataset
+            ).order_by('-uploaded_at')
+            
+            return Response({
+                'dataset': {
+                    'id': dataset.id,
+                    'name': dataset.name,
+                    'shape': list(df.shape),  # Convertir tupla a lista
+                    'columns': list(df.columns)
+                },
+                'normalization_info': normalization_info,
+                'normalized_copies': [
+                    {
+                        'id': copy.id,
+                        'name': copy.name,
+                        'created_at': copy.uploaded_at,
+                        'description': f"Dataset normalizado" if '_normalized_' in copy.name else "Dataset"
+                    }
+                    for copy in normalized_copies
+                ]
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
     def post(self, request, pk):
         dataset = get_object_or_404(Dataset, pk=pk)
         
         # Get normalization parameters
-        normalization_config = request.data.get('normalization', {})
+        normalization_config = request.data.get('normalization_config', {})
         create_copy = request.data.get('create_copy', True)
         copy_name = request.data.get('copy_name', '')
+        copy_short_description = request.data.get('copy_short_description', '')
+        copy_long_description = request.data.get('copy_long_description', '')
         
         # Load dataset
         df = load_dataset(dataset.file.path)
@@ -47,27 +168,37 @@ class DatasetNormalizationView(APIView):
             # Apply normalization
             normalized_df = self._apply_normalization(df, normalization_config)
             
+            print(f"Normalized DataFrame shape: {normalized_df.shape}")  # Debug
+            
             # Save normalized dataset
             if create_copy:
                 new_dataset = self._save_normalized_copy(
-                    dataset, normalized_df, copy_name, normalization_config
+                    dataset, normalized_df, copy_name, normalization_config,
+                    copy_short_description, copy_long_description
                 )
                 
                 return success_response({
                     'dataset_id': new_dataset.id,
                     'dataset_name': new_dataset.name,
-                    'normalization_applied': normalization_config
+                    'normalization_applied': normalization_config,
+                    'new_shape': list(normalized_df.shape)
                 }, message=SUCCESS_NORMALIZATION_COMPLETE)
             else:
                 # Overwrite original
-                dataset.file.save(dataset.file.name, normalized_df.to_csv(index=False))
+                csv_content = normalized_df.to_csv(index=False)
+                dataset.file.save(
+                    os.path.basename(dataset.file.name),
+                    ContentFile(csv_content.encode('utf-8')),
+                    save=False
+                )
                 dataset.is_normalized = True
                 dataset.normalization_method = str(normalization_config)
                 dataset.save()
                 
                 return success_response({
                     'dataset_id': dataset.id,
-                    'normalization_applied': normalization_config
+                    'normalization_applied': normalization_config,
+                    'new_shape': list(normalized_df.shape)
                 }, message=SUCCESS_NORMALIZATION_COMPLETE)
                 
         except Exception as e:
@@ -81,47 +212,64 @@ class DatasetNormalizationView(APIView):
             if column not in df.columns:
                 continue
             
-            # Detect column type
-            col_info = detect_column_type(df[column])
+            # Try numeric normalization first
+            norm_enum = get_numeric_enum(method)
+            if norm_enum in DISPATCH_NUM:
+                try:
+                    # Attempt to convert to numeric if it's not already
+                    if df[column].dtype == 'object':
+                        # Try to convert text to numeric
+                        numeric_series = pd.to_numeric(df[column], errors='coerce')
+                        if not numeric_series.isna().all():  # If at least some values converted
+                            func = DISPATCH_NUM[norm_enum]
+                            normalized_df[column] = func(numeric_series)
+                            continue
+                    else:
+                        # Already numeric
+                        func = DISPATCH_NUM[norm_enum]
+                        normalized_df[column] = func(df[column])
+                        continue
+                except Exception:
+                    pass
             
-            if col_info.get('type') == 'numeric':
-                # Apply numeric normalization
-                norm_enum = get_numeric_enum(method)
-                if norm_enum in DISPATCH_NUM:
-                    func = DISPATCH_NUM[norm_enum]
-                    normalized_df[column] = func(df[column])
-            elif col_info.get('type') in ['categorical', 'text']:
-                # Apply text normalization if applicable
-                text_enum = get_text_enum(method)
-                if text_enum in DISPATCH_TEXT:
+            # Try text normalization
+            text_enum = get_text_enum(method)
+            if text_enum in DISPATCH_TEXT:
+                try:
                     func = DISPATCH_TEXT[text_enum]
                     normalized_df[column] = func(df[column])
+                except Exception as e:
+                    print(f"Error applying text normalization {method} to column {column}: {str(e)}")
         
         return normalized_df
     
     def _save_normalized_copy(self, original_dataset, normalized_df, 
-                              copy_name, config):
+                              copy_name, config, short_description='', long_description=''):
         """Save normalized dataset as a new copy"""
         if not copy_name:
             timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
             copy_name = f"{original_dataset.name}_normalized_{timestamp}"
         
-        # Save to file
-        file_path = f"media/datasets/{copy_name}.csv"
-        normalized_df.to_csv(file_path, index=False)
+        # Generate CSV content
+        csv_content = normalized_df.to_csv(index=False)
         
         # Create new dataset record
         new_dataset = Dataset.objects.create(
             name=copy_name,
-            file=file_path,
             user=original_dataset.user,
             is_normalized=True,
             parent_dataset=original_dataset,
             parent_dataset_name=original_dataset.name,
             root_dataset_id=original_dataset.root_dataset_id or original_dataset.id,
             normalization_method=str(config),
-            short_description=f"Normalized from {original_dataset.name}",
-            long_description=f"Normalization applied: {config}"
+            short_description=short_description or f"Normalized from {original_dataset.name}",
+            long_description=long_description or f"Normalization applied: {config}"
+        )
+        
+        # Save file using Django's file storage
+        new_dataset.file.save(
+            f"{copy_name}.csv",
+            ContentFile(csv_content.encode('utf-8'))
         )
         
         return new_dataset
@@ -154,16 +302,46 @@ class DatasetNormalizationPreviewView(APIView):
             comparison = {}
             for column in normalization_config.keys():
                 if column in df.columns:
-                    comparison[column] = {
-                        'original': {
-                            'sample': sample_df[column].head(10).tolist(),
-                            'stats': detect_column_type(sample_df[column])
-                        },
-                        'normalized': {
-                            'sample': normalized_sample[column].head(10).tolist(),
-                            'stats': detect_column_type(normalized_sample[column])
+                    # Get unique values for better comparison
+                    original_values = sample_df[column].dropna()
+                    normalized_values = normalized_sample[column].dropna()
+                    
+                    # For categorical/text columns, show unique value mapping
+                    if df[column].dtype == 'object' or df[column].nunique() < 50:
+                        unique_mapping = []
+                        for val in original_values.unique()[:50]:  # Limit to 50 unique values
+                            original_idx = original_values[original_values == val].index[0]
+                            if original_idx in normalized_values.index:
+                                unique_mapping.append({
+                                    'original': val,
+                                    'normalized': normalized_values.loc[original_idx]
+                                })
+                        
+                        comparison[column] = {
+                            'original': {
+                                'sample': original_values.head(50).tolist(),
+                                'stats': detect_column_type(sample_df[column])
+                            },
+                            'normalized': {
+                                'sample': normalized_values.head(50).tolist(),
+                                'stats': detect_column_type(normalized_sample[column])
+                            },
+                            'unique_mapping': unique_mapping,
+                            'is_categorical': True
                         }
-                    }
+                    else:
+                        # For numeric columns, show more samples
+                        comparison[column] = {
+                            'original': {
+                                'sample': original_values.head(50).tolist(),
+                                'stats': detect_column_type(sample_df[column])
+                            },
+                            'normalized': {
+                                'sample': normalized_values.head(50).tolist(),
+                                'stats': detect_column_type(normalized_sample[column])
+                            },
+                            'is_categorical': False
+                        }
             
             return success_response({
                 'preview': comparison,
