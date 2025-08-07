@@ -3513,6 +3513,108 @@ document.addEventListener('DOMContentLoaded', function() {
     // Actualiser toutes les 30 secondes
     setInterval(loadDatasets, 30000);
 });
+
+// Función para generar análisis generales (correlación y PCA)
+function generateGeneralAnalysis(analysisType) {
+    if (!selectedDataset) {
+        showNotification('Error', 'Por favor selecciona un dataset primero', 'error');
+        return;
+    }
+    
+    const container = document.getElementById('generalAnalysisContainer');
+    
+    // Mostrar loading
+    container.innerHTML = `
+        <div class="text-center p-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Generando análisis...</span>
+            </div>
+            <p class="mt-3">Generando ${analysisType === 'correlation' ? 'Matriz de Correlación' : 'Análisis PCA'}...</p>
+        </div>
+    `;
+    
+    // Hacer la petición al endpoint actualizado
+    fetch(`/api/datasets/${selectedDataset.id}/analysis/?type=${analysisType}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.status === 'error') {
+                throw new Error(data.error || 'Error desconocido');
+            }
+            
+            // Mostrar el resultado
+            let resultHtml = `
+                <div class="analysis-result mt-3 p-3 bg-light rounded">
+                    <h6 class="text-primary mb-3">
+                        <i class="bi ${analysisType === 'correlation' ? 'bi-grid-3x3' : 'bi-arrows-angle-contract'}"></i>
+                        ${analysisType === 'correlation' ? 'Matriz de Correlación' : 'Análisis PCA'}
+                    </h6>
+            `;
+            
+            // Mostrar imagen
+            if (data.image) {
+                resultHtml += `
+                    <div class="text-center mb-3">
+                        <img src="${data.image}" class="img-fluid" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    </div>
+                `;
+            }
+            
+            // Mostrar estadísticas
+            if (data.statistics) {
+                if (analysisType === 'correlation' && data.statistics.strong_correlations) {
+                    resultHtml += `
+                        <div class="mt-3">
+                            <h6>Correlaciones Fuertes (|r| > 0.5):</h6>
+                            <ul class="list-unstyled">
+                    `;
+                    data.statistics.strong_correlations.forEach(corr => {
+                        const color = corr.correlation > 0 ? 'text-success' : 'text-danger';
+                        resultHtml += `
+                            <li>
+                                <i class="bi bi-arrow-left-right ${color}"></i>
+                                <strong>${corr.var1}</strong> ↔ <strong>${corr.var2}</strong>: 
+                                <span class="${color}">${corr.correlation.toFixed(3)}</span>
+                            </li>
+                        `;
+                    });
+                    resultHtml += `</ul></div>`;
+                } else if (analysisType === 'pca' && data.statistics) {
+                    resultHtml += `
+                        <div class="mt-3">
+                            <p><strong>Variables analizadas:</strong> ${data.statistics.total_variables}</p>
+                            <p><strong>Componentes para 95% varianza:</strong> ${data.statistics.n_components_95_variance}</p>
+                            <h6>Varianza explicada por componente:</h6>
+                            <ul class="list-unstyled">
+                    `;
+                    if (data.statistics.explained_variance_ratio) {
+                        data.statistics.explained_variance_ratio.forEach((variance, idx) => {
+                            resultHtml += `
+                                <li>PC${idx + 1}: ${(variance * 100).toFixed(2)}%</li>
+                            `;
+                        });
+                    }
+                    resultHtml += `</ul></div>`;
+                }
+            }
+            
+            resultHtml += `</div>`;
+            container.innerHTML = resultHtml;
+        })
+        .catch(error => {
+            console.error('Error en análisis:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger mt-3">
+                    <i class="bi bi-exclamation-triangle"></i> Error al generar análisis
+                    <br><small>${error.message}</small>
+                </div>
+            `;
+        });
+}
 </script>
 
 <!-- Script para análisis avanzados -->
