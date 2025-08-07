@@ -5,10 +5,32 @@ from rest_framework.parsers import JSONParser
 from rest_framework.renderers import JSONRenderer
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views import View
 import pandas as pd
 import numpy as np
 import json
+from json import JSONEncoder
 import mimetypes
+
+class NumpyEncoder(JSONEncoder):
+    """Custom JSON Encoder that handles numpy types and NaN values"""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            if np.isnan(obj) or np.isinf(obj):
+                return None
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, pd.Series):
+            return obj.to_list()
+        elif isinstance(obj, pd.DataFrame):
+            return obj.to_dict('records')
+        elif pd.isna(obj):
+            return None
+        return super(NumpyEncoder, self).default(obj)
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -26,24 +48,36 @@ from .code_generator import generate_keras_code, generate_pytorch_code, parse_ke
 
 def clean_nan_values(obj):
     """Recursively clean NaN values from nested structures"""
-    if isinstance(obj, float):
-        if np.isnan(obj) or np.isinf(obj):
-            return None
-        return obj
-    elif isinstance(obj, np.floating):
-        if np.isnan(obj) or np.isinf(obj):
+    import math
+    
+    if obj is None:
+        return None
+    elif isinstance(obj, (float, np.floating)):
+        if math.isnan(obj) or math.isinf(obj) or np.isnan(obj) or np.isinf(obj):
             return None
         return float(obj)
-    elif isinstance(obj, np.integer):
+    elif isinstance(obj, (int, np.integer)):
         return int(obj)
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
     elif isinstance(obj, np.ndarray):
         return clean_nan_values(obj.tolist())
+    elif isinstance(obj, pd.Series):
+        return clean_nan_values(obj.to_dict())
+    elif isinstance(obj, pd.DataFrame):
+        return clean_nan_values(obj.to_dict('records'))
     elif isinstance(obj, list):
         return [clean_nan_values(item) for item in obj]
     elif isinstance(obj, dict):
         return {key: clean_nan_values(value) for key, value in obj.items()}
-    else:
+    elif isinstance(obj, (str, bool)):
         return obj
+    else:
+        # Para cualquier otro tipo, intentar convertir a string
+        try:
+            return str(obj)
+        except:
+            return None
 try:
     # Intentar importar desde el módulo local primero
     from .normalization_methods import NumNorm, TextNorm, Normalizador
@@ -1576,28 +1610,30 @@ class DatasetVariableAnalysisView(APIView):
         })
 
 
-class DatasetGeneralAnalysisView(APIView):
-    renderer_classes = [JSONRenderer]
-    parser_classes = [JSONParser]
+class DatasetGeneralAnalysisView(View):
+    # Usar Django View en lugar de DRF APIView para evitar problemas con NaN
     
     def get(self, request, pk):
         dataset = get_object_or_404(Dataset, pk=pk)
-        analysis_type = request.query_params.get('type', 'correlation')
+        analysis_type = request.GET.get('type', 'correlation')
         
         try:
             df = pd.read_csv(dataset.file.path)
             
             if analysis_type == 'correlation':
-                return self.generate_correlation_matrix(df)
+                print(f"Calling generate_correlation_matrix for dataset {pk}")
+                result = self.generate_correlation_matrix(df)
+                print(f"Result type: {type(result)}")
+                return result
             elif analysis_type == 'pca':
                 return self.generate_pca_analysis(df)
             elif analysis_type == 'lasso':
-                target_column = request.query_params.get('target')
+                target_column = request.GET.get('target')
                 if not target_column:
                     # Si no se proporciona target, usar la última columna numérica
                     numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
                     if len(numeric_columns) < 2:
-                        return Response(
+                        return JsonResponse(
                             {'error': 'At least 2 numeric columns are required for LASSO analysis'}, 
                             status=status.HTTP_400_BAD_REQUEST
                         )
@@ -1605,15 +1641,19 @@ class DatasetGeneralAnalysisView(APIView):
                     target_column = numeric_columns[-1]
                 return self.generate_lasso_analysis(df, target_column)
             else:
-                return Response(
+                return JsonResponse(
                     {'error': f'Unknown analysis type: {analysis_type}'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 
         except Exception as e:
-            return Response(
+            import traceback
+            print(f"Error in DatasetGeneralAnalysisView: {e}")
+            print(traceback.format_exc())
+            return JsonResponse(
                 {'error': str(e)}, 
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
+                encoder=NumpyEncoder
             )
     
     def generate_correlation_matrix(self, df):
@@ -1623,16 +1663,19 @@ class DatasetGeneralAnalysisView(APIView):
             numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
             
             if len(numeric_columns) < 2:
-                return Response(
+                return JsonResponse(
                     {'error': 'At least 2 numeric columns are required for correlation matrix'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
             # Calcular matriz de correlación
             corr_matrix = df[numeric_columns].corr()
-        
-        # Crear figura
-        plt.figure(figsize=(12, 10))
+            
+            # Reemplazar NaN con 0 en la matriz de correlación
+            corr_matrix = corr_matrix.fillna(0)
+            
+            # Crear figura
+            plt.figure(figsize=(12, 10))
         
         # Heatmap
         mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
@@ -1664,8 +1707,8 @@ class DatasetGeneralAnalysisView(APIView):
         
             strong_correlations.sort(key=lambda x: abs(x['correlation']), reverse=True)
             
-            # Limpiar valores NaN antes de devolver
-            return Response({
+            # Crear respuesta
+            response_data = {
                 'analysis_type': 'correlation_matrix',
                 'image': f'data:image/png;base64,{image_base64}',
                 'statistics': {
@@ -1673,14 +1716,30 @@ class DatasetGeneralAnalysisView(APIView):
                     'column_count': len(numeric_columns),
                     'strong_correlations': strong_correlations[:10]  # Top 10
                 }
-            })
+            }
+            
+            # Debug: imprimir estructura antes de limpiar
+            print("Response data before cleaning:")
+            print(f"Type: {type(response_data)}")
+            print(f"Keys: {response_data.keys()}")
+            
+            # Limpiar valores NaN antes de devolver
+            cleaned_data = clean_nan_values(response_data)
+            
+            # Debug: verificar después de limpiar
+            print("Response data after cleaning:")
+            print(f"Type: {type(cleaned_data)}")
+            
+            # Usar JsonResponse con encoder personalizado
+            return JsonResponse(cleaned_data, encoder=NumpyEncoder, safe=False)
         except Exception as e:
             import traceback
             print(f"Error in generate_correlation_matrix: {e}")
             print(traceback.format_exc())
-            return Response(
+            return JsonResponse(
                 {'error': f'Error generating correlation matrix: {str(e)}'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                encoder=NumpyEncoder
             )
     
     def generate_pca_analysis(self, df):
@@ -1690,7 +1749,7 @@ class DatasetGeneralAnalysisView(APIView):
             numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
             
             if len(numeric_columns) < 3:
-                return Response(
+                return JsonResponse(
                     {'error': 'At least 3 numeric columns are required for PCA'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
@@ -1786,14 +1845,16 @@ class DatasetGeneralAnalysisView(APIView):
             }
             
             # Limpiar valores NaN/Inf antes de devolver
-            return Response(clean_nan_values(response_data))
+            cleaned_data = clean_nan_values(response_data)
+            return JsonResponse(cleaned_data, encoder=NumpyEncoder, safe=False)
         except Exception as e:
             import traceback
             print(f"Error in generate_pca_analysis: {e}")
             print(traceback.format_exc())
-            return Response(
+            return JsonResponse(
                 {'error': f'Error generating PCA analysis: {str(e)}'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                encoder=NumpyEncoder
             )
     
     def generate_lasso_analysis(self, df, target_column):
