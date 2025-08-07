@@ -719,6 +719,10 @@
             const varData = variableData[variableName];
             if (!varData || !varData.outliers) return;
             
+            // Use the counts from backend
+            const belowCount = varData.outliers.below_count || 0;
+            const aboveCount = varData.outliers.above_count || 0;
+            
             let currentFilter = 'all';
             let filteredOutliers = [...(varData.outliers.values || [])];
             let currentPage = 0;
@@ -771,12 +775,12 @@
                                                 <p class="mb-2" style="color: #f0f9ff;">
                                                     <i class="bi bi-arrow-down-circle"></i> 
                                                     <strong>Valores por debajo:</strong> 
-                                                    <span class="text-info">${(varData.outliers.values || []).filter(o => o.value < varData.outliers.lower_bound).length}</span>
+                                                    <span class="text-info" id="outliersBelow">${belowCount}</span>
                                                 </p>
                                                 <p class="mb-2" style="color: #f0f9ff;">
                                                     <i class="bi bi-arrow-up-circle"></i> 
                                                     <strong>Valores por encima:</strong> 
-                                                    <span class="text-warning">${(varData.outliers.values || []).filter(o => o.value > varData.outliers.upper_bound).length}</span>
+                                                    <span class="text-warning" id="outliersAbove">${aboveCount}</span>
                                                 </p>
                                                 <p class="mb-0" style="color: #f0f9ff;">
                                                     <i class="bi bi-sum"></i> 
@@ -933,19 +937,19 @@
                     data: {
                         labels: [variableName],
                         datasets: [{
-                            label: 'Distribution',
-                            data: [[
-                                varData.stats.min,
-                                varData.stats.q1,
-                                varData.stats.median,
-                                varData.stats.q3,
-                                varData.stats.max
-                            ]],
-                            backgroundColor: 'rgba(0, 212, 255, 0.2)',
+                            label: 'Distribución',
+                            backgroundColor: 'rgba(0, 212, 255, 0.5)',
                             borderColor: 'rgba(0, 212, 255, 1)',
-                            borderWidth: 2,
-                            outlierColor: '#ff00ff',
-                            outlierBackgroundColor: 'rgba(255, 0, 255, 0.5)'
+                            borderWidth: 1,
+                            outlierColor: '#ff0000',
+                            data: [{
+                                min: varData.stats.min,
+                                q1: varData.stats.q1,
+                                median: varData.stats.median,
+                                q3: varData.stats.q3,
+                                max: varData.stats.max,
+                                outliers: (varData.outliers.values || []).slice(0, 50).map(o => o.value)
+                            }]
                         }]
                     },
                     options: {

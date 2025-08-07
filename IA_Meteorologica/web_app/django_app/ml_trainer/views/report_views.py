@@ -537,12 +537,20 @@ class DatasetReportView(APIView):
                 outliers_mask = (df[col] < lower_bound) | (df[col] > upper_bound)
                 outliers_df = df[outliers_mask]
                 
+                # Calculate below and above counts
+                below_mask = df[col] < lower_bound
+                above_mask = df[col] > upper_bound
+                below_count = int(below_mask.sum())
+                above_count = int(above_mask.sum())
+                
                 col_data['outliers'] = {
                     'count': int(outliers_mask.sum()),
                     'percentage': float((outliers_mask.sum() / len(df)) * 100),
                     'iqr': float(iqr),
                     'lower_bound': float(lower_bound),
                     'upper_bound': float(upper_bound),
+                    'below_count': below_count,
+                    'above_count': above_count,
                     'values': [
                         {'index': int(idx), 'value': float(val)}
                         for idx, val in outliers_df[col].head(50).items()
