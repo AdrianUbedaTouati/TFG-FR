@@ -4,6 +4,7 @@ Prediction and inference views
 from rest_framework import generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 import pandas as pd
 from datetime import datetime, timedelta
@@ -16,12 +17,23 @@ from ..utils import error_response, success_response, load_dataset
 
 class PredictionListCreateView(generics.ListCreateAPIView):
     """List all predictions or create new ones"""
-    queryset = WeatherPrediction.objects.all()
     serializer_class = WeatherPredictionSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filter predictions by user"""
+        if self.request.user.is_staff:
+            return WeatherPrediction.objects.all()
+        return WeatherPrediction.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        """Add user to prediction"""
+        serializer.save(user=self.request.user)
 
 
 class PredictView(APIView):
     """Make predictions using a trained model"""
+    permission_classes = [IsAuthenticated]
     
     def post(self, request):
         """Make predictions with trained model"""
@@ -31,7 +43,11 @@ class PredictView(APIView):
         if not session_id:
             return error_response("session_id is required")
         
-        session = get_object_or_404(TrainingSession, pk=session_id)
+        # Verificar permisos
+        if request.user.is_staff:
+            session = get_object_or_404(TrainingSession, pk=session_id)
+        else:
+            session = get_object_or_404(TrainingSession, pk=session_id, user=request.user)
         
         # Check if model is trained
         if session.status != 'completed':
@@ -72,6 +88,7 @@ class PredictView(APIView):
 
 class PredictionMapView(APIView):
     """Generate prediction data for map visualization"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request):
         """Get prediction data for map"""
@@ -81,7 +98,11 @@ class PredictionMapView(APIView):
         if not session_id:
             return error_response("session_id is required")
         
-        session = get_object_or_404(TrainingSession, pk=session_id)
+        # Verificar permisos
+        if request.user.is_staff:
+            session = get_object_or_404(TrainingSession, pk=session_id)
+        else:
+            session = get_object_or_404(TrainingSession, pk=session_id, user=request.user)
         
         # Parse date or use today
         if date_str:
@@ -110,7 +131,9 @@ class PredictionMapView(APIView):
         try:
             predictions = generate_weather_map_data(session, date)
             
-            # Save predictions
+            # Save predictions with user
+            for prediction in predictions:
+                prediction.user = request.user
             WeatherPrediction.objects.bulk_create(predictions)
             
             serializer = WeatherPredictionSerializer(predictions, many=True)

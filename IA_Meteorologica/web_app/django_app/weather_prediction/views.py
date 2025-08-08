@@ -3,12 +3,6 @@ from django.contrib.auth.decorators import login_required
 from ml_trainer.models import TrainingSession, Dataset
 
 def home(request):
-    if request.user.is_authenticated:
-        context = {
-            'recent_datasets': Dataset.objects.filter(user=request.user).order_by('-uploaded_at')[:5],
-            'recent_trainings': TrainingSession.objects.filter(user=request.user).order_by('-created_at')[:5],
-        }
-        return render(request, 'dashboard.html', context)
     return render(request, 'home.html')
 
 @login_required

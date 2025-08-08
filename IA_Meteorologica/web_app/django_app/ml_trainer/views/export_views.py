@@ -3,6 +3,7 @@ Code export and import views
 """
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 
@@ -21,10 +22,15 @@ from ..constants import (
 
 class ExportModelCodeView(APIView):
     """Export model architecture as Python code"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, pk):
         """Download model code as file"""
-        model_def = get_object_or_404(ModelDefinition, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            model_def = get_object_or_404(ModelDefinition, pk=pk)
+        else:
+            model_def = get_object_or_404(ModelDefinition, pk=pk, user=request.user)
         framework = request.query_params.get('framework', model_def.framework)
         
         # Generate code based on framework
@@ -44,7 +50,11 @@ class ExportModelCodeView(APIView):
     
     def post(self, request, pk):
         """Get code as JSON response"""
-        model_def = get_object_or_404(ModelDefinition, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            model_def = get_object_or_404(ModelDefinition, pk=pk)
+        else:
+            model_def = get_object_or_404(ModelDefinition, pk=pk, user=request.user)
         framework = request.data.get('framework', model_def.framework)
         
         # Generate code based on framework
@@ -84,9 +94,14 @@ class ExportModelCodeView(APIView):
 
 class ImportModelCodeView(APIView):
     """Import model architecture from Python code"""
+    permission_classes = [IsAuthenticated]
     
     def post(self, request, pk):
-        model_def = get_object_or_404(ModelDefinition, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            model_def = get_object_or_404(ModelDefinition, pk=pk)
+        else:
+            model_def = get_object_or_404(ModelDefinition, pk=pk, user=request.user)
         
         # Get code from request
         code = self._get_code_from_request(request)

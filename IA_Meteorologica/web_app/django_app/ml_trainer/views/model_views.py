@@ -4,6 +4,7 @@ Model definition and management views
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from typing import Dict, Any
 
@@ -19,28 +20,42 @@ from ..constants import (
 
 class ModelDefinitionListCreateView(generics.ListCreateAPIView):
     """List all model definitions or create a new one"""
-    queryset = ModelDefinition.objects.all()
     serializer_class = ModelDefinitionSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filter models by user"""
+        if self.request.user.is_staff:
+            return ModelDefinition.objects.all()
+        return ModelDefinition.objects.filter(user=self.request.user)
     
     def perform_create(self, serializer):
-        """Add user to model definition if authenticated"""
-        if self.request.user.is_authenticated:
-            serializer.save(user=self.request.user)
-        else:
-            serializer.save()
+        """Add user to model definition"""
+        serializer.save(user=self.request.user)
 
 
 class ModelDefinitionDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update or delete a model definition"""
-    queryset = ModelDefinition.objects.all()
     serializer_class = ModelDefinitionSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filter models by user"""
+        if self.request.user.is_staff:
+            return ModelDefinition.objects.all()
+        return ModelDefinition.objects.filter(user=self.request.user)
 
 
 class ModelDefinitionTrainingsView(APIView):
     """Get all training sessions for a model definition"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, pk):
-        model_def = get_object_or_404(ModelDefinition, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            model_def = get_object_or_404(ModelDefinition, pk=pk)
+        else:
+            model_def = get_object_or_404(ModelDefinition, pk=pk, user=request.user)
         
         # Get all training sessions
         trainings = model_def.trainingsession_set.all().order_by('-created_at')
@@ -69,9 +84,14 @@ class ModelDefinitionTrainingsView(APIView):
 
 class CloneModelDefinitionView(APIView):
     """Clone an existing model definition"""
+    permission_classes = [IsAuthenticated]
     
     def post(self, request, pk):
-        original = get_object_or_404(ModelDefinition, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            original = get_object_or_404(ModelDefinition, pk=pk)
+        else:
+            original = get_object_or_404(ModelDefinition, pk=pk, user=request.user)
         
         # Create clone
         new_model = ModelDefinition.objects.create(
@@ -86,7 +106,7 @@ class CloneModelDefinitionView(APIView):
             custom_architecture=original.custom_architecture,
             use_custom_architecture=original.use_custom_architecture,
             framework=original.framework,
-            user=request.user if request.user.is_authenticated else None
+            user=request.user
         )
         
         serializer = ModelDefinitionSerializer(new_model)
@@ -95,6 +115,7 @@ class CloneModelDefinitionView(APIView):
 
 class ModelConfigView(APIView):
     """Get default configurations for all model types"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request):
         configs = {}
@@ -106,6 +127,7 @@ class ModelConfigView(APIView):
 
 class NormalizationMethodsView(APIView):
     """Get available normalization methods for a model type"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, model_type):
         if model_type not in [mt.value for mt in ModelType]:
@@ -117,6 +139,7 @@ class NormalizationMethodsView(APIView):
 
 class MetricsView(APIView):
     """Get available metrics for a model type"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, model_type):
         if model_type not in [mt.value for mt in ModelType]:
@@ -128,6 +151,7 @@ class MetricsView(APIView):
 
 class ModelFrameworkView(APIView):
     """Get available frameworks for a model type"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, model_type):
         # Neural networks can use Keras or PyTorch
@@ -149,6 +173,7 @@ class ModelFrameworkView(APIView):
 
 class ImplementedModelsView(APIView):
     """Get list of actually implemented model types"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request):
         """Return model types that are actually implemented"""

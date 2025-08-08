@@ -121,9 +121,14 @@ class DatasetColumnsView(APIView):
 
 class DatasetColumnDetailsView(APIView):
     """Get detailed information about a specific column"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, pk, column_name):
-        dataset = get_object_or_404(Dataset, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
         
         # Load dataset
         df = load_dataset(dataset.file.path)
@@ -201,9 +206,14 @@ class DatasetColumnDetailsView(APIView):
 
 class DatasetDownloadView(APIView):
     """Download a dataset file"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, pk):
-        dataset = get_object_or_404(Dataset, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
         
         try:
             with open(dataset.file.path, 'rb') as f:
@@ -222,10 +232,17 @@ class DatasetDownloadView(APIView):
 
 class DatasetAnalysisBaseView(APIView):
     """Base class for dataset analysis views"""
+    permission_classes = [IsAuthenticated]
     
-    def load_and_validate_dataset(self, pk: int) -> Optional[pd.DataFrame]:
+    def load_and_validate_dataset(self, pk: int, user=None) -> Optional[pd.DataFrame]:
         """Load and validate dataset"""
-        dataset = get_object_or_404(Dataset, pk=pk)
+        # Verificar permisos
+        if user and user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        elif user:
+            dataset = get_object_or_404(Dataset, pk=pk, user=user)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk)
         df = load_dataset(dataset.file.path)
         
         if df is None:
@@ -263,7 +280,7 @@ class DatasetVariableAnalysisView(DatasetAnalysisBaseView):
     
     def get(self, request, pk, column_name):
         # Load dataset
-        df = self.load_and_validate_dataset(pk)
+        df = self.load_and_validate_dataset(pk, user=request.user)
         if df is None:
             return error_response(ERROR_PARSING_FAILED)
         
@@ -349,7 +366,7 @@ class DatasetGeneralAnalysisView(DatasetAnalysisBaseView):
     
     def get(self, request, pk):
         # Load dataset
-        df = self.load_and_validate_dataset(pk)
+        df = self.load_and_validate_dataset(pk, user=request.user)
         if df is None:
             return error_response(ERROR_PARSING_FAILED)
         

@@ -2594,8 +2594,52 @@ function forceCloseUploadModal() {
     document.body.style.removeProperty('padding-right');
 }
 
+// Handle file selection
+function handleFileSelect(input) {
+    const files = input.files;
+    if (files.length === 0) return;
+    
+    // For now, handle only the first file
+    const file = files[0];
+    
+    // Store the file temporarily
+    document.getElementById('pendingFile').value = file.name;
+    window.pendingFile = file;
+    
+    // Show the info modal
+    const infoModal = new bootstrap.Modal(document.getElementById('datasetInfoModal'));
+    document.getElementById('datasetName').value = file.name.replace('.csv', '');
+    document.getElementById('datasetShortDescription').value = '';
+    document.getElementById('datasetLongDescription').value = '';
+    updateCharCount();
+    infoModal.show();
+    
+    // Reset the file input
+    input.value = '';
+}
+
+// Proceed with upload after info is filled
+function proceedWithUpload() {
+    const file = window.pendingFile;
+    if (!file) {
+        showNotification('Erreur', 'Aucun fichier sélectionné', 'error');
+        return;
+    }
+    
+    const customName = document.getElementById('datasetName').value;
+    const shortDescription = document.getElementById('datasetShortDescription').value;
+    const longDescription = document.getElementById('datasetLongDescription').value;
+    
+    // Hide the info modal
+    const infoModal = bootstrap.Modal.getInstance(document.getElementById('datasetInfoModal'));
+    infoModal.hide();
+    
+    // Start the upload
+    uploadFile(file, customName, shortDescription, longDescription);
+}
+
 // Upload d'un fichier
-function uploadFile(file, customName, customDescription) {
+function uploadFile(file, customName, shortDescription, longDescription) {
     // Nettoyer les modals existants avant d'en créer un nouveau
     document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
     document.body.classList.remove('modal-open');
@@ -2637,7 +2681,14 @@ function uploadFile(file, customName, customDescription) {
             'X-CSRFToken': getCookie('csrftoken')
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(err.error || err.detail || 'Error al cargar el archivo');
+            });
+        }
+        return response.json();
+    })
     .then(data => {
         clearInterval(progressInterval);
         progressBar.style.width = '100%';
@@ -2665,7 +2716,7 @@ function uploadFile(file, customName, customDescription) {
         document.body.style.removeProperty('overflow');
         document.body.style.removeProperty('padding-right');
         
-        showNotification('Erreur', 'Erreur lors du chargement: ' + error, 'error');
+        showNotification('Erreur', 'Erreur lors du chargement: ' + error.message, 'error');
     });
 }
 

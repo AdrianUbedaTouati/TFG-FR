@@ -9,24 +9,26 @@ from django.contrib.auth.decorators import login_required
 
 class CustomUserCreationForm(UserCreationForm):
     email = forms.EmailField(required=True, widget=forms.EmailInput(attrs={'class': 'form-control'}))
-    first_name = forms.CharField(max_length=30, required=False, widget=forms.TextInput(attrs={'class': 'form-control'}))
-    last_name = forms.CharField(max_length=30, required=False, widget=forms.TextInput(attrs={'class': 'form-control'}))
     
     class Meta:
         model = User
-        fields = ("username", "email", "first_name", "last_name", "password1", "password2")
+        fields = ("username", "email", "password1", "password2")
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['username'].widget.attrs['class'] = 'form-control'
         self.fields['password1'].widget.attrs['class'] = 'form-control'
+        self.fields['password1'].widget.attrs['id'] = 'id_password1'
         self.fields['password2'].widget.attrs['class'] = 'form-control'
+        self.fields['password2'].widget.attrs['id'] = 'id_password2'
+        
+        # Hacer la validación de contraseña más flexible
+        self.fields['password1'].help_text = 'Tu contraseña debe tener al menos 8 caracteres.'
+        self.fields['password2'].help_text = 'Ingresa la misma contraseña para confirmar.'
     
     def save(self, commit=True):
         user = super().save(commit=False)
         user.email = self.cleaned_data['email']
-        user.first_name = self.cleaned_data['first_name']
-        user.last_name = self.cleaned_data['last_name']
         if commit:
             user.save()
         return user

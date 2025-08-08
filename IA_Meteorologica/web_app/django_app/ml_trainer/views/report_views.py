@@ -2,6 +2,7 @@
 Report generation views
 """
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from django.template.loader import render_to_string
@@ -30,9 +31,14 @@ from ..constants import (
 
 class DatasetReportView(APIView):
     """Generate comprehensive HTML report for dataset"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, pk):
-        dataset = get_object_or_404(Dataset, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
         
         # Load dataset
         df = load_dataset(dataset.file.path)
@@ -58,7 +64,11 @@ class DatasetReportView(APIView):
     
     def post(self, request, pk):
         """Generate report with custom chart data from frontend"""
-        dataset = get_object_or_404(Dataset, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
         
         # Load dataset
         df = load_dataset(dataset.file.path)

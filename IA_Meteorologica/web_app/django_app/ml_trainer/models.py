@@ -211,6 +211,7 @@ class TrainingSession(models.Model):
 
 
 class WeatherPrediction(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='weatherpredictions')
     training_session = models.ForeignKey(TrainingSession, on_delete=models.CASCADE)
     prediction_date = models.DateField()
     region = models.CharField(max_length=100)

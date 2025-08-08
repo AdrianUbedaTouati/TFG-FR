@@ -4,6 +4,7 @@ Vistas para análisis de datasets sin usar DRF para evitar problemas con NaN
 from django.http import JsonResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
 import pandas as pd
 import numpy as np
 import json
@@ -43,12 +44,16 @@ class SafeJSONEncoder(json.JSONEncoder):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@login_required
 def dataset_analysis(request, pk):
     """Vista simple para análisis de dataset que evita DRF"""
     try:
-        # Obtener dataset
+        # Obtener dataset con verificación de permisos
         try:
-            dataset = Dataset.objects.get(pk=pk)
+            if request.user.is_staff:
+                dataset = Dataset.objects.get(pk=pk)
+            else:
+                dataset = Dataset.objects.get(pk=pk, user=request.user)
         except Dataset.DoesNotExist:
             return JsonResponse({'error': 'Dataset not found'}, status=404)
         

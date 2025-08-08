@@ -4,6 +4,7 @@ Training session management views
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 import threading
 
@@ -19,29 +20,43 @@ from ..constants import (
 
 class TrainingSessionListCreateView(generics.ListCreateAPIView):
     """List all training sessions or create a new one"""
-    queryset = TrainingSession.objects.all()
     serializer_class = TrainingSessionSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filter training sessions by user"""
+        if self.request.user.is_staff:
+            return TrainingSession.objects.all()
+        return TrainingSession.objects.filter(user=self.request.user)
     
     def perform_create(self, serializer):
-        """Add user to training session if authenticated"""
-        if self.request.user.is_authenticated:
-            serializer.save(user=self.request.user)
-        else:
-            serializer.save()
+        """Add user to training session"""
+        serializer.save(user=self.request.user)
 
 
 class TrainingSessionDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update or delete a training session"""
-    queryset = TrainingSession.objects.all()
     serializer_class = TrainingSessionSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filter training sessions by user"""
+        if self.request.user.is_staff:
+            return TrainingSession.objects.all()
+        return TrainingSession.objects.filter(user=self.request.user)
 
 
 class TrainModelView(APIView):
     """Start training for a model"""
+    permission_classes = [IsAuthenticated]
     
     def post(self, request, pk):
         """Start training session"""
-        session = get_object_or_404(TrainingSession, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            session = get_object_or_404(TrainingSession, pk=pk)
+        else:
+            session = get_object_or_404(TrainingSession, pk=pk, user=request.user)
         
         # Check if already training
         if session.status == STATUS_TRAINING:
@@ -71,7 +86,11 @@ class TrainModelView(APIView):
     
     def get(self, request, pk):
         """Get training status"""
-        session = get_object_or_404(TrainingSession, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            session = get_object_or_404(TrainingSession, pk=pk)
+        else:
+            session = get_object_or_404(TrainingSession, pk=pk, user=request.user)
         
         response_data = {
             'id': session.id,
