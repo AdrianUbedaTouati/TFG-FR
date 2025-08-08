@@ -744,82 +744,66 @@ function displayDatasets(datasetList) {
         return;
     }
     
-    // Agrupar datasets por dataset original
-    const datasetGroups = {};
-    const originalDatasets = [];
+    // Agrupar datasets por root_dataset_id
+    const rootGroups = {};
     
-    console.log('Grouping datasets...');
+    console.log('Grouping datasets by root_dataset_id...');
     
-    // Primero identificar datasets originales
+    // Agrupar todos los datasets por su root_dataset_id
     datasetList.forEach(dataset => {
-        console.log('Processing dataset:', dataset.name, 'is_normalized:', dataset.is_normalized);
+        let rootId;
+        
         if (!dataset.is_normalized) {
-            originalDatasets.push(dataset);
-            datasetGroups[dataset.id] = {
-                original: dataset,
-                normalized: []
+            // Dataset original, su ID es el root
+            rootId = dataset.id;
+        } else if (dataset.root_dataset_id) {
+            // Dataset normalizado con root_dataset_id
+            rootId = dataset.root_dataset_id;
+        } else {
+            // Dataset normalizado sin root_dataset_id (no debería pasar pero por si acaso)
+            rootId = `orphan_${dataset.id}`;
+        }
+        
+        if (!rootGroups[rootId]) {
+            rootGroups[rootId] = {
+                rootId: rootId,
+                datasets: []
             };
         }
+        
+        rootGroups[rootId].datasets.push(dataset);
     });
     
-    console.log('Original datasets found:', originalDatasets.length);
-    console.log('Dataset groups:', datasetGroups);
+    console.log('Root groups:', rootGroups);
     
-    // Luego asignar datasets normalizados a sus originales
-    datasetList.forEach(dataset => {
-        if (dataset.is_normalized && dataset.parent_dataset) {
-            console.log(`Dataset normalizado: ${dataset.name}, parent: ${dataset.parent_dataset}`);
-            if (datasetGroups[dataset.parent_dataset]) {
-                datasetGroups[dataset.parent_dataset].normalized.push(dataset);
-            } else {
-                // Si el padre no está en el grupo (porque también es normalizado), 
-                // buscar el dataset original raíz
-                let rootParent = findRootParent(datasetList, dataset);
-                if (rootParent && datasetGroups[rootParent.id]) {
-                    console.log(`Asignando ${dataset.name} al grupo raíz: ${rootParent.name}`);
-                    datasetGroups[rootParent.id].normalized.push(dataset);
-                }
-            }
+    // Procesar cada grupo
+    Object.values(rootGroups).forEach(group => {
+        // Ordenar datasets por fecha (más antiguo primero)
+        group.datasets.sort((a, b) => new Date(a.uploaded_at) - new Date(b.uploaded_at));
+        
+        // Buscar el dataset original (no normalizado)
+        const originalDataset = group.datasets.find(d => !d.is_normalized);
+        
+        if (originalDataset) {
+            // Hay un dataset original, mostrar como grupo normal
+            const normalizedDatasets = group.datasets.filter(d => d.is_normalized);
+            displayDatasetGroup({
+                original: originalDataset,
+                normalized: normalizedDatasets
+            });
+        } else {
+            // No hay dataset original, usar el más antiguo como cabeza
+            const headDataset = group.datasets[0];
+            const otherDatasets = group.datasets.slice(1);
+            
+            // Crear un grupo especial con el más antiguo como cabeza
+            displayDatasetGroupWithNormalizedHead(headDataset, otherDatasets);
         }
-    });
-    
-    // Ordenar normalizados por fecha (más antiguo primero - orden cronológico)
-    Object.values(datasetGroups).forEach(group => {
-        group.normalized.sort((a, b) => new Date(a.uploaded_at) - new Date(b.uploaded_at));
     });
     
     // Actualizar el filtro de datasets originales
+    const originalDatasets = datasetList.filter(d => !d.is_normalized);
     updateParentFilter(originalDatasets);
-    
-    // Mostrar grupos
-    Object.values(datasetGroups).forEach(group => {
-        displayDatasetGroup(group);
-    });
-    
-    // Agrupar datasets huérfanos por root_dataset_id
-    const orphanGroups = {};
-    datasetList.forEach(dataset => {
-        if (dataset.is_normalized && !dataset.parent_dataset && dataset.root_dataset_id) {
-            if (!orphanGroups[dataset.root_dataset_id]) {
-                orphanGroups[dataset.root_dataset_id] = [];
-            }
-            orphanGroups[dataset.root_dataset_id].push(dataset);
-        }
-    });
-    
-    // Mostrar grupos de huérfanos
-    Object.entries(orphanGroups).forEach(([rootId, orphans]) => {
-        // Ordenar por fecha
-        orphans.sort((a, b) => new Date(a.uploaded_at) - new Date(b.uploaded_at));
-        displayOrphanGroup(rootId, orphans);
-    });
-    
-    // Mostrar datasets huérfanos sin root_dataset_id
-    datasetList.forEach(dataset => {
-        if (dataset.is_normalized && !dataset.parent_dataset && !dataset.root_dataset_id) {
-            displayOrphanDataset(dataset);
-        }
-    });
 }
 
 // Actualizar filtro de datasets originales
@@ -892,6 +876,58 @@ function displayDatasetGroup(group) {
     
     // Tarjetas normalizadas
     group.normalized.forEach(dataset => {
+        const normalizedCard = createDatasetCard(dataset, 'normalized');
+        cardsContainer.appendChild(normalizedCard);
+    });
+    
+    groupDiv.appendChild(header);
+    groupDiv.appendChild(cardsContainer);
+    container.appendChild(groupDiv);
+}
+
+// Mostrar grupo donde un dataset normalizado es la cabeza (cuando se borró el original)
+function displayDatasetGroupWithNormalizedHead(headDataset, otherDatasets) {
+    const container = document.getElementById('datasetsContainer');
+    
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'dataset-group';
+    groupDiv.setAttribute('data-group-id', headDataset.id);
+    
+    // Header del grupo
+    const header = document.createElement('div');
+    header.className = 'dataset-group-header';
+    header.innerHTML = `
+        <h3 class="dataset-group-title">
+            <i class="bi bi-folder2-open"></i> ${headDataset.name}
+            <span class="badge bg-warning ms-2">Original eliminado</span>
+            <span class="badge bg-primary ms-2">${otherDatasets.length} normalizaciones</span>
+        </h3>
+        <div>
+            <span class="text-muted small">
+                <i class="bi bi-calendar3"></i> ${new Date(headDataset.uploaded_at).toLocaleDateString('fr-FR')}
+            </span>
+        </div>
+    `;
+    
+    // Contenedor de tarjetas
+    const cardsContainer = document.createElement('div');
+    cardsContainer.className = 'dataset-cards-container';
+    
+    // El primer dataset normalizado actúa como cabeza (pero sigue siendo normalizado)
+    const headCard = createDatasetCard(headDataset, 'normalized');
+    headCard.style.borderColor = 'rgba(255, 193, 7, 0.6)'; // Color amarillo para indicar que es la cabeza
+    cardsContainer.appendChild(headCard);
+    
+    // Flecha separadora si hay más normalizaciones
+    if (otherDatasets.length > 0) {
+        const arrow = document.createElement('div');
+        arrow.className = 'normalization-arrow';
+        arrow.innerHTML = '<i class="bi bi-arrow-right-circle"></i>';
+        cardsContainer.appendChild(arrow);
+    }
+    
+    // Otras tarjetas normalizadas
+    otherDatasets.forEach(dataset => {
         const normalizedCard = createDatasetCard(dataset, 'normalized');
         cardsContainer.appendChild(normalizedCard);
     });
@@ -1127,8 +1163,9 @@ function filterDatasets() {
             } else if (parentFilter === 'normalized' && !dataset.is_normalized) {
                 shouldShow = false;
             } else if (parentFilter && parentFilter !== 'original' && parentFilter !== 'normalized') {
-                // Filtro por dataset original específico
-                if (!dataset.parent_dataset || dataset.parent_dataset != parentFilter) {
+                // Filtro por dataset original específico usando root_dataset_id
+                const rootId = dataset.is_normalized ? dataset.root_dataset_id : dataset.id;
+                if (rootId != parentFilter) {
                     shouldShow = false;
                 }
             }

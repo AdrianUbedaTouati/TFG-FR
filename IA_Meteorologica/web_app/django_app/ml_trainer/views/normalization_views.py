@@ -381,6 +381,18 @@ class DatasetNormalizationView(APIView):
         # Generate CSV content
         csv_content = normalized_df.to_csv(index=False)
         
+        # Determine the root dataset ID
+        # If the original dataset is already normalized, keep its root_dataset_id
+        # If it's an original dataset, use its own ID
+        if original_dataset.is_normalized and original_dataset.root_dataset_id:
+            root_id = original_dataset.root_dataset_id
+        elif original_dataset.is_normalized and not original_dataset.root_dataset_id:
+            # This is a normalized dataset without root_dataset_id (shouldn't happen but handle it)
+            root_id = original_dataset.id
+        else:
+            # This is an original dataset
+            root_id = original_dataset.id
+        
         # Create new dataset record
         new_dataset = Dataset.objects.create(
             name=copy_name,
@@ -388,7 +400,7 @@ class DatasetNormalizationView(APIView):
             is_normalized=True,
             parent_dataset=original_dataset,
             parent_dataset_name=original_dataset.name,
-            root_dataset_id=original_dataset.root_dataset_id or original_dataset.id,
+            root_dataset_id=root_id,
             normalization_method=str(config),
             short_description=short_description or f"Normalized from {original_dataset.name}",
             long_description=long_description or f"Normalization applied: {config}"
