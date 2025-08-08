@@ -972,12 +972,10 @@
     let datasetInfo = null;
     let normalizationConfig = {};
     let normalizedCount = 0;
-    let customFunctions = [];
     let selectedFunctionType = 'numeric';
 
     document.addEventListener('DOMContentLoaded', function() {
         loadDatasetInfo();
-        loadCustomFunctions();
     });
 
     async function loadDatasetInfo() {
@@ -986,6 +984,7 @@
             if (!response.ok) throw new Error('Error loading dataset info');
             
             datasetInfo = await response.json();
+            console.log('Dataset info loaded:', datasetInfo);
             
             // Actualizar información del dataset
             document.getElementById('dataset-name').textContent = datasetInfo.dataset.name;
@@ -1709,18 +1708,6 @@
         }
     }
     
-    // Funciones para manejo de funciones personalizadas
-    async function loadCustomFunctions() {
-        try {
-            const response = await fetch('/api/custom-normalization-functions/');
-            if (response.ok) {
-                customFunctions = await response.json();
-                // Las funciones personalizadas se añadirán a los dropdowns cuando se rendericen las variables
-            }
-        } catch (error) {
-            console.error('Error loading custom functions:', error);
-        }
-    }
     
     function openCustomFunctionModal() {
         const modal = new bootstrap.Modal(document.getElementById('customFunctionModal'));
@@ -1865,15 +1852,17 @@
         let valuesToTest = [];
         
         // Intentar obtener valores de diferentes formas según la estructura de los datos
-        if (currentColumnData.sample_values && Array.isArray(currentColumnData.sample_values)) {
-            valuesToTest = currentColumnData.sample_values.slice(0, 20);
-        } else if (currentColumnData.frequency_data && Array.isArray(currentColumnData.frequency_data)) {
+        // Priorizar frequency_data ya que contiene todos los valores únicos
+        if (currentColumnData.frequency_data && Array.isArray(currentColumnData.frequency_data)) {
             // frequency_data contiene objetos con {value: x, count: y}, tomar los primeros 20 valores
             valuesToTest = currentColumnData.frequency_data.slice(0, 20).map(item => item.value || item);
         } else if (currentColumnData.unique_values && Array.isArray(currentColumnData.unique_values)) {
             valuesToTest = currentColumnData.unique_values.slice(0, 20);
         } else if (currentColumnData.value_counts) {
             valuesToTest = Object.keys(currentColumnData.value_counts).slice(0, 20);
+        } else if (currentColumnData.sample_values && Array.isArray(currentColumnData.sample_values)) {
+            // sample_values como último recurso ya que puede tener pocos valores
+            valuesToTest = currentColumnData.sample_values.slice(0, 20);
         }
         
         if (valuesToTest.length === 0) {
@@ -1897,6 +1886,7 @@
         let allValues = [];
         
         // Intentar obtener valores de diferentes formas según la estructura de los datos
+        // Priorizar frequency_data ya que contiene todos los valores únicos
         if (currentColumnData.frequency_data && Array.isArray(currentColumnData.frequency_data)) {
             // frequency_data contiene todos los valores únicos con su frecuencia
             allValues = currentColumnData.frequency_data.map(item => item.value !== undefined ? item.value : item);
@@ -2093,7 +2083,7 @@
                 modal.hide();
                 
                 // Recargar funciones y actualizar UI
-                await loadCustomFunctions();
+                await loadDatasetInfo();
                 renderVariables();
                 
                 // Limpiar formulario
@@ -2102,7 +2092,16 @@
                 updateCodeExample();
             } else {
                 const error = await response.json();
-                showNotification(error.error || 'Error al guardar la función', 'error');
+                console.error('Error saving function:', error);
+                let errorMessage = 'Error al guardar la función';
+                if (error.name && error.name[0]) {
+                    errorMessage = `Error en el nombre: ${error.name[0]}`;
+                } else if (error.error) {
+                    errorMessage = error.error;
+                } else if (error.detail) {
+                    errorMessage = error.detail;
+                }
+                showNotification(errorMessage, 'error');
             }
         } catch (error) {
             showNotification('Error de conexión', 'error');
@@ -2111,6 +2110,10 @@
     
     // Modificar la función createVariableCard para incluir funciones personalizadas
     function createVariableCard(column, info) {
+        console.log(`Creating card for ${column}:`, info);
+        console.log(`Primary methods:`, info.primary_methods);
+        console.log(`Secondary methods:`, info.secondary_methods);
+        
         const card = document.createElement('div');
         card.className = 'variable-card';
         
@@ -2139,11 +2142,6 @@
             `;
         }
         
-        // Filtrar funciones personalizadas por tipo
-        const customFunctionsForType = customFunctions.filter(func => 
-            func.function_type === info.type || info.type === 'unknown'
-        );
-        
         card.innerHTML = `
             <div class="variable-header">
                 <span class="variable-name">${column}</span>
@@ -2161,13 +2159,6 @@
                     <optgroup label="Otros métodos">
                         ${info.secondary_methods.map(method => 
                             `<option value="${method.value}" title="${method.description}">${method.label}</option>`
-                        ).join('')}
-                    </optgroup>
-                ` : ''}
-                ${customFunctionsForType.length > 0 ? `
-                    <optgroup label="Funciones personalizadas">
-                        ${customFunctionsForType.map(func => 
-                            `<option value="CUSTOM_${func.id}" title="${func.description}">🔧 ${func.name}</option>`
                         ).join('')}
                     </optgroup>
                 ` : ''}

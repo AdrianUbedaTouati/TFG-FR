@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.core.files.base import ContentFile
 from django.conf import settings
+from django.db import models
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -40,6 +41,44 @@ class DatasetNormalizationView(APIView):
         try:
             df = pd.read_csv(dataset.file.path)
             
+            # Obtener funciones personalizadas del usuario
+            custom_numeric_functions = []
+            custom_text_functions = []
+            
+            # Obtener funciones personalizadas - del usuario o públicas
+            if request.user.is_authenticated:
+                # Usuario autenticado: mostrar sus funciones y las públicas
+                custom_functions = CustomNormalizationFunction.objects.filter(
+                    models.Q(user=request.user) | models.Q(user__isnull=True)
+                ).order_by('name')
+                print(f"DatasetNormalizationView - Authenticated User: {request.user}")
+            else:
+                # Usuario no autenticado: solo mostrar funciones públicas
+                custom_functions = CustomNormalizationFunction.objects.filter(
+                    user__isnull=True
+                ).order_by('name')
+                print(f"DatasetNormalizationView - Anonymous User")
+            
+            print(f"Found {custom_functions.count()} custom functions")
+            
+            # Separar funciones personalizadas por tipo
+            for func in custom_functions:
+                print(f"Processing function: {func.name} (type: {func.function_type}, user: {func.user})")
+                func_data = {
+                    'value': f'CUSTOM_{func.id}',
+                    'label': f'{func.name} 🔧',
+                    'description': func.description or f'Función personalizada: {func.name}',
+                    'is_custom': True
+                }
+                
+                if func.function_type == 'numeric':
+                    custom_numeric_functions.append(func_data)
+                else:  # text
+                    custom_text_functions.append(func_data)
+            
+            print(f"Custom numeric functions: {len(custom_numeric_functions)}")
+            print(f"Custom text functions: {len(custom_text_functions)}")
+            
             # Analizar cada columna para determinar métodos de normalización disponibles
             normalization_info = {}
             
@@ -57,12 +96,12 @@ class DatasetNormalizationView(APIView):
                             {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Normalización Z-Score para CNN'},
                             {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler resistente a outliers'},
                             {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación (modelos de árbol)'}
-                        ],
+                        ] + custom_numeric_functions,  # Agregar funciones personalizadas numéricas
                         'secondary_methods': [
                             {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte a minúsculas (si son texto)'},
                             {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final'},
                             {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos (0, 1, 2...)'}
-                        ],
+                        ] + custom_text_functions,  # Agregar funciones personalizadas de texto
                         'stats': {
                             'mean': float(df[col].mean()) if not df[col].isna().all() else None,
                             'std': float(df[col].std()) if not df[col].isna().all() else None,
@@ -81,7 +120,7 @@ class DatasetNormalizationView(APIView):
                             {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte todo a minúsculas'},
                             {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final'},
                             {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': f'Convierte {unique_values} categorías a códigos numéricos (0, 1, 2...)'}
-                        ],
+                        ] + custom_text_functions,  # Agregar funciones personalizadas de texto
                         'secondary_methods': [
                             {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores (si son números como texto)'},
                             {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Estandariza (si son números como texto)'},
@@ -89,7 +128,7 @@ class DatasetNormalizationView(APIView):
                             {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Z-Score (si son números)'},
                             {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler (si son números)'},
                             {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación'}
-                        ],
+                        ] + custom_numeric_functions,  # Agregar funciones personalizadas numéricas
                         'stats': {
                             'unique_count': unique_values,
                             'sample_values': sample_values,
@@ -110,7 +149,7 @@ class DatasetNormalizationView(APIView):
                             {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Intenta convertir a minúsculas'},
                             {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Intenta eliminar espacios'},
                             {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos'}
-                        ],
+                        ] + custom_numeric_functions + custom_text_functions,  # Agregar todas las funciones personalizadas
                         'secondary_methods': [],
                         'stats': {
                             'dtype': col_type,
@@ -143,6 +182,9 @@ class DatasetNormalizationView(APIView):
             })
             
         except Exception as e:
+            import traceback
+            print(f"Error in DatasetNormalizationView: {str(e)}")
+            print(traceback.format_exc())
             return Response(
                 {'error': str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
@@ -410,15 +452,27 @@ class CustomNormalizationFunctionView(APIView):
     
     def get(self, request):
         """List all custom normalization functions"""
-        functions = CustomNormalizationFunction.objects.all()
+        print(f"GET request - User authenticated: {request.user.is_authenticated}")
+        
         if request.user.is_authenticated:
             # Show user's functions and public functions
-            functions = functions.filter(user=request.user)
+            functions = CustomNormalizationFunction.objects.filter(
+                models.Q(user=request.user) | models.Q(user__isnull=True)
+            )
+            print(f"User {request.user} - Found {functions.count()} functions")
+        else:
+            # For anonymous users, show only public functions
+            functions = CustomNormalizationFunction.objects.filter(user__isnull=True)
+            print(f"Anonymous user - Found {functions.count()} public functions")
+            
         serializer = CustomNormalizationFunctionSerializer(functions, many=True)
         return Response(serializer.data)
     
     def post(self, request):
         """Create a new custom normalization function"""
+        print(f"POST data: {request.data}")
+        print(f"User authenticated: {request.user.is_authenticated}")
+        
         serializer = CustomNormalizationFunctionSerializer(data=request.data)
         if serializer.is_valid():
             # Validate the code syntax
@@ -431,6 +485,8 @@ class CustomNormalizationFunctionView(APIView):
             # Save the function
             serializer.save(user=request.user if request.user.is_authenticated else None)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        print(f"Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
