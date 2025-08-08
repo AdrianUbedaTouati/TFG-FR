@@ -654,6 +654,8 @@
         font-family: monospace;
         white-space: pre-wrap;
         word-break: break-all;
+        max-height: 400px;
+        overflow-y: auto;
     }
     
     .test-result.success {
@@ -664,6 +666,38 @@
     .test-result.error {
         border: 1px solid rgba(255, 0, 0, 0.3);
         color: #ff6b6b;
+    }
+    
+    .test-result-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+    
+    .test-result-table th,
+    .test-result-table td {
+        padding: 8px;
+        text-align: left;
+        border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+    }
+    
+    .test-result-table th {
+        background: rgba(0, 212, 255, 0.1);
+        color: var(--primary-color);
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .test-result-table tr:hover {
+        background: rgba(0, 212, 255, 0.05);
+    }
+    
+    .test-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
     }
 </style>
 {% endblock %}
@@ -878,30 +912,45 @@
                 <!-- Sección de prueba -->
                 <div class="test-section">
                     <h6 style="color: var(--primary-color);">Probar función</h6>
+                    
+                    <!-- Opción 1: Valor manual -->
                     <div class="mb-3">
-                        <label class="form-label" style="color: var(--light-color);">Valor de prueba:</label>
-                        <div class="row">
-                            <div class="col-md-8">
-                                <input type="text" class="test-input" id="testValue" 
-                                       list="datasetValuesList"
-                                       placeholder="Selecciona un valor del dataset o ingresa uno propio">
-                                <datalist id="datasetValuesList">
-                                    <!-- Se llenará dinámicamente con valores del dataset -->
-                                </datalist>
-                            </div>
-                            <div class="col-md-4">
-                                <select class="form-select test-input" id="columnSelector" 
-                                        onchange="updateDatasetValues()"
-                                        style="background: rgba(15, 17, 20, 0.8); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
-                                    <option value="">Seleccionar columna...</option>
-                                </select>
-                            </div>
-                        </div>
-                        <small class="text-muted">Puedes seleccionar una columna para ver sus valores o escribir tu propio valor de prueba</small>
+                        <label class="form-label" style="color: var(--light-color);">
+                            <i class="bi bi-pencil"></i> Opción 1: Ingresar valor de prueba manual
+                        </label>
+                        <input type="text" class="test-input" id="testValue" 
+                               placeholder="Escribe aquí un valor para probar tu función">
+                        <button class="btn btn-sm btn-primary mt-2" onclick="testWithManualValue()">
+                            <i class="bi bi-play-circle"></i> Probar con este valor
+                        </button>
                     </div>
-                    <button class="btn btn-primary" onclick="testCustomFunction()">
-                        <i class="bi bi-play-circle"></i> Ejecutar prueba
-                    </button>
+                    
+                    <div class="text-center my-3" style="color: rgba(240, 249, 255, 0.6);">
+                        <hr style="border-color: rgba(0, 212, 255, 0.2);">
+                        <span>O</span>
+                        <hr style="border-color: rgba(0, 212, 255, 0.2);">
+                    </div>
+                    
+                    <!-- Opción 2: Columna del dataset -->
+                    <div class="mb-3">
+                        <label class="form-label" style="color: var(--light-color);">
+                            <i class="bi bi-table"></i> Opción 2: Probar con valores de una columna
+                        </label>
+                        <select class="form-select test-input" id="columnSelector" 
+                                onchange="updateDatasetValues()"
+                                style="background: rgba(15, 17, 20, 0.8); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
+                            <option value="">Seleccionar columna del dataset...</option>
+                        </select>
+                        <div id="columnTestButtons" style="display: none;" class="mt-2">
+                            <button class="btn btn-sm btn-success" onclick="testFirst20Values()" id="test20Btn">
+                                <i class="bi bi-lightning"></i> Probar primeros 20 valores
+                            </button>
+                            <button class="btn btn-sm btn-info" onclick="testAllUniqueValues()" id="testUniqueBtn">
+                                <i class="bi bi-list-check"></i> Probar todos los valores únicos
+                            </button>
+                        </div>
+                    </div>
+                    
                     <div id="testResult" class="test-result mt-3" style="display: none;"></div>
                 </div>
             </div>
@@ -1759,70 +1808,210 @@
         }
     }
     
+    let currentColumnData = null;
+    
     async function updateDatasetValues() {
         const columnName = document.getElementById('columnSelector').value;
-        const datalist = document.getElementById('datasetValuesList');
+        const columnTestButtons = document.getElementById('columnTestButtons');
         
-        // Limpiar la lista actual
-        datalist.innerHTML = '';
+        currentColumnData = null;
         
-        if (!columnName) return;
+        if (!columnName) {
+            columnTestButtons.style.display = 'none';
+            return;
+        }
         
         try {
             // Obtener valores únicos de la columna
             const response = await fetch(`/api/datasets/${datasetId}/columns/${encodeURIComponent(columnName)}/`);
             if (response.ok) {
                 const data = await response.json();
+                currentColumnData = data;
                 
-                // Tomar una muestra de valores únicos (máximo 50)
-                let values = [];
-                if (data.unique_values && Array.isArray(data.unique_values)) {
-                    values = data.unique_values.slice(0, 50);
-                } else if (data.value_counts) {
-                    values = Object.keys(data.value_counts).slice(0, 50);
-                }
-                
-                // Añadir valores al datalist
-                values.forEach(value => {
-                    const option = document.createElement('option');
-                    option.value = value;
-                    datalist.appendChild(option);
-                });
-                
-                // Si hay estadísticas numéricas, también añadir algunos valores representativos
-                if (data.dtype === 'float64' || data.dtype === 'int64') {
-                    if (data.min !== undefined) {
-                        const option = document.createElement('option');
-                        option.value = data.min;
-                        option.label = 'Valor mínimo';
-                        datalist.appendChild(option);
-                    }
-                    if (data.max !== undefined) {
-                        const option = document.createElement('option');
-                        option.value = data.max;
-                        option.label = 'Valor máximo';
-                        datalist.appendChild(option);
-                    }
-                    if (data.mean !== undefined) {
-                        const option = document.createElement('option');
-                        option.value = data.mean.toFixed(2);
-                        option.label = 'Valor promedio';
-                        datalist.appendChild(option);
-                    }
-                }
+                // Mostrar botones de prueba
+                columnTestButtons.style.display = 'block';
             }
         } catch (error) {
             console.error('Error loading column values:', error);
+            showNotification('Error al cargar datos de la columna', 'error');
         }
     }
     
-    async function testCustomFunction() {
-        const functionCode = document.getElementById('functionCode').value;
+    async function testWithManualValue() {
         const testValue = document.getElementById('testValue').value;
-        const resultDiv = document.getElementById('testResult');
         
         if (!testValue) {
             showNotification('Por favor ingresa un valor de prueba', 'warning');
+            return;
+        }
+        
+        await testCustomFunction(testValue);
+    }
+    
+    async function testFirst20Values() {
+        const columnName = document.getElementById('columnSelector').value;
+        if (!columnName || !currentColumnData) {
+            showNotification('Por favor selecciona una columna primero', 'warning');
+            return;
+        }
+        
+        const functionCode = document.getElementById('functionCode').value;
+        if (!functionCode.trim()) {
+            showNotification('Por favor escribe el código de la función primero', 'warning');
+            return;
+        }
+        
+        // Obtener los primeros 20 valores
+        let valuesToTest = [];
+        
+        // Intentar obtener valores de diferentes formas según la estructura de los datos
+        if (currentColumnData.sample_values && Array.isArray(currentColumnData.sample_values)) {
+            valuesToTest = currentColumnData.sample_values.slice(0, 20);
+        } else if (currentColumnData.frequency_data && Array.isArray(currentColumnData.frequency_data)) {
+            // frequency_data contiene objetos con {value: x, count: y}, tomar los primeros 20 valores
+            valuesToTest = currentColumnData.frequency_data.slice(0, 20).map(item => item.value || item);
+        } else if (currentColumnData.unique_values && Array.isArray(currentColumnData.unique_values)) {
+            valuesToTest = currentColumnData.unique_values.slice(0, 20);
+        } else if (currentColumnData.value_counts) {
+            valuesToTest = Object.keys(currentColumnData.value_counts).slice(0, 20);
+        }
+        
+        if (valuesToTest.length === 0) {
+            showNotification('No se encontraron valores en la columna', 'warning');
+            return;
+        }
+        
+        // Ejecutar la función en cada valor
+        const results = await testMultipleValues(valuesToTest);
+        displayMultipleResults(results, `Primeros ${valuesToTest.length} valores de "${columnName}"`);
+    }
+    
+    async function testAllUniqueValues() {
+        const columnName = document.getElementById('columnSelector').value;
+        if (!columnName || !currentColumnData) {
+            showNotification('Por favor selecciona una columna primero', 'warning');
+            return;
+        }
+        
+        // Obtener todos los valores únicos
+        let allValues = [];
+        
+        // Intentar obtener valores de diferentes formas según la estructura de los datos
+        if (currentColumnData.frequency_data && Array.isArray(currentColumnData.frequency_data)) {
+            // frequency_data contiene todos los valores únicos con su frecuencia
+            allValues = currentColumnData.frequency_data.map(item => item.value !== undefined ? item.value : item);
+        } else if (currentColumnData.unique_values && Array.isArray(currentColumnData.unique_values)) {
+            allValues = currentColumnData.unique_values;
+        } else if (currentColumnData.value_counts) {
+            allValues = Object.keys(currentColumnData.value_counts);
+        } else if (currentColumnData.sample_values && Array.isArray(currentColumnData.sample_values)) {
+            // Si solo tenemos una muestra, obtener valores únicos de ella
+            allValues = [...new Set(currentColumnData.sample_values)];
+        }
+        
+        if (allValues.length === 0) {
+            showNotification('No se encontraron valores únicos en la columna', 'warning');
+            return;
+        }
+        
+        // Mostrar loading
+        const resultDiv = document.getElementById('testResult');
+        resultDiv.className = 'test-result mt-3';
+        resultDiv.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Procesando...</span></div><p class="mt-2">Probando ' + allValues.length + ' valores únicos...</p></div>';
+        resultDiv.style.display = 'block';
+        
+        // Ejecutar la función en cada valor
+        const results = await testMultipleValues(allValues);
+        displayMultipleResults(results, `Todos los valores únicos de ${columnName} (${allValues.length} valores)`);
+    }
+    
+    async function testMultipleValues(values) {
+        const functionCode = document.getElementById('functionCode').value;
+        const results = [];
+        
+        for (const value of values) {
+            try {
+                const response = await fetch('/api/custom-normalization-functions/test/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        code: functionCode,
+                        test_value: value,
+                        function_type: selectedFunctionType
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    results.push({
+                        input: value,
+                        output: result.result,
+                        success: true
+                    });
+                } else {
+                    results.push({
+                        input: value,
+                        output: result.error,
+                        success: false
+                    });
+                }
+            } catch (error) {
+                results.push({
+                    input: value,
+                    output: error.message,
+                    success: false
+                });
+            }
+        }
+        
+        return results;
+    }
+    
+    function displayMultipleResults(results, title) {
+        const resultDiv = document.getElementById('testResult');
+        
+        const successCount = results.filter(r => r.success).length;
+        const errorCount = results.length - successCount;
+        
+        let html = `<h6>${title}</h6>`;
+        html += `<p class="mb-2">✅ Exitosos: ${successCount} | ❌ Errores: ${errorCount}</p>`;
+        
+        html += '<table class="test-result-table">';
+        html += '<thead><tr><th>Valor Original</th><th>Resultado</th><th>Estado</th></tr></thead>';
+        html += '<tbody>';
+        
+        results.forEach(result => {
+            const statusIcon = result.success ? '✅' : '❌';
+            const rowClass = result.success ? '' : 'style="color: #ff6b6b;"';
+            html += `<tr ${rowClass}>`;
+            html += `<td>${result.input}</td>`;
+            html += `<td>${result.output}</td>`;
+            html += `<td>${statusIcon}</td>`;
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        
+        resultDiv.className = 'test-result success mt-3';
+        resultDiv.innerHTML = html;
+        resultDiv.style.display = 'block';
+    }
+    
+    async function testCustomFunction(testValue) {
+        const functionCode = document.getElementById('functionCode').value;
+        const resultDiv = document.getElementById('testResult');
+        
+        if (!functionCode.trim()) {
+            showNotification('Por favor escribe el código de la función primero', 'warning');
+            return;
+        }
+        
+        if (!testValue) {
+            showNotification('Por favor proporciona un valor de prueba', 'warning');
             return;
         }
         
@@ -1844,7 +2033,19 @@
             
             if (response.ok) {
                 resultDiv.className = 'test-result success mt-3';
-                resultDiv.innerHTML = `<strong>Resultado:</strong> ${result.result}`;
+                resultDiv.innerHTML = `
+                    <h6>Resultado de la prueba</h6>
+                    <table class="test-result-table">
+                        <tr>
+                            <th>Valor de entrada</th>
+                            <td>${testValue}</td>
+                        </tr>
+                        <tr>
+                            <th>Resultado</th>
+                            <td>${result.result}</td>
+                        </tr>
+                    </table>
+                `;
                 resultDiv.style.display = 'block';
             } else {
                 resultDiv.className = 'test-result error mt-3';

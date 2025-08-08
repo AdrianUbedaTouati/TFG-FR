@@ -73,7 +73,7 @@ class DatasetNormalizationView(APIView):
                 elif df[col].dtype == 'object':
                     # Columna de texto o objeto
                     unique_values = df[col].nunique()
-                    sample_values = df[col].dropna().head(5).tolist()
+                    sample_values = df[col].dropna().head(20).tolist()
                     
                     normalization_info[col] = {
                         'type': 'text',
@@ -114,7 +114,7 @@ class DatasetNormalizationView(APIView):
                         'secondary_methods': [],
                         'stats': {
                             'dtype': col_type,
-                            'sample_values': df[col].dropna().head(5).astype(str).tolist()
+                            'sample_values': df[col].dropna().head(20).astype(str).tolist()
                         }
                     }
             
