@@ -45,19 +45,9 @@ class DatasetNormalizationView(APIView):
             custom_numeric_functions = []
             custom_text_functions = []
             
-            # Obtener funciones personalizadas - del usuario o públicas
-            if request.user.is_authenticated:
-                # Usuario autenticado: mostrar sus funciones y las públicas
-                custom_functions = CustomNormalizationFunction.objects.filter(
-                    models.Q(user=request.user) | models.Q(user__isnull=True)
-                ).order_by('name')
-                print(f"DatasetNormalizationView - Authenticated User: {request.user}")
-            else:
-                # Usuario no autenticado: solo mostrar funciones públicas
-                custom_functions = CustomNormalizationFunction.objects.filter(
-                    user__isnull=True
-                ).order_by('name')
-                print(f"DatasetNormalizationView - Anonymous User")
+            # Obtener todas las funciones personalizadas para todos los usuarios
+            custom_functions = CustomNormalizationFunction.objects.all().order_by('name')
+            print(f"DatasetNormalizationView - User: {request.user if request.user.is_authenticated else 'Anonymous'}")
             
             print(f"Found {custom_functions.count()} custom functions")
             
@@ -247,6 +237,14 @@ class DatasetNormalizationView(APIView):
                     'new_shape': list(normalized_df.shape)
                 }, message=SUCCESS_NORMALIZATION_COMPLETE)
                 
+        except ValueError as e:
+            # Error específico de función personalizada con formato detallado
+            return Response({
+                'error': 'custom_function_error',
+                'error_type': 'CustomFunctionError',
+                'message': str(e),
+                'details': str(e)  # Ya incluye el formato tipo terminal
+            }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return error_response(ERROR_NORMALIZATION_FAILED.format(str(e)))
     
@@ -262,7 +260,9 @@ class DatasetNormalizationView(APIView):
             if method.startswith('CUSTOM_'):
                 try:
                     function_id = int(method.replace('CUSTOM_', ''))
+                    # Forzar lectura fresca desde la base de datos
                     custom_func = CustomNormalizationFunction.objects.get(id=function_id)
+                    print(f"Applying custom function {custom_func.name} (ID: {function_id}) to column {column}")
                     
                     # Create safe execution environment
                     safe_globals = {
@@ -305,7 +305,25 @@ class DatasetNormalizationView(APIView):
                 except CustomNormalizationFunction.DoesNotExist:
                     print(f"Custom normalization function with ID {function_id} not found")
                 except Exception as e:
-                    print(f"Error applying custom normalization {method} to column {column}: {str(e)}")
+                    import traceback
+                    error_msg = f"Error applying custom normalization {method} to column {column}: {str(e)}"
+                    print(error_msg)
+                    
+                    # Crear un mensaje de error detallado tipo terminal
+                    error_details = {
+                        'column': column,
+                        'method': method,
+                        'function_name': custom_func.name if 'custom_func' in locals() else 'Unknown',
+                        'error_type': type(e).__name__,
+                        'error_message': str(e),
+                        'traceback': traceback.format_exc()
+                    }
+                    
+                    raise ValueError(f"Custom function error in column '{column}':\n\n"
+                                   f"Function: {error_details['function_name']}\n"
+                                   f"Error Type: {error_details['error_type']}\n"
+                                   f"Error Message: {error_details['error_message']}\n\n"
+                                   f"Traceback:\n{error_details['traceback']}")
             
             # Try numeric normalization first
             norm_enum = get_numeric_enum(method)
@@ -443,6 +461,14 @@ class DatasetNormalizationPreviewView(APIView):
                 'sample_size': len(sample_df)
             })
             
+        except ValueError as e:
+            # Error específico de función personalizada con formato detallado
+            return Response({
+                'error': 'custom_function_error',
+                'error_type': 'CustomFunctionError',
+                'message': str(e),
+                'details': str(e)  # Ya incluye el formato tipo terminal
+            }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return error_response(f"Preview failed: {str(e)}")
 
@@ -454,16 +480,9 @@ class CustomNormalizationFunctionView(APIView):
         """List all custom normalization functions"""
         print(f"GET request - User authenticated: {request.user.is_authenticated}")
         
-        if request.user.is_authenticated:
-            # Show user's functions and public functions
-            functions = CustomNormalizationFunction.objects.filter(
-                models.Q(user=request.user) | models.Q(user__isnull=True)
-            )
-            print(f"User {request.user} - Found {functions.count()} functions")
-        else:
-            # For anonymous users, show only public functions
-            functions = CustomNormalizationFunction.objects.filter(user__isnull=True)
-            print(f"Anonymous user - Found {functions.count()} public functions")
+        # Mostrar todas las funciones para todos los usuarios
+        functions = CustomNormalizationFunction.objects.all()
+        print(f"Found {functions.count()} total functions")
             
         serializer = CustomNormalizationFunctionSerializer(functions, many=True)
         return Response(serializer.data)
@@ -482,12 +501,82 @@ class CustomNormalizationFunctionView(APIView):
             except SyntaxError as e:
                 return error_response(f"Syntax error in function code: {str(e)}")
             
-            # Save the function
-            serializer.save(user=request.user if request.user.is_authenticated else None)
+            # Guardar la función sin usuario (pública para todos)
+            serializer.save(user=None)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
         print(f"Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def put(self, request, pk):
+        """Update an existing custom normalization function"""
+        print(f"PUT request for function ID {pk}")
+        print(f"Request data: {request.data}")
+        
+        try:
+            function = CustomNormalizationFunction.objects.get(pk=pk)
+            print(f"Function found: {function.name}")
+            
+            # Sin verificación de permisos - todos pueden editar cualquier función
+            
+            # Mostrar el código actual antes de actualizar
+            print(f"Current code before update (first 200 chars): {function.code[:200]}...")
+            print(f"Current code length: {len(function.code)}")
+            
+            serializer = CustomNormalizationFunctionSerializer(function, data=request.data)
+            if serializer.is_valid():
+                # Validate the code syntax
+                code = serializer.validated_data['code']
+                print(f"New code to save (first 200 chars): {code[:200]}...")
+                print(f"New code length: {len(code)}")
+                
+                try:
+                    compile(code, '<string>', 'exec')
+                except SyntaxError as e:
+                    return error_response(f"Syntax error in function code: {str(e)}")
+                
+                # Guardar y forzar refresh desde la DB
+                updated_function = serializer.save()
+                updated_function.refresh_from_db()
+                
+                print(f"Function updated successfully:")
+                print(f"  Name: {updated_function.name}")
+                print(f"  Type: {updated_function.function_type}")
+                print(f"  Code length: {len(updated_function.code)}")
+                print(f"  Code after save (first 200 chars): {updated_function.code[:200]}...")
+                
+                # Verificar directamente en la DB
+                db_function = CustomNormalizationFunction.objects.get(pk=pk)
+                print(f"  Code in DB (first 200 chars): {db_function.code[:200]}...")
+                
+                # Serializar de nuevo para asegurar que devolvemos los datos actualizados
+                response_serializer = CustomNormalizationFunctionSerializer(updated_function)
+                return Response(response_serializer.data)
+            
+            print(f"Serializer errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        except CustomNormalizationFunction.DoesNotExist:
+            return Response(
+                {'error': 'Función no encontrada'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    def delete(self, request, pk):
+        """Delete a custom normalization function"""
+        try:
+            function = CustomNormalizationFunction.objects.get(pk=pk)
+            
+            # Sin verificación de permisos - todos pueden eliminar cualquier función
+            
+            function.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+            
+        except CustomNormalizationFunction.DoesNotExist:
+            return Response(
+                {'error': 'Función no encontrada'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 
 class CustomNormalizationFunctionTestView(APIView):
