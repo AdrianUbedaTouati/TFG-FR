@@ -37,6 +37,23 @@ class MetricType(models.TextChoices):
     F1 = 'f1', 'F1 Score'
 
 
+class CustomNormalizationFunction(models.Model):
+    """Funciones de normalización personalizadas creadas por el usuario"""
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField()
+    function_type = models.CharField(max_length=20, choices=[('numeric', 'Numérica'), ('text', 'Texto')])
+    code = models.TextField(help_text="Código Python de la función de normalización")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.name} ({self.function_type})"
+
+
 class Dataset(models.Model):
     name = models.CharField(max_length=255)
     short_description = models.CharField(max_length=80, blank=True, null=True, help_text="Descripción corta (máx. 80 caracteres)")

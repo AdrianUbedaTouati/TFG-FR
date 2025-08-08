@@ -13,7 +13,7 @@ import numpy as np
 from datetime import datetime
 import os
 
-from ..models import Dataset
+from ..models import Dataset, CustomNormalizationFunction
 from ..normalization_methods import DISPATCH_NUM, DISPATCH_TEXT
 from ..normalization_mappings import get_numeric_enum, get_text_enum
 from ..utils import (
@@ -24,6 +24,10 @@ from ..constants import (
     ERROR_PARSING_FAILED, ERROR_NORMALIZATION_FAILED,
     SUCCESS_NORMALIZATION_COMPLETE
 )
+from ..serializers import CustomNormalizationFunctionSerializer
+import traceback
+import sys
+from io import StringIO
 
 
 class DatasetNormalizationView(APIView):
@@ -212,6 +216,55 @@ class DatasetNormalizationView(APIView):
             if column not in df.columns:
                 continue
             
+            # Check if it's a custom function
+            if method.startswith('CUSTOM_'):
+                try:
+                    function_id = int(method.replace('CUSTOM_', ''))
+                    custom_func = CustomNormalizationFunction.objects.get(id=function_id)
+                    
+                    # Create safe execution environment
+                    safe_globals = {
+                        '__builtins__': {
+                            'len': len,
+                            'str': str,
+                            'int': int,
+                            'float': float,
+                            'isinstance': isinstance,
+                            'min': min,
+                            'max': max,
+                            'abs': abs,
+                            'round': round,
+                            'sum': sum,
+                        }
+                    }
+                    
+                    # Add pandas for numeric functions
+                    if custom_func.function_type == 'numeric':
+                        safe_globals['pd'] = pd
+                    
+                    # Execute the custom function code
+                    exec(custom_func.code, safe_globals)
+                    
+                    if 'normalize' in safe_globals:
+                        normalize_func = safe_globals['normalize']
+                        
+                        # Apply function to each value
+                        if custom_func.function_type == 'numeric':
+                            # For numeric functions, provide the series as well
+                            normalized_df[column] = df[column].apply(
+                                lambda x: normalize_func(x, series=df[column])
+                            )
+                        else:
+                            # For text functions, just provide the value
+                            normalized_df[column] = df[column].apply(normalize_func)
+                        continue
+                    else:
+                        print(f"Custom function {custom_func.name} does not define 'normalize' function")
+                except CustomNormalizationFunction.DoesNotExist:
+                    print(f"Custom normalization function with ID {function_id} not found")
+                except Exception as e:
+                    print(f"Error applying custom normalization {method} to column {column}: {str(e)}")
+            
             # Try numeric normalization first
             norm_enum = get_numeric_enum(method)
             if norm_enum in DISPATCH_NUM:
@@ -350,3 +403,100 @@ class DatasetNormalizationPreviewView(APIView):
             
         except Exception as e:
             return error_response(f"Preview failed: {str(e)}")
+
+
+class CustomNormalizationFunctionView(APIView):
+    """CRUD operations for custom normalization functions"""
+    
+    def get(self, request):
+        """List all custom normalization functions"""
+        functions = CustomNormalizationFunction.objects.all()
+        if request.user.is_authenticated:
+            # Show user's functions and public functions
+            functions = functions.filter(user=request.user)
+        serializer = CustomNormalizationFunctionSerializer(functions, many=True)
+        return Response(serializer.data)
+    
+    def post(self, request):
+        """Create a new custom normalization function"""
+        serializer = CustomNormalizationFunctionSerializer(data=request.data)
+        if serializer.is_valid():
+            # Validate the code syntax
+            code = serializer.validated_data['code']
+            try:
+                compile(code, '<string>', 'exec')
+            except SyntaxError as e:
+                return error_response(f"Syntax error in function code: {str(e)}")
+            
+            # Save the function
+            serializer.save(user=request.user if request.user.is_authenticated else None)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CustomNormalizationFunctionTestView(APIView):
+    """Test a custom normalization function"""
+    
+    def post(self, request):
+        """Test a custom normalization function with a sample value"""
+        code = request.data.get('code', '')
+        test_value = request.data.get('test_value', '')
+        function_type = request.data.get('function_type', 'numeric')
+        
+        if not code or test_value is None:
+            return error_response("Code and test_value are required")
+        
+        # Create a safe execution environment
+        safe_globals = {
+            '__builtins__': {
+                'len': len,
+                'str': str,
+                'int': int,
+                'float': float,
+                'isinstance': isinstance,
+                'min': min,
+                'max': max,
+                'abs': abs,
+                'round': round,
+                'sum': sum,
+            }
+        }
+        
+        # Add pandas series methods for numeric functions
+        if function_type == 'numeric':
+            import pandas as pd
+            safe_globals['pd'] = pd
+            
+        try:
+            # Compile and execute the code
+            compiled_code = compile(code, '<string>', 'exec')
+            exec(compiled_code, safe_globals)
+            
+            # Find the normalize function
+            if 'normalize' not in safe_globals:
+                return error_response("Function 'normalize' not found in code")
+            
+            normalize_func = safe_globals['normalize']
+            
+            # Convert test value to appropriate type
+            if function_type == 'numeric':
+                try:
+                    test_value = float(test_value)
+                except ValueError:
+                    return error_response("Invalid numeric value")
+            
+            # Execute the function
+            result = normalize_func(test_value)
+            
+            return success_response({
+                'result': str(result),
+                'input': str(test_value),
+                'function_type': function_type
+            })
+            
+        except Exception as e:
+            # Capture the full traceback
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            tb_str = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+            
+            return error_response(f"Error executing function: {str(e)}\n\nTraceback:\n{tb_str}")

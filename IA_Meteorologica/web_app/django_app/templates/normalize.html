@@ -549,6 +549,122 @@
         padding: 20px;
         border: 1px solid rgba(0, 212, 255, 0.2);
     }
+    
+    /* Estilos para creación de funciones personalizadas */
+    .custom-function-btn {
+        background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 20px;
+        font-weight: 600;
+        width: 100%;
+    }
+    
+    .custom-function-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--neon-glow);
+    }
+    
+    .custom-function-modal .modal-content {
+        background: var(--dark-color);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 20px;
+    }
+    
+    .custom-function-modal .modal-header {
+        border-bottom: 1px solid rgba(0, 212, 255, 0.3);
+    }
+    
+    .custom-function-modal .modal-footer {
+        border-top: 1px solid rgba(0, 212, 255, 0.3);
+    }
+    
+    .function-type-selector {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .function-type-option {
+        flex: 1;
+        padding: 15px;
+        border: 2px solid rgba(0, 212, 255, 0.3);
+        border-radius: 10px;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    
+    .function-type-option:hover {
+        border-color: var(--primary-color);
+        background: rgba(0, 212, 255, 0.05);
+    }
+    
+    .function-type-option.active {
+        border-color: var(--primary-color);
+        background: rgba(0, 212, 255, 0.1);
+        box-shadow: var(--neon-glow);
+    }
+    
+    .code-editor {
+        background: rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 8px;
+        padding: 15px;
+        font-family: 'Consolas', 'Monaco', monospace;
+        min-height: 500px;
+        width: 100%;
+        color: #f0f9ff;
+        overflow-x: auto;
+        resize: vertical;
+    }
+    
+    .code-editor:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: var(--neon-glow);
+    }
+    
+    .test-section {
+        background: rgba(0, 212, 255, 0.05);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 10px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    
+    .test-input {
+        width: 100%;
+        padding: 10px;
+        background: rgba(15, 17, 20, 0.8);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 8px;
+        color: var(--light-color);
+        margin-bottom: 10px;
+    }
+    
+    .test-result {
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        padding: 15px;
+        font-family: monospace;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+    
+    .test-result.success {
+        border: 1px solid rgba(0, 255, 0, 0.3);
+        color: #00ff00;
+    }
+    
+    .test-result.error {
+        border: 1px solid rgba(255, 0, 0, 0.3);
+        color: #ff6b6b;
+    }
 </style>
 {% endblock %}
 
@@ -578,6 +694,11 @@
             </div>
         </div>
     </div>
+    
+    <!-- Botón para crear función personalizada -->
+    <button class="custom-function-btn" onclick="openCustomFunctionModal()">
+        <i class="bi bi-code-slash"></i> Crear Función de Normalización Personalizada
+    </button>
 
     <div class="row">
         <div class="col-md-8">
@@ -699,6 +820,100 @@
         </div>
     </div>
 </div>
+
+<!-- Modal de creación de función personalizada -->
+<div class="modal fade custom-function-modal" id="customFunctionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" style="color: var(--primary-color);">
+                    <i class="bi bi-code-slash"></i> Crear Función de Normalización Personalizada
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Selector de tipo de objetivo -->
+                <div class="mb-3">
+                    <label class="form-label" style="color: var(--light-color);">Tipo de variable objetivo:</label>
+                    <div class="function-type-selector">
+                        <div class="function-type-option active" data-type="numeric" onclick="selectFunctionType('numeric')">
+                            <i class="bi bi-123" style="font-size: 2rem; color: var(--primary-color);"></i>
+                            <h6 style="margin-top: 10px;">Numérica</h6>
+                            <small>Para valores numéricos</small>
+                        </div>
+                        <div class="function-type-option" data-type="text" onclick="selectFunctionType('text')">
+                            <i class="bi bi-fonts" style="font-size: 2rem; color: var(--secondary-color);"></i>
+                            <h6 style="margin-top: 10px;">Texto</h6>
+                            <small>Para valores de texto</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Nombre de la función -->
+                <div class="mb-3">
+                    <label class="form-label" style="color: var(--light-color);">Nombre de la función:</label>
+                    <input type="text" class="form-control dataset-name-input" id="functionName" 
+                           placeholder="Ej: normalizar_temperatura, codificar_categorias">
+                </div>
+                
+                <!-- Descripción -->
+                <div class="mb-3">
+                    <label class="form-label" style="color: var(--light-color);">Descripción:</label>
+                    <textarea class="form-control dataset-name-input" id="functionDescription" rows="2"
+                              placeholder="Describe qué hace tu función de normalización..."></textarea>
+                </div>
+                
+                <!-- Editor de código -->
+                <div class="mb-3">
+                    <label class="form-label" style="color: var(--light-color);">Código de la función:</label>
+                    <div class="alert alert-info" style="background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
+                        <i class="bi bi-info-circle"></i> La función debe recibir un parámetro 'value' y retornar el valor normalizado.
+                        Para funciones numéricas, también puede recibir 'series' con toda la columna.
+                    </div>
+                    <textarea class="code-editor" id="functionCode" placeholder="def normalize(value):
+    # Tu código aquí
+    return normalized_value"></textarea>
+                </div>
+                
+                <!-- Sección de prueba -->
+                <div class="test-section">
+                    <h6 style="color: var(--primary-color);">Probar función</h6>
+                    <div class="mb-3">
+                        <label class="form-label" style="color: var(--light-color);">Valor de prueba:</label>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <input type="text" class="test-input" id="testValue" 
+                                       list="datasetValuesList"
+                                       placeholder="Selecciona un valor del dataset o ingresa uno propio">
+                                <datalist id="datasetValuesList">
+                                    <!-- Se llenará dinámicamente con valores del dataset -->
+                                </datalist>
+                            </div>
+                            <div class="col-md-4">
+                                <select class="form-select test-input" id="columnSelector" 
+                                        onchange="updateDatasetValues()"
+                                        style="background: rgba(15, 17, 20, 0.8); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
+                                    <option value="">Seleccionar columna...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <small class="text-muted">Puedes seleccionar una columna para ver sus valores o escribir tu propio valor de prueba</small>
+                    </div>
+                    <button class="btn btn-primary" onclick="testCustomFunction()">
+                        <i class="bi bi-play-circle"></i> Ejecutar prueba
+                    </button>
+                    <div id="testResult" class="test-result mt-3" style="display: none;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="saveCustomFunction()">
+                    <i class="bi bi-save"></i> Guardar Función
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -708,9 +923,12 @@
     let datasetInfo = null;
     let normalizationConfig = {};
     let normalizedCount = 0;
+    let customFunctions = [];
+    let selectedFunctionType = 'numeric';
 
     document.addEventListener('DOMContentLoaded', function() {
         loadDatasetInfo();
+        loadCustomFunctions();
     });
 
     async function loadDatasetInfo() {
@@ -1440,6 +1658,326 @@
         if (event.target === modal) {
             closePreview();
         }
+    }
+    
+    // Funciones para manejo de funciones personalizadas
+    async function loadCustomFunctions() {
+        try {
+            const response = await fetch('/api/custom-normalization-functions/');
+            if (response.ok) {
+                customFunctions = await response.json();
+                // Las funciones personalizadas se añadirán a los dropdowns cuando se rendericen las variables
+            }
+        } catch (error) {
+            console.error('Error loading custom functions:', error);
+        }
+    }
+    
+    function openCustomFunctionModal() {
+        const modal = new bootstrap.Modal(document.getElementById('customFunctionModal'));
+        modal.show();
+        
+        // Establecer código de ejemplo según el tipo seleccionado
+        updateCodeExample();
+        
+        // Poblar el selector de columnas
+        populateColumnSelector();
+    }
+    
+    function selectFunctionType(type) {
+        selectedFunctionType = type;
+        
+        // Actualizar visual
+        document.querySelectorAll('.function-type-option').forEach(opt => {
+            opt.classList.remove('active');
+        });
+        document.querySelector(`[data-type="${type}"]`).classList.add('active');
+        
+        // Actualizar ejemplo de código
+        updateCodeExample();
+        
+        // Repoblar el selector de columnas con el nuevo tipo
+        populateColumnSelector();
+        
+        // Limpiar valores del datalist
+        document.getElementById('datasetValuesList').innerHTML = '';
+        document.getElementById('testValue').value = '';
+    }
+    
+    function updateCodeExample() {
+        const codeEditor = document.getElementById('functionCode');
+        
+        if (selectedFunctionType === 'numeric') {
+            codeEditor.value = `def normalize(value, series=None):
+    """
+    Normaliza valores numéricos
+    Args:
+        value: El valor individual a normalizar
+        series: La serie completa de la columna (opcional)
+    Returns:
+        El valor normalizado
+    """
+    # Ejemplo: normalización personalizada
+    if series is not None:
+        min_val = series.min()
+        max_val = series.max()
+        if max_val - min_val > 0:
+            return (value - min_val) / (max_val - min_val)
+    return value`;
+        } else {
+            codeEditor.value = `def normalize(value):
+    """
+    Normaliza valores de texto
+    Args:
+        value: El valor de texto a normalizar
+    Returns:
+        El texto normalizado
+    """
+    # Ejemplo: limpieza de texto
+    if isinstance(value, str):
+        # Eliminar espacios extras y convertir a minúsculas
+        return value.strip().lower().replace('  ', ' ')
+    return value`;
+        }
+    }
+    
+    function populateColumnSelector() {
+        const columnSelector = document.getElementById('columnSelector');
+        columnSelector.innerHTML = '<option value="">Seleccionar columna...</option>';
+        
+        if (datasetInfo && datasetInfo.normalization_info) {
+            // Filtrar columnas según el tipo de función seleccionado
+            for (const [column, info] of Object.entries(datasetInfo.normalization_info)) {
+                if (selectedFunctionType === 'numeric' && info.type === 'numeric') {
+                    columnSelector.innerHTML += `<option value="${column}">${column} (Numérico)</option>`;
+                } else if (selectedFunctionType === 'text' && info.type === 'text') {
+                    columnSelector.innerHTML += `<option value="${column}">${column} (Texto)</option>`;
+                } else if (info.type === 'unknown') {
+                    columnSelector.innerHTML += `<option value="${column}">${column} (Desconocido)</option>`;
+                }
+            }
+        }
+    }
+    
+    async function updateDatasetValues() {
+        const columnName = document.getElementById('columnSelector').value;
+        const datalist = document.getElementById('datasetValuesList');
+        
+        // Limpiar la lista actual
+        datalist.innerHTML = '';
+        
+        if (!columnName) return;
+        
+        try {
+            // Obtener valores únicos de la columna
+            const response = await fetch(`/api/datasets/${datasetId}/columns/${encodeURIComponent(columnName)}/`);
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Tomar una muestra de valores únicos (máximo 50)
+                let values = [];
+                if (data.unique_values && Array.isArray(data.unique_values)) {
+                    values = data.unique_values.slice(0, 50);
+                } else if (data.value_counts) {
+                    values = Object.keys(data.value_counts).slice(0, 50);
+                }
+                
+                // Añadir valores al datalist
+                values.forEach(value => {
+                    const option = document.createElement('option');
+                    option.value = value;
+                    datalist.appendChild(option);
+                });
+                
+                // Si hay estadísticas numéricas, también añadir algunos valores representativos
+                if (data.dtype === 'float64' || data.dtype === 'int64') {
+                    if (data.min !== undefined) {
+                        const option = document.createElement('option');
+                        option.value = data.min;
+                        option.label = 'Valor mínimo';
+                        datalist.appendChild(option);
+                    }
+                    if (data.max !== undefined) {
+                        const option = document.createElement('option');
+                        option.value = data.max;
+                        option.label = 'Valor máximo';
+                        datalist.appendChild(option);
+                    }
+                    if (data.mean !== undefined) {
+                        const option = document.createElement('option');
+                        option.value = data.mean.toFixed(2);
+                        option.label = 'Valor promedio';
+                        datalist.appendChild(option);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error loading column values:', error);
+        }
+    }
+    
+    async function testCustomFunction() {
+        const functionCode = document.getElementById('functionCode').value;
+        const testValue = document.getElementById('testValue').value;
+        const resultDiv = document.getElementById('testResult');
+        
+        if (!testValue) {
+            showNotification('Por favor ingresa un valor de prueba', 'warning');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/custom-normalization-functions/test/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    code: functionCode,
+                    test_value: testValue,
+                    function_type: selectedFunctionType
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                resultDiv.className = 'test-result success mt-3';
+                resultDiv.innerHTML = `<strong>Resultado:</strong> ${result.result}`;
+                resultDiv.style.display = 'block';
+            } else {
+                resultDiv.className = 'test-result error mt-3';
+                resultDiv.innerHTML = `<strong>Error:</strong> ${result.error}`;
+                resultDiv.style.display = 'block';
+            }
+        } catch (error) {
+            resultDiv.className = 'test-result error mt-3';
+            resultDiv.innerHTML = `<strong>Error:</strong> ${error.message}`;
+            resultDiv.style.display = 'block';
+        }
+    }
+    
+    async function saveCustomFunction() {
+        const name = document.getElementById('functionName').value.trim();
+        const description = document.getElementById('functionDescription').value.trim();
+        const code = document.getElementById('functionCode').value.trim();
+        
+        if (!name || !description || !code) {
+            showNotification('Por favor completa todos los campos', 'warning');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/custom-normalization-functions/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    name: name,
+                    description: description,
+                    code: code,
+                    function_type: selectedFunctionType
+                })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                showNotification('Función guardada exitosamente', 'success');
+                
+                // Cerrar modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('customFunctionModal'));
+                modal.hide();
+                
+                // Recargar funciones y actualizar UI
+                await loadCustomFunctions();
+                renderVariables();
+                
+                // Limpiar formulario
+                document.getElementById('functionName').value = '';
+                document.getElementById('functionDescription').value = '';
+                updateCodeExample();
+            } else {
+                const error = await response.json();
+                showNotification(error.error || 'Error al guardar la función', 'error');
+            }
+        } catch (error) {
+            showNotification('Error de conexión', 'error');
+        }
+    }
+    
+    // Modificar la función createVariableCard para incluir funciones personalizadas
+    function createVariableCard(column, info) {
+        const card = document.createElement('div');
+        card.className = 'variable-card';
+        
+        // Determinar el tipo de badge
+        const typeClass = `type-${info.type}`;
+        const typeLabel = info.type === 'numeric' ? 'Numérico' : 
+                         info.type === 'text' ? 'Texto' : 'Desconocido';
+        
+        // Crear contenido de estadísticas
+        let statsHtml = '';
+        if (info.type === 'numeric' && info.stats) {
+            statsHtml = `
+                <div class="variable-stats">
+                    ${info.stats.mean !== null ? `Media: ${info.stats.mean.toFixed(2)}` : ''}
+                    ${info.stats.std !== null ? ` | Desv: ${info.stats.std.toFixed(2)}` : ''}<br>
+                    ${info.stats.min !== null ? `Min: ${info.stats.min.toFixed(2)}` : ''}
+                    ${info.stats.max !== null ? ` | Max: ${info.stats.max.toFixed(2)}` : ''}
+                </div>
+            `;
+        } else if (info.type === 'text' && info.stats) {
+            statsHtml = `
+                <div class="variable-stats">
+                    ${info.stats.unique_count} valores únicos<br>
+                    ${info.stats.sample_values ? `Ej: ${info.stats.sample_values.slice(0, 2).join(', ')}...` : ''}
+                </div>
+            `;
+        }
+        
+        // Filtrar funciones personalizadas por tipo
+        const customFunctionsForType = customFunctions.filter(func => 
+            func.function_type === info.type || info.type === 'unknown'
+        );
+        
+        card.innerHTML = `
+            <div class="variable-header">
+                <span class="variable-name">${column}</span>
+                <span class="variable-type ${typeClass}">${typeLabel}</span>
+            </div>
+            ${statsHtml}
+            <select class="normalization-select" id="norm-${column}" onchange="onNormalizationChange('${column}')">
+                <option value="">Sin normalizar</option>
+                <optgroup label="Métodos principales">
+                    ${info.primary_methods.map(method => 
+                        `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                    ).join('')}
+                </optgroup>
+                ${info.secondary_methods.length > 0 ? `
+                    <optgroup label="Otros métodos">
+                        ${info.secondary_methods.map(method => 
+                            `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                        ).join('')}
+                    </optgroup>
+                ` : ''}
+                ${customFunctionsForType.length > 0 ? `
+                    <optgroup label="Funciones personalizadas">
+                        ${customFunctionsForType.map(func => 
+                            `<option value="CUSTOM_${func.id}" title="${func.description}">🔧 ${func.name}</option>`
+                        ).join('')}
+                    </optgroup>
+                ` : ''}
+            </select>
+            <button class="preview-btn" onclick="previewNormalization('${column}')" 
+                    id="preview-btn-${column}" style="display: none;">
+                <i class="bi bi-eye"></i> Previsualizar
+            </button>
+        `;
+        
+        return card;
     }
 </script>
 {% endblock %}

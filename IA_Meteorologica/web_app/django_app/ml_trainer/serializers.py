@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Dataset, TrainingSession, WeatherPrediction, ModelDefinition
+from .models import Dataset, TrainingSession, WeatherPrediction, ModelDefinition, CustomNormalizationFunction
 
 
 class DatasetSerializer(serializers.ModelSerializer):
@@ -131,3 +131,11 @@ class WeatherPredictionSerializer(serializers.ModelSerializer):
         fields = ['id', 'training_session', 'prediction_date', 'region', 
                   'latitude', 'longitude', 'predictions', 'created_at']
         read_only_fields = ['created_at']
+
+
+class CustomNormalizationFunctionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomNormalizationFunction
+        fields = ['id', 'name', 'description', 'function_type', 'code', 
+                  'created_at', 'updated_at', 'user']
+        read_only_fields = ['created_at', 'updated_at', 'user']

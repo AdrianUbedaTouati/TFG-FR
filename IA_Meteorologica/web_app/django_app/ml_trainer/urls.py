@@ -15,6 +15,10 @@ urlpatterns = [
     path('datasets/<int:pk>/normalization/', views.DatasetNormalizationView.as_view(), name='dataset-normalization'),
     path('datasets/<int:pk>/normalization/preview/', views.DatasetNormalizationPreviewView.as_view(), name='dataset-normalization-preview'),
     
+    # Custom normalization function endpoints
+    path('custom-normalization-functions/', views.CustomNormalizationFunctionView.as_view(), name='custom-normalization-functions'),
+    path('custom-normalization-functions/test/', views.CustomNormalizationFunctionTestView.as_view(), name='custom-normalization-function-test'),
+    
     # Model definition endpoints
     path('models/', views.ModelDefinitionListCreateView.as_view(), name='model-list-create'),
     path('models/<int:pk>/', views.ModelDefinitionDetailView.as_view(), name='model-detail'),
