@@ -4,6 +4,7 @@ Dataset-related views for ML Trainer
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 import pandas as pd
@@ -32,21 +33,42 @@ from ..constants import (
 
 class DatasetListCreateView(generics.ListCreateAPIView):
     """List all datasets or create a new one"""
-    queryset = Dataset.objects.all()
     serializer_class = DatasetSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        # Los usuarios normales solo ven sus datasets
+        # Los admin/staff ven todos
+        if self.request.user.is_staff:
+            return Dataset.objects.all()
+        return Dataset.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        # Asociar el dataset al usuario actual
+        serializer.save(user=self.request.user)
 
 
 class DatasetDetailView(generics.RetrieveDestroyAPIView):
     """Retrieve or delete a specific dataset"""
-    queryset = Dataset.objects.all()
     serializer_class = DatasetSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return Dataset.objects.all()
+        return Dataset.objects.filter(user=self.request.user)
 
 
 class DatasetColumnsView(APIView):
     """Get column information for a dataset"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, pk):
-        dataset = get_object_or_404(Dataset, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
         
         # Load dataset
         df = load_dataset(dataset.file.path)

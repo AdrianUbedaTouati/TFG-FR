@@ -4,6 +4,7 @@ Dataset normalization views
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.core.files.base import ContentFile
@@ -33,10 +34,15 @@ from io import StringIO
 
 class DatasetNormalizationView(APIView):
     """Apply normalization to a dataset"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, pk):
         """Obtiene información de normalización para un dataset"""
-        dataset = get_object_or_404(Dataset, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
         
         try:
             df = pd.read_csv(dataset.file.path)
@@ -45,9 +51,14 @@ class DatasetNormalizationView(APIView):
             custom_numeric_functions = []
             custom_text_functions = []
             
-            # Obtener todas las funciones personalizadas para todos los usuarios
-            custom_functions = CustomNormalizationFunction.objects.all().order_by('name')
-            print(f"DatasetNormalizationView - User: {request.user if request.user.is_authenticated else 'Anonymous'}")
+            # Obtener funciones personalizadas del usuario
+            if request.user.is_staff:
+                # Admin ve todas las funciones
+                custom_functions = CustomNormalizationFunction.objects.all().order_by('name')
+            else:
+                # Usuario normal ve solo sus funciones
+                custom_functions = CustomNormalizationFunction.objects.filter(user=request.user).order_by('name')
+            print(f"DatasetNormalizationView - User: {request.user}")
             
             print(f"Found {custom_functions.count()} custom functions")
             
@@ -181,7 +192,11 @@ class DatasetNormalizationView(APIView):
             )
     
     def post(self, request, pk):
-        dataset = get_object_or_404(Dataset, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
         
         # Get normalization parameters
         normalization_config = request.data.get('normalization_config', {})
@@ -390,9 +405,14 @@ class DatasetNormalizationView(APIView):
 
 class DatasetNormalizationPreviewView(APIView):
     """Preview normalization results without saving"""
+    permission_classes = [IsAuthenticated]
     
     def post(self, request, pk):
-        dataset = get_object_or_404(Dataset, pk=pk)
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
         
         # Get normalization parameters
         normalization_config = request.data.get('normalization', {})
@@ -475,14 +495,18 @@ class DatasetNormalizationPreviewView(APIView):
 
 class CustomNormalizationFunctionView(APIView):
     """CRUD operations for custom normalization functions"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request):
         """List all custom normalization functions"""
-        print(f"GET request - User authenticated: {request.user.is_authenticated}")
+        print(f"GET request - User: {request.user}")
         
-        # Mostrar todas las funciones para todos los usuarios
-        functions = CustomNormalizationFunction.objects.all()
-        print(f"Found {functions.count()} total functions")
+        # Filtrar funciones por usuario
+        if request.user.is_staff:
+            functions = CustomNormalizationFunction.objects.all()
+        else:
+            functions = CustomNormalizationFunction.objects.filter(user=request.user)
+        print(f"Found {functions.count()} functions for user")
             
         serializer = CustomNormalizationFunctionSerializer(functions, many=True)
         return Response(serializer.data)
@@ -501,8 +525,8 @@ class CustomNormalizationFunctionView(APIView):
             except SyntaxError as e:
                 return error_response(f"Syntax error in function code: {str(e)}")
             
-            # Guardar la función sin usuario (pública para todos)
-            serializer.save(user=None)
+            # Guardar la función asociada al usuario actual
+            serializer.save(user=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
         print(f"Serializer errors: {serializer.errors}")
@@ -514,10 +538,12 @@ class CustomNormalizationFunctionView(APIView):
         print(f"Request data: {request.data}")
         
         try:
-            function = CustomNormalizationFunction.objects.get(pk=pk)
+            # Verificar que la función pertenezca al usuario
+            if request.user.is_staff:
+                function = CustomNormalizationFunction.objects.get(pk=pk)
+            else:
+                function = CustomNormalizationFunction.objects.get(pk=pk, user=request.user)
             print(f"Function found: {function.name}")
-            
-            # Sin verificación de permisos - todos pueden editar cualquier función
             
             # Mostrar el código actual antes de actualizar
             print(f"Current code before update (first 200 chars): {function.code[:200]}...")
@@ -565,9 +591,11 @@ class CustomNormalizationFunctionView(APIView):
     def delete(self, request, pk):
         """Delete a custom normalization function"""
         try:
-            function = CustomNormalizationFunction.objects.get(pk=pk)
-            
-            # Sin verificación de permisos - todos pueden eliminar cualquier función
+            # Verificar que la función pertenezca al usuario
+            if request.user.is_staff:
+                function = CustomNormalizationFunction.objects.get(pk=pk)
+            else:
+                function = CustomNormalizationFunction.objects.get(pk=pk, user=request.user)
             
             function.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
@@ -581,6 +609,7 @@ class CustomNormalizationFunctionView(APIView):
 
 class CustomNormalizationFunctionTestView(APIView):
     """Test a custom normalization function"""
+    permission_classes = [IsAuthenticated]
     
     def post(self, request):
         """Test a custom normalization function with a sample value"""

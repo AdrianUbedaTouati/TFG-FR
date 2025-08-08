@@ -43,7 +43,7 @@ class CustomNormalizationFunction(models.Model):
     description = models.TextField()
     function_type = models.CharField(max_length=20, choices=[('numeric', 'Numérica'), ('text', 'Texto')])
     code = models.TextField(help_text="Código Python de la función de normalización")
-    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='custom_functions')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -60,7 +60,7 @@ class Dataset(models.Model):
     long_description = models.TextField(blank=True, null=True, help_text="Descripción detallada del dataset")
     file = models.FileField(upload_to='datasets/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='datasets')
     
     # Campos para normalización
     is_normalized = models.BooleanField(default=False)
@@ -105,7 +105,7 @@ class ModelDefinition(models.Model):
     model_type = models.CharField(max_length=50, choices=ModelType.choices)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='model_definitions')
     
     # Dataset asociado
     dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
@@ -157,7 +157,7 @@ class TrainingSession(models.Model):
     dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
     model_type = models.CharField(max_length=50, choices=ModelType.choices)
     created_at = models.DateTimeField(auto_now_add=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='training_sessions')
     
     # Variable selection
     predictor_columns = models.JSONField(default=list)

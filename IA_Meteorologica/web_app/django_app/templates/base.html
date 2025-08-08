@@ -691,11 +691,33 @@
                             <i class="bi bi-database"></i> Datasets
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/">
-                            <i class="bi bi-shield-lock"></i> Admin
-                        </a>
-                    </li>
+                    {% if user.is_authenticated %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-person-circle"></i> {{ user.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" style="background: rgba(10, 14, 39, 0.95); border: 1px solid rgba(0, 212, 255, 0.3);">
+                                <li><a class="dropdown-item" href="{% url 'profile' %}" style="color: #00d4ff;">
+                                    <i class="bi bi-person"></i> Mi Perfil
+                                </a></li>
+                                {% if user.is_staff %}
+                                    <li><a class="dropdown-item" href="/admin/" style="color: #00d4ff;">
+                                        <i class="bi bi-shield-lock"></i> Admin Panel
+                                    </a></li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider" style="border-color: rgba(0, 212, 255, 0.3);"></li>
+                                <li><a class="dropdown-item" href="{% url 'logout' %}" style="color: #ff3b30;">
+                                    <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+                                </a></li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'login' %}">
+                                <i class="bi bi-box-arrow-in-right"></i> Iniciar Sesión
+                            </a>
+                        </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
