@@ -1891,21 +1891,29 @@
             console.log('Opening modal for edit mode with data:', functionData);
             modalTitle.innerHTML = '<i class="bi bi-pencil-square"></i> Editar Función de Normalización Personalizada';
             
+            // Guardar el ID y el tipo original ANTES de cualquier otra operación
+            document.getElementById('customFunctionModal').dataset.editingId = functionData.id;
+            document.getElementById('customFunctionModal').dataset.originalType = functionData.function_type;
+            
             // Primero establecer el tipo de función (sin actualizar el código)
             selectFunctionType(functionData.function_type, true);
             
             // Luego establecer los valores
             document.getElementById('functionName').value = functionData.name;
             document.getElementById('functionDescription').value = functionData.description;
-            document.getElementById('functionCode').value = functionData.code;
             
-            // Verificar que el código se cargó correctamente
-            console.log('Code loaded into textarea:', document.getElementById('functionCode').value.substring(0, 200) + '...');
-            console.log('Original code:', functionData.code.substring(0, 200) + '...');
-            
-            // Guardar el ID y el tipo original para la actualización
-            document.getElementById('customFunctionModal').dataset.editingId = functionData.id;
-            document.getElementById('customFunctionModal').dataset.originalType = functionData.function_type;
+            // Establecer el código después de un pequeño delay para asegurar que no se sobrescriba
+            setTimeout(() => {
+                document.getElementById('functionCode').value = functionData.code;
+                
+                // Verificar que el código se cargó correctamente
+                console.log('Code loaded into textarea:', document.getElementById('functionCode').value.substring(0, 200) + '...');
+                console.log('Original code:', functionData.code.substring(0, 200) + '...');
+                
+                // Forzar un evento de cambio para actualizar cualquier listener
+                const event = new Event('input', { bubbles: true });
+                document.getElementById('functionCode').dispatchEvent(event);
+            }, 100);
             
             console.log('Modal data set - ID:', functionData.id, 'Type:', functionData.function_type);
         } else {
@@ -1943,7 +1951,9 @@
         }
         
         // NO actualizar el código si estamos en modo edición
-        if (!skipCodeUpdate && !document.getElementById('customFunctionModal').dataset.editingId) {
+        // Verificar tanto el parámetro skipCodeUpdate como el dataset.editingId
+        const isEditMode = skipCodeUpdate || document.getElementById('customFunctionModal').dataset.editingId;
+        if (!isEditMode) {
             updateCodeExample();
         }
         
@@ -1963,7 +1973,14 @@
     }
     
     function updateCodeExample() {
+        // No actualizar si estamos en modo edición
+        if (document.getElementById('customFunctionModal').dataset.editingId) {
+            console.log('Skipping code update - in edit mode');
+            return;
+        }
+        
         const codeEditor = document.getElementById('functionCode');
+        console.log('Updating code example for type:', selectedFunctionType);
         
         if (selectedFunctionType === 'numeric') {
             codeEditor.value = `def normalize(value, series=None):
@@ -2274,7 +2291,7 @@
     async function saveCustomFunction() {
         const name = document.getElementById('functionName').value.trim();
         const description = document.getElementById('functionDescription').value.trim();
-        const code = document.getElementById('functionCode').value.trim();
+        const code = document.getElementById('functionCode').value; // No trim para preservar el formato exacto
         const editingId = document.getElementById('customFunctionModal').dataset.editingId;
         
         if (!name || !description || !code) {
@@ -2305,6 +2322,11 @@
                 codePreview: code.substring(0, 200) + '...'
             });
             
+            // Verificar una vez más que el código es el correcto antes de enviar
+            console.log('Final code check before sending:');
+            console.log('  Code starts with:', code.substring(0, 50));
+            console.log('  Code ends with:', code.substring(code.length - 50));
+            
             // Verificar que el código del textarea es el correcto
             const textareaCode = document.getElementById('functionCode').value;
             console.log('Code from textarea:', textareaCode.substring(0, 200) + '...');
@@ -2322,6 +2344,16 @@
             if (response.ok) {
                 const result = await response.json();
                 console.log('Function saved/updated:', result);
+                console.log('Returned code preview:', result.code ? result.code.substring(0, 200) + '...' : 'No code returned');
+                console.log('Returned code length:', result.code ? result.code.length : 0);
+                
+                // Verificar que el código devuelto coincide con el enviado
+                if (result.code !== code) {
+                    console.warn('WARNING: Returned code does not match sent code!');
+                    console.log('Sent code length:', code.length);
+                    console.log('Returned code length:', result.code ? result.code.length : 0);
+                }
+                
                 showNotification(
                     editingId ? 'Función actualizada exitosamente' : 'Función guardada exitosamente', 
                     'success'
@@ -2578,17 +2610,20 @@
     window.editFunction = async function(functionId) {
         console.log('editFunction called with ID:', functionId);
         try {
-            // Agregar timestamp para evitar cache
+            // Obtener la función específica directamente para evitar datos cacheados
             const timestamp = new Date().getTime();
-            const response = await fetch(`/api/custom-normalization-functions/?t=${timestamp}`, {
+            const response = await fetch(`/api/custom-normalization-functions/${functionId}/?t=${timestamp}`, {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
                 cache: 'no-store'
             });
             console.log('Response status:', response.status);
             if (response.ok) {
-                const functions = await response.json();
-                console.log('Functions loaded:', functions);
-                const functionData = functions.find(f => f.id === functionId);
-                console.log('Function found:', functionData);
+                const functionData = await response.json();
+                console.log('Function loaded directly:', functionData);
+                console.log('Code preview:', functionData.code ? functionData.code.substring(0, 100) + '...' : 'No code');
                 
                 if (functionData) {
                     // Cerrar el modal de gestión

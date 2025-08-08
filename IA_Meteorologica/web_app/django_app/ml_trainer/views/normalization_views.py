@@ -509,19 +509,38 @@ class CustomNormalizationFunctionView(APIView):
     """CRUD operations for custom normalization functions"""
     permission_classes = [IsAuthenticated]
     
-    def get(self, request):
-        """List all custom normalization functions"""
-        print(f"GET request - User: {request.user}")
+    def get(self, request, pk=None):
+        """List all custom normalization functions or get a specific one"""
+        print(f"GET request - User: {request.user}, PK: {pk}")
         
-        # Filtrar funciones por usuario
-        if request.user.is_staff:
-            functions = CustomNormalizationFunction.objects.all()
+        if pk:
+            # Obtener una función específica
+            try:
+                if request.user.is_staff:
+                    function = CustomNormalizationFunction.objects.get(pk=pk)
+                else:
+                    function = CustomNormalizationFunction.objects.get(pk=pk, user=request.user)
+                serializer = CustomNormalizationFunctionSerializer(function)
+                
+                # Log para verificar el GET individual
+                print(f"GET individual function {pk}:")
+                print(f"  Name: {function.name}")
+                print(f"  Code from DB (first 200 chars): {function.code[:200]}...")
+                print(f"  Serialized code (first 200 chars): {serializer.data.get('code', '')[:200]}...")
+                
+                return Response(serializer.data)
+            except CustomNormalizationFunction.DoesNotExist:
+                return Response({'error': 'Función no encontrada'}, status=status.HTTP_404_NOT_FOUND)
         else:
-            functions = CustomNormalizationFunction.objects.filter(user=request.user)
-        print(f"Found {functions.count()} functions for user")
-            
-        serializer = CustomNormalizationFunctionSerializer(functions, many=True)
-        return Response(serializer.data)
+            # Listar todas las funciones
+            if request.user.is_staff:
+                functions = CustomNormalizationFunction.objects.all()
+            else:
+                functions = CustomNormalizationFunction.objects.filter(user=request.user)
+            print(f"Found {functions.count()} functions for user")
+                
+            serializer = CustomNormalizationFunctionSerializer(functions, many=True)
+            return Response(serializer.data)
     
     def post(self, request):
         """Create a new custom normalization function"""
@@ -561,10 +580,23 @@ class CustomNormalizationFunctionView(APIView):
             print(f"Current code before update (first 200 chars): {function.code[:200]}...")
             print(f"Current code length: {len(function.code)}")
             
-            serializer = CustomNormalizationFunctionSerializer(function, data=request.data)
+            # Imprimir los datos validados
+            print(f"Request data keys: {list(request.data.keys())}")
+            print(f"Code in request: {request.data.get('code', 'NO CODE')[:200]}...")
+            
+            serializer = CustomNormalizationFunctionSerializer(function, data=request.data, partial=True)
             if serializer.is_valid():
-                # Validate the code syntax
-                code = serializer.validated_data['code']
+                print(f"Validated data keys: {list(serializer.validated_data.keys())}")
+                print(f"Code in validated_data: {'code' in serializer.validated_data}")
+                
+                # Obtener el código directamente de request.data si no está en validated_data
+                if 'code' in request.data:
+                    code = request.data['code']
+                    print(f"Using code from request.data")
+                else:
+                    code = function.code
+                    print(f"Using existing code")
+                    
                 print(f"New code to save (first 200 chars): {code[:200]}...")
                 print(f"New code length: {len(code)}")
                 
@@ -573,23 +605,45 @@ class CustomNormalizationFunctionView(APIView):
                 except SyntaxError as e:
                     return error_response(f"Syntax error in function code: {str(e)}")
                 
-                # Guardar y forzar refresh desde la DB
-                updated_function = serializer.save()
-                updated_function.refresh_from_db()
+                # Actualizar manualmente todos los campos directamente desde request.data
+                if 'name' in request.data:
+                    function.name = request.data['name']
+                if 'description' in request.data:
+                    function.description = request.data['description']
+                if 'function_type' in request.data:
+                    function.function_type = request.data['function_type']
+                if 'code' in request.data:
+                    function.code = request.data['code']
+                    print(f"Code updated to: {function.code[:50]}...{function.code[-50:]}")
+                
+                function.save()
+                
+                # Recargar desde la DB para asegurar
+                function.refresh_from_db()
                 
                 print(f"Function updated successfully:")
-                print(f"  Name: {updated_function.name}")
-                print(f"  Type: {updated_function.function_type}")
-                print(f"  Code length: {len(updated_function.code)}")
-                print(f"  Code after save (first 200 chars): {updated_function.code[:200]}...")
+                print(f"  Name: {function.name}")
+                print(f"  Type: {function.function_type}")
+                print(f"  Code length: {len(function.code)}")
+                print(f"  Code after save (first 200 chars): {function.code[:200]}...")
                 
                 # Verificar directamente en la DB
                 db_function = CustomNormalizationFunction.objects.get(pk=pk)
                 print(f"  Code in DB (first 200 chars): {db_function.code[:200]}...")
                 
+                # Usar el objeto recién obtenido de la DB para la respuesta para evitar cualquier problema de caché
                 # Serializar de nuevo para asegurar que devolvemos los datos actualizados
-                response_serializer = CustomNormalizationFunctionSerializer(updated_function)
-                return Response(response_serializer.data)
+                response_serializer = CustomNormalizationFunctionSerializer(db_function)
+                
+                # Log adicional para verificar el contenido de la respuesta
+                response_data = response_serializer.data
+                print(f"Response data being sent:")
+                print(f"  ID: {response_data.get('id')}")
+                print(f"  Name: {response_data.get('name')}")
+                print(f"  Code in response (first 200 chars): {response_data.get('code', '')[:200]}...")
+                print(f"  Full response keys: {list(response_data.keys())}")
+                
+                return Response(response_data)
             
             print(f"Serializer errors: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
