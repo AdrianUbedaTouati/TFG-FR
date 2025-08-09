@@ -1106,6 +1106,26 @@
         // Verificar que las funciones globales estén disponibles
         console.log('window.editFunction:', typeof window.editFunction);
         console.log('window.deleteFunction:', typeof window.deleteFunction);
+        
+        // Añadir soporte para Tab en el editor de código
+        const codeEditor = document.getElementById('functionCode');
+        if (codeEditor) {
+            codeEditor.addEventListener('keydown', function(e) {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    
+                    const start = this.selectionStart;
+                    const end = this.selectionEnd;
+                    const value = this.value;
+                    
+                    // Insertar 4 espacios donde está el cursor
+                    this.value = value.substring(0, start) + '    ' + value.substring(end);
+                    
+                    // Mover el cursor después de los espacios insertados
+                    this.selectionStart = this.selectionEnd = start + 4;
+                }
+            });
+        }
     });
 
     async function loadDatasetInfo() {
@@ -1988,15 +2008,7 @@
                 console.log('Code loaded into textarea:', document.getElementById('functionCode').value.substring(0, 200) + '...');
                 console.log('Original code:', functionData.code.substring(0, 200) + '...');
                 
-                // Cargar los nombres de las columnas nuevas
-                if (functionData.new_columns && functionData.new_columns.length > 0) {
-                    functionData.new_columns.forEach((colName, index) => {
-                        const input = document.getElementById(`newColumnName${index + 1}`);
-                        if (input) {
-                            input.value = colName;
-                        }
-                    });
-                }
+                // Ya no necesitamos cargar los nombres de columnas ya que no hay inputs
                 
                 // Forzar un evento de cambio para actualizar cualquier listener
                 const event = new Event('input', { bubbles: true });
@@ -2041,10 +2053,12 @@
             typeSelector.classList.add('active');
         }
         
-        // NO actualizar el código si estamos en modo edición
-        // Verificar tanto el parámetro skipCodeUpdate como el dataset.editingId
+        // NO actualizar el código si ya hay código escrito
+        const currentCode = document.getElementById('functionCode').value;
         const isEditMode = skipCodeUpdate || document.getElementById('customFunctionModal').dataset.editingId;
-        if (!isEditMode) {
+        
+        // Solo actualizar el código si está vacío o es el código de ejemplo por defecto
+        if (!isEditMode && (!currentCode || currentCode.trim() === '')) {
             updateCodeExample();
         }
         
@@ -2068,18 +2082,8 @@
         const container = document.getElementById('newColumnsContainer');
         container.innerHTML = '';
         
-        for (let i = 1; i <= numColumns; i++) {
-            const div = document.createElement('div');
-            div.className = 'mb-2';
-            div.innerHTML = `
-                <input type="text" class="form-control new-column-name" 
-                       id="newColumnName${i}" 
-                       placeholder="Nombre de columna ${i} (ej: ${getColumnNameSuggestion(i)})"
-                       data-column-index="${i}"
-                       onkeyup="updateCodeExample()">
-            `;
-            container.appendChild(div);
-        }
+        // No mostrar inputs de nombres de columnas
+        // Los nombres se generarán automáticamente como columna_1, columna_2, etc.
         
         // Actualizar el ejemplo de código con la nueva estructura
         updateCodeExample();
@@ -2230,15 +2234,46 @@
         columnSelector.innerHTML = '<option value="">Seleccionar columna...</option>';
         
         if (datasetInfo && datasetInfo.normalization_info) {
-            // Filtrar columnas según el tipo de función seleccionado
+            // Separar columnas por tipo
+            const numericColumns = [];
+            const textColumns = [];
+            const otherColumns = [];
+            
             for (const [column, info] of Object.entries(datasetInfo.normalization_info)) {
-                if (selectedFunctionType === 'numeric' && info.type === 'numeric') {
-                    columnSelector.innerHTML += `<option value="${column}">${column} (Numérico)</option>`;
-                } else if (selectedFunctionType === 'text' && info.type === 'text') {
-                    columnSelector.innerHTML += `<option value="${column}">${column} (Texto)</option>`;
-                } else if (info.type === 'unknown') {
-                    columnSelector.innerHTML += `<option value="${column}">${column} (Desconocido)</option>`;
+                if (info.type === 'numeric') {
+                    numericColumns.push({ name: column, type: 'Numérico' });
+                } else if (info.type === 'text') {
+                    textColumns.push({ name: column, type: 'Texto' });
+                } else {
+                    otherColumns.push({ name: column, type: 'Otro' });
                 }
+            }
+            
+            // Agregar columnas numéricas
+            if (numericColumns.length > 0) {
+                columnSelector.innerHTML += '<optgroup label="Columnas Numéricas">';
+                numericColumns.forEach(col => {
+                    columnSelector.innerHTML += `<option value="${col.name}">${col.name}</option>`;
+                });
+                columnSelector.innerHTML += '</optgroup>';
+            }
+            
+            // Agregar columnas de texto
+            if (textColumns.length > 0) {
+                columnSelector.innerHTML += '<optgroup label="Columnas de Texto">';
+                textColumns.forEach(col => {
+                    columnSelector.innerHTML += `<option value="${col.name}">${col.name}</option>`;
+                });
+                columnSelector.innerHTML += '</optgroup>';
+            }
+            
+            // Agregar otras columnas
+            if (otherColumns.length > 0) {
+                columnSelector.innerHTML += '<optgroup label="Otras Columnas">';
+                otherColumns.forEach(col => {
+                    columnSelector.innerHTML += `<option value="${col.name}">${col.name}</option>`;
+                });
+                columnSelector.innerHTML += '</optgroup>';
             }
         }
     }
@@ -2521,8 +2556,8 @@
             const newColumns = [];
             
             for (let i = 1; i <= numNewColumns; i++) {
-                const columnName = document.getElementById(`newColumnName${i}`)?.value || `columna_${i}`;
-                newColumns.push(columnName);
+                // Generar nombres automáticos para las columnas
+                newColumns.push(`columna_${i}`);
             }
             
             const requestData = {
