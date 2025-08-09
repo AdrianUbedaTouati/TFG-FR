@@ -1028,6 +1028,10 @@
                     <div class="alert alert-info" style="background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
                         <i class="bi bi-info-circle"></i> La función debe recibir un parámetro 'value' y retornar el valor normalizado.
                         Para funciones numéricas, también puede recibir 'series' con toda la columna.
+                        <br><br>
+                        <strong>Módulos disponibles:</strong> math, datetime, timezone, timedelta (y pandas como pd para funciones numéricas)
+                        <br>
+                        <strong style="color: #ff6b6b;">⚠️ NO uses declaraciones import</strong> - Los módulos ya están disponibles directamente
                     </div>
                     <textarea class="code-editor" id="functionCode" placeholder="def normalize(value):
     # Tu código aquí
@@ -2130,7 +2134,14 @@
         max_val = series.max()
         if max_val - min_val > 0:
             return (value - min_val) / (max_val - min_val)
-    return value`;
+    return value
+    
+    # Ejemplo con math (sin import):
+    # return math.sin(value * math.pi / 180)
+    
+    # Ejemplo con datetime (sin import):
+    # dt = datetime.fromisoformat(value) if isinstance(value, str) else value
+    # return dt.hour`;
             } else {
                 // Generar ejemplo para múltiples columnas
                 const columnNames = [];

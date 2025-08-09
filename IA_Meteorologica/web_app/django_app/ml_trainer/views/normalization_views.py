@@ -311,6 +311,9 @@ class DatasetNormalizationView(APIView):
                     print(f"Applying custom function {custom_func.name} (ID: {function_id}) to column {column}")
                     
                     # Create safe execution environment
+                    import math
+                    from datetime import datetime, timezone, timedelta
+                    
                     safe_globals = {
                         '__builtins__': {
                             'len': len,
@@ -343,6 +346,12 @@ class DatasetNormalizationView(APIView):
                             'print': print,  # For debugging
                         }
                     }
+                    
+                    # Add safe modules
+                    safe_globals['math'] = math
+                    safe_globals['datetime'] = datetime
+                    safe_globals['timezone'] = timezone
+                    safe_globals['timedelta'] = timedelta
                     
                     # Add pandas and numpy for numeric functions
                     if custom_func.function_type == 'numeric':
@@ -915,6 +924,9 @@ class CustomNormalizationFunctionTestView(APIView):
             return error_response("Code and test_value are required")
         
         # Create a safe execution environment
+        import math
+        from datetime import datetime, timezone, timedelta
+        
         safe_globals = {
             '__builtins__': {
                 'len': len,
@@ -927,7 +939,21 @@ class CustomNormalizationFunctionTestView(APIView):
                 'abs': abs,
                 'round': round,
                 'sum': sum,
-            }
+                'dict': dict,
+                'list': list,
+                'tuple': tuple,
+                'set': set,
+                'bool': bool,
+                'type': type,
+                'range': range,
+                'enumerate': enumerate,
+                'zip': zip,
+            },
+            # Add safe modules
+            'math': math,
+            'datetime': datetime,
+            'timezone': timezone,
+            'timedelta': timedelta,
         }
         
         # Add pandas series methods for numeric functions
