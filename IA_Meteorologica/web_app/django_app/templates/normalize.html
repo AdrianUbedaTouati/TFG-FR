@@ -1956,6 +1956,10 @@
         if (functionData) {
             // Modo edición
             console.log('Opening modal for edit mode with data:', functionData);
+            console.log('Column control data:', {
+                remove_original_column: functionData.remove_original_column,
+                new_columns: functionData.new_columns
+            });
             modalTitle.innerHTML = '<i class="bi bi-pencil-square"></i> Editar Función de Normalización Personalizada';
             
             // Guardar el ID y el tipo original ANTES de cualquier otra operación
@@ -1969,6 +1973,13 @@
             document.getElementById('functionName').value = functionData.name;
             document.getElementById('functionDescription').value = functionData.description;
             
+            // Cargar configuración de columnas
+            document.getElementById('removeOriginalColumn').checked = functionData.remove_original_column !== undefined ? functionData.remove_original_column : true;
+            document.getElementById('numNewColumns').value = functionData.new_columns && functionData.new_columns.length > 0 ? functionData.new_columns.length : 1;
+            
+            // Actualizar los inputs de columnas antes de establecer sus valores
+            updateNewColumnsInputs();
+            
             // Establecer el código después de un pequeño delay para asegurar que no se sobrescriba
             setTimeout(() => {
                 document.getElementById('functionCode').value = functionData.code;
@@ -1976,6 +1987,16 @@
                 // Verificar que el código se cargó correctamente
                 console.log('Code loaded into textarea:', document.getElementById('functionCode').value.substring(0, 200) + '...');
                 console.log('Original code:', functionData.code.substring(0, 200) + '...');
+                
+                // Cargar los nombres de las columnas nuevas
+                if (functionData.new_columns && functionData.new_columns.length > 0) {
+                    functionData.new_columns.forEach((colName, index) => {
+                        const input = document.getElementById(`newColumnName${index + 1}`);
+                        if (input) {
+                            input.value = colName;
+                        }
+                    });
+                }
                 
                 // Forzar un evento de cambio para actualizar cualquier listener
                 const event = new Event('input', { bubbles: true });
