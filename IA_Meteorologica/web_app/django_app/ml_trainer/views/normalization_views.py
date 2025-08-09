@@ -316,6 +316,13 @@ class DatasetNormalizationView(APIView):
                     import re
                     import json
                     import unicodedata
+                    import numpy as np
+                    from scipy import stats, special
+                    from sklearn import preprocessing
+                    import statistics
+                    from collections import Counter, defaultdict
+                    import itertools
+                    import functools
                     
                     # Define allowed modules for import
                     import _strptime  # Pre-import to avoid issues with datetime.strptime
@@ -331,6 +338,18 @@ class DatasetNormalizationView(APIView):
                         'unicodedata': unicodedata,
                         '_strptime': _strptime,  # Internal module needed by datetime.strptime
                         'time': time,  # Needed by datetime internally
+                        'numpy': np,
+                        'np': np,  # Common alias
+                        'stats': stats,  # scipy.stats
+                        'special': special,  # scipy.special
+                        'pandas': pd,
+                        'pd': pd,  # Common alias
+                        'preprocessing': preprocessing,  # sklearn.preprocessing
+                        'statistics': statistics,
+                        'Counter': Counter,
+                        'defaultdict': defaultdict,
+                        'itertools': itertools,
+                        'functools': functools,
                     }
                     
                     # Create datetime module object for 'from datetime import ...'
@@ -340,8 +359,25 @@ class DatasetNormalizationView(APIView):
                     datetime_module.timezone = timezone
                     datetime_module.timedelta = timedelta
                     
-                    # Update ALLOWED_MODULES to use the module object
+                    # Create scipy module object
+                    scipy_module = types.ModuleType('scipy')
+                    scipy_module.stats = stats
+                    scipy_module.special = special
+                    
+                    # Create sklearn module object
+                    sklearn_module = types.ModuleType('sklearn')
+                    sklearn_module.preprocessing = preprocessing
+                    
+                    # Create collections module object
+                    collections_module = types.ModuleType('collections')
+                    collections_module.Counter = Counter
+                    collections_module.defaultdict = defaultdict
+                    
+                    # Update ALLOWED_MODULES to use the module objects
                     ALLOWED_MODULES['datetime'] = datetime_module
+                    ALLOWED_MODULES['scipy'] = scipy_module
+                    ALLOWED_MODULES['sklearn'] = sklearn_module
+                    ALLOWED_MODULES['collections'] = collections_module
                     
                     # Create a safe import function
                     def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -1019,6 +1055,14 @@ class CustomNormalizationFunctionTestView(APIView):
         import re
         import json
         import unicodedata
+        import numpy as np
+        from scipy import stats, special
+        import pandas as pd
+        from sklearn import preprocessing
+        import statistics
+        from collections import Counter, defaultdict
+        import itertools
+        import functools
         
         # Define allowed modules for import
         import _strptime  # Pre-import to avoid issues with datetime.strptime
@@ -1034,6 +1078,18 @@ class CustomNormalizationFunctionTestView(APIView):
             'unicodedata': unicodedata,
             '_strptime': _strptime,  # Internal module needed by datetime.strptime
             'time': time,  # Needed by datetime internally
+            'numpy': np,
+            'np': np,  # Common alias
+            'stats': stats,  # scipy.stats
+            'special': special,  # scipy.special
+            'pandas': pd,
+            'pd': pd,  # Common alias
+            'preprocessing': preprocessing,  # sklearn.preprocessing
+            'statistics': statistics,
+            'Counter': Counter,
+            'defaultdict': defaultdict,
+            'itertools': itertools,
+            'functools': functools,
         }
         
         # Create datetime module object for 'from datetime import ...'
@@ -1043,8 +1099,25 @@ class CustomNormalizationFunctionTestView(APIView):
         datetime_module.timezone = timezone
         datetime_module.timedelta = timedelta
         
-        # Update ALLOWED_MODULES to use the module object
+        # Create scipy module object
+        scipy_module = types.ModuleType('scipy')
+        scipy_module.stats = stats
+        scipy_module.special = special
+        
+        # Create sklearn module object
+        sklearn_module = types.ModuleType('sklearn')
+        sklearn_module.preprocessing = preprocessing
+        
+        # Create collections module object
+        collections_module = types.ModuleType('collections')
+        collections_module.Counter = Counter
+        collections_module.defaultdict = defaultdict
+        
+        # Update ALLOWED_MODULES to use the module objects
         ALLOWED_MODULES['datetime'] = datetime_module
+        ALLOWED_MODULES['scipy'] = scipy_module
+        ALLOWED_MODULES['sklearn'] = sklearn_module
+        ALLOWED_MODULES['collections'] = collections_module
         
         # Create a safe import function
         def safe_import(name, globals=None, locals=None, fromlist=(), level=0):

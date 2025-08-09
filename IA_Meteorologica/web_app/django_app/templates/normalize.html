@@ -1029,15 +1029,47 @@
                         <i class="bi bi-info-circle"></i> La función debe recibir un parámetro 'value' y retornar el valor normalizado.
                         Para funciones numéricas, también puede recibir 'series' con toda la columna.
                         <br><br>
-                        <strong>Módulos permitidos para importar:</strong>
-                        <ul style="margin-bottom: 0; margin-top: 5px;">
-                            <li>math - Funciones matemáticas</li>
-                            <li>datetime, timezone, timedelta - Manejo de fechas y tiempo</li>
-                            <li>re - Expresiones regulares</li>
-                            <li>json - Manejo de JSON</li>
-                            <li>unicodedata - Normalización de caracteres Unicode</li>
-                            <li>pandas (como pd) - Solo para funciones numéricas</li>
-                        </ul>
+                        <strong>Módulos disponibles para importar:</strong>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                            <div>
+                                <strong style="color: #00d4ff;">Cálculo y Matemáticas:</strong>
+                                <ul style="margin-bottom: 0; margin-top: 5px; font-size: 0.9em;">
+                                    <li><code>numpy</code> (o <code>np</code>) - Arrays y operaciones numéricas</li>
+                                    <li><code>math</code> - Funciones matemáticas básicas</li>
+                                    <li><code>statistics</code> - Estadísticas estándar de Python</li>
+                                    <li><code>scipy.stats</code> - Distribuciones y tests estadísticos</li>
+                                    <li><code>scipy.special</code> - Funciones matemáticas especiales</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <strong style="color: #00d4ff;">Procesamiento de Datos:</strong>
+                                <ul style="margin-bottom: 0; margin-top: 5px; font-size: 0.9em;">
+                                    <li><code>pandas</code> (o <code>pd</code>) - DataFrames y Series</li>
+                                    <li><code>sklearn.preprocessing</code> - Normalizadores ML</li>
+                                    <li><code>datetime</code>, <code>timezone</code>, <code>timedelta</code> - Fechas</li>
+                                    <li><code>re</code> - Expresiones regulares</li>
+                                    <li><code>json</code> - Manejo de JSON</li>
+                                    <li><code>unicodedata</code> - Normalización Unicode</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div style="margin-top: 10px;">
+                            <strong style="color: #00d4ff;">Utilidades:</strong>
+                            <ul style="margin-bottom: 0; margin-top: 5px; font-size: 0.9em;">
+                                <li><code>collections.Counter</code>, <code>collections.defaultdict</code> - Estructuras de datos</li>
+                                <li><code>itertools</code> - Herramientas de iteración</li>
+                                <li><code>functools</code> - Herramientas funcionales</li>
+                            </ul>
+                        </div>
+                        <div style="margin-top: 10px; padding: 10px; background: rgba(255, 107, 107, 0.1); border-radius: 5px;">
+                            <strong>Ejemplo de uso:</strong>
+                            <pre style="margin: 0; font-size: 0.85em;"><code>import numpy as np
+from sklearn.preprocessing import StandardScaler
+
+def normalize(value, series=None):
+    # Tu código aquí
+    return np.log1p(value)  # Ejemplo: log(1+x)</code></pre>
+                        </div>
                     </div>
                     <textarea class="code-editor" id="functionCode" placeholder="def normalize(value):
     # Tu código aquí
