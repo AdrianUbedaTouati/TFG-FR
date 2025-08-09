@@ -137,5 +137,5 @@ class CustomNormalizationFunctionSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomNormalizationFunction
         fields = ['id', 'name', 'description', 'function_type', 'code', 
-                  'created_at', 'updated_at', 'user']
+                  'created_at', 'updated_at', 'user', 'remove_original_column', 'new_columns']
         read_only_fields = ['created_at', 'updated_at', 'user']

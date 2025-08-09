@@ -14,6 +14,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import os
+import signal
+from contextlib import contextmanager
 
 from ..models import Dataset, CustomNormalizationFunction
 from ..normalization_methods import DISPATCH_NUM, DISPATCH_TEXT
@@ -30,6 +32,29 @@ from ..serializers import CustomNormalizationFunctionSerializer
 import traceback
 import sys
 from io import StringIO
+
+
+class TimeoutException(Exception):
+    pass
+
+
+@contextmanager
+def time_limit(seconds):
+    """Context manager to limit execution time"""
+    def signal_handler(signum, frame):
+        raise TimeoutException("Function execution timed out")
+    
+    # Set the signal handler and alarm
+    if hasattr(signal, 'SIGALRM'):
+        signal.signal(signal.SIGALRM, signal_handler)
+        signal.alarm(seconds)
+        try:
+            yield
+        finally:
+            signal.alarm(0)  # Disable the alarm
+    else:
+        # On Windows, just yield without timeout
+        yield
 
 
 class DatasetNormalizationView(APIView):
@@ -216,17 +241,23 @@ class DatasetNormalizationView(APIView):
             return error_response(error_msg)
         
         try:
+            print(f"Starting normalization process for dataset {dataset.name}")
+            print(f"Normalization config: {normalization_config}")
+            
             # Apply normalization
             normalized_df = self._apply_normalization(df, normalization_config)
             
-            print(f"Normalized DataFrame shape: {normalized_df.shape}")  # Debug
+            print(f"Normalization complete. DataFrame shape: {normalized_df.shape}")  # Debug
+            print(f"DataFrame columns: {list(normalized_df.columns)}")
             
             # Save normalized dataset
             if create_copy:
+                print(f"Saving normalized copy...")
                 new_dataset = self._save_normalized_copy(
                     dataset, normalized_df, copy_name, normalization_config,
                     copy_short_description, copy_long_description
                 )
+                print(f"Dataset saved successfully: {new_dataset.name}")
                 
                 return success_response({
                     'dataset_id': new_dataset.id,
@@ -292,12 +323,31 @@ class DatasetNormalizationView(APIView):
                             'abs': abs,
                             'round': round,
                             'sum': sum,
+                            'dict': dict,
+                            'list': list,
+                            'tuple': tuple,
+                            'set': set,
+                            'bool': bool,
+                            'type': type,
+                            'range': range,
+                            'enumerate': enumerate,
+                            'zip': zip,
+                            'map': map,
+                            'filter': filter,
+                            'sorted': sorted,
+                            'reversed': reversed,
+                            'any': any,
+                            'all': all,
+                            'pow': pow,
+                            'divmod': divmod,
+                            'print': print,  # For debugging
                         }
                     }
                     
-                    # Add pandas for numeric functions
+                    # Add pandas and numpy for numeric functions
                     if custom_func.function_type == 'numeric':
                         safe_globals['pd'] = pd
+                        safe_globals['np'] = np
                     
                     # Execute the custom function code
                     exec(custom_func.code, safe_globals)
@@ -305,15 +355,130 @@ class DatasetNormalizationView(APIView):
                     if 'normalize' in safe_globals:
                         normalize_func = safe_globals['normalize']
                         
-                        # Apply function to each value
-                        if custom_func.function_type == 'numeric':
-                            # For numeric functions, provide the series as well
-                            normalized_df[column] = df[column].apply(
-                                lambda x: normalize_func(x, series=df[column])
-                            )
+                        # Check if function returns multiple columns
+                        if custom_func.new_columns and len(custom_func.new_columns) > 0:
+                            # Function returns multiple columns
+                            print(f"Custom function {custom_func.name} will create {len(custom_func.new_columns)} new columns")
+                            
+                            # Process in batches to avoid memory issues
+                            batch_size = 1000
+                            total_rows = len(df)
+                            results_dict = {col: [] for col in custom_func.new_columns}
+                            
+                            print(f"Processing {total_rows} rows in batches of {batch_size}")
+                            
+                            # Pre-compute series statistics if numeric to avoid recomputation
+                            series_data = None
+                            if custom_func.function_type == 'numeric':
+                                # Create a lightweight series representation
+                                series_data = {
+                                    'min': df[column].min(),
+                                    'max': df[column].max(),
+                                    'mean': df[column].mean(),
+                                    'std': df[column].std(),
+                                    'median': df[column].median(),
+                                    'count': df[column].count(),
+                                    'sum': df[column].sum()
+                                }
+                                # Add the series data to safe_globals so the function can access it
+                                safe_globals['series_stats'] = series_data
+                                print(f"Pre-computed series statistics: {series_data}")
+                            
+                            for start_idx in range(0, total_rows, batch_size):
+                                end_idx = min(start_idx + batch_size, total_rows)
+                                batch = df[column].iloc[start_idx:end_idx]
+                                
+                                if start_idx % (batch_size * 10) == 0:  # Log progress every 10 batches
+                                    print(f"Processing rows {start_idx} to {end_idx} ({(start_idx/total_rows)*100:.1f}% complete)")
+                                
+                                # Apply function to batch
+                                if custom_func.function_type == 'numeric':
+                                    # For numeric functions, DO NOT pass entire series to avoid memory issues
+                                    for idx, value in batch.items():
+                                        try:
+                                            # Apply timeout for each value processing
+                                            with time_limit(5):  # 5 second timeout per value
+                                                # DO NOT pass entire series - it causes memory/performance issues
+                                                result = normalize_func(value, series=None)
+                                            
+                                            if isinstance(result, dict):
+                                                for col_name in custom_func.new_columns:
+                                                    results_dict[col_name].append(result.get(col_name, None))
+                                            else:
+                                                # If single value returned, use first column name
+                                                results_dict[custom_func.new_columns[0]].append(result)
+                                                for col_name in custom_func.new_columns[1:]:
+                                                    results_dict[col_name].append(None)
+                                        except TimeoutException:
+                                            print(f"Timeout in normalize function at index {idx}")
+                                            # Append None for all columns on timeout
+                                            for col_name in custom_func.new_columns:
+                                                results_dict[col_name].append(None)
+                                        except Exception as e:
+                                            print(f"Error in normalize function at index {idx}: {e}")
+                                            # Append None for all columns on error
+                                            for col_name in custom_func.new_columns:
+                                                results_dict[col_name].append(None)
+                                else:
+                                    # For text functions, apply without series parameter
+                                    for idx, value in batch.items():
+                                        try:
+                                            # Apply timeout for each value processing
+                                            with time_limit(5):  # 5 second timeout per value
+                                                result = normalize_func(value)
+                                            
+                                            if isinstance(result, dict):
+                                                for col_name in custom_func.new_columns:
+                                                    results_dict[col_name].append(result.get(col_name, ''))
+                                            else:
+                                                # If single value returned, use first column name
+                                                results_dict[custom_func.new_columns[0]].append(result)
+                                                for col_name in custom_func.new_columns[1:]:
+                                                    results_dict[col_name].append('')
+                                        except TimeoutException:
+                                            print(f"Timeout in normalize function at index {idx}")
+                                            # Append empty string for all columns on timeout
+                                            for col_name in custom_func.new_columns:
+                                                results_dict[col_name].append('')
+                                        except Exception as e:
+                                            print(f"Error in normalize function at index {idx}: {e}")
+                                            # Append empty string for all columns on error
+                                            for col_name in custom_func.new_columns:
+                                                results_dict[col_name].append('')
+                            
+                            print(f"Finished processing all {total_rows} rows")
+                            
+                            # Create new columns from results
+                            for new_col_name in custom_func.new_columns:
+                                normalized_df[new_col_name] = results_dict[new_col_name]
+                                print(f"Created new column: {new_col_name} with {len(results_dict[new_col_name])} values")
+                            
+                            # Remove original column if specified
+                            if custom_func.remove_original_column:
+                                normalized_df = normalized_df.drop(columns=[column])
+                                print(f"Removed original column: {column}")
                         else:
-                            # For text functions, just provide the value
-                            normalized_df[column] = df[column].apply(normalize_func)
+                            # Traditional single column output
+                            print(f"Applying traditional single-column normalization")
+                            if custom_func.function_type == 'numeric':
+                                # For numeric functions, DO NOT pass entire series
+                                # Pre-compute statistics if needed
+                                series_stats = {
+                                    'min': df[column].min(),
+                                    'max': df[column].max(),
+                                    'mean': df[column].mean(),
+                                    'std': df[column].std()
+                                }
+                                safe_globals['series_stats'] = series_stats
+                                
+                                # Apply function without passing series
+                                normalized_df[column] = df[column].apply(
+                                    lambda x: normalize_func(x, series=None)
+                                )
+                            else:
+                                # For text functions, just provide the value
+                                normalized_df[column] = df[column].apply(normalize_func)
+                            print(f"Traditional normalization complete for column {column}")
                         continue
                     else:
                         print(f"Custom function {custom_func.name} does not define 'normalize' function")
@@ -369,17 +534,30 @@ class DatasetNormalizationView(APIView):
                 except Exception as e:
                     print(f"Error applying text normalization {method} to column {column}: {str(e)}")
         
+        print(f"_apply_normalization completed. Final DataFrame shape: {normalized_df.shape}")
+        print(f"Final columns: {list(normalized_df.columns)}")
         return normalized_df
     
     def _save_normalized_copy(self, original_dataset, normalized_df, 
                               copy_name, config, short_description='', long_description=''):
         """Save normalized dataset as a new copy"""
+        print(f"_save_normalized_copy called with copy_name: {copy_name}")
+        
         if not copy_name:
             timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
             copy_name = f"{original_dataset.name}_normalized_{timestamp}"
         
+        print(f"Final copy name: {copy_name}")
+        print(f"DataFrame shape before CSV generation: {normalized_df.shape}")
+        
         # Generate CSV content
-        csv_content = normalized_df.to_csv(index=False)
+        try:
+            print("Converting DataFrame to CSV...")
+            csv_content = normalized_df.to_csv(index=False)
+            print(f"CSV content generated. Size: {len(csv_content)} bytes")
+        except Exception as e:
+            print(f"Error generating CSV: {str(e)}")
+            raise
         
         # Determine the root dataset ID
         # If the original dataset is already normalized, keep its root_dataset_id
@@ -394,24 +572,39 @@ class DatasetNormalizationView(APIView):
             root_id = original_dataset.id
         
         # Create new dataset record
-        new_dataset = Dataset.objects.create(
-            name=copy_name,
-            user=original_dataset.user,
-            is_normalized=True,
-            parent_dataset=original_dataset,
-            parent_dataset_name=original_dataset.name,
-            root_dataset_id=root_id,
-            normalization_method=str(config),
-            short_description=short_description or f"Normalized from {original_dataset.name}",
-            long_description=long_description or f"Normalization applied: {config}"
-        )
+        print("Creating new dataset record...")
+        try:
+            new_dataset = Dataset.objects.create(
+                name=copy_name,
+                user=original_dataset.user,
+                is_normalized=True,
+                parent_dataset=original_dataset,
+                parent_dataset_name=original_dataset.name,
+                root_dataset_id=root_id,
+                normalization_method=str(config),
+                short_description=short_description or f"Normalized from {original_dataset.name}",
+                long_description=long_description or f"Normalization applied: {config}"
+            )
+            print(f"Dataset record created with ID: {new_dataset.id}")
+        except Exception as e:
+            print(f"Error creating dataset record: {str(e)}")
+            raise
         
         # Save file using Django's file storage
-        new_dataset.file.save(
-            f"{copy_name}.csv",
-            ContentFile(csv_content.encode('utf-8'))
-        )
+        print("Saving CSV file...")
+        try:
+            new_dataset.file.save(
+                f"{copy_name}.csv",
+                ContentFile(csv_content.encode('utf-8'))
+            )
+            print(f"CSV file saved successfully")
+        except Exception as e:
+            print(f"Error saving CSV file: {str(e)}")
+            # Delete the dataset record if file save fails
+            new_dataset.delete()
+            raise
         
+        print(f"Dataset saved successfully: {new_dataset.name} (ID: {new_dataset.id})")
         return new_dataset
 
 
@@ -447,9 +640,40 @@ class DatasetNormalizationPreviewView(APIView):
             comparison = {}
             for column in normalization_config.keys():
                 if column in df.columns:
+                    # Check if this is a custom function with multiple outputs
+                    method = normalization_config[column]
+                    if method.startswith('CUSTOM_'):
+                        try:
+                            function_id = int(method.replace('CUSTOM_', ''))
+                            custom_func = CustomNormalizationFunction.objects.get(id=function_id)
+                            
+                            if custom_func.new_columns and len(custom_func.new_columns) > 0:
+                                # Handle multiple column output
+                                comparison[column] = {
+                                    'new_columns': custom_func.new_columns,
+                                    'remove_original': custom_func.remove_original_column
+                                }
+                                
+                                # Add preview for each new column
+                                for new_col in custom_func.new_columns:
+                                    if new_col in normalized_sample.columns:
+                                        new_values = normalized_sample[new_col].dropna()
+                                        comparison[column][new_col] = {
+                                            'sample': new_values.head(50).tolist(),
+                                            'stats': detect_column_type(normalized_sample[new_col])
+                                        }
+                                continue
+                        except:
+                            pass
+                    
+                    # Traditional single column comparison
                     # Get unique values for better comparison
                     original_values = sample_df[column].dropna()
-                    normalized_values = normalized_sample[column].dropna()
+                    if column in normalized_sample.columns:
+                        normalized_values = normalized_sample[column].dropna()
+                    else:
+                        # Column was removed, skip comparison
+                        continue
                     
                     # For categorical/text columns, show unique value mapping
                     if df[column].dtype == 'object' or df[column].nunique() < 50:
@@ -615,6 +839,10 @@ class CustomNormalizationFunctionView(APIView):
                 if 'code' in request.data:
                     function.code = request.data['code']
                     print(f"Code updated to: {function.code[:50]}...{function.code[-50:]}")
+                if 'remove_original_column' in request.data:
+                    function.remove_original_column = request.data['remove_original_column']
+                if 'new_columns' in request.data:
+                    function.new_columns = request.data['new_columns']
                 
                 function.save()
                 

@@ -998,6 +998,30 @@
                               placeholder="Describe qué hace tu función de normalización..."></textarea>
                 </div>
                 
+                <!-- Opciones de columnas -->
+                <div class="mb-3">
+                    <label class="form-label" style="color: var(--light-color);">Opciones de columnas:</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="removeOriginalColumn" checked>
+                        <label class="form-check-label" for="removeOriginalColumn" style="color: var(--light-color);">
+                            Eliminar columna original después de normalizar
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Nuevas columnas -->
+                <div class="mb-3">
+                    <label class="form-label" style="color: var(--light-color);">Columnas nuevas a crear:</label>
+                    <div class="input-group mb-2">
+                        <input type="number" class="form-control" id="numNewColumns" min="1" max="10" value="1" 
+                               placeholder="Número de columnas" onchange="updateNewColumnsInputs()">
+                        <span class="input-group-text">columnas</span>
+                    </div>
+                    <div id="newColumnsContainer">
+                        <!-- Los inputs de nombres de columnas se generarán dinámicamente aquí -->
+                    </div>
+                </div>
+                
                 <!-- Editor de código -->
                 <div class="mb-3">
                     <label class="form-label" style="color: var(--light-color);">Código de la función:</label>
@@ -1298,16 +1322,59 @@
         let bodyHtml = '';
         
         if (preview.new_columns) {
-            // One-hot encoding
+            // Multiple columns output (including one-hot encoding)
             bodyHtml = `
                 <div class="alert alert-info">
-                    <i class="bi bi-info-circle"></i> One-Hot Encoding generará ${preview.new_columns.length} nuevas columnas
+                    <i class="bi bi-info-circle"></i> Esta función generará ${preview.new_columns.length} nueva${preview.new_columns.length > 1 ? 's' : ''} columna${preview.new_columns.length > 1 ? 's' : ''}
+                    ${preview.remove_original ? '<br><i class="bi bi-trash"></i> La columna original será eliminada' : '<br><i class="bi bi-arrow-right"></i> La columna original se mantendrá'}
                 </div>
                 <h4>Nuevas columnas:</h4>
                 <ul>
-                    ${preview.new_columns.map(col => `<li>${col}</li>`).join('')}
+                    ${preview.new_columns.map(col => `<li><strong>${col}</strong></li>`).join('')}
                 </ul>
-                ${preview.one_hot_preview ? `
+            `;
+            
+            // Show preview for each new column
+            for (const newCol of preview.new_columns) {
+                if (preview[newCol]) {
+                    const colData = preview[newCol];
+                    bodyHtml += `
+                        <div style="margin-top: 20px; border-top: 1px solid rgba(0, 212, 255, 0.2); padding-top: 20px;">
+                            <h5 style="color: var(--primary-color);">Vista previa: ${newCol}</h5>
+                            <div class="preview-table-container" style="max-height: 300px; overflow-y: auto;">
+                                <table class="preview-table">
+                                    <thead style="position: sticky; top: 0; background-color: var(--dark-color); z-index: 10;">
+                                        <tr>
+                                            <th>Índice</th>
+                                            <th>Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${(colData.sample || []).slice(0, 20).map((val, idx) => `
+                                            <tr>
+                                                <td>${idx + 1}</td>
+                                                <td>${typeof val === 'number' ? val.toFixed(4) : val}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                            ${colData.stats ? `
+                                <div style="margin-top: 10px; background: rgba(0, 212, 255, 0.05); padding: 10px; border-radius: 5px;">
+                                    <strong>Estadísticas:</strong><br>
+                                    ${Object.entries(colData.stats).filter(([k, v]) => v !== null && typeof v !== 'object').map(([k, v]) => `
+                                        ${k}: ${typeof v === 'number' ? v.toFixed(4) : v}
+                                    `).join(' | ')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+            }
+            
+            // Show one-hot preview if available (backward compatibility)
+            if (preview.one_hot_preview) {
+                bodyHtml += `
                     <h4>Vista previa (primeras 10 filas):</h4>
                     <div style="overflow-x: auto;">
                         <table class="preview-table">
@@ -1325,8 +1392,8 @@
                             </tbody>
                         </table>
                     </div>
-                ` : ''}
-            `;
+                `;
+            }
         } else {
             // Normal preview
             const original = preview.original || {};
@@ -1922,6 +1989,9 @@
             modalTitle.innerHTML = '<i class="bi bi-code-slash"></i> Crear Función de Normalización Personalizada';
             document.getElementById('functionName').value = '';
             document.getElementById('functionDescription').value = '';
+            document.getElementById('removeOriginalColumn').checked = true;
+            document.getElementById('numNewColumns').value = '1';
+            updateNewColumnsInputs();
             updateCodeExample();
             
             // Eliminar el ID de edición si existe
@@ -1972,6 +2042,39 @@
         }
     }
     
+    function updateNewColumnsInputs() {
+        const numColumns = parseInt(document.getElementById('numNewColumns').value) || 1;
+        const container = document.getElementById('newColumnsContainer');
+        container.innerHTML = '';
+        
+        for (let i = 1; i <= numColumns; i++) {
+            const div = document.createElement('div');
+            div.className = 'mb-2';
+            div.innerHTML = `
+                <input type="text" class="form-control new-column-name" 
+                       id="newColumnName${i}" 
+                       placeholder="Nombre de columna ${i} (ej: ${getColumnNameSuggestion(i)})"
+                       data-column-index="${i}"
+                       onkeyup="updateCodeExample()">
+            `;
+            container.appendChild(div);
+        }
+        
+        // Actualizar el ejemplo de código con la nueva estructura
+        updateCodeExample();
+    }
+    
+    function getColumnNameSuggestion(index) {
+        const suggestions = [
+            'columna_normalizada',
+            'categoria_codificada',
+            'valor_procesado',
+            'feature_extraida',
+            'componente_principal'
+        ];
+        return suggestions[(index - 1) % suggestions.length] + (index > suggestions.length ? index : '');
+    }
+    
     function updateCodeExample() {
         // No actualizar si estamos en modo edición
         if (document.getElementById('customFunctionModal').dataset.editingId) {
@@ -1980,17 +2083,21 @@
         }
         
         const codeEditor = document.getElementById('functionCode');
+        const numColumns = parseInt(document.getElementById('numNewColumns').value) || 1;
+        const removeOriginal = document.getElementById('removeOriginalColumn').checked;
+        
         console.log('Updating code example for type:', selectedFunctionType);
         
         if (selectedFunctionType === 'numeric') {
-            codeEditor.value = `def normalize(value, series=None):
+            if (numColumns === 1) {
+                codeEditor.value = `def normalize(value, series=None):
     """
     Normaliza valores numéricos
     Args:
         value: El valor individual a normalizar
         series: La serie completa de la columna (opcional)
     Returns:
-        El valor normalizado
+        El valor normalizado para la nueva columna
     """
     # Ejemplo: normalización personalizada
     if series is not None:
@@ -1999,20 +2106,101 @@
         if max_val - min_val > 0:
             return (value - min_val) / (max_val - min_val)
     return value`;
+            } else {
+                // Generar ejemplo para múltiples columnas
+                const columnNames = [];
+                for (let i = 1; i <= numColumns; i++) {
+                    const inputName = document.getElementById(`newColumnName${i}`)?.value || `columna_${i}`;
+                    columnNames.push(`'${inputName}'`);
+                }
+                
+                codeEditor.value = `def normalize(value, series=None):
+    """
+    Normaliza valores numéricos y crea múltiples columnas nuevas
+    Args:
+        value: El valor individual a normalizar
+        series: La serie completa de la columna (opcional)
+    Returns:
+        dict: Diccionario con los valores para cada columna nueva
+              Las claves deben ser: ${columnNames.join(', ')}
+    """
+    # Ejemplo: crear múltiples features a partir del valor original
+    result = {}
+    
+    if series is not None:
+        min_val = series.min()
+        max_val = series.max()
+        
+        # Columna 1: Normalización min-max
+        if max_val - min_val > 0:
+            result['${columnNames[0].replace(/'/g, '')}'] = (value - min_val) / (max_val - min_val)
+        else:
+            result['${columnNames[0].replace(/'/g, '')}'] = 0
+        
+        # Columna 2: Normalización z-score
+        if len(series) > 1:
+            mean_val = series.mean()
+            std_val = series.std()
+            if std_val > 0:
+                result['${columnNames[1] ? columnNames[1].replace(/'/g, '') : 'columna_2'}'] = (value - mean_val) / std_val
+            else:
+                result['${columnNames[1] ? columnNames[1].replace(/'/g, '') : 'columna_2'}'] = 0
+    else:
+        # Sin la serie completa, retornar valores por defecto
+        ${columnNames.map((col, i) => `result[${col}] = value`).join('\n        ')}
+    
+    return result`;
+            }
         } else {
-            codeEditor.value = `def normalize(value):
+            if (numColumns === 1) {
+                codeEditor.value = `def normalize(value):
     """
     Normaliza valores de texto
     Args:
         value: El valor de texto a normalizar
     Returns:
-        El texto normalizado
+        El texto normalizado para la nueva columna
     """
     # Ejemplo: limpieza de texto
     if isinstance(value, str):
         # Eliminar espacios extras y convertir a minúsculas
         return value.strip().lower().replace('  ', ' ')
     return value`;
+            } else {
+                // Generar ejemplo para múltiples columnas de texto
+                const columnNames = [];
+                for (let i = 1; i <= numColumns; i++) {
+                    const inputName = document.getElementById(`newColumnName${i}`)?.value || `columna_${i}`;
+                    columnNames.push(`'${inputName}'`);
+                }
+                
+                codeEditor.value = `def normalize(value):
+    """
+    Normaliza valores de texto y crea múltiples columnas nuevas
+    Args:
+        value: El valor de texto a normalizar
+    Returns:
+        dict: Diccionario con los valores para cada columna nueva
+              Las claves deben ser: ${columnNames.join(', ')}
+    """
+    # Ejemplo: extraer diferentes características del texto
+    result = {}
+    
+    if isinstance(value, str):
+        # Columna 1: Texto limpio en minúsculas
+        result['${columnNames[0].replace(/'/g, '')}'] = value.strip().lower().replace('  ', ' ')
+        
+        # Columna 2: Longitud del texto
+        result['${columnNames[1] ? columnNames[1].replace(/'/g, '') : 'columna_2'}'] = len(value.strip())
+        
+        # Agregar más transformaciones según sea necesario
+        ${columnNames.slice(2).map((col, i) => `result[${col}] = value  # Transformación ${i + 3}`).join('\n        ')}
+    else:
+        # Si no es texto, retornar valores por defecto
+        ${columnNames.map((col, i) => `result[${col}] = ''`).join('\n        ')}
+    
+    return result`;
+            }
         }
     }
     
@@ -2306,11 +2494,23 @@
             
             const method = editingId ? 'PUT' : 'POST';
             
+            // Recopilar información de las nuevas columnas
+            const removeOriginal = document.getElementById('removeOriginalColumn').checked;
+            const numNewColumns = parseInt(document.getElementById('numNewColumns').value) || 1;
+            const newColumns = [];
+            
+            for (let i = 1; i <= numNewColumns; i++) {
+                const columnName = document.getElementById(`newColumnName${i}`)?.value || `columna_${i}`;
+                newColumns.push(columnName);
+            }
+            
             const requestData = {
                 name: name,
                 description: description,
                 code: code,
-                function_type: selectedFunctionType
+                function_type: selectedFunctionType,
+                remove_original_column: removeOriginal,
+                new_columns: newColumns
             };
             
             console.log('Saving function:', {
