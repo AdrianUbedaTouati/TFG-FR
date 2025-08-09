@@ -7,8 +7,12 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
+from django.core.files.base import ContentFile
+from django.core.cache import cache
 import pandas as pd
 import numpy as np
+import os
+import shutil
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -70,8 +74,8 @@ class DatasetColumnsView(APIView):
         else:
             dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
         
-        # Load dataset
-        df = load_dataset(dataset.file.path)
+        # Load dataset (sin usar caché para asegurar datos frescos)
+        df = load_dataset(dataset.file.path, use_cache=False)
         if df is None:
             return error_response(ERROR_PARSING_FAILED)
         
@@ -98,23 +102,11 @@ class DatasetColumnsView(APIView):
             'columns': columns,
             'dtypes': dtypes,
             'shape': [len(df), len(columns)],
-            'total_rows': len(df),
-            'total_columns': len(columns),
             'stats': stats,
             'preview': preview,
-            'memory_usage': get_memory_usage(df),
-            'total_null_count': int(total_null_count)
+            'total_null_count': int(total_null_count),
+            'memory_usage': get_memory_usage(df)
         }
-        
-        # Add detailed analysis if requested
-        if request.query_params.get('detailed', False):
-            columns_info = []
-            for col in columns:
-                col_info = stats[col].copy()
-                col_info['name'] = col
-                columns_info.append(col_info)
-            
-            response_data['detailed_info'] = columns_info
         
         return success_response(response_data)
 
@@ -135,77 +127,247 @@ class DatasetColumnDetailsView(APIView):
         if df is None:
             return error_response(ERROR_PARSING_FAILED)
         
-        # Validate column exists
+        # Clean and convert column names to strings
+        df.columns = [str(col).strip() for col in df.columns]
+        column_name = str(column_name).strip()
+        
+        # Check column exists
         if column_name not in df.columns:
             return error_response(f"Column '{column_name}' not found")
         
-        # Get column details
-        series = df[column_name]
-        details = detect_column_type(series)
+        column = df[column_name]
         
-        # Add total count
-        details['total_count'] = len(series)
+        # Get detailed stats
+        stats = detect_column_type(column)
         
-        # Add column name to response
-        details['column'] = column_name
+        # Get value counts (limit to 50 most frequent)
+        value_counts = column.value_counts().head(50).to_dict()
         
-        # Add frequency data
-        value_counts = series.value_counts(dropna=False)
-        total_non_null = series.notna().sum()
-        
+        # Get frequency data
         frequency_data = []
-        for value, count in value_counts.items():
-            # Handle NaN values
-            display_value = 'NaN' if pd.isna(value) else str(value)
-            percentage = (count / len(series)) * 100 if len(series) > 0 else 0
-            
+        total_count = len(column)
+        
+        for value, count in column.value_counts().items():
             frequency_data.append({
-                'value': display_value,
+                'value': str(value) if pd.notna(value) else 'null',
                 'count': int(count),
-                'percentage': round(percentage, 2)
+                'percentage': round((count / total_count) * 100, 2)
             })
         
-        # Sort by count (frequency) descending
-        frequency_data.sort(key=lambda x: x['count'], reverse=True)
-        details['frequency_data'] = frequency_data
+        # Add null count if there are nulls
+        null_count = column.isnull().sum()
+        if null_count > 0:
+            frequency_data.append({
+                'value': 'null',
+                'count': int(null_count),
+                'percentage': round((null_count / total_count) * 100, 2)
+            })
         
-        # Add histogram and outlier analysis for numeric columns
-        if details.get('type') == 'numeric':
-            # Create a temporary base view instance to use its methods
-            base_view = DatasetAnalysisBaseView()
-            details['histogram'] = base_view.create_histogram(series)
-            
-            # Add outlier analysis
-            valid_data = series.dropna()
-            if len(valid_data) > 0:
-                # Calculate IQR and bounds
-                q1 = valid_data.quantile(0.25)
-                q3 = valid_data.quantile(0.75)
-                iqr = q3 - q1
-                lower_bound = q1 - 1.5 * iqr
-                upper_bound = q3 + 1.5 * iqr
-                
-                # Find outliers
-                outliers = valid_data[(valid_data < lower_bound) | (valid_data > upper_bound)]
-                outlier_values = sorted(outliers.tolist())
-                
-                details['outlier_info'] = {
-                    'q1': float(q1),
-                    'q3': float(q3),
-                    'iqr': float(iqr),
-                    'lower_bound': float(lower_bound),
-                    'upper_bound': float(upper_bound),
-                    'outlier_count': len(outliers),
-                    'outlier_percentage': (len(outliers) / len(valid_data)) * 100 if len(valid_data) > 0 else 0,
-                    'outlier_values': outlier_values
-                }
+        response_data = {
+            'column_name': column_name,
+            'stats': stats,
+            'value_counts': value_counts,
+            'frequency_data': frequency_data[:100],  # Limit to 100 items
+            'total_rows': int(total_count)
+        }
         
-        return success_response(details)
+        return success_response(response_data)
+
+
+class DatasetVariableAnalysisView(APIView):
+    """Analyze a specific variable from a dataset"""
+    permission_classes = [IsAuthenticated]
     
+    def post(self, request, pk, column_name):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Clean column names
+        df.columns = [str(col).strip() for col in df.columns]
+        column_name = str(column_name).strip()
+        
+        if column_name not in df.columns:
+            return error_response(f"Column '{column_name}' not found")
+        
+        # Get analysis parameters
+        analysis_type = request.data.get('analysis_type', 'histogram')
+        include_outliers = request.data.get('include_outliers', True)
+        num_bins = request.data.get('num_bins', 20)
+        
+        column = df[column_name]
+        
+        # Detect if numeric
+        is_numeric = pd.api.types.is_numeric_dtype(column)
+        
+        try:
+            if analysis_type == 'histogram' and is_numeric:
+                plot_data = self._generate_histogram(
+                    column, column_name, num_bins, include_outliers
+                )
+            elif analysis_type == 'boxplot' and is_numeric:
+                plot_data = self._generate_boxplot(
+                    column, column_name, include_outliers
+                )
+            elif analysis_type == 'outlier_map' and is_numeric:
+                plot_data = self._generate_outlier_map(
+                    column, column_name
+                )
+            else:
+                return error_response("Invalid analysis type or non-numeric column")
+            
+            return success_response(plot_data)
+            
+        except Exception as e:
+            return error_response(f"Analysis error: {str(e)}")
+    
+    def _generate_histogram(self, column, column_name, num_bins, include_outliers):
+        """Generate histogram data and plot"""
+        # Remove nulls
+        data = column.dropna()
+        
+        if not include_outliers:
+            # Remove outliers using IQR method
+            Q1 = data.quantile(0.25)
+            Q3 = data.quantile(0.75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+            data = data[(data >= lower_bound) & (data <= upper_bound)]
+        
+        # Generate histogram
+        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
+        counts, bins, patches = ax.hist(data, bins=num_bins, edgecolor='black', alpha=0.7)
+        
+        ax.set_xlabel(column_name)
+        ax.set_ylabel('Frequency')
+        ax.set_title(f'Distribution of {column_name}')
+        ax.grid(True, alpha=0.3)
+        
+        # Add statistics
+        stats_text = f'Mean: {data.mean():.2f}\nStd: {data.std():.2f}\nCount: {len(data)}'
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
+                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        
+        # Convert plot to base64
+        plot_base64 = self.generate_plot_base64(fig)
+        
+        return {
+            'plot': plot_base64,
+            'bins': bins.tolist(),
+            'counts': counts.tolist(),
+            'statistics': {
+                'mean': float(data.mean()),
+                'std': float(data.std()),
+                'min': float(data.min()),
+                'max': float(data.max()),
+                'count': int(len(data))
+            }
+        }
+    
+    def _generate_boxplot(self, column, column_name, include_outliers):
+        """Generate boxplot data and plot"""
+        # Remove nulls
+        data = column.dropna()
+        
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.boxplot([data], showfliers=include_outliers, labels=[column_name])
+        ax.set_ylabel('Value')
+        ax.set_title(f'Boxplot of {column_name}')
+        ax.grid(True, alpha=0.3)
+        
+        # Calculate statistics
+        Q1 = data.quantile(0.25)
+        Q3 = data.quantile(0.75)
+        IQR = Q3 - Q1
+        
+        stats_text = f'Median: {data.median():.2f}\nQ1: {Q1:.2f}\nQ3: {Q3:.2f}\nIQR: {IQR:.2f}'
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
+                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        
+        plot_base64 = self.generate_plot_base64(fig)
+        
+        return {
+            'plot': plot_base64,
+            'statistics': {
+                'median': float(data.median()),
+                'q1': float(Q1),
+                'q3': float(Q3),
+                'iqr': float(IQR),
+                'min': float(data.min()),
+                'max': float(data.max()),
+                'outlier_count': int(((data < Q1 - 1.5 * IQR) | (data > Q3 + 1.5 * IQR)).sum())
+            }
+        }
+    
+    def _generate_outlier_map(self, column, column_name):
+        """Generate outlier visualization"""
+        # Remove nulls
+        data = column.dropna()
+        
+        # Calculate outlier bounds using IQR
+        Q1 = data.quantile(0.25)
+        Q3 = data.quantile(0.75)
+        IQR = Q3 - Q1
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+        
+        # Identify outliers
+        outliers = data[(data < lower_bound) | (data > upper_bound)]
+        normal_data = data[(data >= lower_bound) & (data <= upper_bound)]
+        
+        # Create scatter plot
+        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
+        
+        # Plot normal data
+        ax.scatter(range(len(normal_data)), normal_data, alpha=0.6, label='Normal', s=30)
+        
+        # Plot outliers
+        outlier_indices = data[(data < lower_bound) | (data > upper_bound)].index
+        ax.scatter(outlier_indices, outliers, color='red', alpha=0.8, label='Outliers', s=50, marker='^')
+        
+        # Add threshold lines
+        ax.axhline(y=upper_bound, color='red', linestyle='--', alpha=0.5, label='Upper Bound')
+        ax.axhline(y=lower_bound, color='red', linestyle='--', alpha=0.5, label='Lower Bound')
+        
+        ax.set_xlabel('Index')
+        ax.set_ylabel(column_name)
+        ax.set_title(f'Outlier Map for {column_name}')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        plot_base64 = self.generate_plot_base64(fig)
+        
+        return {
+            'plot': plot_base64,
+            'outlier_info': {
+                'total_outliers': int(len(outliers)),
+                'outlier_percentage': float((len(outliers) / len(data)) * 100),
+                'lower_bound': float(lower_bound),
+                'upper_bound': float(upper_bound),
+                'outlier_values': outliers.head(20).tolist()  # First 20 outliers
+            }
+        }
+    
+    def generate_plot_base64(self, fig):
+        """Convert matplotlib figure to base64 string"""
+        buffer = BytesIO()
+        fig.savefig(buffer, format='png', bbox_inches='tight', dpi=100)
+        buffer.seek(0)
+        plot_base64 = base64.b64encode(buffer.getvalue()).decode()
+        plt.close(fig)
+        return plot_base64
 
 
 class DatasetDownloadView(APIView):
-    """Download a dataset file"""
+    """Download a dataset as CSV"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request, pk):
@@ -215,161 +377,45 @@ class DatasetDownloadView(APIView):
         else:
             dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
         
+        # Read the file
         try:
             with open(dataset.file.path, 'rb') as f:
-                file_data = f.read()
-            
-            response = HttpResponse(
-                file_data,
-                content_type='text/csv'
-            )
-            response['Content-Disposition'] = f'attachment; filename="{dataset.name}.csv"'
-            return response
-            
+                response = HttpResponse(f.read(), content_type='text/csv')
+                response['Content-Disposition'] = f'attachment; filename="{dataset.name}.csv"'
+                return response
         except Exception as e:
             return error_response(f"Error downloading file: {str(e)}")
 
 
-class DatasetAnalysisBaseView(APIView):
-    """Base class for dataset analysis views"""
+class DatasetReportView(APIView):
+    """Generate analysis report for a dataset"""
     permission_classes = [IsAuthenticated]
     
-    def load_and_validate_dataset(self, pk: int, user=None) -> Optional[pd.DataFrame]:
-        """Load and validate dataset"""
-        # Verificar permisos
-        if user and user.is_staff:
-            dataset = get_object_or_404(Dataset, pk=pk)
-        elif user:
-            dataset = get_object_or_404(Dataset, pk=pk, user=user)
-        else:
-            dataset = get_object_or_404(Dataset, pk=pk)
-        df = load_dataset(dataset.file.path)
-        
-        if df is None:
-            return None
-            
-        is_valid, error_msg = validate_dataframe(df)
-        if not is_valid:
-            return None
-            
-        return df
-    
-    def generate_plot_base64(self, fig) -> str:
-        """Convert matplotlib figure to base64 string"""
-        buffer = BytesIO()
-        fig.savefig(buffer, format='png', bbox_inches='tight', dpi=100)
-        buffer.seek(0)
-        image_base64 = base64.b64encode(buffer.getvalue()).decode()
-        plt.close(fig)
-        return f"data:image/png;base64,{image_base64}"
-    
-    def create_histogram(self, series: pd.Series, title: str = None, alpha: float = 0.7) -> str:
-        """Create a histogram for a pandas Series"""
-        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
-        ax.hist(series.dropna(), bins=HISTOGRAM_BINS, edgecolor='black', alpha=alpha)
-        ax.set_xlabel(series.name)
-        ax.set_ylabel('Frequency')
-        ax.set_title(title or f'Distribution of {series.name}')
-        ax.grid(True, alpha=0.3)
-        
-        return self.generate_plot_base64(fig)
+    def post(self, request, pk):
+        # Implementation would generate a comprehensive report
+        # This is a placeholder
+        return success_response({
+            'message': 'Report generation not yet implemented'
+        })
 
 
-class DatasetVariableAnalysisView(DatasetAnalysisBaseView):
-    """Analyze a specific variable in the dataset"""
-    
-    def get(self, request, pk, column_name):
-        # Load dataset
-        df = self.load_and_validate_dataset(pk, user=request.user)
-        if df is None:
-            return error_response(ERROR_PARSING_FAILED)
-        
-        # Validate column
-        if column_name not in df.columns:
-            return error_response(f"Column '{column_name}' not found")
-        
-        # Generate analysis based on column type
-        series = df[column_name]
-        col_info = detect_column_type(series)
-        
-        analysis = {
-            'column_name': column_name,
-            'type_info': col_info,
-            'visualizations': []
-        }
-        
-        if col_info.get('type') == 'numeric':
-            # Generate multiple visualizations for numeric data
-            analysis['visualizations'].extend([
-                self._create_histogram(series),
-                self._create_boxplot(series),
-                self._create_density_plot(series)
-            ])
-        elif col_info.get('type') == 'categorical':
-            analysis['visualizations'].append(
-                self._create_bar_chart(series)
-            )
-        
-        return success_response(analysis)
-    
-    def _create_histogram(self, series: pd.Series) -> Dict[str, str]:
-        """Create histogram visualization"""
-        return {
-            'type': 'histogram',
-            'image': self.create_histogram(series, f'Histogram of {series.name}')
-        }
-    
-    def _create_boxplot(self, series: pd.Series) -> Dict[str, str]:
-        """Create boxplot visualization"""
-        fig, ax = plt.subplots(figsize=(8, 6))
-        ax.boxplot(series.dropna())
-        ax.set_ylabel(series.name)
-        ax.set_title(f'Boxplot of {series.name}')
-        ax.grid(True, alpha=0.3)
-        
-        return {
-            'type': 'boxplot',
-            'image': self.generate_plot_base64(fig)
-        }
-    
-    def _create_density_plot(self, series: pd.Series) -> Dict[str, str]:
-        """Create density plot visualization"""
-        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
-        series.dropna().plot(kind='density', ax=ax)
-        ax.set_xlabel(series.name)
-        ax.set_title(f'Density Plot of {series.name}')
-        ax.grid(True, alpha=0.3)
-        
-        return {
-            'type': 'density',
-            'image': self.generate_plot_base64(fig)
-        }
-    
-    def _create_bar_chart(self, series: pd.Series) -> Dict[str, str]:
-        """Create bar chart for categorical data"""
-        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
-        value_counts = series.value_counts().head(20)
-        value_counts.plot(kind='bar', ax=ax)
-        ax.set_xlabel(series.name)
-        ax.set_ylabel('Count')
-        ax.set_title(f'Distribution of {series.name}')
-        plt.xticks(rotation=45, ha='right')
-        
-        return {
-            'type': 'bar_chart',
-            'image': self.generate_plot_base64(fig)
-        }
-
-
-class DatasetGeneralAnalysisView(DatasetAnalysisBaseView):
-    """Generate general analysis for entire dataset"""
+class DatasetAnalysisView(APIView):
+    """Comprehensive dataset analysis"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, pk):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
         # Load dataset
-        df = self.load_and_validate_dataset(pk, user=request.user)
+        df = load_dataset(dataset.file.path)
         if df is None:
             return error_response(ERROR_PARSING_FAILED)
         
+        # Perform comprehensive analysis
         analysis = {
             'basic_info': self._get_basic_info(df),
             'missing_data': self._analyze_missing_data(df),
@@ -385,12 +431,11 @@ class DatasetGeneralAnalysisView(DatasetAnalysisBaseView):
     def _get_basic_info(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Get basic dataset information"""
         return {
-            'shape': df.shape,
-            'columns': df.columns.tolist(),
+            'shape': list(df.shape),
+            'columns': list(df.columns),
             'dtypes': df.dtypes.astype(str).to_dict(),
             'memory_usage': get_memory_usage(df),
-            'numeric_columns': df.select_dtypes(include=[np.number]).columns.tolist(),
-            'categorical_columns': df.select_dtypes(include=['object']).columns.tolist()
+            'duplicate_rows': int(df.duplicated().sum())
         }
     
     def _analyze_missing_data(self, df: pd.DataFrame) -> Dict[str, Any]:
@@ -454,3 +499,99 @@ class DatasetGeneralAnalysisView(DatasetAnalysisBaseView):
         ax.grid(True, alpha=0.3)
         
         return self.generate_plot_base64(fig)
+
+
+class DatasetDeleteColumnView(APIView):
+    """Delete a column from a dataset"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
+        # Get column name from request
+        column_name = request.data.get('column_name')
+        if not column_name:
+            return error_response("Column name is required")
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Log initial state
+        print(f"Dataset path: {dataset.file.path}")
+        print(f"Initial columns: {list(df.columns)}")
+        print(f"Column to delete: {column_name}")
+        
+        # Check if column exists
+        if column_name not in df.columns:
+            return error_response(f"Column '{column_name}' not found in dataset")
+        
+        # Remove the column
+        df = df.drop(columns=[column_name])
+        print(f"After drop - columns: {list(df.columns)}")
+        
+        # Save the modified dataset
+        try:
+            # Convert DataFrame to CSV string
+            from io import StringIO
+            csv_buffer = StringIO()
+            df.to_csv(csv_buffer, index=False)
+            csv_content = csv_buffer.getvalue()
+            
+            # Get the original file name
+            original_name = os.path.basename(dataset.file.name)
+            
+            # Invalidar caché antes de eliminar el archivo antiguo
+            old_path = dataset.file.path
+            old_cache_key = f'dataset_{old_path}'
+            cache.delete(old_cache_key)
+            print(f"Old cache invalidated for key: {old_cache_key}")
+            
+            # Delete the old file
+            dataset.file.delete(save=False)
+            
+            # Save the new content
+            dataset.file.save(
+                original_name,
+                ContentFile(csv_content.encode('utf-8')),
+                save=False
+            )
+            
+            # Update dataset metadata if fields exist
+            if hasattr(dataset, 'column_count'):
+                dataset.column_count = len(df.columns)
+            if hasattr(dataset, 'row_count'):
+                dataset.row_count = len(df)
+            
+            # Force save to ensure database is updated
+            dataset.save()
+            
+            # Invalidar el caché del dataset
+            cache_key = f'dataset_{dataset.file.path}'
+            cache.delete(cache_key)
+            print(f"Cache invalidated for key: {cache_key}")
+            
+            # Verify the change was saved
+            df_verify = pd.read_csv(dataset.file.path)
+            print(f"After save - columns: {list(df_verify.columns)}")
+            print(f"New file path: {dataset.file.path}")
+            
+            if column_name in df_verify.columns:
+                return error_response(f"Column '{column_name}' was not deleted properly")
+            
+            return success_response({
+                'message': f"Column '{column_name}' deleted successfully",
+                'new_column_count': len(df_verify.columns),
+                'columns': list(df_verify.columns),
+                'file_path': dataset.file.path  # Para depuración
+            })
+        except Exception as e:
+            print(f"Error in delete column: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return error_response(f"Error saving dataset: {str(e)}")

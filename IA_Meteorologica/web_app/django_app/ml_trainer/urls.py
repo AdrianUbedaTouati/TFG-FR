@@ -14,6 +14,7 @@ urlpatterns = [
     path('datasets/<int:pk>/report/', views.DatasetReportView.as_view(), name='dataset-report'),
     path('datasets/<int:pk>/normalization/', views.DatasetNormalizationView.as_view(), name='dataset-normalization'),
     path('datasets/<int:pk>/normalization/preview/', views.DatasetNormalizationPreviewView.as_view(), name='dataset-normalization-preview'),
+    path('datasets/<int:pk>/delete-column/', views.DatasetDeleteColumnView.as_view(), name='dataset-delete-column'),
     
     # Custom normalization function endpoints
     path('custom-normalization-functions/', views.CustomNormalizationFunctionView.as_view(), name='custom-normalization-functions'),

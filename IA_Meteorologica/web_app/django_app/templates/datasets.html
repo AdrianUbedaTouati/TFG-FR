@@ -1285,8 +1285,13 @@ function showDatasetDetails(datasetId) {
         // Mostrar el modal
         modal.show();
         
-        // Cargar los datos del dataset
-        fetch(`/api/datasets/${datasetId}/columns/`)
+        // Cargar los datos del dataset (con timestamp para evitar caché)
+        fetch(`/api/datasets/${datasetId}/columns/?t=${Date.now()}`, {
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        })
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -1434,12 +1439,14 @@ function displayDatasetDetails(dataset, data) {
                                             const isNumeric = colStats.mean !== undefined;
                                             
                                             let typeLabel = dtype;
-                                            if (dtype.includes('int') || dtype.includes('float')) {
+                                            if (dtype.includes('int') || dtype.includes('float') || dtype.includes('uint')) {
                                                 typeLabel = '📊 Numérique';
                                             } else if (dtype.includes('datetime')) {
                                                 typeLabel = '📅 Date/Heure';
                                             } else if (dtype.includes('numeric (stored as text)')) {
                                                 typeLabel = '🔢 Numérique (texte)';
+                                            } else if (isNumeric) {
+                                                typeLabel = '📊 Numérique';
                                             } else if (dtype.includes('object')) {
                                                 typeLabel = '📝 Texte';
                                             }
@@ -1592,12 +1599,12 @@ function displayDatasetDetails(dataset, data) {
                                 let displayType = dtype;
                                 let pythonType = 'object';
                                 
-                                if (dtype.includes('int64')) {
+                                if (dtype.includes('int64') || dtype.includes('int32') || dtype.includes('int16') || dtype.includes('int8') || dtype.includes('uint')) {
                                     badgeClass = 'success';
                                     typeIcon = 'bi-123';
                                     displayType = 'Numérico';
                                     pythonType = 'int';
-                                } else if (dtype.includes('float64')) {
+                                } else if (dtype.includes('float64') || dtype.includes('float32') || dtype.includes('float16')) {
                                     badgeClass = 'success';
                                     typeIcon = 'bi-123';
                                     displayType = 'Numérico';
@@ -1654,6 +1661,15 @@ function displayDatasetDetails(dataset, data) {
                                     typeIcon = 'bi-toggle-on';
                                     displayType = 'Booleano';
                                     pythonType = 'bool';
+                                } else if (isNumeric) {
+                                    // Fallback para columnas numéricas que no coinciden con los patrones anteriores
+                                    badgeClass = 'success';
+                                    typeIcon = 'bi-123';
+                                    displayType = 'Numérico';
+                                    // Determinar si es int o float basándose en los valores de muestra
+                                    const sampleValues = colStats.sample_values || [];
+                                    const hasDecimals = sampleValues.some(val => val !== null && val !== undefined && val % 1 !== 0);
+                                    pythonType = hasDecimals ? 'float' : 'int';
                                 }
                                 
                                 return `
@@ -1687,6 +1703,9 @@ function displayDatasetDetails(dataset, data) {
                                                     <i class="bi bi-exclamation-triangle"></i>
                                                 </button>
                                             ` : ''}
+                                            <button class="btn btn-sm btn-outline-danger ms-1" onclick="event.stopPropagation(); deleteColumn('${col}')" title="Eliminar columna">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
                                         </td>
                                     </tr>
                                 `;
@@ -1719,8 +1738,10 @@ function generateDatasetCharts(columns, stats) {
     // Gráfico de tipos de datos
     const dataTypes = {};
     columns.forEach(col => {
-        const dtype = stats[col]?.dtype || 'unknown';
-        const type = dtype.includes('float') || dtype.includes('int') ? 'Numérico' : 
+        const colStats = stats[col] || {};
+        const dtype = colStats.dtype || 'unknown';
+        const isNumeric = colStats.mean !== undefined;
+        const type = dtype.includes('float') || dtype.includes('int') || dtype.includes('uint') || isNumeric ? 'Numérico' : 
                      dtype.includes('object') ? 'Texto' : 
                      dtype.includes('datetime') ? 'Fecha' : 'Otro';
         dataTypes[type] = (dataTypes[type] || 0) + 1;
@@ -1914,12 +1935,14 @@ function addNewAnalysis() {
                                 const isNumeric = colStats.mean !== undefined;
                                 
                                 let typeLabel = dtype;
-                                if (dtype.includes('int') || dtype.includes('float')) {
+                                if (dtype.includes('int') || dtype.includes('float') || dtype.includes('uint')) {
                                     typeLabel = '📊 Numérique';
                                 } else if (dtype.includes('datetime')) {
                                     typeLabel = '📅 Date/Heure';
                                 } else if (dtype.includes('numeric (stored as text)')) {
                                     typeLabel = '🔢 Numérique (texte)';
+                                } else if (isNumeric) {
+                                    typeLabel = '📊 Numérique';
                                 } else if (dtype.includes('object')) {
                                     typeLabel = '📝 Texte';
                                 }
@@ -2867,6 +2890,74 @@ function deleteDataset(datasetId) {
                 hideLoading();
                 console.error('Erreur de suppression:', error);
                 showNotification('Erreur', 'Erreur lors de la suppression: ' + error.message, 'error');
+            });
+        }
+    });
+}
+
+// Eliminar una columna del dataset
+function deleteColumn(columnName) {
+    if (!selectedDataset) return;
+    
+    Swal.fire({
+        title: '¿Estás seguro?',
+        text: `¿Deseas eliminar la columna "${columnName}" del dataset?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            showLoading('Eliminando columna...', `Eliminando la columna "${columnName}" del dataset`);
+            
+            fetch(`/api/datasets/${selectedDataset.id}/delete-column/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    column_name: columnName
+                })
+            })
+            .then(response => {
+                hideLoading();
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+            })
+            .then(data => {
+                hideLoading();
+                showNotification('¡Éxito!', `La columna "${columnName}" ha sido eliminada`, 'success');
+                
+                // Limpiar datos almacenados en caché del cliente
+                window.currentDatasetData = null;
+                
+                // Cerrar el modal actual para evitar conflictos
+                const currentModal = bootstrap.Modal.getInstance(document.getElementById('datasetDetailModal'));
+                if (currentModal) {
+                    currentModal.hide();
+                }
+                
+                // Limpiar cualquier backdrop residual
+                document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.removeProperty('overflow');
+                document.body.style.removeProperty('padding-right');
+                
+                // Esperar un momento y luego recargar los detalles del dataset
+                setTimeout(() => {
+                    showDatasetDetails(selectedDataset.id);
+                }, 500);
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error al eliminar columna:', error);
+                showNotification('Error', 'Error al eliminar la columna: ' + error.message, 'error');
             });
         }
     });
