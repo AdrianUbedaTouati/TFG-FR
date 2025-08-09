@@ -795,8 +795,13 @@ class DatasetNormalizationPreviewView(APIView):
                                         new_values = normalized_sample[new_col].dropna()
                                         comparison[column][new_col] = {
                                             'sample': new_values.head(50).tolist(),
-                                            'stats': detect_column_type(normalized_sample[new_col])
+                                            'stats': detect_column_type(normalized_sample[new_col]),
+                                            'unique_count': normalized_sample[new_col].nunique()
                                         }
+                                
+                                # Add original column info
+                                comparison[column]['original_stats'] = detect_column_type(df[column])
+                                comparison[column]['original_unique_count'] = df[column].nunique()
                                 continue
                         except:
                             pass
@@ -811,20 +816,60 @@ class DatasetNormalizationPreviewView(APIView):
                         continue
                     
                     # For categorical/text columns, show unique value mapping
-                    if df[column].dtype == 'object' or df[column].nunique() < 50:
+                    # Show mapping for all columns with reasonable number of unique values
+                    if df[column].dtype == 'object' or df[column].nunique() < 1000:
                         unique_mapping = []
-                        for val in original_values.unique()[:50]:  # Limit to 50 unique values
-                            original_idx = original_values[original_values == val].index[0]
-                            if original_idx in normalized_values.index:
+                        # Get ALL unique values from the full dataset, no limit
+                        all_unique_values = df[column].dropna().unique()
+                        
+                        # Create a temporary dataframe with all unique values to normalize them
+                        temp_df = pd.DataFrame({column: all_unique_values})
+                        
+                        # Apply the same normalization to all unique values
+                        try:
+                            view = DatasetNormalizationView()
+                            normalized_temp = view._apply_normalization(temp_df.copy(), {column: method})
+                            
+                            # Build the mapping for all unique values
+                            for idx, val in enumerate(all_unique_values):
+                                if column in normalized_temp.columns:
+                                    # Single column output
+                                    normalized_val = normalized_temp.iloc[idx][column]
+                                else:
+                                    # Column was transformed or removed, try to find the new column
+                                    new_cols = [col for col in normalized_temp.columns if col not in temp_df.columns]
+                                    if new_cols:
+                                        # Use the first new column for the mapping
+                                        normalized_val = normalized_temp.iloc[idx][new_cols[0]]
+                                    else:
+                                        normalized_val = '[Columna eliminada]'
+                                
                                 unique_mapping.append({
                                     'original': val,
-                                    'normalized': normalized_values.loc[original_idx]
+                                    'normalized': normalized_val
                                 })
+                        except Exception as e:
+                            # If normalization fails, fall back to sample-based mapping
+                            print(f"Error normalizing all unique values: {e}")
+                            for val in all_unique_values:
+                                if val in original_values.values:
+                                    original_idx = original_values[original_values == val].index[0]
+                                    if original_idx in normalized_values.index:
+                                        unique_mapping.append({
+                                            'original': val,
+                                            'normalized': normalized_values.loc[original_idx]
+                                        })
+                                else:
+                                    unique_mapping.append({
+                                        'original': val,
+                                        'normalized': '[Error al normalizar]'
+                                    })
                         
                         comparison[column] = {
                             'original': {
                                 'sample': original_values.head(50).tolist(),
-                                'stats': detect_column_type(sample_df[column])
+                                'stats': detect_column_type(df[column]),  # Use full dataset for stats
+                                'all_unique_count': df[column].nunique()  # Add count of all unique values
                             },
                             'normalized': {
                                 'sample': normalized_values.head(50).tolist(),
@@ -838,7 +883,7 @@ class DatasetNormalizationPreviewView(APIView):
                         comparison[column] = {
                             'original': {
                                 'sample': original_values.head(50).tolist(),
-                                'stats': detect_column_type(sample_df[column])
+                                'stats': detect_column_type(df[column])  # Use full dataset for stats
                             },
                             'normalized': {
                                 'sample': normalized_values.head(50).tolist(),

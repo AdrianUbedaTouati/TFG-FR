@@ -1466,11 +1466,12 @@ def normalize(value, series=None):
             
             if (isCategorical && uniqueMapping.length > 0) {
                 // Show unique value mapping for categorical data
+                const totalUniqueCount = original.all_unique_count || uniqueMapping.length;
                 bodyHtml = `
-                    <h4>Mapeo de valores únicos:</h4>
-                    <div class="preview-table-container" style="max-height: 400px; overflow-y: auto;">
+                    <h4>Mapeo de valores únicos (${totalUniqueCount} valores únicos totales):</h4>
+                    <div class="preview-table-container" style="max-height: 600px; overflow-y: auto;">
                         <table class="preview-table">
-                            <thead style="position: sticky; top: 0; background-color: white; z-index: 10;">
+                            <thead style="position: sticky; top: 0; background-color: rgba(0, 20, 40, 0.95); z-index: 10;">
                                 <tr>
                                     <th>Valor Original</th>
                                     <th>Valor Normalizado</th>
