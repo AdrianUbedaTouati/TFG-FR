@@ -313,9 +313,47 @@ class DatasetNormalizationView(APIView):
                     # Create safe execution environment
                     import math
                     from datetime import datetime, timezone, timedelta
+                    import re
+                    import json
+                    import unicodedata
+                    
+                    # Define allowed modules for import
+                    import _strptime  # Pre-import to avoid issues with datetime.strptime
+                    import time
+                    
+                    ALLOWED_MODULES = {
+                        'math': math,
+                        'datetime': datetime,
+                        'timezone': timezone,
+                        'timedelta': timedelta,
+                        're': re,
+                        'json': json,
+                        'unicodedata': unicodedata,
+                        '_strptime': _strptime,  # Internal module needed by datetime.strptime
+                        'time': time,  # Needed by datetime internally
+                    }
+                    
+                    # Create datetime module object for 'from datetime import ...'
+                    import types
+                    datetime_module = types.ModuleType('datetime')
+                    datetime_module.datetime = datetime
+                    datetime_module.timezone = timezone
+                    datetime_module.timedelta = timedelta
+                    
+                    # Update ALLOWED_MODULES to use the module object
+                    ALLOWED_MODULES['datetime'] = datetime_module
+                    
+                    # Create a safe import function
+                    def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+                        """Safe import function that only allows specific modules"""
+                        if name in ALLOWED_MODULES:
+                            return ALLOWED_MODULES[name]
+                        else:
+                            raise ImportError(f"Import of module '{name}' is not allowed")
                     
                     safe_globals = {
                         '__builtins__': {
+                            '__import__': safe_import,
                             'len': len,
                             'str': str,
                             'int': int,
@@ -344,6 +382,20 @@ class DatasetNormalizationView(APIView):
                             'pow': pow,
                             'divmod': divmod,
                             'print': print,  # For debugging
+                            # Add built-in exceptions
+                            'Exception': Exception,
+                            'ValueError': ValueError,
+                            'TypeError': TypeError,
+                            'KeyError': KeyError,
+                            'IndexError': IndexError,
+                            'AttributeError': AttributeError,
+                            'ImportError': ImportError,
+                            'RuntimeError': RuntimeError,
+                            'ZeroDivisionError': ZeroDivisionError,
+                            'NameError': NameError,
+                            'FileNotFoundError': FileNotFoundError,
+                            'NotImplementedError': NotImplementedError,
+                            'StopIteration': StopIteration,
                         }
                     }
                     
@@ -372,7 +424,26 @@ class DatasetNormalizationView(APIView):
                             # Process in batches to avoid memory issues
                             batch_size = 1000
                             total_rows = len(df)
-                            results_dict = {col: [] for col in custom_func.new_columns}
+                            
+                            # First, detect actual column names by running the function once
+                            actual_column_names = None
+                            if total_rows > 0:
+                                try:
+                                    sample_value = df[column].iloc[0]
+                                    if custom_func.function_type == 'numeric':
+                                        sample_result = normalize_func(sample_value, series=None)
+                                    else:
+                                        sample_result = normalize_func(sample_value)
+                                    
+                                    if isinstance(sample_result, dict):
+                                        actual_column_names = list(sample_result.keys())
+                                        print(f"Detected actual column names from function output: {actual_column_names}")
+                                except Exception as e:
+                                    print(f"Error detecting column names: {e}")
+                            
+                            # Use actual column names if detected, otherwise use saved names
+                            column_names_to_use = actual_column_names if actual_column_names else custom_func.new_columns
+                            results_dict = {col: [] for col in column_names_to_use}
                             
                             print(f"Processing {total_rows} rows in batches of {batch_size}")
                             
@@ -411,22 +482,23 @@ class DatasetNormalizationView(APIView):
                                                 result = normalize_func(value, series=None)
                                             
                                             if isinstance(result, dict):
-                                                for col_name in custom_func.new_columns:
+                                                # Use actual keys from result if available
+                                                for col_name in column_names_to_use:
                                                     results_dict[col_name].append(result.get(col_name, None))
                                             else:
                                                 # If single value returned, use first column name
-                                                results_dict[custom_func.new_columns[0]].append(result)
-                                                for col_name in custom_func.new_columns[1:]:
+                                                results_dict[column_names_to_use[0]].append(result)
+                                                for col_name in column_names_to_use[1:]:
                                                     results_dict[col_name].append(None)
                                         except TimeoutException:
                                             print(f"Timeout in normalize function at index {idx}")
                                             # Append None for all columns on timeout
-                                            for col_name in custom_func.new_columns:
+                                            for col_name in column_names_to_use:
                                                 results_dict[col_name].append(None)
                                         except Exception as e:
                                             print(f"Error in normalize function at index {idx}: {e}")
                                             # Append None for all columns on error
-                                            for col_name in custom_func.new_columns:
+                                            for col_name in column_names_to_use:
                                                 results_dict[col_name].append(None)
                                 else:
                                     # For text functions, apply without series parameter
@@ -437,28 +509,29 @@ class DatasetNormalizationView(APIView):
                                                 result = normalize_func(value)
                                             
                                             if isinstance(result, dict):
-                                                for col_name in custom_func.new_columns:
+                                                for col_name in column_names_to_use:
                                                     results_dict[col_name].append(result.get(col_name, ''))
                                             else:
                                                 # If single value returned, use first column name
-                                                results_dict[custom_func.new_columns[0]].append(result)
-                                                for col_name in custom_func.new_columns[1:]:
+                                                results_dict[column_names_to_use[0]].append(result)
+                                                for col_name in column_names_to_use[1:]:
                                                     results_dict[col_name].append('')
                                         except TimeoutException:
                                             print(f"Timeout in normalize function at index {idx}")
                                             # Append empty string for all columns on timeout
-                                            for col_name in custom_func.new_columns:
+                                            for col_name in column_names_to_use:
                                                 results_dict[col_name].append('')
                                         except Exception as e:
                                             print(f"Error in normalize function at index {idx}: {e}")
                                             # Append empty string for all columns on error
-                                            for col_name in custom_func.new_columns:
+                                            for col_name in column_names_to_use:
                                                 results_dict[col_name].append('')
                             
                             print(f"Finished processing all {total_rows} rows")
                             
                             # Create new columns from results
-                            for new_col_name in custom_func.new_columns:
+                            # Use the actual column names from results_dict
+                            for new_col_name in results_dict.keys():
                                 normalized_df[new_col_name] = results_dict[new_col_name]
                                 print(f"Created new column: {new_col_name} with {len(results_dict[new_col_name])} values")
                             
@@ -657,14 +730,31 @@ class DatasetNormalizationPreviewView(APIView):
                             custom_func = CustomNormalizationFunction.objects.get(id=function_id)
                             
                             if custom_func.new_columns and len(custom_func.new_columns) > 0:
+                                # Detect actual column names in the normalized sample
+                                # Look for columns that exist in normalized_sample but not in sample_df
+                                original_columns = set(sample_df.columns)
+                                normalized_columns = set(normalized_sample.columns)
+                                new_columns_detected = list(normalized_columns - original_columns)
+                                
+                                # If custom function removed the original column, detect new columns differently
+                                if custom_func.remove_original_column and column not in normalized_sample.columns:
+                                    # All columns that didn't exist before are new
+                                    actual_new_columns = new_columns_detected
+                                else:
+                                    # Filter to only truly new columns
+                                    actual_new_columns = [col for col in new_columns_detected if col not in original_columns]
+                                
+                                # Use detected columns if available, otherwise fall back to saved names
+                                columns_to_use = actual_new_columns if actual_new_columns else custom_func.new_columns
+                                
                                 # Handle multiple column output
                                 comparison[column] = {
-                                    'new_columns': custom_func.new_columns,
+                                    'new_columns': columns_to_use,
                                     'remove_original': custom_func.remove_original_column
                                 }
                                 
                                 # Add preview for each new column
-                                for new_col in custom_func.new_columns:
+                                for new_col in columns_to_use:
                                     if new_col in normalized_sample.columns:
                                         new_values = normalized_sample[new_col].dropna()
                                         comparison[column][new_col] = {
@@ -926,9 +1016,47 @@ class CustomNormalizationFunctionTestView(APIView):
         # Create a safe execution environment
         import math
         from datetime import datetime, timezone, timedelta
+        import re
+        import json
+        import unicodedata
+        
+        # Define allowed modules for import
+        import _strptime  # Pre-import to avoid issues with datetime.strptime
+        import time
+        
+        ALLOWED_MODULES = {
+            'math': math,
+            'datetime': datetime,
+            'timezone': timezone,
+            'timedelta': timedelta,
+            're': re,
+            'json': json,
+            'unicodedata': unicodedata,
+            '_strptime': _strptime,  # Internal module needed by datetime.strptime
+            'time': time,  # Needed by datetime internally
+        }
+        
+        # Create datetime module object for 'from datetime import ...'
+        import types
+        datetime_module = types.ModuleType('datetime')
+        datetime_module.datetime = datetime
+        datetime_module.timezone = timezone
+        datetime_module.timedelta = timedelta
+        
+        # Update ALLOWED_MODULES to use the module object
+        ALLOWED_MODULES['datetime'] = datetime_module
+        
+        # Create a safe import function
+        def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+            """Safe import function that only allows specific modules"""
+            if name in ALLOWED_MODULES:
+                return ALLOWED_MODULES[name]
+            else:
+                raise ImportError(f"Import of module '{name}' is not allowed")
         
         safe_globals = {
             '__builtins__': {
+                '__import__': safe_import,
                 'len': len,
                 'str': str,
                 'int': int,
@@ -948,6 +1076,20 @@ class CustomNormalizationFunctionTestView(APIView):
                 'range': range,
                 'enumerate': enumerate,
                 'zip': zip,
+                # Add built-in exceptions
+                'Exception': Exception,
+                'ValueError': ValueError,
+                'TypeError': TypeError,
+                'KeyError': KeyError,
+                'IndexError': IndexError,
+                'AttributeError': AttributeError,
+                'ImportError': ImportError,
+                'RuntimeError': RuntimeError,
+                'ZeroDivisionError': ZeroDivisionError,
+                'NameError': NameError,
+                'FileNotFoundError': FileNotFoundError,
+                'NotImplementedError': NotImplementedError,
+                'StopIteration': StopIteration,
             },
             # Add safe modules
             'math': math,
@@ -982,10 +1124,16 @@ class CustomNormalizationFunctionTestView(APIView):
             # Execute the function
             result = normalize_func(test_value)
             
+            # Detect column names if result is a dictionary
+            detected_columns = []
+            if isinstance(result, dict):
+                detected_columns = list(result.keys())
+            
             return success_response({
                 'result': str(result),
                 'input': str(test_value),
-                'function_type': function_type
+                'function_type': function_type,
+                'detected_columns': detected_columns
             })
             
         except Exception as e:

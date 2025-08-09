@@ -1029,9 +1029,15 @@
                         <i class="bi bi-info-circle"></i> La función debe recibir un parámetro 'value' y retornar el valor normalizado.
                         Para funciones numéricas, también puede recibir 'series' con toda la columna.
                         <br><br>
-                        <strong>Módulos disponibles:</strong> math, datetime, timezone, timedelta (y pandas como pd para funciones numéricas)
-                        <br>
-                        <strong style="color: #ff6b6b;">⚠️ NO uses declaraciones import</strong> - Los módulos ya están disponibles directamente
+                        <strong>Módulos permitidos para importar:</strong>
+                        <ul style="margin-bottom: 0; margin-top: 5px;">
+                            <li>math - Funciones matemáticas</li>
+                            <li>datetime, timezone, timedelta - Manejo de fechas y tiempo</li>
+                            <li>re - Expresiones regulares</li>
+                            <li>json - Manejo de JSON</li>
+                            <li>unicodedata - Normalización de caracteres Unicode</li>
+                            <li>pandas (como pd) - Solo para funciones numéricas</li>
+                        </ul>
                     </div>
                     <textarea class="code-editor" id="functionCode" placeholder="def normalize(value):
     # Tu código aquí
@@ -1102,6 +1108,7 @@
     let normalizationConfig = {};
     let normalizedCount = 0;
     let selectedFunctionType = 'numeric';
+    let detectedColumnNames = [];
 
     document.addEventListener('DOMContentLoaded', function() {
         console.log('normalize.html script loaded');
@@ -2001,6 +2008,12 @@
             document.getElementById('removeOriginalColumn').checked = functionData.remove_original_column !== undefined ? functionData.remove_original_column : true;
             document.getElementById('numNewColumns').value = functionData.new_columns && functionData.new_columns.length > 0 ? functionData.new_columns.length : 1;
             
+            // Cargar nombres de columnas existentes
+            if (functionData.new_columns && functionData.new_columns.length > 0) {
+                detectedColumnNames = functionData.new_columns;
+                console.log('Loaded existing column names:', detectedColumnNames);
+            }
+            
             // Actualizar los inputs de columnas antes de establecer sus valores
             updateNewColumnsInputs();
             
@@ -2030,6 +2043,9 @@
             document.getElementById('numNewColumns').value = '1';
             updateNewColumnsInputs();
             updateCodeExample();
+            
+            // Limpiar nombres detectados
+            detectedColumnNames = [];
             
             // Eliminar el ID de edición si existe
             delete document.getElementById('customFunctionModal').dataset.editingId;
@@ -2119,7 +2135,11 @@
         
         if (selectedFunctionType === 'numeric') {
             if (numColumns === 1) {
-                codeEditor.value = `def normalize(value, series=None):
+                codeEditor.value = `# Los imports son opcionales - los módulos también están disponibles directamente
+# import math
+# from datetime import datetime
+
+def normalize(value, series=None):
     """
     Normaliza valores numéricos
     Args:
@@ -2128,20 +2148,13 @@
     Returns:
         El valor normalizado para la nueva columna
     """
-    # Ejemplo: normalización personalizada
+    # Ejemplo: normalización min-max
     if series is not None:
         min_val = series.min()
         max_val = series.max()
         if max_val - min_val > 0:
             return (value - min_val) / (max_val - min_val)
-    return value
-    
-    # Ejemplo con math (sin import):
-    # return math.sin(value * math.pi / 180)
-    
-    # Ejemplo con datetime (sin import):
-    # dt = datetime.fromisoformat(value) if isinstance(value, str) else value
-    # return dt.hour`;
+    return value`;
             } else {
                 // Generar ejemplo para múltiples columnas
                 const columnNames = [];
@@ -2516,8 +2529,17 @@
             const result = await response.json();
             
             if (response.ok) {
+                // Store detected column names
+                if (result.detected_columns && result.detected_columns.length > 0) {
+                    detectedColumnNames = result.detected_columns;
+                    console.log('Detected column names:', detectedColumnNames);
+                    
+                    // Update the number of columns input
+                    document.getElementById('numNewColumns').value = detectedColumnNames.length;
+                }
+                
                 resultDiv.className = 'test-result success mt-3';
-                resultDiv.innerHTML = `
+                let html = `
                     <h6>Resultado de la prueba</h6>
                     <table class="test-result-table">
                         <tr>
@@ -2528,8 +2550,19 @@
                             <th>Resultado</th>
                             <td>${result.result}</td>
                         </tr>
-                    </table>
                 `;
+                
+                if (detectedColumnNames.length > 0) {
+                    html += `
+                        <tr>
+                            <th>Columnas detectadas</th>
+                            <td>${detectedColumnNames.join(', ')}</td>
+                        </tr>
+                    `;
+                }
+                
+                html += '</table>';
+                resultDiv.innerHTML = html;
                 resultDiv.style.display = 'block';
             } else {
                 resultDiv.className = 'test-result error mt-3';
@@ -2564,11 +2597,17 @@
             // Recopilar información de las nuevas columnas
             const removeOriginal = document.getElementById('removeOriginalColumn').checked;
             const numNewColumns = parseInt(document.getElementById('numNewColumns').value) || 1;
-            const newColumns = [];
+            let newColumns = [];
             
-            for (let i = 1; i <= numNewColumns; i++) {
-                // Generar nombres automáticos para las columnas
-                newColumns.push(`columna_${i}`);
+            // Usar nombres detectados si están disponibles
+            if (detectedColumnNames.length > 0) {
+                newColumns = detectedColumnNames;
+                console.log('Using detected column names:', newColumns);
+            } else {
+                // Generar nombres automáticos solo si no hay nombres detectados
+                for (let i = 1; i <= numNewColumns; i++) {
+                    newColumns.push(`columna_${i}`);
+                }
             }
             
             const requestData = {
