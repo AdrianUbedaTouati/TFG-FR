@@ -712,11 +712,21 @@
                 
                 <div class="row mb-3">
                     <div class="col-md-12">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <button type="button" class="btn btn-outline-info btn-sm" onclick="togglePatternMode()">
-                                <i class="bi bi-grid-3x3-gap"></i> <span id="patternToggleText">Activar patrón personalizado</span>
-                            </button>
-                            
+                        <div class="mb-3">
+                            <div class="d-flex align-items-center">
+                                <button type="button" class="btn btn-outline-info btn-sm" onclick="togglePatternMode()">
+                                    <i class="bi bi-grid-3x3-gap"></i> <span id="patternToggleText">Activar patrón personalizado</span>
+                                </button>
+                                <small class="text-muted ms-2">
+                                    <i class="bi bi-info-circle"></i> Agrupa resultados por caracteres seleccionados para encontrar valores únicos
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex align-items-center">
+                            <small class="text-muted me-2">
+                                <i class="bi bi-search"></i> Alcance de búsqueda:
+                            </small>
                             <div class="btn-group btn-group-sm" role="group">
                                 <button type="button" class="btn btn-primary" onclick="setSearchScope('limited')" id="searchLimitedBtn">
                                     <i class="bi bi-funnel"></i> Primeros <span id="limitValue">100</span>
