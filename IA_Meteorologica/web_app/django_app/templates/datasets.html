@@ -440,6 +440,37 @@
         padding-left: 10px;
         border-radius: 5px;
     }
+    
+    /* Pattern selector styles */
+    .pattern-char {
+        display: inline-block;
+        padding: 5px 8px;
+        margin: 2px;
+        background-color: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 3px;
+        cursor: pointer;
+        transition: all 0.2s;
+        user-select: none;
+        color: #212529;
+    }
+
+    .pattern-char:hover {
+        background-color: #e9ecef;
+        transform: scale(1.1);
+        border-color: #0d6efd;
+    }
+
+    .pattern-char.selected {
+        background-color: #28a745;
+        color: white;
+        border-color: #28a745;
+    }
+
+    .pattern-char.selected:hover {
+        background-color: #218838;
+        border-color: #1e7e34;
+    }
 </style>
 {% endblock %}
 
@@ -676,6 +707,39 @@
                         <label class="form-label">Valor a buscar</label>
                         <input type="text" class="form-control" id="searchValue" placeholder="Introduzca el valor a buscar">
                         <small class="text-muted" id="searchHint">Buscar valores que contengan este texto</small>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <button type="button" class="btn btn-outline-info btn-sm" onclick="togglePatternMode()">
+                            <i class="bi bi-grid-3x3-gap"></i> <span id="patternToggleText">Activar patrón personalizado</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Selector de patrón integrado -->
+                <div id="patternSelectorRow" class="row mb-3" style="display: none;">
+                    <div class="col-md-12">
+                        <div class="border rounded p-3" style="background-color: rgba(0, 123, 255, 0.05);">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <label class="form-label">Ejemplo #</label>
+                                    <div class="input-group">
+                                        <input type="number" id="patternExampleIndex" class="form-control" value="1" min="1" onchange="updatePatternExample()">
+                                        <button class="btn btn-outline-secondary" onclick="updatePatternExample()">
+                                            <i class="bi bi-arrow-clockwise"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label">Clickea los caracteres para seleccionar el patrón:</label>
+                                    <div id="patternCharacters" class="p-2 border rounded" style="font-family: monospace; font-size: 1.1em; letter-spacing: 0.1em;">
+                                        <!-- Los caracteres clickeables aparecerán aquí -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -3301,7 +3365,11 @@ function showUniqueValues(columnName) {
 window.currentColumnSearch = {
     columnName: '',
     datasetId: '',
-    columnData: []
+    columnData: [],
+    lastSearchResults: [],
+    totalValues: 0,
+    selectedPattern: [],
+    patternGrouping: false
 };
 
 // Abrir modal de búsqueda en columna
@@ -3376,6 +3444,29 @@ function _openColumnSearchModal(columnName, datasetId) {
     }
 }
 
+// Toggle patrón personalizado
+window.togglePatternMode = function() {
+    const patternRow = document.getElementById('patternSelectorRow');
+    const toggleBtn = event.target.closest('button');
+    const toggleText = document.getElementById('patternToggleText');
+    
+    if (patternRow.style.display === 'none') {
+        patternRow.style.display = 'block';
+        toggleBtn.classList.remove('btn-outline-info');
+        toggleBtn.classList.add('btn-info');
+        toggleText.textContent = 'Desactivar patrón personalizado';
+        window.currentColumnSearch.patternGrouping = true;
+        loadPatternData();
+    } else {
+        patternRow.style.display = 'none';
+        toggleBtn.classList.remove('btn-info');
+        toggleBtn.classList.add('btn-outline-info');
+        toggleText.textContent = 'Activar patrón personalizado';
+        window.currentColumnSearch.patternGrouping = false;
+        window.currentColumnSearch.selectedPattern = [];
+    }
+}
+
 // Actualizar interfaz según tipo de búsqueda
 window.updateSearchInterface = function() {
     const searchType = document.getElementById('searchType').value;
@@ -3410,8 +3501,16 @@ window.updateSearchInterface = function() {
 window.performColumnSearch = async function() {
     const searchType = document.getElementById('searchType').value;
     const searchValue = document.getElementById('searchValue').value.trim();
+    const isPatternMode = window.currentColumnSearch.patternGrouping;
     
-    if (!searchValue) {
+    // Validar patrón si está activo
+    if (isPatternMode && window.currentColumnSearch.selectedPattern.length === 0) {
+        showNotification('Error', 'Selecciona al menos un carácter para el patrón', 'warning');
+        return;
+    }
+    
+    // Validar valor de búsqueda si no hay patrón
+    if (!isPatternMode && !searchValue) {
         showNotification('Error', 'Por favor ingrese un valor de búsqueda', 'warning');
         return;
     }
@@ -3481,6 +3580,10 @@ window.performColumnSearch = async function() {
             }
         });
         
+        // Guardar resultados para poder re-procesarlos
+        window.currentColumnSearch.lastSearchResults = matchedValues;
+        window.currentColumnSearch.totalValues = totalValues;
+        
         // Mostrar resultados
         displaySearchResults(matchedValues, totalValues);
         
@@ -3509,31 +3612,73 @@ window.displaySearchResults = function(matchedValues, totalValues) {
     if (matchCount === 0) {
         matchedValuesList.innerHTML = '<p class="text-muted">No se encontraron coincidencias</p>';
     } else {
-        // Crear un mapa de frecuencias para valores únicos
-        const valueFrequency = {};
-        matchedValues.forEach(value => {
-            valueFrequency[value] = (valueFrequency[value] || 0) + 1;
-        });
+        let displayData;
         
-        // Ordenar valores únicos por frecuencia
-        const uniqueValues = Object.entries(valueFrequency)
-            .sort((a, b) => b[1] - a[1])
-            .map(([value, count]) => ({value, count}));
+        if (window.currentColumnSearch.patternGrouping && window.currentColumnSearch.selectedPattern.length > 0) {
+            // Agrupar por patrón seleccionado
+            const patternGroups = {};
+            const pattern = window.currentColumnSearch.selectedPattern;
+            
+            matchedValues.forEach(value => {
+                const strValue = String(value);
+                // Extraer caracteres según el patrón seleccionado
+                const patternKey = pattern.map(idx => strValue[idx] || '').join('');
+                
+                if (!patternGroups[patternKey]) {
+                    patternGroups[patternKey] = {
+                        example: value,
+                        count: 0,
+                        pattern: pattern.map(idx => ({
+                            char: strValue[idx] || '',
+                            index: idx
+                        }))
+                    };
+                }
+                patternGroups[patternKey].count++;
+            });
+            
+            // Convertir a array y ordenar por frecuencia
+            displayData = Object.entries(patternGroups)
+                .sort((a, b) => b[1].count - a[1].count)
+                .map(([key, data]) => ({
+                    value: `Patrón: ${data.pattern.map(p => p.char).join('')} (ej: ${data.example})`,
+                    count: data.count,
+                    patternInfo: data.pattern
+                }));
+                
+            matchedValuesList.innerHTML = `
+                <div class="mb-2">
+                    <strong>Patrones únicos encontrados: ${displayData.length}</strong>
+                    <small class="text-muted d-block">Agrupado por caracteres en posiciones: ${pattern.join(', ')}</small>
+                </div>
+            `;
+        } else {
+            // Mostrar valores únicos normalmente
+            const valueFrequency = {};
+            matchedValues.forEach(value => {
+                valueFrequency[value] = (valueFrequency[value] || 0) + 1;
+            });
+            
+            displayData = Object.entries(valueFrequency)
+                .sort((a, b) => b[1] - a[1])
+                .map(([value, count]) => ({value, count}));
+                
+            matchedValuesList.innerHTML = `
+                <div class="mb-2">
+                    <strong>Valores únicos encontrados: ${displayData.length}</strong>
+                </div>
+            `;
+        }
         
-        // Mostrar valores únicos con su frecuencia
-        const listHtml = uniqueValues.map(({value, count}) => 
+        // Mostrar los datos
+        const listHtml = displayData.map(({value, count}) => 
             `<div class="border-bottom py-1 d-flex justify-content-between">
                 <small>${value}</small>
                 <small class="text-muted">(${count})</small>
             </div>`
         ).join('');
         
-        matchedValuesList.innerHTML = `
-            <div class="mb-2">
-                <strong>Valores únicos encontrados: ${uniqueValues.length}</strong>
-            </div>
-            ${listHtml}
-        `;
+        matchedValuesList.innerHTML += listHtml;
     }
     
     // Crear gráfico circular
@@ -3589,10 +3734,131 @@ window.createSearchResultChart = function(matchCount, nonMatchCount) {
     });
 }
 
+// Cargar datos para el patrón
+window.loadPatternData = async function() {
+    if (window.currentColumnSearch.columnData && window.currentColumnSearch.columnData.length > 0) {
+        // Ya tenemos datos
+        updatePatternExample();
+        return;
+    }
+    
+    showLoading('Cargando datos de la columna...');
+    
+    try {
+        const response = await fetch(`/api/datasets/${currentColumnSearch.datasetId}/column-data/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                column_name: currentColumnSearch.columnName
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Error al obtener datos de la columna');
+        }
+        
+        const responseData = await response.json();
+        const data = responseData.data || responseData;
+        window.currentColumnSearch.columnData = data.values || [];
+        window.currentColumnSearch.lastSearchResults = window.currentColumnSearch.columnData;
+        window.currentColumnSearch.totalValues = window.currentColumnSearch.columnData.length;
+        
+        updatePatternExample();
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error', 'Error al cargar datos de la columna', 'error');
+    }
+    
+    hideLoading();
+}
+
+
+// Actualizar ejemplo de patrón
+window.updatePatternExample = function() {
+    const index = parseInt(document.getElementById('patternExampleIndex').value) - 1;
+    const results = window.currentColumnSearch.lastSearchResults;
+    
+    if (!results || results.length === 0) {
+        document.getElementById('patternCharacters').innerHTML = '<p class="text-dark">No hay resultados de búsqueda</p>';
+        return;
+    }
+    
+    // Validar índice
+    const validIndex = Math.max(0, Math.min(index, results.length - 1));
+    if (validIndex !== index) {
+        document.getElementById('patternExampleIndex').value = validIndex + 1;
+    }
+    
+    // Obtener el valor del ejemplo
+    const exampleValue = String(results[validIndex]);
+    
+    // Crear caracteres clickeables
+    const charsHtml = exampleValue.split('').map((char, idx) => {
+        const isSelected = window.currentColumnSearch.selectedPattern.includes(idx);
+        return `<span class="pattern-char ${isSelected ? 'selected' : ''}" 
+                     data-index="${idx}" 
+                     onclick="togglePatternChar(${idx})">${char}</span>`;
+    }).join('');
+    
+    document.getElementById('patternCharacters').innerHTML = charsHtml;
+}
+
+// Toggle selección de carácter
+window.togglePatternChar = function(index) {
+    const pattern = window.currentColumnSearch.selectedPattern;
+    const idx = pattern.indexOf(index);
+    
+    if (idx > -1) {
+        pattern.splice(idx, 1);
+    } else {
+        pattern.push(index);
+    }
+    
+    // Reordenar para mantener el orden de índices
+    pattern.sort((a, b) => a - b);
+    
+    // Actualizar visualización
+    updatePatternExample();
+}
+
+// Limpiar selección de patrón
+window.clearPatternSelection = function() {
+    window.currentColumnSearch.selectedPattern = [];
+    updatePatternExample();
+}
+
+
+// Actualizar resultados cuando se cambia el toggle de agrupación
+window.updateSearchResults = function() {
+    if (window.currentColumnSearch.lastSearchResults && window.currentColumnSearch.lastSearchResults.length > 0) {
+        displaySearchResults(window.currentColumnSearch.lastSearchResults, window.currentColumnSearch.totalValues);
+    }
+}
+
 // Limpiar búsqueda
 window.clearColumnSearch = function() {
     document.getElementById('searchValue').value = '';
     document.getElementById('searchResults').style.display = 'none';
+    document.getElementById('patternSelectorRow').style.display = 'none';
+    document.getElementById('searchType').value = 'contains';
+    
+    // Reset pattern button
+    const toggleBtn = document.querySelector('[onclick="togglePatternMode()"]');
+    if (toggleBtn) {
+        toggleBtn.classList.remove('btn-info');
+        toggleBtn.classList.add('btn-outline-info');
+        document.getElementById('patternToggleText').textContent = 'Activar patrón personalizado';
+    }
+    
+    updateSearchInterface();
+    window.currentColumnSearch.lastSearchResults = [];
+    window.currentColumnSearch.totalValues = 0;
+    window.currentColumnSearch.selectedPattern = [];
+    window.currentColumnSearch.patternGrouping = false;
     if (window.searchResultChart && typeof window.searchResultChart.destroy === 'function') {
         window.searchResultChart.destroy();
         window.searchResultChart = null;
