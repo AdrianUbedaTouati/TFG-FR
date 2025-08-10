@@ -649,6 +649,73 @@
         </div>
     </div>
 </div>
+
+<!-- Modal Column Search -->
+<div class="modal fade" id="columnSearchModal" tabindex="-1" aria-labelledby="columnSearchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="columnSearchModalLabel">
+                    <i class="bi bi-search"></i> Buscar en columna: <span id="searchColumnName"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Tipo de búsqueda</label>
+                        <select class="form-select" id="searchType" onchange="updateSearchInterface()">
+                            <option value="contains">Contiene</option>
+                            <option value="startsWith">Empieza por</option>
+                            <option value="endsWith">Termina por</option>
+                            <option value="equals">Es igual a</option>
+                            <option value="regex">Expresión Regular</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Valor a buscar</label>
+                        <input type="text" class="form-control" id="searchValue" placeholder="Introduzca el valor a buscar">
+                        <small class="text-muted" id="searchHint">Buscar valores que contengan este texto</small>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <button class="btn btn-primary" onclick="performColumnSearch()">
+                            <i class="bi bi-search"></i> Buscar
+                        </button>
+                        <button class="btn btn-secondary ms-2" onclick="clearColumnSearch()">
+                            <i class="bi bi-x-circle"></i> Limpiar
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Resultados de búsqueda -->
+                <div id="searchResults" style="display: none;">
+                    <hr>
+                    <h6>Resultados de búsqueda</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="alert alert-info">
+                                <strong>Coincidencias encontradas:</strong> <span id="matchCount">0</span> de <span id="totalCount">0</span> valores
+                                (<span id="matchPercentage">0</span>%)
+                            </div>
+                            <div id="matchedValuesList" style="max-height: 400px; overflow-y: auto;" class="border rounded p-2">
+                                <!-- Lista de valores coincidentes -->
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <canvas id="searchResultChart" style="max-height: 300px;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1674,7 +1741,18 @@ function displayDatasetDetails(dataset, data) {
                                 
                                 return `
                                     <tr class="column-row" data-column="${col}" onclick="selectVariable('${col}', ${isNumeric})">
-                                        <td><strong>${col}</strong></td>
+                                        <td>
+                                            <strong>${col}</strong>
+                                            <button class="btn btn-sm btn-outline-primary ms-2" 
+                                                onclick="event.stopPropagation();" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#columnSearchModal"
+                                                data-column-name="${col}"
+                                                data-dataset-id="${dataset.id}"
+                                                title="Buscar en esta columna">
+                                                <i class="bi bi-search"></i>
+                                            </button>
+                                        </td>
                                         <td>
                                             <span class="badge bg-${badgeClass}">
                                                 <i class="bi ${typeIcon}"></i> ${pythonType}
@@ -3219,6 +3297,308 @@ function showUniqueValues(columnName) {
     });
 }
 
+// Variables globales para búsqueda en columna
+window.currentColumnSearch = {
+    columnName: '',
+    datasetId: '',
+    columnData: []
+};
+
+// Abrir modal de búsqueda en columna
+window.openColumnSearchModal = function(columnName, datasetId) {
+    console.log('Opening search modal for column:', columnName, 'dataset:', datasetId);
+    
+    // Ensure DOM is ready
+    if (document.readyState !== 'loading') {
+        _openColumnSearchModal(columnName, datasetId);
+    } else {
+        document.addEventListener('DOMContentLoaded', function() {
+            _openColumnSearchModal(columnName, datasetId);
+        });
+    }
+}
+
+function _openColumnSearchModal(columnName, datasetId) {
+    window.currentColumnSearch.columnName = columnName;
+    window.currentColumnSearch.datasetId = datasetId;
+    
+    // Verificar que el modal existe
+    const modalElement = document.getElementById('columnSearchModal');
+    if (!modalElement) {
+        console.error('Modal element not found! Trying again in 500ms...');
+        // Try again after a short delay
+        setTimeout(() => {
+            const modalEl = document.getElementById('columnSearchModal');
+            if (modalEl) {
+                _openColumnSearchModal(columnName, datasetId);
+            } else {
+                alert('Error: No se puede encontrar el modal de búsqueda. Por favor recarga la página.');
+            }
+        }, 500);
+        return;
+    }
+    
+    // Actualizar título del modal
+    const columnNameElement = document.getElementById('searchColumnName');
+    if (columnNameElement) {
+        columnNameElement.textContent = columnName;
+    }
+    
+    // Limpiar búsqueda anterior
+    if (window.clearColumnSearch) {
+        window.clearColumnSearch();
+    }
+    
+    try {
+        // Verificar si Bootstrap está cargado
+        if (typeof bootstrap === 'undefined') {
+            console.error('Bootstrap not loaded!');
+            alert('Error: Bootstrap no está cargado. Por favor recarga la página.');
+            return;
+        }
+        
+        // Mostrar modal
+        const modal = new bootstrap.Modal(modalElement, {
+            backdrop: true,
+            keyboard: true
+        });
+        modal.show();
+        
+        console.log('Modal should be visible now');
+    } catch (error) {
+        console.error('Error showing modal:', error);
+        // Fallback: try using jQuery if available
+        if (typeof $ !== 'undefined') {
+            $('#columnSearchModal').modal('show');
+        } else {
+            alert('Error al abrir el modal de búsqueda. Por favor recarga la página.');
+        }
+    }
+}
+
+// Actualizar interfaz según tipo de búsqueda
+window.updateSearchInterface = function() {
+    const searchType = document.getElementById('searchType').value;
+    const searchHint = document.getElementById('searchHint');
+    const searchValue = document.getElementById('searchValue');
+    
+    switch(searchType) {
+        case 'contains':
+            searchHint.textContent = 'Buscar valores que contengan este texto';
+            searchValue.placeholder = 'Ej: cloud, 2023, etc.';
+            break;
+        case 'startsWith':
+            searchHint.textContent = 'Buscar valores que empiecen con este texto';
+            searchValue.placeholder = 'Ej: A, 2023-, http://, etc.';
+            break;
+        case 'endsWith':
+            searchHint.textContent = 'Buscar valores que terminen con este texto';
+            searchValue.placeholder = 'Ej: .com, 2023, ing, etc.';
+            break;
+        case 'equals':
+            searchHint.textContent = 'Buscar valores exactamente iguales a este texto';
+            searchValue.placeholder = 'Ej: Clear, 2023, 0, etc.';
+            break;
+        case 'regex':
+            searchHint.textContent = 'Usar expresión regular (compatible con JavaScript)';
+            searchValue.placeholder = 'Ej: ^[A-Z], \\d{4}$, etc.';
+            break;
+    }
+}
+
+// Realizar búsqueda en columna
+window.performColumnSearch = async function() {
+    const searchType = document.getElementById('searchType').value;
+    const searchValue = document.getElementById('searchValue').value.trim();
+    
+    if (!searchValue) {
+        showNotification('Error', 'Por favor ingrese un valor de búsqueda', 'warning');
+        return;
+    }
+    
+    // Mostrar loading
+    showLoading('Buscando en la columna...');
+    
+    try {
+        // Obtener datos de la columna
+        const response = await fetch(`/api/datasets/${currentColumnSearch.datasetId}/column-data/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                column_name: currentColumnSearch.columnName
+            })
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('API Error:', response.status, errorText);
+            throw new Error(`Error ${response.status}: ${errorText || 'Error al obtener datos de la columna'}`);
+        }
+        
+        const responseData = await response.json();
+        console.log('API Response:', responseData);
+        
+        // Check if response has a data wrapper
+        const data = responseData.data || responseData;
+        currentColumnSearch.columnData = data.values || [];
+        
+        // Filtrar datos según tipo de búsqueda
+        let matchedValues = [];
+        const totalValues = currentColumnSearch.columnData.length;
+        
+        currentColumnSearch.columnData.forEach(value => {
+            const strValue = String(value);
+            let matches = false;
+            
+            switch(searchType) {
+                case 'contains':
+                    matches = strValue.toLowerCase().includes(searchValue.toLowerCase());
+                    break;
+                case 'startsWith':
+                    matches = strValue.toLowerCase().startsWith(searchValue.toLowerCase());
+                    break;
+                case 'endsWith':
+                    matches = strValue.toLowerCase().endsWith(searchValue.toLowerCase());
+                    break;
+                case 'equals':
+                    matches = strValue === searchValue;
+                    break;
+                case 'regex':
+                    try {
+                        const regex = new RegExp(searchValue, 'i');
+                        matches = regex.test(strValue);
+                    } catch(e) {
+                        console.error('Invalid regex:', e);
+                    }
+                    break;
+            }
+            
+            if (matches) {
+                matchedValues.push(value);
+            }
+        });
+        
+        // Mostrar resultados
+        displaySearchResults(matchedValues, totalValues);
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('Error', 'Error al realizar la búsqueda', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Mostrar resultados de búsqueda
+window.displaySearchResults = function(matchedValues, totalValues) {
+    const matchCount = matchedValues.length;
+    const percentage = totalValues > 0 ? (matchCount / totalValues * 100).toFixed(2) : 0;
+    
+    // Actualizar estadísticas
+    document.getElementById('matchCount').textContent = matchCount;
+    document.getElementById('totalCount').textContent = totalValues;
+    document.getElementById('matchPercentage').textContent = percentage;
+    
+    // Mostrar lista de todos los valores coincidentes
+    const matchedValuesList = document.getElementById('matchedValuesList');
+    matchedValuesList.innerHTML = '';
+    
+    if (matchCount === 0) {
+        matchedValuesList.innerHTML = '<p class="text-muted">No se encontraron coincidencias</p>';
+    } else {
+        // Crear un mapa de frecuencias para valores únicos
+        const valueFrequency = {};
+        matchedValues.forEach(value => {
+            valueFrequency[value] = (valueFrequency[value] || 0) + 1;
+        });
+        
+        // Ordenar valores únicos por frecuencia
+        const uniqueValues = Object.entries(valueFrequency)
+            .sort((a, b) => b[1] - a[1])
+            .map(([value, count]) => ({value, count}));
+        
+        // Mostrar valores únicos con su frecuencia
+        const listHtml = uniqueValues.map(({value, count}) => 
+            `<div class="border-bottom py-1 d-flex justify-content-between">
+                <small>${value}</small>
+                <small class="text-muted">(${count})</small>
+            </div>`
+        ).join('');
+        
+        matchedValuesList.innerHTML = `
+            <div class="mb-2">
+                <strong>Valores únicos encontrados: ${uniqueValues.length}</strong>
+            </div>
+            ${listHtml}
+        `;
+    }
+    
+    // Crear gráfico circular
+    createSearchResultChart(matchCount, totalValues - matchCount);
+    
+    // Mostrar sección de resultados
+    document.getElementById('searchResults').style.display = 'block';
+}
+
+// Crear gráfico circular de resultados
+window.createSearchResultChart = function(matchCount, nonMatchCount) {
+    const ctx = document.getElementById('searchResultChart').getContext('2d');
+    
+    // Destruir gráfico anterior si existe
+    if (window.searchResultChart && typeof window.searchResultChart.destroy === 'function') {
+        window.searchResultChart.destroy();
+        window.searchResultChart = null;
+    }
+    
+    window.searchResultChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Coincidencias', 'No coincidencias'],
+            datasets: [{
+                data: [matchCount, nonMatchCount],
+                backgroundColor: ['#0d6efd', '#e9ecef'],
+                borderColor: ['#0d6efd', '#dee2e6'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                },
+                title: {
+                    display: true,
+                    text: 'Distribución de coincidencias'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(2);
+                            return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Limpiar búsqueda
+window.clearColumnSearch = function() {
+    document.getElementById('searchValue').value = '';
+    document.getElementById('searchResults').style.display = 'none';
+    if (window.searchResultChart && typeof window.searchResultChart.destroy === 'function') {
+        window.searchResultChart.destroy();
+        window.searchResultChart = null;
+    }
+}
+
 // Mostrar outliers
 function showOutliers(columnName) {
     const data = window.currentDatasetData;
@@ -3646,6 +4026,38 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.style.removeProperty('padding-right');
         }, 100);
     });
+    
+    // Add event listener for column search modal
+    const columnSearchModal = document.getElementById('columnSearchModal');
+    if (columnSearchModal) {
+        columnSearchModal.addEventListener('show.bs.modal', function (event) {
+            console.log('Column search modal is being shown');
+            // Button that triggered the modal
+            const button = event.relatedTarget;
+            if (button) {
+                const columnName = button.getAttribute('data-column-name');
+                const datasetId = button.getAttribute('data-dataset-id');
+                
+                console.log('Modal data:', { columnName, datasetId });
+                
+                if (columnName && datasetId) {
+                    window.currentColumnSearch.columnName = columnName;
+                    window.currentColumnSearch.datasetId = datasetId;
+                    
+                    // Update modal title
+                    const columnNameElement = document.getElementById('searchColumnName');
+                    if (columnNameElement) {
+                        columnNameElement.textContent = columnName;
+                    }
+                    
+                    // Clear previous search
+                    if (window.clearColumnSearch) {
+                        window.clearColumnSearch();
+                    }
+                }
+            }
+        });
+    }
     
     // Cargar datasets con callback para manejar URL params
     loadDatasets().then(() => {

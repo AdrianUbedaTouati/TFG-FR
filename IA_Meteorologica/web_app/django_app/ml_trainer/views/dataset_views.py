@@ -595,3 +595,48 @@ class DatasetDeleteColumnView(APIView):
             import traceback
             traceback.print_exc()
             return error_response(f"Error saving dataset: {str(e)}")
+
+
+class DatasetColumnDataView(APIView):
+    """Get all data from a specific column for searching/filtering"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
+        # Get column name from request
+        column_name = request.data.get('column_name')
+        if not column_name:
+            return error_response("Column name is required")
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Check if column exists
+        if column_name not in df.columns:
+            return error_response(f"Column '{column_name}' not found in dataset")
+        
+        # Get column data
+        column_data = df[column_name]
+        
+        # Convert to list, handling null values
+        values = []
+        for val in column_data:
+            if pd.isna(val):
+                values.append(None)
+            else:
+                values.append(str(val))
+        
+        return success_response({
+            'column_name': column_name,
+            'values': values,
+            'total_count': len(values),
+            'unique_count': column_data.nunique(),
+            'null_count': column_data.isnull().sum()
+        })
