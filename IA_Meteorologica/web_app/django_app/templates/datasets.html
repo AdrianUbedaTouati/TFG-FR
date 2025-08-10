@@ -794,6 +794,9 @@
                         </div>
                         <div class="col-md-6">
                             <canvas id="searchResultChart" style="max-height: 300px;"></canvas>
+                            <small class="text-muted text-center d-block mt-1">
+                                <i class="bi bi-hand-index"></i> Click en el gráfico para ver los valores
+                            </small>
                         </div>
                     </div>
                 </div>
@@ -3816,6 +3819,21 @@ window.createSearchResultChart = function(matchCount, nonMatchCount) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            onClick: function(event, elements) {
+                if (elements.length > 0) {
+                    const index = elements[0].index;
+                    const label = this.data.labels[index];
+                    
+                    // Mostrar valores según el segmento clickeado
+                    if (index === 0) {
+                        // Mostrar coincidencias
+                        showChartValues('Valores coincidentes', window.currentColumnSearch.lastSearchResults);
+                    } else {
+                        // Mostrar no coincidencias
+                        showNonMatchingValues();
+                    }
+                }
+            },
             plugins: {
                 legend: {
                     position: 'bottom',
@@ -3833,9 +3851,97 @@ window.createSearchResultChart = function(matchCount, nonMatchCount) {
                         }
                     }
                 }
+            },
+            onHover: function(event, activeElements) {
+                ctx.canvas.style.cursor = activeElements.length > 0 ? 'pointer' : 'default';
             }
         }
     });
+}
+
+// Mostrar valores del gráfico
+window.showChartValues = function(title, values) {
+    // Crear modal si no existe
+    let modal = document.getElementById('chartValuesModal');
+    if (!modal) {
+        const modalHtml = `
+            <div class="modal fade" id="chartValuesModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="chartValuesTitle"></h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-2">
+                                <strong>Total: <span id="chartValueCount">0</span> valores</strong>
+                            </div>
+                            <div id="chartValuesList" style="max-height: 400px; overflow-y: auto;"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modal = document.getElementById('chartValuesModal');
+    }
+    
+    // Actualizar contenido
+    document.getElementById('chartValuesTitle').textContent = title;
+    document.getElementById('chartValueCount').textContent = values.length;
+    
+    // Crear mapa de frecuencias
+    const valueFrequency = {};
+    values.forEach(value => {
+        const strValue = String(value);
+        valueFrequency[strValue] = (valueFrequency[strValue] || 0) + 1;
+    });
+    
+    // Ordenar por frecuencia
+    const sortedValues = Object.entries(valueFrequency)
+        .sort((a, b) => b[1] - a[1])
+        .map(([value, count]) => ({ value, count }));
+    
+    // Mostrar valores
+    const listHtml = sortedValues.map(({ value, count }) => `
+        <div class="border-bottom py-2 d-flex justify-content-between">
+            <span>${value}</span>
+            <span class="badge bg-secondary">${count}</span>
+        </div>
+    `).join('');
+    
+    document.getElementById('chartValuesList').innerHTML = listHtml || '<p class="text-muted">No hay valores para mostrar</p>';
+    
+    // Mostrar modal
+    new bootstrap.Modal(modal).show();
+}
+
+// Mostrar valores no coincidentes
+window.showNonMatchingValues = async function() {
+    showLoading('Calculando valores no coincidentes...');
+    
+    try {
+        // Obtener todos los valores buscados
+        const searchedValues = window.currentColumnSearch.columnData.slice(0, 
+            window.currentColumnSearch.searchScope === 'all' 
+                ? window.currentColumnSearch.columnData.length 
+                : window.currentColumnSearch.searchLimit
+        );
+        
+        // Filtrar los que no coincidieron
+        const matchedSet = new Set(window.currentColumnSearch.lastSearchResults.map(v => String(v)));
+        const nonMatching = searchedValues.filter(value => !matchedSet.has(String(value)));
+        
+        hideLoading();
+        showChartValues('Valores no coincidentes', nonMatching);
+        
+    } catch (error) {
+        hideLoading();
+        showNotification('Error', 'Error al calcular valores no coincidentes', 'error');
+    }
 }
 
 // Cargar datos para el patrón
