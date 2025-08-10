@@ -728,15 +728,29 @@
                                 <i class="bi bi-search"></i> Alcance de búsqueda:
                             </small>
                             <div class="btn-group btn-group-sm" role="group">
-                                <button type="button" class="btn btn-primary" onclick="setSearchScope('limited')" id="searchLimitedBtn">
+                                <button type="button" class="btn btn-primary" onclick="setSearchScope('first')" id="searchFirstBtn">
                                     <i class="bi bi-funnel"></i> Primeros <span id="limitValue">100</span>
                                 </button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="showLimitModal()" title="Configurar límite">
+                                <button type="button" class="btn btn-outline-secondary" onclick="setSearchScope('range')" id="searchRangeBtn">
+                                    <i class="bi bi-arrows-expand"></i> Rango
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="showLimitModal()" title="Configurar">
                                     <i class="bi bi-gear"></i>
                                 </button>
                                 <button type="button" class="btn btn-outline-secondary" onclick="setSearchScope('all')" id="searchAllBtn">
-                                    <i class="bi bi-database"></i> Todo el dataset
+                                    <i class="bi bi-database"></i> Todo
                                 </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Selector de rango -->
+                        <div id="rangeSelector" class="mt-2" style="display: none;">
+                            <div class="d-flex align-items-center">
+                                <small class="text-muted me-2">Desde índice:</small>
+                                <input type="number" id="rangeStart" class="form-control form-control-sm" value="1" min="1" style="width: 80px;" onchange="updateRangeInfo()" oninput="updateRangeInfo()">
+                                <small class="text-muted mx-2">hasta:</small>
+                                <input type="number" id="rangeEnd" class="form-control form-control-sm" value="100" min="1" style="width: 80px;" onchange="updateRangeInfo()" oninput="updateRangeInfo()">
+                                <small class="text-muted ms-2" id="rangeInfo"></small>
                             </div>
                         </div>
                     </div>
@@ -818,8 +832,30 @@
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label">Número de valores a buscar:</label>
-                    <input type="number" id="customSearchLimit" class="form-control" value="100" min="1">
+                    <label class="form-label">Configurar búsqueda:</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="searchConfig" id="configFirst" checked onchange="updateConfigModal()">
+                        <label class="form-check-label" for="configFirst">
+                            Primeros N valores
+                        </label>
+                    </div>
+                    <div class="ms-3 mt-2" id="configFirstOptions">
+                        <input type="number" id="customSearchLimit" class="form-control form-control-sm" value="100" min="1" style="width: 120px;">
+                    </div>
+                    
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="radio" name="searchConfig" id="configRange" onchange="updateConfigModal()">
+                        <label class="form-check-label" for="configRange">
+                            Rango de índices
+                        </label>
+                    </div>
+                    <div class="ms-3 mt-2" id="configRangeOptions" style="display: none;">
+                        <div class="d-flex align-items-center">
+                            <input type="number" id="customRangeStart" class="form-control form-control-sm" value="1" min="1" style="width: 100px;">
+                            <span class="mx-2">hasta</span>
+                            <input type="number" id="customRangeEnd" class="form-control form-control-sm" value="100" min="1" style="width: 100px;">
+                        </div>
+                    </div>
                 </div>
                 <div class="text-muted small">
                     <i class="bi bi-info-circle"></i> Limitar la búsqueda mejora el rendimiento en datasets grandes
@@ -859,6 +895,95 @@ function getCookie(name) {
         }
     }
     return cookieValue;
+}
+
+// Funciones de loading
+function showLoading(message = 'Cargando...') {
+    // Crear overlay si no existe
+    let loadingOverlay = document.getElementById('globalLoadingOverlay');
+    if (!loadingOverlay) {
+        loadingOverlay = document.createElement('div');
+        loadingOverlay.id = 'globalLoadingOverlay';
+        loadingOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        `;
+        loadingOverlay.innerHTML = `
+            <div class="text-center text-white">
+                <div class="spinner-border mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div id="loadingMessage">${message}</div>
+            </div>
+        `;
+        document.body.appendChild(loadingOverlay);
+    } else {
+        document.getElementById('loadingMessage').textContent = message;
+        loadingOverlay.style.display = 'flex';
+    }
+}
+
+function hideLoading() {
+    const loadingOverlay = document.getElementById('globalLoadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'none';
+    }
+}
+
+// Función para mostrar notificaciones
+function showNotification(title, message, type = 'info') {
+    // Crear contenedor de notificaciones si no existe
+    let notificationContainer = document.getElementById('notificationContainer');
+    if (!notificationContainer) {
+        notificationContainer = document.createElement('div');
+        notificationContainer.id = 'notificationContainer';
+        notificationContainer.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            max-width: 350px;
+        `;
+        document.body.appendChild(notificationContainer);
+    }
+    
+    // Mapear tipo a clase de Bootstrap
+    const typeMap = {
+        'info': 'info',
+        'success': 'success',
+        'warning': 'warning',
+        'error': 'danger',
+        'danger': 'danger'
+    };
+    
+    const alertType = typeMap[type] || 'info';
+    
+    // Crear notificación
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${alertType} alert-dismissible fade show`;
+    notification.setAttribute('role', 'alert');
+    notification.innerHTML = `
+        <strong>${title}</strong> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    notificationContainer.appendChild(notification);
+    
+    // Auto-cerrar después de 5 segundos
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 150);
+        }
+    }, 5000);
 }
 
 // Normalizar dataset
@@ -1860,11 +1985,7 @@ function displayDatasetDetails(dataset, data) {
                                         <td>
                                             <strong>${col}</strong>
                                             <button class="btn btn-sm btn-outline-primary ms-2" 
-                                                onclick="event.stopPropagation();" 
-                                                data-bs-toggle="modal" 
-                                                data-bs-target="#columnSearchModal"
-                                                data-column-name="${col}"
-                                                data-dataset-id="${dataset.id}"
+                                                onclick="event.stopPropagation(); openColumnSearchModal('${col}', ${dataset.id});" 
                                                 title="Buscar en esta columna">
                                                 <i class="bi bi-search"></i>
                                             </button>
@@ -3422,8 +3543,10 @@ window.currentColumnSearch = {
     totalValues: 0,
     selectedPattern: [],
     patternGrouping: false,
-    searchScope: 'limited', // 'limited' or 'all'
-    searchLimit: 100
+    searchScope: 'first', // 'first', 'range', or 'all'
+    searchLimit: 100,
+    rangeStart: 1,
+    rangeEnd: 100
 };
 
 // Abrir modal de búsqueda en columna
@@ -3499,23 +3622,118 @@ function _openColumnSearchModal(columnName, datasetId) {
 }
 
 // Establecer alcance de búsqueda
-window.setSearchScope = function(scope) {
+window.setSearchScope = async function(scope) {
     window.currentColumnSearch.searchScope = scope;
     
-    const limitedBtn = document.getElementById('searchLimitedBtn');
+    const firstBtn = document.getElementById('searchFirstBtn');
+    const rangeBtn = document.getElementById('searchRangeBtn');
     const allBtn = document.getElementById('searchAllBtn');
+    const rangeSelector = document.getElementById('rangeSelector');
     
-    if (scope === 'all') {
-        limitedBtn.classList.remove('btn-primary');
-        limitedBtn.classList.add('btn-outline-secondary');
-        allBtn.classList.remove('btn-outline-secondary');
-        allBtn.classList.add('btn-primary');
-    } else {
-        limitedBtn.classList.remove('btn-outline-secondary');
-        limitedBtn.classList.add('btn-primary');
-        allBtn.classList.remove('btn-primary');
-        allBtn.classList.add('btn-outline-secondary');
+    // Reset all buttons
+    [firstBtn, rangeBtn, allBtn].forEach(btn => {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-outline-secondary');
+    });
+    
+    // Highlight active button and show/hide range selector
+    switch(scope) {
+        case 'first':
+            firstBtn.classList.remove('btn-outline-secondary');
+            firstBtn.classList.add('btn-primary');
+            rangeSelector.style.display = 'none';
+            break;
+        case 'range':
+            rangeBtn.classList.remove('btn-outline-secondary');
+            rangeBtn.classList.add('btn-primary');
+            rangeSelector.style.display = 'block';
+            
+            // Si es la primera vez que se selecciona rango, cargar datos para conocer el tamaño
+            if (!window.currentColumnSearch.columnData || window.currentColumnSearch.columnData.length === 0) {
+                try {
+                    showLoading('Cargando información de la columna...');
+                    const response = await fetch(`/api/datasets/${currentColumnSearch.datasetId}/column-data/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({
+                            column_name: currentColumnSearch.columnName
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const responseData = await response.json();
+                        const data = responseData.data || responseData;
+                        window.currentColumnSearch.columnData = data.values || [];
+                    }
+                } catch (error) {
+                    console.error('Error loading column data:', error);
+                } finally {
+                    hideLoading();
+                }
+            }
+            
+            updateRangeInfo();
+            break;
+        case 'all':
+            allBtn.classList.remove('btn-outline-secondary');
+            allBtn.classList.add('btn-primary');
+            rangeSelector.style.display = 'none';
+            break;
     }
+}
+
+// Actualizar información del rango
+window.updateRangeInfo = function() {
+    const startInput = document.getElementById('rangeStart');
+    const endInput = document.getElementById('rangeEnd');
+    let start = parseInt(startInput.value) || 1;
+    let end = parseInt(endInput.value) || 100;
+    
+    // Si tenemos datos cargados, validar contra el tamaño real
+    if (window.currentColumnSearch.columnData && window.currentColumnSearch.columnData.length > 0) {
+        const maxLength = window.currentColumnSearch.columnData.length;
+        
+        // Validar y ajustar el valor inicial
+        if (start < 1) {
+            start = 1;
+            startInput.value = start;
+        } else if (start > maxLength) {
+            start = maxLength;
+            startInput.value = start;
+        }
+        
+        // Validar y ajustar el valor final
+        if (end < start) {
+            end = start;
+            endInput.value = end;
+        } else if (end > maxLength) {
+            end = maxLength;
+            endInput.value = end;
+        }
+        
+        // Establecer el atributo max en los inputs
+        startInput.max = maxLength;
+        endInput.max = maxLength;
+        
+        // Mostrar información adicional si se ajustó el valor
+        const count = Math.max(0, end - start + 1);
+        let infoText = `(${count} valores)`;
+        if (end === maxLength && parseInt(endInput.value) > maxLength) {
+            infoText += ` <small class="text-warning">Máx: ${maxLength}</small>`;
+        }
+        document.getElementById('rangeInfo').innerHTML = infoText;
+    } else {
+        // Si no hay datos, solo mostrar el conteo
+        const count = Math.max(0, end - start + 1);
+        document.getElementById('rangeInfo').textContent = `(${count} valores)`;
+    }
+    
+    // Actualizar valores en el objeto global
+    window.currentColumnSearch.rangeStart = start;
+    window.currentColumnSearch.rangeEnd = end;
 }
 
 // Mostrar modal de configuración de límite
@@ -3525,15 +3743,57 @@ window.showLimitModal = function() {
     modal.show();
 }
 
+// Actualizar modal de configuración
+window.updateConfigModal = function() {
+    const isFirst = document.getElementById('configFirst').checked;
+    document.getElementById('configFirstOptions').style.display = isFirst ? 'block' : 'none';
+    document.getElementById('configRangeOptions').style.display = isFirst ? 'none' : 'block';
+}
+
 // Aplicar límite personalizado
-window.applyCustomLimit = function() {
-    const newLimit = parseInt(document.getElementById('customSearchLimit').value);
-    if (newLimit > 0) {
-        window.currentColumnSearch.searchLimit = newLimit;
-        document.getElementById('limitValue').textContent = newLimit;
-        setSearchScope('limited');
-        bootstrap.Modal.getInstance(document.getElementById('searchLimitModal')).hide();
+window.applyCustomLimit = async function() {
+    if (document.getElementById('configFirst').checked) {
+        const newLimit = parseInt(document.getElementById('customSearchLimit').value);
+        if (newLimit > 0) {
+            // Si tenemos datos, validar contra el tamaño real
+            if (window.currentColumnSearch.columnData && window.currentColumnSearch.columnData.length > 0) {
+                const maxLength = window.currentColumnSearch.columnData.length;
+                const validatedLimit = Math.min(newLimit, maxLength);
+                window.currentColumnSearch.searchLimit = validatedLimit;
+                document.getElementById('limitValue').textContent = validatedLimit;
+                if (validatedLimit !== newLimit) {
+                    showNotification('Información', `El límite se ajustó al tamaño del dataset: ${validatedLimit}`, 'info');
+                }
+            } else {
+                window.currentColumnSearch.searchLimit = newLimit;
+                document.getElementById('limitValue').textContent = newLimit;
+            }
+            setSearchScope('first');
+        }
+    } else {
+        let start = parseInt(document.getElementById('customRangeStart').value);
+        let end = parseInt(document.getElementById('customRangeEnd').value);
+        
+        if (start > 0 && end >= start) {
+            // Si tenemos datos, validar contra el tamaño real
+            if (window.currentColumnSearch.columnData && window.currentColumnSearch.columnData.length > 0) {
+                const maxLength = window.currentColumnSearch.columnData.length;
+                start = Math.min(start, maxLength);
+                end = Math.min(end, maxLength);
+                
+                if (end < start) {
+                    end = start;
+                }
+            }
+            
+            window.currentColumnSearch.rangeStart = start;
+            window.currentColumnSearch.rangeEnd = end;
+            document.getElementById('rangeStart').value = start;
+            document.getElementById('rangeEnd').value = end;
+            await setSearchScope('range');
+        }
     }
+    bootstrap.Modal.getInstance(document.getElementById('searchLimitModal')).hide();
 }
 
 // Toggle patrón personalizado
@@ -3635,17 +3895,77 @@ window.performColumnSearch = async function() {
         // Check if response has a data wrapper
         const data = responseData.data || responseData;
         currentColumnSearch.columnData = data.values || [];
+        const totalDataLength = currentColumnSearch.columnData.length;
         
-        // Determinar cuántos valores buscar
-        const isSearchAll = window.currentColumnSearch.searchScope === 'all';
-        const searchLimit = isSearchAll ? currentColumnSearch.columnData.length : window.currentColumnSearch.searchLimit;
-        const dataToSearch = currentColumnSearch.columnData.slice(0, searchLimit);
+        // Validar y ajustar los valores del rango
+        if (window.currentColumnSearch.searchScope === 'range') {
+            // Asegurar que los valores estén dentro del rango válido
+            let startValue = parseInt(document.getElementById('rangeStart').value) || 1;
+            let endValue = parseInt(document.getElementById('rangeEnd').value) || 100;
+            
+            // Validar y ajustar valores
+            startValue = Math.max(1, Math.min(startValue, totalDataLength));
+            endValue = Math.max(startValue, Math.min(endValue, totalDataLength));
+            
+            // Actualizar los inputs si se ajustaron los valores
+            if (startValue !== window.currentColumnSearch.rangeStart) {
+                document.getElementById('rangeStart').value = startValue;
+                window.currentColumnSearch.rangeStart = startValue;
+            }
+            if (endValue !== window.currentColumnSearch.rangeEnd) {
+                document.getElementById('rangeEnd').value = endValue;
+                window.currentColumnSearch.rangeEnd = endValue;
+            }
+            
+            // Actualizar la información del rango
+            updateRangeInfo();
+        }
+        
+        // Determinar qué valores buscar según el alcance
+        let dataToSearch;
+        let searchedRange;
+        
+        switch(window.currentColumnSearch.searchScope) {
+            case 'all':
+                dataToSearch = currentColumnSearch.columnData;
+                searchedRange = { start: 1, end: totalDataLength };
+                break;
+            case 'range':
+                const start = (window.currentColumnSearch.rangeStart || 1) - 1; // Convert to 0-based index
+                const end = window.currentColumnSearch.rangeEnd || Math.min(100, totalDataLength);
+                dataToSearch = currentColumnSearch.columnData.slice(start, end);
+                searchedRange = { start: start + 1, end: Math.min(end, totalDataLength) };
+                break;
+            case 'first':
+            default:
+                const limit = Math.min(window.currentColumnSearch.searchLimit, totalDataLength);
+                dataToSearch = currentColumnSearch.columnData.slice(0, limit);
+                searchedRange = { start: 1, end: limit };
+                break;
+        }
+        
+        // Guardar el rango buscado
+        window.currentColumnSearch.searchedRange = searchedRange;
         
         // Filtrar datos según tipo de búsqueda
         let matchedValues = [];
+        let matchedValuesWithIndex = [];
         const totalValues = currentColumnSearch.columnData.length;
         
-        dataToSearch.forEach(value => {
+        // Calcular el offset basado en el alcance de búsqueda
+        let indexOffset = 0;
+        switch(window.currentColumnSearch.searchScope) {
+            case 'range':
+                indexOffset = (window.currentColumnSearch.rangeStart || 1) - 1;
+                break;
+            case 'first':
+            case 'all':
+            default:
+                indexOffset = 0;
+                break;
+        }
+        
+        dataToSearch.forEach((value, localIndex) => {
             const strValue = String(value);
             let matches = false;
             
@@ -3674,15 +3994,20 @@ window.performColumnSearch = async function() {
             
             if (matches) {
                 matchedValues.push(value);
+                matchedValuesWithIndex.push({
+                    value: value,
+                    index: localIndex + indexOffset + 1 // Índice basado en 1
+                });
             }
         });
         
         // Guardar resultados para poder re-procesarlos
         window.currentColumnSearch.lastSearchResults = matchedValues;
+        window.currentColumnSearch.lastSearchResultsWithIndex = matchedValuesWithIndex;
         window.currentColumnSearch.totalValues = totalValues;
         
-        // Mostrar resultados
-        displaySearchResults(matchedValues, totalValues);
+        // Mostrar resultados (usar el tamaño del rango buscado, no el total)
+        displaySearchResults(matchedValuesWithIndex, dataToSearch.length);
         
     } catch (error) {
         console.error('Error:', error);
@@ -3693,27 +4018,49 @@ window.performColumnSearch = async function() {
 }
 
 // Mostrar resultados de búsqueda
-window.displaySearchResults = function(matchedValues, totalValues) {
-    const matchCount = matchedValues.length;
-    const percentage = totalValues > 0 ? (matchCount / totalValues * 100).toFixed(2) : 0;
+window.displaySearchResults = function(matchedValuesWithIndex, searchedCount) {
+    // Verificar que el modal esté abierto y los elementos existan
+    const modal = document.getElementById('columnSearchModal');
+    if (!modal || !modal.classList.contains('show')) {
+        console.error('Modal de búsqueda no está visible');
+        return;
+    }
     
-    // Actualizar estadísticas
-    const isSearchAll = window.currentColumnSearch.searchScope === 'all';
-    const searchLimit = window.currentColumnSearch.searchLimit;
-    const actualSearched = isSearchAll ? totalValues : Math.min(searchLimit, totalValues);
+    const matchCount = matchedValuesWithIndex.length;
+    const percentage = searchedCount > 0 ? (matchCount / searchedCount * 100).toFixed(2) : 0;
     
-    document.getElementById('matchCount').textContent = matchCount;
-    document.getElementById('totalCount').textContent = actualSearched;
-    document.getElementById('matchPercentage').textContent = percentage;
+    // Actualizar estadísticas con verificación
+    const matchCountEl = document.getElementById('matchCount');
+    const totalCountEl = document.getElementById('totalCount');
+    const matchPercentageEl = document.getElementById('matchPercentage');
     
-    // Mostrar información adicional si no se buscó en todo
-    if (!isSearchAll && totalValues > searchLimit) {
-        const totalCountElement = document.getElementById('totalCount');
-        totalCountElement.innerHTML = `${actualSearched} <small class="text-muted">(de ${totalValues} total)</small>`;
+    if (matchCountEl) matchCountEl.textContent = matchCount;
+    if (totalCountEl) totalCountEl.textContent = searchedCount;
+    if (matchPercentageEl) matchPercentageEl.textContent = percentage;
+    
+    // Mostrar información del rango si aplica
+    if (window.currentColumnSearch.searchedRange && totalCountEl) {
+        const range = window.currentColumnSearch.searchedRange;
+        const totalCountElement = totalCountEl.parentElement;
+        if (totalCountElement) {
+            let rangeInfo = '';
+            
+            if (window.currentColumnSearch.searchScope === 'range') {
+                rangeInfo = ` <small class="text-info">(índices ${range.start}-${range.end})</small>`;
+            } else if (window.currentColumnSearch.searchScope === 'first') {
+                rangeInfo = ` <small class="text-info">(primeros ${searchedCount})</small>`;
+            }
+            
+            totalCountElement.innerHTML = `<strong>Coincidencias encontradas:</strong> ${matchCount} de ${searchedCount} valores${rangeInfo}`;
+        }
     }
     
     // Mostrar lista de todos los valores coincidentes
     const matchedValuesList = document.getElementById('matchedValuesList');
+    if (!matchedValuesList) {
+        console.error('Elemento matchedValuesList no encontrado');
+        return;
+    }
     matchedValuesList.innerHTML = '';
     
     if (matchCount === 0) {
@@ -3726,15 +4073,17 @@ window.displaySearchResults = function(matchedValues, totalValues) {
             const patternGroups = {};
             const pattern = window.currentColumnSearch.selectedPattern;
             
-            matchedValues.forEach(value => {
-                const strValue = String(value);
+            matchedValuesWithIndex.forEach(item => {
+                const strValue = String(item.value);
                 // Extraer caracteres según el patrón seleccionado
                 const patternKey = pattern.map(idx => strValue[idx] || '').join('');
                 
                 if (!patternGroups[patternKey]) {
                     patternGroups[patternKey] = {
-                        example: value,
+                        example: item.value,
+                        exampleIndex: item.index,
                         count: 0,
+                        indices: [],
                         pattern: pattern.map(idx => ({
                             char: strValue[idx] || '',
                             index: idx
@@ -3742,15 +4091,17 @@ window.displaySearchResults = function(matchedValues, totalValues) {
                     };
                 }
                 patternGroups[patternKey].count++;
+                patternGroups[patternKey].indices.push(item.index);
             });
             
             // Convertir a array y ordenar por frecuencia
             displayData = Object.entries(patternGroups)
                 .sort((a, b) => b[1].count - a[1].count)
                 .map(([key, data]) => ({
-                    value: `Patrón: ${data.pattern.map(p => p.char).join('')} (ej: ${data.example})`,
+                    value: `Patrón: ${data.pattern.map(p => p.char).join('')} (ej: ${data.example} en índice ${data.exampleIndex})`,
                     count: data.count,
-                    patternInfo: data.pattern
+                    patternInfo: data.pattern,
+                    indices: data.indices
                 }));
                 
             matchedValuesList.innerHTML = `
@@ -3760,44 +4111,81 @@ window.displaySearchResults = function(matchedValues, totalValues) {
                 </div>
             `;
         } else {
-            // Mostrar valores únicos normalmente
-            const valueFrequency = {};
-            matchedValues.forEach(value => {
-                valueFrequency[value] = (valueFrequency[value] || 0) + 1;
+            // Mostrar valores con sus índices
+            const valueMap = new Map();
+            
+            matchedValuesWithIndex.forEach(item => {
+                const key = String(item.value);
+                if (!valueMap.has(key)) {
+                    valueMap.set(key, {
+                        value: item.value,
+                        count: 0,
+                        indices: []
+                    });
+                }
+                const data = valueMap.get(key);
+                data.count++;
+                data.indices.push(item.index);
             });
             
-            displayData = Object.entries(valueFrequency)
-                .sort((a, b) => b[1] - a[1])
-                .map(([value, count]) => ({value, count}));
+            displayData = Array.from(valueMap.values())
+                .sort((a, b) => b.count - a.count)
+                .map(data => ({
+                    value: data.value,
+                    count: data.count,
+                    indices: data.indices
+                }));
                 
             matchedValuesList.innerHTML = `
                 <div class="mb-2">
                     <strong>Valores únicos encontrados: ${displayData.length}</strong>
+                    <small class="text-muted d-block">Total coincidencias: ${matchCount}</small>
                 </div>
             `;
         }
         
-        // Mostrar los datos
-        const listHtml = displayData.map(({value, count}) => 
-            `<div class="border-bottom py-1 d-flex justify-content-between">
-                <small>${value}</small>
-                <small class="text-muted">(${count})</small>
-            </div>`
-        ).join('');
+        // Mostrar los datos con índices
+        const listHtml = displayData.map(({value, count, indices}) => {
+            // Mostrar los primeros 5 índices y agregar "..." si hay más
+            const indicesToShow = indices.slice(0, 5);
+            const indicesText = indicesToShow.join(', ') + (indices.length > 5 ? ', ...' : '');
+            
+            return `<div class="border-bottom py-1">
+                <div class="d-flex justify-content-between">
+                    <small>${value}</small>
+                    <small class="text-muted">(${count})</small>
+                </div>
+                <div class="text-muted" style="font-size: 0.75rem;">
+                    <i class="bi bi-hash"></i> Índices: ${indicesText}
+                </div>
+            </div>`;
+        }).join('');
         
         matchedValuesList.innerHTML += listHtml;
     }
     
-    // Crear gráfico circular
-    createSearchResultChart(matchCount, totalValues - matchCount);
+    // Crear gráfico circular (usar el total buscado, no el total del dataset)
+    const nonMatchCount = searchedCount - matchCount;
+    createSearchResultChart(matchCount, nonMatchCount);
     
     // Mostrar sección de resultados
-    document.getElementById('searchResults').style.display = 'block';
+    const searchResults = document.getElementById('searchResults');
+    if (searchResults) {
+        searchResults.style.display = 'block';
+    } else {
+        console.error('Elemento searchResults no encontrado');
+    }
 }
 
 // Crear gráfico circular de resultados
 window.createSearchResultChart = function(matchCount, nonMatchCount) {
-    const ctx = document.getElementById('searchResultChart').getContext('2d');
+    const canvas = document.getElementById('searchResultChart');
+    if (!canvas) {
+        console.error('Canvas searchResultChart no encontrado');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
     
     // Destruir gráfico anterior si existe
     if (window.searchResultChart && typeof window.searchResultChart.destroy === 'function') {
@@ -3826,8 +4214,8 @@ window.createSearchResultChart = function(matchCount, nonMatchCount) {
                     
                     // Mostrar valores según el segmento clickeado
                     if (index === 0) {
-                        // Mostrar coincidencias
-                        showChartValues('Valores coincidentes', window.currentColumnSearch.lastSearchResults);
+                        // Mostrar coincidencias con índices
+                        showChartValuesWithIndex('Valores coincidentes', window.currentColumnSearch.lastSearchResultsWithIndex);
                     } else {
                         // Mostrar no coincidencias
                         showNonMatchingValues();
@@ -3859,8 +4247,8 @@ window.createSearchResultChart = function(matchCount, nonMatchCount) {
     });
 }
 
-// Mostrar valores del gráfico
-window.showChartValues = function(title, values) {
+// Mostrar valores del gráfico con índices
+window.showChartValuesWithIndex = function(title, valuesWithIndex) {
     // Crear modal si no existe
     let modal = document.getElementById('chartValuesModal');
     if (!modal) {
@@ -3891,27 +4279,46 @@ window.showChartValues = function(title, values) {
     
     // Actualizar contenido
     document.getElementById('chartValuesTitle').textContent = title;
-    document.getElementById('chartValueCount').textContent = values.length;
+    document.getElementById('chartValueCount').textContent = valuesWithIndex.length;
     
-    // Crear mapa de frecuencias
-    const valueFrequency = {};
-    values.forEach(value => {
-        const strValue = String(value);
-        valueFrequency[strValue] = (valueFrequency[strValue] || 0) + 1;
+    // Crear mapa de valores con índices
+    const valueMap = new Map();
+    valuesWithIndex.forEach(item => {
+        const key = String(item.value);
+        if (!valueMap.has(key)) {
+            valueMap.set(key, {
+                value: item.value,
+                count: 0,
+                indices: []
+            });
+        }
+        const data = valueMap.get(key);
+        data.count++;
+        data.indices.push(item.index);
     });
     
     // Ordenar por frecuencia
-    const sortedValues = Object.entries(valueFrequency)
-        .sort((a, b) => b[1] - a[1])
-        .map(([value, count]) => ({ value, count }));
+    const sortedValues = Array.from(valueMap.values())
+        .sort((a, b) => b.count - a.count);
     
-    // Mostrar valores
-    const listHtml = sortedValues.map(({ value, count }) => `
-        <div class="border-bottom py-2 d-flex justify-content-between">
-            <span>${value}</span>
-            <span class="badge bg-secondary">${count}</span>
-        </div>
-    `).join('');
+    // Mostrar valores con índices
+    const listHtml = sortedValues.map(({ value, count, indices }) => {
+        // Mostrar los primeros 10 índices y agregar "..." si hay más
+        const indicesToShow = indices.slice(0, 10);
+        const indicesText = indicesToShow.join(', ') + (indices.length > 10 ? ', ...' : '');
+        
+        return `
+            <div class="border-bottom py-2">
+                <div class="d-flex justify-content-between">
+                    <span>${value}</span>
+                    <span class="badge bg-secondary">${count}</span>
+                </div>
+                <div class="text-muted" style="font-size: 0.8rem;">
+                    <i class="bi bi-hash"></i> Índices: ${indicesText}
+                </div>
+            </div>
+        `;
+    }).join('');
     
     document.getElementById('chartValuesList').innerHTML = listHtml || '<p class="text-muted">No hay valores para mostrar</p>';
     
@@ -3919,17 +4326,38 @@ window.showChartValues = function(title, values) {
     new bootstrap.Modal(modal).show();
 }
 
+// Mantener la función original para compatibilidad
+window.showChartValues = function(title, values) {
+    // Convertir valores simples a formato con índice
+    const valuesWithIndex = values.map((value, index) => ({
+        value: value,
+        index: index + 1
+    }));
+    showChartValuesWithIndex(title, valuesWithIndex);
+}
+
 // Mostrar valores no coincidentes
 window.showNonMatchingValues = async function() {
     showLoading('Calculando valores no coincidentes...');
     
     try {
-        // Obtener todos los valores buscados
-        const searchedValues = window.currentColumnSearch.columnData.slice(0, 
-            window.currentColumnSearch.searchScope === 'all' 
-                ? window.currentColumnSearch.columnData.length 
-                : window.currentColumnSearch.searchLimit
-        );
+        // Obtener los valores buscados según el alcance
+        let searchedValues;
+        switch(window.currentColumnSearch.searchScope) {
+            case 'all':
+                searchedValues = window.currentColumnSearch.columnData;
+                break;
+            case 'range':
+                const start = (window.currentColumnSearch.rangeStart || 1) - 1;
+                const end = window.currentColumnSearch.rangeEnd || 100;
+                searchedValues = window.currentColumnSearch.columnData.slice(start, end);
+                break;
+            case 'first':
+            default:
+                const limit = window.currentColumnSearch.searchLimit;
+                searchedValues = window.currentColumnSearch.columnData.slice(0, limit);
+                break;
+        }
         
         // Filtrar los que no coincidieron
         const matchedSet = new Set(window.currentColumnSearch.lastSearchResults.map(v => String(v)));
@@ -4020,6 +4448,13 @@ window.updatePatternExample = function() {
         // Obtener el valor del ejemplo
         const exampleValue = String(results[validIndex]);
         
+        // Si tenemos resultados con índices, mostrar también el índice del dataset
+        let datasetIndexInfo = '';
+        if (window.currentColumnSearch.lastSearchResultsWithIndex && window.currentColumnSearch.lastSearchResultsWithIndex[validIndex]) {
+            const datasetIndex = window.currentColumnSearch.lastSearchResultsWithIndex[validIndex].index;
+            datasetIndexInfo = ` <small class="text-muted">(Índice en dataset: ${datasetIndex})</small>`;
+        }
+        
         // Crear caracteres clickeables
         const charsHtml = exampleValue.split('').map((char, idx) => {
             const isSelected = window.currentColumnSearch.selectedPattern.includes(idx);
@@ -4028,7 +4463,7 @@ window.updatePatternExample = function() {
                          onclick="togglePatternChar(${idx})">${char}</span>`;
         }).join('');
         
-        document.getElementById('patternCharacters').innerHTML = charsHtml;
+        document.getElementById('patternCharacters').innerHTML = charsHtml + datasetIndexInfo;
     }, 100); // 100ms debounce
 }
 
@@ -4703,6 +5138,52 @@ function generateGeneralAnalysis(analysisType) {
             `;
         });
 }
+
+// Event listener para limpiar cuando se cierra el modal de búsqueda
+document.addEventListener('DOMContentLoaded', function() {
+    const searchModal = document.getElementById('columnSearchModal');
+    if (searchModal) {
+        searchModal.addEventListener('hidden.bs.modal', function () {
+            // Limpiar el gráfico si existe
+            if (window.searchResultChart && typeof window.searchResultChart.destroy === 'function') {
+                window.searchResultChart.destroy();
+                window.searchResultChart = null;
+            }
+            
+            // No limpiar todos los datos aquí, solo resetear la UI
+            // Mantener los datos de columna para mejorar el rendimiento
+            document.getElementById('searchResults').style.display = 'none';
+        });
+        
+        // Asegurar que el modal esté disponible globalmente
+        searchModal.addEventListener('shown.bs.modal', function () {
+            // Verificar que todos los elementos necesarios estén presentes
+            const requiredElements = [
+                'searchColumnName',
+                'searchType',
+                'searchValue',
+                'matchCount',
+                'totalCount',
+                'matchPercentage',
+                'matchedValuesList',
+                'searchResultChart',
+                'searchResults'
+            ];
+            
+            let allElementsPresent = true;
+            requiredElements.forEach(id => {
+                if (!document.getElementById(id)) {
+                    console.error(`Elemento requerido no encontrado: ${id}`);
+                    allElementsPresent = false;
+                }
+            });
+            
+            if (!allElementsPresent) {
+                showNotification('Error', 'Error al inicializar el modal de búsqueda. Por favor recarga la página.', 'error');
+            }
+        });
+    }
+});
 </script>
 
 <!-- Script para análisis avanzados -->
