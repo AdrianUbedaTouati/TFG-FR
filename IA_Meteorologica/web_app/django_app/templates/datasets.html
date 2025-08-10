@@ -712,9 +712,23 @@
                 
                 <div class="row mb-3">
                     <div class="col-md-12">
-                        <button type="button" class="btn btn-outline-info btn-sm" onclick="togglePatternMode()">
-                            <i class="bi bi-grid-3x3-gap"></i> <span id="patternToggleText">Activar patrón personalizado</span>
-                        </button>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <button type="button" class="btn btn-outline-info btn-sm" onclick="togglePatternMode()">
+                                <i class="bi bi-grid-3x3-gap"></i> <span id="patternToggleText">Activar patrón personalizado</span>
+                            </button>
+                            
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-primary" onclick="setSearchScope('limited')" id="searchLimitedBtn">
+                                    <i class="bi bi-funnel"></i> Primeros <span id="limitValue">100</span>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="showLimitModal()" title="Configurar límite">
+                                    <i class="bi bi-gear"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="setSearchScope('all')" id="searchAllBtn">
+                                    <i class="bi bi-database"></i> Todo el dataset
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -726,10 +740,10 @@
                                 <div class="col-md-4">
                                     <label class="form-label">Ejemplo #</label>
                                     <div class="input-group">
-                                        <input type="number" id="patternExampleIndex" class="form-control" value="1" min="1" onchange="updatePatternExample()">
-                                        <button class="btn btn-outline-secondary" onclick="updatePatternExample()">
-                                            <i class="bi bi-arrow-clockwise"></i>
-                                        </button>
+                                        <input type="number" id="patternExampleIndex" class="form-control" value="1" min="1" 
+                                               onchange="updatePatternExample()" 
+                                               oninput="updatePatternExample()"
+                                               onkeyup="updatePatternExample()">
                                     </div>
                                 </div>
                                 <div class="col-md-8">
@@ -776,6 +790,31 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para configurar límite de búsqueda -->
+<div class="modal fade" id="searchLimitModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Configurar límite de búsqueda</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Número de valores a buscar:</label>
+                    <input type="number" id="customSearchLimit" class="form-control" value="100" min="1">
+                </div>
+                <div class="text-muted small">
+                    <i class="bi bi-info-circle"></i> Limitar la búsqueda mejora el rendimiento en datasets grandes
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="applyCustomLimit()">Aplicar</button>
             </div>
         </div>
     </div>
@@ -3369,7 +3408,9 @@ window.currentColumnSearch = {
     lastSearchResults: [],
     totalValues: 0,
     selectedPattern: [],
-    patternGrouping: false
+    patternGrouping: false,
+    searchScope: 'limited', // 'limited' or 'all'
+    searchLimit: 100
 };
 
 // Abrir modal de búsqueda en columna
@@ -3441,6 +3482,44 @@ function _openColumnSearchModal(columnName, datasetId) {
         } else {
             alert('Error al abrir el modal de búsqueda. Por favor recarga la página.');
         }
+    }
+}
+
+// Establecer alcance de búsqueda
+window.setSearchScope = function(scope) {
+    window.currentColumnSearch.searchScope = scope;
+    
+    const limitedBtn = document.getElementById('searchLimitedBtn');
+    const allBtn = document.getElementById('searchAllBtn');
+    
+    if (scope === 'all') {
+        limitedBtn.classList.remove('btn-primary');
+        limitedBtn.classList.add('btn-outline-secondary');
+        allBtn.classList.remove('btn-outline-secondary');
+        allBtn.classList.add('btn-primary');
+    } else {
+        limitedBtn.classList.remove('btn-outline-secondary');
+        limitedBtn.classList.add('btn-primary');
+        allBtn.classList.remove('btn-primary');
+        allBtn.classList.add('btn-outline-secondary');
+    }
+}
+
+// Mostrar modal de configuración de límite
+window.showLimitModal = function() {
+    document.getElementById('customSearchLimit').value = window.currentColumnSearch.searchLimit;
+    const modal = new bootstrap.Modal(document.getElementById('searchLimitModal'));
+    modal.show();
+}
+
+// Aplicar límite personalizado
+window.applyCustomLimit = function() {
+    const newLimit = parseInt(document.getElementById('customSearchLimit').value);
+    if (newLimit > 0) {
+        window.currentColumnSearch.searchLimit = newLimit;
+        document.getElementById('limitValue').textContent = newLimit;
+        setSearchScope('limited');
+        bootstrap.Modal.getInstance(document.getElementById('searchLimitModal')).hide();
     }
 }
 
@@ -3544,11 +3623,16 @@ window.performColumnSearch = async function() {
         const data = responseData.data || responseData;
         currentColumnSearch.columnData = data.values || [];
         
+        // Determinar cuántos valores buscar
+        const isSearchAll = window.currentColumnSearch.searchScope === 'all';
+        const searchLimit = isSearchAll ? currentColumnSearch.columnData.length : window.currentColumnSearch.searchLimit;
+        const dataToSearch = currentColumnSearch.columnData.slice(0, searchLimit);
+        
         // Filtrar datos según tipo de búsqueda
         let matchedValues = [];
         const totalValues = currentColumnSearch.columnData.length;
         
-        currentColumnSearch.columnData.forEach(value => {
+        dataToSearch.forEach(value => {
             const strValue = String(value);
             let matches = false;
             
@@ -3601,9 +3685,19 @@ window.displaySearchResults = function(matchedValues, totalValues) {
     const percentage = totalValues > 0 ? (matchCount / totalValues * 100).toFixed(2) : 0;
     
     // Actualizar estadísticas
+    const isSearchAll = window.currentColumnSearch.searchScope === 'all';
+    const searchLimit = window.currentColumnSearch.searchLimit;
+    const actualSearched = isSearchAll ? totalValues : Math.min(searchLimit, totalValues);
+    
     document.getElementById('matchCount').textContent = matchCount;
-    document.getElementById('totalCount').textContent = totalValues;
+    document.getElementById('totalCount').textContent = actualSearched;
     document.getElementById('matchPercentage').textContent = percentage;
+    
+    // Mostrar información adicional si no se buscó en todo
+    if (!isSearchAll && totalValues > searchLimit) {
+        const totalCountElement = document.getElementById('totalCount');
+        totalCountElement.innerHTML = `${actualSearched} <small class="text-muted">(de ${totalValues} total)</small>`;
+    }
     
     // Mostrar lista de todos los valores coincidentes
     const matchedValuesList = document.getElementById('matchedValuesList');
@@ -3777,34 +3871,49 @@ window.loadPatternData = async function() {
 }
 
 
+// Variable para debouncing
+let updatePatternTimeout = null;
+
 // Actualizar ejemplo de patrón
 window.updatePatternExample = function() {
-    const index = parseInt(document.getElementById('patternExampleIndex').value) - 1;
-    const results = window.currentColumnSearch.lastSearchResults;
-    
-    if (!results || results.length === 0) {
-        document.getElementById('patternCharacters').innerHTML = '<p class="text-dark">No hay resultados de búsqueda</p>';
-        return;
+    // Clear previous timeout
+    if (updatePatternTimeout) {
+        clearTimeout(updatePatternTimeout);
     }
     
-    // Validar índice
-    const validIndex = Math.max(0, Math.min(index, results.length - 1));
-    if (validIndex !== index) {
-        document.getElementById('patternExampleIndex').value = validIndex + 1;
-    }
-    
-    // Obtener el valor del ejemplo
-    const exampleValue = String(results[validIndex]);
-    
-    // Crear caracteres clickeables
-    const charsHtml = exampleValue.split('').map((char, idx) => {
-        const isSelected = window.currentColumnSearch.selectedPattern.includes(idx);
-        return `<span class="pattern-char ${isSelected ? 'selected' : ''}" 
-                     data-index="${idx}" 
-                     onclick="togglePatternChar(${idx})">${char}</span>`;
-    }).join('');
-    
-    document.getElementById('patternCharacters').innerHTML = charsHtml;
+    // Debounce para evitar actualizaciones muy rápidas
+    updatePatternTimeout = setTimeout(() => {
+        const input = document.getElementById('patternExampleIndex');
+        const index = parseInt(input.value) - 1;
+        const results = window.currentColumnSearch.lastSearchResults;
+        
+        if (!results || results.length === 0) {
+            document.getElementById('patternCharacters').innerHTML = '<p class="text-dark">No hay resultados de búsqueda</p>';
+            return;
+        }
+        
+        // Validar índice
+        const validIndex = Math.max(0, Math.min(index, results.length - 1));
+        if (validIndex !== index) {
+            input.value = validIndex + 1;
+        }
+        
+        // Actualizar límites del input
+        input.max = results.length;
+        
+        // Obtener el valor del ejemplo
+        const exampleValue = String(results[validIndex]);
+        
+        // Crear caracteres clickeables
+        const charsHtml = exampleValue.split('').map((char, idx) => {
+            const isSelected = window.currentColumnSearch.selectedPattern.includes(idx);
+            return `<span class="pattern-char ${isSelected ? 'selected' : ''}" 
+                         data-index="${idx}" 
+                         onclick="togglePatternChar(${idx})">${char}</span>`;
+        }).join('');
+        
+        document.getElementById('patternCharacters').innerHTML = charsHtml;
+    }, 100); // 100ms debounce
 }
 
 // Toggle selección de carácter
@@ -3853,6 +3962,12 @@ window.clearColumnSearch = function() {
         toggleBtn.classList.add('btn-outline-info');
         document.getElementById('patternToggleText').textContent = 'Activar patrón personalizado';
     }
+    
+    // Reset search scope
+    window.currentColumnSearch.searchScope = 'limited';
+    window.currentColumnSearch.searchLimit = 100;
+    document.getElementById('limitValue').textContent = '100';
+    setSearchScope('limited');
     
     updateSearchInterface();
     window.currentColumnSearch.lastSearchResults = [];
