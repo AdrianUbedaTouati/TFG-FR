@@ -1789,6 +1789,7 @@ function displayDatasetDetails(dataset, data) {
                                 <div class="col-md-6">
                                     <select class="form-select" id="analysisType1" onchange="updateAnalysisButton(1)">
                                         <option value="histogram">Histogramme</option>
+                                        <option value="pie" class="text-only">Gráfico Circular (Pie Chart)</option>
                                         <option value="outlier_map" class="numeric-only">Carte des Outliers</option>
                                         <option value="boxplot" class="numeric-only">Box Plot</option>
                                         <option value="scatter" class="numeric-only">Scatter Plot (2 variables)</option>
@@ -1851,6 +1852,9 @@ function displayDatasetDetails(dataset, data) {
                     </button>
                     <button class="btn btn-outline-warning" onclick="generateGeneralAnalysis('pca')">
                         <i class="bi bi-arrows-angle-contract"></i> Analyse PCA
+                    </button>
+                    <button class="btn btn-outline-success" onclick="generateRadarChart()">
+                        <i class="bi bi-radar"></i> Gráfico Radar de Variables
                     </button>
                 </div>
                 <div id="generalAnalysisContainer">
@@ -2292,6 +2296,7 @@ function addNewAnalysis() {
                     <div class="col-md-6">
                         <select class="form-select" id="analysisType${analysisCount}" onchange="updateAnalysisButton(${analysisCount})">
                             <option value="histogram">Histogramme</option>
+                            <option value="pie" class="text-only">Gráfico Circular (Pie Chart)</option>
                             <option value="outlier_map" class="numeric-only">Carte des Outliers</option>
                             <option value="boxplot" class="numeric-only">Box Plot</option>
                             <option value="scatter" class="numeric-only">Scatter Plot (2 variables)</option>
@@ -2367,13 +2372,21 @@ function updateAnalysisButton(analysisId) {
     
     // Mostrar/ocultar opciones según el tipo de variable
     const numericOptions = analysisTypeSelect.querySelectorAll('.numeric-only');
+    const textOptions = analysisTypeSelect.querySelectorAll('.text-only');
+    
     numericOptions.forEach(option => {
         option.style.display = isNumeric ? 'block' : 'none';
     });
     
-    // Si la opción seleccionada no es válida para el tipo de variable, cambiar a histograma
+    textOptions.forEach(option => {
+        option.style.display = !isNumeric ? 'block' : 'none';
+    });
+    
+    // Si la opción seleccionada no es válida para el tipo de variable, cambiar a histograma o pie
     const selectedAnalysis = analysisTypeSelect.value;
     if (!isNumeric && ['outlier_map', 'boxplot', 'scatter', 'lasso'].includes(selectedAnalysis)) {
+        analysisTypeSelect.value = 'histogram';
+    } else if (isNumeric && selectedAnalysis === 'pie') {
         analysisTypeSelect.value = 'histogram';
     }
 }
@@ -2406,6 +2419,9 @@ function executeAnalysis(analysisId) {
         case 'histogram':
             generateHistogram(analysisId);
             break;
+        case 'pie':
+            generatePieChart(analysisId);
+            break;
         case 'outlier_map':
         case 'boxplot':
         case 'scatter':
@@ -2417,6 +2433,582 @@ function executeAnalysis(analysisId) {
         default:
             generateHistogram(analysisId);
     }
+}
+
+// Función para generar gráfico circular (pie chart) para variables categóricas
+function generatePieChart(analysisId) {
+    const select = document.getElementById(`variableSelect${analysisId}`);
+    const selectedVariable = select.value;
+    
+    if (!selectedVariable) {
+        showNotification('Error', 'Por favor selecciona una variable', 'warning');
+        return;
+    }
+    
+    const data = window.currentDatasetData;
+    if (!data || !data.stats) {
+        showNotification('Error', 'No hay datos disponibles', 'error');
+        return;
+    }
+    
+    const colStats = data.stats[selectedVariable];
+    const container = document.getElementById(`analysisResultContainer${analysisId}`);
+    
+    // Buscar datos de frecuencia en diferentes lugares posibles
+    let valueCountsObj = null;
+    
+    if (colStats) {
+        if (colStats.value_counts) {
+            valueCountsObj = colStats.value_counts;
+        } else if (colStats.categories) {
+            valueCountsObj = colStats.categories;
+        } else if (colStats.top_values) {
+            // Convertir el formato top_values a un objeto de conteo
+            valueCountsObj = {};
+            if (colStats.top_values.values && colStats.top_values.counts) {
+                colStats.top_values.values.forEach((val, idx) => {
+                    valueCountsObj[val] = colStats.top_values.counts[idx];
+                });
+            }
+        }
+    }
+    
+    // Si aún no tenemos datos, intentar obtener los datos detallados de la columna
+    if (!valueCountsObj || Object.keys(valueCountsObj).length === 0) {
+        // Hacer una petición para obtener datos detallados de la columna
+        fetch(`/api/datasets/${window.selectedDataset.id}/columns/${encodeURIComponent(selectedVariable)}/`)
+            .then(response => response.json())
+            .then(detailData => {
+                if (detailData.status === 'success' && detailData.data && detailData.data.value_counts) {
+                    // Usar los value_counts del endpoint detallado
+                    const sortedEntries = Object.entries(detailData.data.value_counts).sort((a, b) => b[1] - a[1]);
+                    generatePieChartWithData(analysisId, selectedVariable, sortedEntries);
+                } else {
+                    container.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i> No hay datos de frecuencia disponibles para esta variable
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Error al obtener datos: ${error.message}
+                    </div>
+                `;
+            });
+        return;
+    }
+    
+    // Preparar datos para el gráfico
+    const sortedEntries = Object.entries(valueCountsObj).sort((a, b) => b[1] - a[1]);
+    generatePieChartWithData(analysisId, selectedVariable, sortedEntries);
+}
+
+// Función auxiliar para generar el pie chart con datos
+function generatePieChartWithData(analysisId, selectedVariable, sortedEntries, maxSlices = 15) {
+    const container = document.getElementById(`analysisResultContainer${analysisId}`);
+    
+    // Guardar todos los datos para poder regenerar el gráfico
+    window[`pieChartData_${analysisId}`] = {
+        selectedVariable,
+        sortedEntries,
+        currentMax: maxSlices
+    };
+    
+    let topEntries;
+    let othersCount = 0;
+    
+    // Si maxSlices es mayor o igual al total de entradas, mostrar todo sin agrupar
+    if (maxSlices >= sortedEntries.length) {
+        topEntries = sortedEntries;
+    } else {
+        topEntries = sortedEntries.slice(0, maxSlices);
+        // Solo agrupar como "Otros" si hay límite
+        for (let i = maxSlices; i < sortedEntries.length; i++) {
+            othersCount += sortedEntries[i][1];
+        }
+        if (othersCount > 0) {
+            topEntries.push(['Otros', othersCount]);
+        }
+    }
+    
+    const labels = topEntries.map(([value, _]) => String(value).substring(0, 30) + (String(value).length > 30 ? '...' : ''));
+    const values = topEntries.map(([_, count]) => count);
+    const total = values.reduce((a, b) => a + b, 0);
+    
+    // Generar colores aleatorios pero agradables
+    const colors = topEntries.map((_, i) => {
+        const hue = (i * 360 / topEntries.length) % 360;
+        return `hsl(${hue}, 70%, 50%)`;
+    });
+    
+    // Crear el contenedor del gráfico
+    container.innerHTML = `
+        <div class="card bg-dark border-secondary">
+            <div class="card-header">
+                <h6 class="mb-0 text-info">
+                    <i class="bi bi-pie-chart"></i> Gráfico Circular - ${selectedVariable}
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="d-flex align-items-center gap-3">
+                            <label class="text-muted mb-0">Mostrar top:</label>
+                            <input type="number" 
+                                   id="pieSliceCount${analysisId}" 
+                                   class="form-control form-control-sm" 
+                                   style="width: 80px;" 
+                                   value="${maxSlices}" 
+                                   min="3" 
+                                   max="${sortedEntries.length}"
+                                   onchange="updatePieChart(${analysisId})">
+                            <span class="text-muted">valores (de ${sortedEntries.length} únicos)</span>
+                            <div class="ms-auto">
+                                ${maxSlices < sortedEntries.length ? `
+                                    <button class="btn btn-sm btn-outline-success" onclick="showAllInPie(${analysisId})">
+                                        <i class="bi bi-pie-chart-fill"></i> Mostrar todos
+                                    </button>
+                                ` : ''}
+                                <button class="btn btn-sm btn-outline-primary" onclick="showAllPieValues(${analysisId})">
+                                    <i class="bi bi-list-ul"></i> Ver lista completa
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-8">
+                        <canvas id="pieChart${analysisId}" style="max-height: 400px;"></canvas>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="alert alert-info">
+                            <strong>Estadísticas:</strong><br>
+                            Total de valores: ${total}<br>
+                            Valores únicos: ${sortedEntries.length}<br>
+                            Mostrando: ${maxSlices >= sortedEntries.length ? 'Todos los' : `Top ${maxSlices}`} valores
+                            ${sortedEntries.length > maxSlices ? `<br>Agrupados como "Otros": ${sortedEntries.length - maxSlices} valores` : ''}
+                        </div>
+                        <div class="mt-3">
+                            <h6>${maxSlices >= sortedEntries.length ? 'Todos los' : `Top ${maxSlices}`} valores:</h6>
+                            <div id="pieValuesList${analysisId}" style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-sm table-hover">
+                                    <thead style="position: sticky; top: 0; background: #1a1a1a;">
+                                        <tr>
+                                            <th>Valor</th>
+                                            <th>Cantidad</th>
+                                            <th>%</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${topEntries.map(([value, count], idx) => `
+                                            <tr>
+                                                <td title="${value}">
+                                                    <span class="badge" style="background-color: ${colors[idx]}; color: white;">
+                                                        ${idx + 1}
+                                                    </span>
+                                                    ${String(value).substring(0, 20)}${String(value).length > 20 ? '...' : ''}
+                                                </td>
+                                                <td>${count}</td>
+                                                <td>${((count/total)*100).toFixed(1)}%</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Crear el gráfico
+    setTimeout(() => {
+        const ctx = document.getElementById(`pieChart${analysisId}`).getContext('2d');
+        new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors,
+                    borderColor: '#1a1a1a',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: topEntries.length > 20 ? 'bottom' : 'right',
+                        labels: {
+                            color: '#f0f9ff',
+                            font: {
+                                size: topEntries.length > 30 ? 9 : 11
+                            },
+                            generateLabels: function(chart) {
+                                const data = chart.data;
+                                if (data.labels.length && data.datasets.length) {
+                                    return data.labels.map((label, i) => {
+                                        const dataset = data.datasets[0];
+                                        const value = dataset.data[i];
+                                        const percentage = ((value/total)*100).toFixed(1);
+                                        // Si hay muchos valores, solo mostrar porcentaje en valores significativos
+                                        const showPercentage = topEntries.length <= 30 || percentage >= 1;
+                                        return {
+                                            text: showPercentage ? `${label} (${percentage}%)` : label,
+                                            fillStyle: dataset.backgroundColor[i],
+                                            hidden: false,
+                                            index: i
+                                        };
+                                    });
+                                }
+                                return [];
+                            }
+                        },
+                        display: topEntries.length <= 50 // Ocultar leyenda si hay demasiados valores
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed;
+                                const percentage = ((value/total)*100).toFixed(2);
+                                const fullLabel = topEntries[context.dataIndex][0];
+                                return [
+                                    `${fullLabel}`,
+                                    `Cantidad: ${value}`,
+                                    `Porcentaje: ${percentage}%`
+                                ];
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: `Distribución de ${selectedVariable}`,
+                        color: '#f0f9ff'
+                    }
+                }
+            }
+        });
+    }, 100);
+}
+
+// Función para actualizar el pie chart con un nuevo número de elementos
+function updatePieChart(analysisId) {
+    const newMax = parseInt(document.getElementById(`pieSliceCount${analysisId}`).value);
+    const data = window[`pieChartData_${analysisId}`];
+    
+    if (data && newMax >= 3) {
+        generatePieChartWithData(analysisId, data.selectedVariable, data.sortedEntries, newMax);
+    }
+}
+
+// Función para mostrar todos los valores en el gráfico
+function showAllInPie(analysisId) {
+    const data = window[`pieChartData_${analysisId}`];
+    if (!data) return;
+    
+    // Actualizar el input y regenerar el gráfico con todos los valores
+    document.getElementById(`pieSliceCount${analysisId}`).value = data.sortedEntries.length;
+    generatePieChartWithData(analysisId, data.selectedVariable, data.sortedEntries, data.sortedEntries.length);
+}
+
+// Función para mostrar todos los valores en un modal
+function showAllPieValues(analysisId) {
+    const data = window[`pieChartData_${analysisId}`];
+    if (!data) return;
+    
+    const total = data.sortedEntries.reduce((sum, [_, count]) => sum + count, 0);
+    
+    // Crear modal con todos los valores
+    const modalHtml = `
+        <div class="modal fade" id="allValuesModal${analysisId}" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content bg-dark">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Todos los valores de ${data.selectedVariable} (${data.sortedEntries.length} únicos)</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="searchValues${analysisId}" 
+                                   placeholder="Buscar valor..."
+                                   onkeyup="filterPieValues(${analysisId})">
+                        </div>
+                        <div style="max-height: 500px; overflow-y: auto;">
+                            <table class="table table-sm table-hover" id="allValuesTable${analysisId}">
+                                <thead style="position: sticky; top: 0; background: #1a1a1a;">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Valor</th>
+                                        <th>Cantidad</th>
+                                        <th>Porcentaje</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.sortedEntries.map(([value, count], idx) => `
+                                        <tr data-value="${value}">
+                                            <td>${idx + 1}</td>
+                                            <td title="${value}">${String(value).substring(0, 50)}${String(value).length > 50 ? '...' : ''}</td>
+                                            <td>${count}</td>
+                                            <td>${((count/total)*100).toFixed(2)}%</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-info" 
+                                                        onclick="focusOnValue(${analysisId}, ${idx})">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <span class="me-auto text-muted">Total: ${total} valores</span>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal anterior si existe
+    const existingModal = document.getElementById(`allValuesModal${analysisId}`);
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Agregar nuevo modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = new bootstrap.Modal(document.getElementById(`allValuesModal${analysisId}`));
+    modal.show();
+}
+
+// Función para filtrar valores en el modal
+function filterPieValues(analysisId) {
+    const searchText = document.getElementById(`searchValues${analysisId}`).value.toLowerCase();
+    const rows = document.querySelectorAll(`#allValuesTable${analysisId} tbody tr`);
+    
+    rows.forEach(row => {
+        const value = row.getAttribute('data-value').toLowerCase();
+        row.style.display = value.includes(searchText) ? '' : 'none';
+    });
+}
+
+// Función para enfocar en un valor específico
+function focusOnValue(analysisId, valueIndex) {
+    // Cerrar el modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById(`allValuesModal${analysisId}`));
+    if (modal) modal.hide();
+    
+    // Actualizar el gráfico para mostrar desde ese valor
+    const newMax = Math.min(valueIndex + 15, window[`pieChartData_${analysisId}`].sortedEntries.length);
+    document.getElementById(`pieSliceCount${analysisId}`).value = newMax;
+    updatePieChart(analysisId);
+    
+    // Hacer scroll al gráfico
+    document.getElementById(`analysisResultContainer${analysisId}`).scrollIntoView({ behavior: 'smooth' });
+}
+
+// Función para generar análisis avanzados (boxplot, scatter, outlier_map)
+async function generateAdvancedAnalysis(analysisId, analysisType) {
+    const select = document.getElementById(`variableSelect${analysisId}`);
+    const selectedVariable = select.value;
+    const includeOutliers = document.getElementById(`includeOutliers${analysisId}`).checked;
+    
+    if (!selectedVariable) {
+        showNotification('Error', 'Por favor selecciona una variable', 'warning');
+        return;
+    }
+    
+    const currentDataset = window.selectedDataset;
+    if (!currentDataset || !currentDataset.id) {
+        showNotification('Error', 'No hay dataset seleccionado', 'error');
+        return;
+    }
+    
+    const container = document.getElementById(`analysisResultContainer${analysisId}`);
+    container.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p>Generando análisis...</p></div>';
+    
+    try {
+        // Usar el endpoint correcto según urls.py
+        let url = `/api/datasets/${currentDataset.id}/columns/${encodeURIComponent(selectedVariable)}/analysis/?type=${analysisType}`;
+        
+        if (!includeOutliers) {
+            url += '&include_outliers=false';
+        }
+        
+        // Para scatter plot, necesitamos una segunda variable
+        if (analysisType === 'scatter') {
+            const secondVariable = await selectSecondVariable(analysisId);
+            if (!secondVariable) return;
+            url += `&second_variable=${encodeURIComponent(secondVariable)}`;
+        }
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error al generar el análisis');
+        }
+        
+        // Mostrar el resultado
+        displayAdvancedAnalysisResult(analysisId, data, analysisType);
+        
+    } catch (error) {
+        container.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> ${error.message}</div>`;
+    }
+}
+
+// Función para seleccionar segunda variable para scatter plot
+async function selectSecondVariable(analysisId) {
+    const currentVariable = document.getElementById(`variableSelect${analysisId}`).value;
+    const columns = Object.keys(window.currentDatasetData.stats || {});
+    const numericColumns = columns.filter(col => {
+        const stats = window.currentDatasetData.stats[col];
+        return stats && stats.mean !== undefined && col !== currentVariable;
+    });
+    
+    if (numericColumns.length === 0) {
+        showNotification('Error', 'No hay otras variables numéricas disponibles', 'error');
+        return null;
+    }
+    
+    // Crear un modal simple para seleccionar la segunda variable
+    const modalHtml = `
+        <div class="modal fade" id="secondVariableModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content bg-dark">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Seleccionar segunda variable</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label class="form-label">Variable Y para el scatter plot:</label>
+                        <select class="form-select" id="secondVariableSelect">
+                            ${numericColumns.map(col => `<option value="${col}">${col}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" id="confirmSecondVariable">Confirmar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Agregar modal al body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = new bootstrap.Modal(document.getElementById('secondVariableModal'));
+    
+    return new Promise((resolve) => {
+        document.getElementById('confirmSecondVariable').onclick = () => {
+            const selected = document.getElementById('secondVariableSelect').value;
+            modal.hide();
+            document.getElementById('secondVariableModal').remove();
+            resolve(selected);
+        };
+        
+        document.getElementById('secondVariableModal').addEventListener('hidden.bs.modal', () => {
+            document.getElementById('secondVariableModal').remove();
+            resolve(null);
+        });
+        
+        modal.show();
+    });
+}
+
+// Función para mostrar resultados de análisis avanzados
+function displayAdvancedAnalysisResult(analysisId, data, analysisType) {
+    const container = document.getElementById(`analysisResultContainer${analysisId}`);
+    
+    let content = `
+        <div class="card bg-dark border-secondary">
+            <div class="card-header">
+                <h6 class="mb-0 text-info">
+                    <i class="bi bi-graph-up"></i> ${getAnalysisTitle(analysisType)} - ${data.column}
+                </h6>
+            </div>
+            <div class="card-body">
+    `;
+    
+    // Mostrar imagen si existe
+    if (data.image) {
+        content += `<img src="${data.image}" class="img-fluid mb-3" alt="${analysisType}">`;
+    }
+    
+    // Mostrar estadísticas según el tipo
+    if (data.statistics) {
+        content += '<div class="alert alert-info">';
+        
+        switch(analysisType) {
+            case 'boxplot':
+                content += `
+                    <strong>Estadísticas del Box Plot:</strong><br>
+                    Q1 (25%): ${data.statistics.q1?.toFixed(2) || 'N/A'}<br>
+                    Mediana (50%): ${data.statistics.median?.toFixed(2) || 'N/A'}<br>
+                    Q3 (75%): ${data.statistics.q3?.toFixed(2) || 'N/A'}<br>
+                    IQR: ${data.statistics.iqr?.toFixed(2) || 'N/A'}<br>
+                    Outliers: ${data.statistics.n_outliers || 0}
+                `;
+                break;
+                
+            case 'outlier_map':
+                content += `
+                    <strong>Análisis de Outliers:</strong><br>
+                    Total de valores: ${data.statistics.total_values || 0}<br>
+                    Outliers detectados: ${data.statistics.n_outliers || 0} (${data.statistics.outlier_percentage?.toFixed(1) || 0}%)<br>
+                    Método: ${data.statistics.method || 'IQR'}
+                `;
+                break;
+                
+            case 'scatter':
+                content += `
+                    <strong>Análisis de Correlación:</strong><br>
+                    Variable X: ${data.column}<br>
+                    Variable Y: ${data.second_column || 'N/A'}<br>
+                    Correlación: ${data.statistics.correlation?.toFixed(3) || 'N/A'}<br>
+                    Puntos: ${data.statistics.n_points || 0}
+                `;
+                break;
+        }
+        
+        content += '</div>';
+    }
+    
+    content += `
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = content;
+}
+
+// Función auxiliar para obtener título del análisis
+function getAnalysisTitle(analysisType) {
+    const titles = {
+        'boxplot': 'Box Plot',
+        'outlier_map': 'Mapa de Outliers',
+        'scatter': 'Scatter Plot',
+        'histogram': 'Histograma'
+    };
+    return titles[analysisType] || analysisType;
 }
 
 // Nueva función para generar análisis LASSO con variable objetivo específica
@@ -5372,6 +5964,194 @@ function generateGeneralAnalysis(analysisType) {
                 </div>
             `;
         });
+}
+
+// Función para generar gráfico radar de todas las variables
+function generateRadarChart() {
+    if (!selectedDataset) {
+        showNotification('Error', 'Por favor selecciona un dataset primero', 'error');
+        return;
+    }
+    
+    const container = document.getElementById('generalAnalysisContainer');
+    const data = window.currentDatasetData;
+    
+    if (!data || !data.stats) {
+        showNotification('Error', 'No hay datos disponibles', 'error');
+        return;
+    }
+    
+    // Filtrar solo variables numéricas
+    const numericColumns = Object.keys(data.stats).filter(col => {
+        const stats = data.stats[col];
+        return stats && stats.mean !== undefined;
+    });
+    
+    if (numericColumns.length < 3) {
+        showNotification('Error', 'Se necesitan al menos 3 variables numéricas para el gráfico radar', 'warning');
+        return;
+    }
+    
+    // Mostrar loading
+    container.innerHTML = `
+        <div class="text-center p-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Generando gráfico radar...</span>
+            </div>
+            <p class="mt-3">Generando Gráfico Radar...</p>
+        </div>
+    `;
+    
+    // Preparar datos para el gráfico
+    const labels = numericColumns;
+    const datasets = [];
+    
+    // Dataset 1: Valores medios normalizados (0-1)
+    const meanValues = numericColumns.map(col => {
+        const stats = data.stats[col];
+        const min = stats.min || 0;
+        const max = stats.max || 1;
+        const mean = stats.mean || 0;
+        // Normalizar a escala 0-100
+        return ((mean - min) / (max - min)) * 100;
+    });
+    
+    datasets.push({
+        label: 'Valores Medios (Normalizados)',
+        data: meanValues,
+        backgroundColor: 'rgba(0, 212, 255, 0.2)',
+        borderColor: 'rgba(0, 212, 255, 1)',
+        borderWidth: 2,
+        pointBackgroundColor: 'rgba(0, 212, 255, 1)',
+        pointBorderColor: '#fff',
+        pointHoverBackgroundColor: '#fff',
+        pointHoverBorderColor: 'rgba(0, 212, 255, 1)'
+    });
+    
+    // Dataset 2: Desviación estándar normalizada
+    const stdValues = numericColumns.map(col => {
+        const stats = data.stats[col];
+        const std = stats.std || 0;
+        const mean = stats.mean || 1;
+        // Coeficiente de variación normalizado a escala 0-100
+        const cv = mean !== 0 ? (std / Math.abs(mean)) * 100 : 0;
+        return Math.min(cv, 100); // Limitar a 100
+    });
+    
+    datasets.push({
+        label: 'Variabilidad (Coef. Variación)',
+        data: stdValues,
+        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+        borderColor: 'rgba(255, 99, 132, 1)',
+        borderWidth: 2,
+        pointBackgroundColor: 'rgba(255, 99, 132, 1)',
+        pointBorderColor: '#fff',
+        pointHoverBackgroundColor: '#fff',
+        pointHoverBorderColor: 'rgba(255, 99, 132, 1)'
+    });
+    
+    // Crear el gráfico
+    setTimeout(() => {
+        container.innerHTML = `
+            <div class="analysis-result mt-3 p-3 bg-light rounded">
+                <h6 class="text-primary mb-3">
+                    <i class="bi bi-radar"></i> Gráfico Radar de Variables Numéricas
+                </h6>
+                <div class="row">
+                    <div class="col-md-8">
+                        <canvas id="radarChart" style="max-height: 500px;"></canvas>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="alert alert-info">
+                            <h6>Interpretación:</h6>
+                            <ul class="mb-0">
+                                <li><strong>Azul:</strong> Valores medios normalizados (0-100)</li>
+                                <li><strong>Rojo:</strong> Variabilidad relativa de cada variable</li>
+                                <li>Variables con valores altos en azul tienen valores medios más cercanos a su máximo</li>
+                                <li>Variables con valores altos en rojo tienen mayor dispersión relativa</li>
+                            </ul>
+                        </div>
+                        <div class="mt-3">
+                            <h6>Variables incluidas (${numericColumns.length}):</h6>
+                            <ul class="list-unstyled" style="max-height: 300px; overflow-y: auto;">
+                                ${numericColumns.map(col => `
+                                    <li class="mb-1">
+                                        <i class="bi bi-dot"></i> ${col}
+                                        <small class="text-muted">
+                                            (μ: ${data.stats[col].mean?.toFixed(2) || 'N/A'})
+                                        </small>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Configurar y crear el gráfico
+        const ctx = document.getElementById('radarChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: 'Análisis Multivariable del Dataset'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.dataset.label || '';
+                                const value = context.parsed.r || context.parsed.y;
+                                const variable = context.label;
+                                const stats = data.stats[variable];
+                                
+                                let tooltipText = `${label}: ${value.toFixed(2)}%`;
+                                if (context.datasetIndex === 0 && stats) {
+                                    tooltipText += `\nMedia real: ${stats.mean?.toFixed(2) || 'N/A'}`;
+                                    tooltipText += `\nRango: [${stats.min?.toFixed(2) || 'N/A'}, ${stats.max?.toFixed(2) || 'N/A'}]`;
+                                } else if (context.datasetIndex === 1 && stats) {
+                                    tooltipText += `\nDesv. Estándar: ${stats.std?.toFixed(2) || 'N/A'}`;
+                                }
+                                return tooltipText;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            stepSize: 20,
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        },
+                        pointLabels: {
+                            font: {
+                                size: 10
+                            },
+                            callback: function(value) {
+                                // Truncar nombres largos
+                                return value.length > 15 ? value.substring(0, 12) + '...' : value;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }, 100);
 }
 
 // Event listener para limpiar cuando se cierra el modal de búsqueda
