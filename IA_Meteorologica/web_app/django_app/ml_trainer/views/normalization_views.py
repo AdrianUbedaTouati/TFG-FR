@@ -298,9 +298,18 @@ class DatasetNormalizationView(APIView):
         """Apply normalization based on configuration"""
         normalized_df = df.copy()
         
-        for column, method in config.items():
+        for column, method_config in config.items():
             if column not in df.columns:
                 continue
+            
+            # Handle both old format (string) and new format (dict with method and keep_original)
+            if isinstance(method_config, dict):
+                method = method_config.get('method', '')
+                keep_original = method_config.get('keep_original', True)
+            else:
+                # Backward compatibility: if it's just a string, treat as method
+                method = method_config
+                keep_original = False  # Default for old format
             
             # Check if it's a custom function
             if method.startswith('CUSTOM_'):
@@ -633,12 +642,22 @@ class DatasetNormalizationView(APIView):
                         numeric_series = pd.to_numeric(df[column], errors='coerce')
                         if not numeric_series.isna().all():  # If at least some values converted
                             func = DISPATCH_NUM[norm_enum]
-                            normalized_df[column] = func(numeric_series)
+                            if keep_original:
+                                new_column_name = f"{column}_normalized"
+                                normalized_df[new_column_name] = func(numeric_series)
+                            else:
+                                normalized_df[column] = func(numeric_series)
                             continue
                     else:
                         # Already numeric
                         func = DISPATCH_NUM[norm_enum]
-                        normalized_df[column] = func(df[column])
+                        if keep_original:
+                            # Create new column with normalized values
+                            new_column_name = f"{column}_normalized"
+                            normalized_df[new_column_name] = func(df[column])
+                        else:
+                            # Replace original column
+                            normalized_df[column] = func(df[column])
                         continue
                 except Exception:
                     pass
@@ -648,7 +667,11 @@ class DatasetNormalizationView(APIView):
             if text_enum in DISPATCH_TEXT:
                 try:
                     func = DISPATCH_TEXT[text_enum]
-                    normalized_df[column] = func(df[column])
+                    if keep_original:
+                        new_column_name = f"{column}_normalized"
+                        normalized_df[new_column_name] = func(df[column])
+                    else:
+                        normalized_df[column] = func(df[column])
                 except Exception as e:
                     print(f"Error applying text normalization {method} to column {column}: {str(e)}")
         
