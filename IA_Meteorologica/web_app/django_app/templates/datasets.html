@@ -2404,10 +2404,33 @@ function handleOutliersChange(analysisId) {
 // Función para actualizar el histograma cuando se cambian los bins
 function updateHistogramBins(analysisId) {
     const analysisType = document.getElementById(`analysisType${analysisId}`).value;
-    const selectedVariable = document.getElementById(`variableSelect${analysisId}`).value;
+    const select = document.getElementById(`variableSelect${analysisId}`);
     
-    if (selectedVariable && analysisType === 'histogram' && analysisCharts[analysisId]) {
-        generateHistogram(analysisId);
+    if (!select || select.selectedIndex < 0) {
+        console.error('No variable selected for analysis', analysisId);
+        return;
+    }
+    
+    const selectedVariable = select.value;
+    const selectedOption = select.options[select.selectedIndex];
+    const isNumeric = selectedOption && selectedOption.getAttribute('data-numeric') === 'true';
+    
+    if (selectedVariable && analysisType === 'histogram') {
+        // Para variables categóricas, regenerar con los datos guardados
+        if (!isNumeric) {
+            // Si tenemos los datos guardados, usarlos
+            if (window[`categoricalData_${analysisId}`] && window[`categoricalData_${analysisId}`].allData) {
+                const data = window[`categoricalData_${analysisId}`];
+                const colStats = window.currentDatasetData.stats[selectedVariable] || {};
+                generateCategoricalHistogramWithData(analysisId, data.selectedVariable, data.allData, colStats);
+            } else {
+                // Si no, regenerar todo el histograma
+                generateHistogram(analysisId);
+            }
+        } else {
+            // Para variables numéricas, regenerar normalmente
+            generateHistogram(analysisId);
+        }
     }
 }
 
@@ -3347,7 +3370,25 @@ function generateHistogram(analysisId) {
             document.getElementById(`binMax${analysisId}`).value = colStats.max;
         }
     } else {
-        document.getElementById(`histogramConfig${analysisId}`).style.display = 'none';
+        // Para variables de texto, mostrar configuración diferente
+        const configContainer = document.getElementById(`histogramConfig${analysisId}`);
+        configContainer.style.display = 'flex';
+        // Cambiar las etiquetas y configuración para texto
+        configContainer.innerHTML = `
+            <div class="col-md-6">
+                <label for="numCategories${analysisId}" class="form-label text-info small">Número de categorías a mostrar:</label>
+                <input type="number" class="form-control form-control-sm" id="numCategories${analysisId}" value="10" min="5" max="50" onchange="updateHistogramBins(${analysisId})">
+            </div>
+            <div class="col-md-6">
+                <label for="sortOrder${analysisId}" class="form-label text-info small">Ordenar por:</label>
+                <select class="form-select form-select-sm" id="sortOrder${analysisId}" onchange="updateHistogramBins(${analysisId})">
+                    <option value="frequency">Frecuencia (mayor a menor)</option>
+                    <option value="alphabetical">Alfabético (A-Z)</option>
+                    <option value="alphabetical_desc">Alfabético (Z-A)</option>
+                </select>
+            </div>
+        `;
+        
     }
     
     // Destruir gráfico anterior si existe
@@ -3584,99 +3625,542 @@ function generateHistogram(analysisId) {
                 </div>
             </div>
         `;
-    } else if (!isNumeric && colStats.top_values) {
+        
+        // Save analysis data for numeric variables
+        analysisData[analysisId] = {
+            variable: selectedVariable,
+            isNumeric: true,
+            stats: colStats,
+            chartData: analysisCharts[analysisId] ? analysisCharts[analysisId].toBase64Image() : null,
+            outlierInfo: colStats.histogram?.outliers_info || null
+        };
+    } else if (!isNumeric) {
         // Gráfico de barras para variables categóricas
-        analysisCharts[analysisId] = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: colStats.top_values.values,
-                datasets: [{
-                    label: `Frecuencia de ${selectedVariable}`,
-                    data: colStats.top_values.counts,
-                    backgroundColor: 'rgba(16, 185, 129, 0.5)',
-                    borderColor: 'rgba(16, 185, 129, 1)',
-                    borderWidth: 1
-                }]
+        // Primero, obtener todos los datos de frecuencia disponibles
+        let allData = [];
+        
+        if (colStats.value_counts) {
+            allData = Object.entries(colStats.value_counts);
+        } else if (colStats.categories) {
+            allData = Object.entries(colStats.categories);
+        } else if (colStats.top_values) {
+            colStats.top_values.values.forEach((val, idx) => {
+                allData.push([val, colStats.top_values.counts[idx]]);
+            });
+        }
+        
+        // Si no hay datos, intentar obtener datos completos
+        if (allData.length === 0) {
+            // Hacer una petición para obtener datos completos
+            fetch(`/api/datasets/${window.selectedDataset.id}/columns/${encodeURIComponent(selectedVariable)}/`, {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(detailData => {
+                if (detailData && !detailData.error) {
+                    let valueCountsObj = detailData.value_counts_complete || detailData.value_counts || {};
+                    
+                    if (Object.keys(valueCountsObj).length === 0 && detailData.frequency_data) {
+                        valueCountsObj = {};
+                        detailData.frequency_data.forEach(item => {
+                            if (item.value !== 'null') {
+                                valueCountsObj[item.value] = item.count;
+                            }
+                        });
+                    }
+                    
+                    allData = Object.entries(valueCountsObj);
+                    
+                    // Guardar los datos inmediatamente
+                    window[`categoricalData_${analysisId}`] = {
+                        allData: allData,
+                        sortedData: allData,
+                        selectedVariable: selectedVariable
+                    };
+                    
+                    // Dar tiempo para que los elementos de configuración estén listos
+                    setTimeout(() => {
+                        generateCategoricalHistogramWithData(analysisId, selectedVariable, allData, colStats);
+                    }, 100);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching column details:', error);
+                // Usar los datos que tenemos
+                if (allData.length > 0) {
+                    window[`categoricalData_${analysisId}`] = {
+                        allData: allData,
+                        sortedData: allData,
+                        selectedVariable: selectedVariable
+                    };
+                    setTimeout(() => {
+                        generateCategoricalHistogramWithData(analysisId, selectedVariable, allData, colStats);
+                    }, 100);
+                }
+            });
+            return;
+        }
+        
+        // Guardar los datos inmediatamente para que estén disponibles cuando se actualice
+        window[`categoricalData_${analysisId}`] = {
+            allData: allData,
+            sortedData: allData,
+            selectedVariable: selectedVariable
+        };
+        
+        // Dar tiempo para que los elementos de configuración estén listos
+        setTimeout(() => {
+            generateCategoricalHistogramWithData(analysisId, selectedVariable, allData, colStats);
+        }, 100);
+    }
+}
+
+// Nueva función para generar histograma categórico con datos
+function generateCategoricalHistogramWithData(analysisId, selectedVariable, allData, colStats) {
+    const canvas = document.getElementById(`variableHistogram${analysisId}`);
+    const ctx = canvas.getContext('2d');
+    
+    // Obtener configuración
+    const numCategoriesElement = document.getElementById(`numCategories${analysisId}`);
+    const sortOrderElement = document.getElementById(`sortOrder${analysisId}`);
+    
+    // Verificar que los elementos existen
+    if (!numCategoriesElement || !sortOrderElement) {
+        console.error('Configuration elements not found for analysis', analysisId);
+        return;
+    }
+    
+    const numCategories = parseInt(numCategoriesElement.value) || 10;
+    const sortOrder = sortOrderElement.value || 'frequency';
+    
+    // Ordenar datos según la configuración
+    let sortedData = [...allData];
+    switch(sortOrder) {
+        case 'frequency':
+            sortedData.sort((a, b) => b[1] - a[1]); // Mayor a menor frecuencia
+            break;
+        case 'alphabetical':
+            sortedData.sort((a, b) => String(a[0]).localeCompare(String(b[0]))); // A-Z
+            break;
+        case 'alphabetical_desc':
+            sortedData.sort((a, b) => String(b[0]).localeCompare(String(a[0]))); // Z-A
+            break;
+    }
+    
+    // Limitar al número de categorías configurado
+    const displayData = sortedData.slice(0, numCategories);
+    const labels = displayData.map(([val, _]) => String(val).substring(0, 30) + (String(val).length > 30 ? '...' : ''));
+    const counts = displayData.map(([_, count]) => count);
+    
+    // Calcular "otros" si hay más categorías
+    let othersCount = 0;
+    if (sortedData.length > numCategories) {
+        for (let i = numCategories; i < sortedData.length; i++) {
+            othersCount += sortedData[i][1];
+        }
+        labels.push('Otros');
+        counts.push(othersCount);
+    }
+    
+    // Destruir gráfico anterior si existe
+    if (analysisCharts[analysisId]) {
+        analysisCharts[analysisId].destroy();
+    }
+    
+    analysisCharts[analysisId] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: `Frecuencia de ${selectedVariable}`,
+                data: counts,
+                backgroundColor: 'rgba(16, 185, 129, 0.5)',
+                borderColor: 'rgba(16, 185, 129, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: `Distribución de ${selectedVariable} (${numCategories < sortedData.length ? `Top ${numCategories} de ${sortedData.length}` : `Todos los ${sortedData.length}`} valores)`,
+                    color: '#00d4ff',
+                    font: { size: 16 }
+                },
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        afterLabel: function(context) {
+                            const total = counts.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.parsed.y / total) * 100).toFixed(1);
+                            return `${percentage}% del total`;
+                        }
+                    }
+                }
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
+            scales: {
+                x: {
                     title: {
                         display: true,
-                        text: `Distribución de ${selectedVariable} (Top 10 valores)`,
-                        color: '#00d4ff',
-                        font: { size: 16 }
+                        text: 'Categorías',
+                        color: '#00d4ff'
                     },
-                    legend: { display: false }
+                    ticks: { 
+                        color: '#f0f9ff',
+                        maxRotation: 45,
+                        minRotation: 45,
+                        callback: function(value, index) {
+                            const label = this.getLabelForValue(value);
+                            return label.length > 20 ? label.substring(0, 20) + '...' : label;
+                        }
+                    },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
                 },
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Categorías',
-                            color: '#00d4ff'
-                        },
-                        ticks: { 
-                            color: '#f0f9ff',
-                            maxRotation: 45,
-                            minRotation: 45
-                        },
-                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Frecuencia',
+                        color: '#00d4ff'
                     },
-                    y: {
-                        title: {
-                            display: true,
-                            text: 'Frecuencia',
-                            color: '#00d4ff'
-                        },
-                        beginAtZero: true,
-                        ticks: { color: '#f0f9ff' },
-                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    beginAtZero: true,
+                    ticks: { color: '#f0f9ff' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                }
+            },
+            onClick: function(evt, activeElements) {
+                if (activeElements.length > 0) {
+                    const index = activeElements[0].index;
+                    const label = labels[index];
+                    if (label !== 'Otros') {
+                        // Aquí puedes agregar funcionalidad al hacer clic en una barra
+                        console.log('Clicked on:', label);
                     }
                 }
             }
-        });
-        
-        // Mostrar estadísticas categóricas
-        document.getElementById(`variableStats${analysisId}`).innerHTML = `
-            <div class="card bg-dark border-info">
-                <div class="card-body">
-                    <h6 class="text-info mb-3">Información de ${selectedVariable}</h6>
-                    <div class="row">
-                        <div class="col-md-4">
-                            <small class="text-muted">Valores únicos:</small><br>
-                            <strong>${colStats.unique_count || 0}</strong>
-                        </div>
-                        <div class="col-md-4">
-                            <small class="text-muted">Valores nulos:</small><br>
-                            <strong>${colStats.null_count || 0} (${colStats.null_percentage?.toFixed(1) || 0}%)</strong>
-                        </div>
-                        <div class="col-md-4">
-                            <small class="text-muted">Moda:</small><br>
-                            <strong>${colStats.top_values?.values[0] || 'N/A'}</strong>
-                        </div>
+        }
+    });
+    
+    // Mostrar estadísticas categóricas mejoradas
+    const totalCount = allData.reduce((sum, [_, count]) => sum + count, 0);
+    const uniqueCount = colStats.unique_count || allData.length;
+    
+    // Calcular el valor más frecuente
+    const mostFrequent = sortedData[0];
+    const leastFrequent = sortedData[sortedData.length - 1];
+    
+    document.getElementById(`variableStats${analysisId}`).innerHTML = `
+        <div class="card bg-dark border-info">
+            <div class="card-body">
+                <h6 class="text-info mb-3">Información de ${selectedVariable}</h6>
+                <div class="row">
+                    <div class="col-md-3">
+                        <small class="text-muted">Valores únicos:</small><br>
+                        <strong>${uniqueCount}</strong>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted">Total de registros:</small><br>
+                        <strong>${totalCount.toLocaleString()}</strong>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted">Valores nulos:</small><br>
+                        <strong>${colStats.null_count || 0} (${colStats.null_percentage?.toFixed(1) || 0}%)</strong>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted">Mostrando:</small><br>
+                        <strong>${numCategories < sortedData.length ? `Top ${numCategories}` : 'Todos'}</strong>
                     </div>
                 </div>
+                ${mostFrequent ? `
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <small class="text-muted">Valor más frecuente:</small><br>
+                            <strong>${String(mostFrequent[0]).substring(0, 30)}${String(mostFrequent[0]).length > 30 ? '...' : ''}</strong>
+                            <small class="text-info ms-2">(${mostFrequent[1]} veces - ${((mostFrequent[1]/totalCount)*100).toFixed(1)}%)</small>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted">Valor menos frecuente:</small><br>
+                            <strong>${String(leastFrequent[0]).substring(0, 30)}${String(leastFrequent[0]).length > 30 ? '...' : ''}</strong>
+                            <small class="text-info ms-2">(${leastFrequent[1]} veces - ${((leastFrequent[1]/totalCount)*100).toFixed(1)}%)</small>
+                        </div>
+                    </div>
+                ` : ''}
+                ${othersCount > 0 ? `
+                    <div class="alert alert-info mt-3 mb-0">
+                        <i class="bi bi-info-circle"></i> 
+                        <strong>Valores agrupados como "Otros":</strong> ${sortedData.length - numCategories} categorías
+                        con un total de ${othersCount} registros (${((othersCount/totalCount)*100).toFixed(1)}% del total)
+                    </div>
+                ` : ''}
+                <div class="mt-3">
+                    <button class="btn btn-sm btn-outline-primary" onclick="showAllCategoricalValues(${analysisId}, '${selectedVariable}')">
+                        <i class="bi bi-list-ul"></i> Ver todos los valores
+                    </button>
+                    ${sortedData.length > numCategories ? `
+                        <button class="btn btn-sm btn-outline-success ms-2" onclick="document.getElementById('numCategories${analysisId}').value = ${sortedData.length}; updateHistogramBins(${analysisId})">
+                            <i class="bi bi-bar-chart-fill"></i> Mostrar todos en el gráfico
+                        </button>
+                    ` : ''}
+                </div>
             </div>
-        `;
-    } else {
-        document.getElementById(`histogramContainer${analysisId}`).innerHTML = `
-            <div class="alert alert-warning">
-                <i class="bi bi-exclamation-triangle"></i> Aucune donnée de distribution disponible pour cette variable
-            </div>
-        `;
-        document.getElementById(`variableStats${analysisId}`).innerHTML = '';
+        </div>
+    `;
+    
+    // Actualizar los datos guardados con los datos ordenados
+    if (window[`categoricalData_${analysisId}`]) {
+        window[`categoricalData_${analysisId}`].sortedData = sortedData;
     }
     
     // Save analysis data for report generation
     analysisData[analysisId] = {
         variable: selectedVariable,
-        isNumeric: isNumeric,
+        isNumeric: false,
         stats: colStats,
-        chartData: analysisCharts[analysisId] ? analysisCharts[analysisId].toBase64Image() : null,
-        outlierInfo: colStats.histogram?.outliers_info || null
+        chartData: analysisCharts[analysisId] ? analysisCharts[analysisId].toBase64Image() : null
     };
+}
+
+// Función para mostrar todos los valores categóricos en un modal
+async function showAllCategoricalValues(analysisId, variableName) {
+    // Mostrar loading mientras se cargan los datos
+    const loadingModal = `
+        <div class="modal fade" id="loadingModal${analysisId}" tabindex="-1">
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content bg-dark">
+                    <div class="modal-body text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="mt-2">Cargando todos los valores...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', loadingModal);
+    const loading = new bootstrap.Modal(document.getElementById(`loadingModal${analysisId}`));
+    loading.show();
+    
+    try {
+        // Fetch complete data from the server
+        const response = await fetch(`/api/datasets/${window.selectedDataset.id}/columns/${encodeURIComponent(variableName)}/`, {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        const detailData = await response.json();
+        let allValues = [];
+        
+        if (detailData && !detailData.error) {
+            // Usar value_counts_complete si está disponible, sino usar value_counts
+            let valueCountsObj = detailData.value_counts_complete || detailData.value_counts || {};
+            
+            // Si no hay value_counts pero hay frequency_data, usarlo
+            if (Object.keys(valueCountsObj).length === 0 && detailData.frequency_data) {
+                valueCountsObj = {};
+                detailData.frequency_data.forEach(item => {
+                    if (item.value !== 'null') {
+                        valueCountsObj[item.value] = item.count;
+                    }
+                });
+            }
+            
+            allValues = Object.entries(valueCountsObj);
+        } else {
+            // Si falla, usar los datos que tenemos
+            const data = window[`categoricalData_${analysisId}`];
+            if (data && data.allData) {
+                allValues = [...data.allData];
+            }
+        }
+        
+        // Cerrar loading
+        loading.hide();
+        document.getElementById(`loadingModal${analysisId}`).remove();
+        
+        if (allValues.length === 0) {
+            showNotification('Error', 'No se pudieron obtener los datos completos', 'error');
+            return;
+        }
+        
+        // Ordenar por frecuencia (mayor a menor) por defecto
+        allValues.sort((a, b) => b[1] - a[1]);
+        
+        const total = allValues.reduce((sum, [_, count]) => sum + count, 0);
+    
+    // Crear modal con todos los valores
+    const modalHtml = `
+        <div class="modal fade" id="allCategoricalValuesModal${analysisId}" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content bg-dark">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Todos los valores de ${variableName} (${allValues.length} únicos)</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="searchCategoricalValues${analysisId}" 
+                                       placeholder="Buscar valor..."
+                                       onkeyup="filterCategoricalValues(${analysisId})">
+                            </div>
+                            <div class="col-md-6">
+                                <select class="form-select" id="modalSortOrder${analysisId}" onchange="sortModalTable(${analysisId})">
+                                    <option value="frequency">Ordenar por frecuencia</option>
+                                    <option value="alphabetical">Ordenar alfabéticamente (A-Z)</option>
+                                    <option value="alphabetical_desc">Ordenar alfabéticamente (Z-A)</option>
+                                    <option value="value_asc">Ordenar por valor (menor a mayor)</option>
+                                    <option value="value_desc">Ordenar por valor (mayor a menor)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="alert alert-info mb-3">
+                            <i class="bi bi-info-circle"></i> Mostrando todos los <strong>${allValues.length}</strong> valores únicos
+                        </div>
+                        <div style="max-height: 500px; overflow-y: auto;">
+                            <table class="table table-sm table-hover" id="allCategoricalValuesTable${analysisId}">
+                                <thead style="position: sticky; top: 0; background: #1a1a1a; z-index: 10;">
+                                    <tr>
+                                        <th style="width: 60px;">#</th>
+                                        <th>Valor</th>
+                                        <th style="width: 100px;">Frecuencia</th>
+                                        <th style="width: 100px;">Porcentaje</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${allValues.map(([value, count], idx) => `
+                                        <tr data-value="${String(value).replace(/"/g, '&quot;')}" data-count="${count}" data-index="${idx + 1}">
+                                            <td>${idx + 1}</td>
+                                            <td title="${String(value).replace(/"/g, '&quot;')}">${String(value).substring(0, 50)}${String(value).length > 50 ? '...' : ''}</td>
+                                            <td>${count.toLocaleString()}</td>
+                                            <td>${((count/total)*100).toFixed(2)}%</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <span class="me-auto text-muted">
+                            Total de registros: <strong>${total.toLocaleString()}</strong> | 
+                            Valores únicos: <strong>${allValues.length}</strong>
+                        </span>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal anterior si existe
+    const existingModal = document.getElementById(`allCategoricalValuesModal${analysisId}`);
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Agregar nuevo modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = new bootstrap.Modal(document.getElementById(`allCategoricalValuesModal${analysisId}`));
+    modal.show();
+    
+    // Guardar los datos para el ordenamiento
+    window[`modalData_${analysisId}`] = allValues;
+    
+    } catch (error) {
+        console.error('Error loading all values:', error);
+        // Cerrar loading si hay error
+        const loadingElement = document.getElementById(`loadingModal${analysisId}`);
+        if (loadingElement) {
+            const loading = bootstrap.Modal.getInstance(loadingElement);
+            if (loading) loading.hide();
+            loadingElement.remove();
+        }
+        
+        showNotification('Error', 'Error al cargar todos los valores', 'error');
+    }
+}
+
+// Nueva función para ordenar la tabla del modal
+function sortModalTable(analysisId) {
+    const sortOrder = document.getElementById(`modalSortOrder${analysisId}`).value;
+    const tableBody = document.querySelector(`#allCategoricalValuesTable${analysisId} tbody`);
+    const rows = Array.from(tableBody.querySelectorAll('tr'));
+    const data = window[`modalData_${analysisId}`];
+    
+    if (!data) return;
+    
+    // Obtener el total para recalcular porcentajes
+    const total = data.reduce((sum, [_, count]) => sum + count, 0);
+    
+    // Ordenar los datos según la selección
+    let sortedData = [...data];
+    switch(sortOrder) {
+        case 'frequency':
+            sortedData.sort((a, b) => b[1] - a[1]);
+            break;
+        case 'alphabetical':
+            sortedData.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+            break;
+        case 'alphabetical_desc':
+            sortedData.sort((a, b) => String(b[0]).localeCompare(String(a[0])));
+            break;
+        case 'value_asc':
+            sortedData.sort((a, b) => {
+                const aNum = parseFloat(a[0]);
+                const bNum = parseFloat(b[0]);
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    return aNum - bNum;
+                }
+                return String(a[0]).localeCompare(String(b[0]));
+            });
+            break;
+        case 'value_desc':
+            sortedData.sort((a, b) => {
+                const aNum = parseFloat(a[0]);
+                const bNum = parseFloat(b[0]);
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    return bNum - aNum;
+                }
+                return String(b[0]).localeCompare(String(a[0]));
+            });
+            break;
+    }
+    
+    // Regenerar el contenido de la tabla
+    tableBody.innerHTML = sortedData.map(([value, count], idx) => `
+        <tr data-value="${String(value).replace(/"/g, '&quot;')}" data-count="${count}" data-index="${idx + 1}">
+            <td>${idx + 1}</td>
+            <td title="${String(value).replace(/"/g, '&quot;')}">${String(value).substring(0, 50)}${String(value).length > 50 ? '...' : ''}</td>
+            <td>${count.toLocaleString()}</td>
+            <td>${((count/total)*100).toFixed(2)}%</td>
+        </tr>
+    `).join('');
+    
+    // Reaplicar el filtro si hay texto de búsqueda
+    const searchText = document.getElementById(`searchCategoricalValues${analysisId}`).value;
+    if (searchText) {
+        filterCategoricalValues(analysisId);
+    }
+}
+
+// Función para filtrar valores en el modal
+function filterCategoricalValues(analysisId) {
+    const searchText = document.getElementById(`searchCategoricalValues${analysisId}`).value.toLowerCase();
+    const rows = document.querySelectorAll(`#allCategoricalValuesTable${analysisId} tbody tr`);
+    
+    rows.forEach(row => {
+        const value = row.getAttribute('data-value').toLowerCase();
+        row.style.display = value.includes(searchText) ? '' : 'none';
+    });
 }
 
 // Actualizar estadísticas
