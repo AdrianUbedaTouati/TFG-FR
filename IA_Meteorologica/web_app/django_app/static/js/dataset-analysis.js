@@ -3,6 +3,22 @@
 // Variable para almacenar análisis generales del dataset
 let generalAnalysisData = {};
 
+// Función para obtener el token CSRF
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
 // Función para generar análisis avanzado de variable
 async function generateAdvancedAnalysis(analysisId, analysisType) {
     const select = document.getElementById(`variableSelect${analysisId}`);
@@ -20,16 +36,28 @@ async function generateAdvancedAnalysis(analysisId, analysisType) {
     }
     
     try {
-        let url = `/api/datasets/${currentDataset.id}/columns/${encodeURIComponent(selectedVariable)}/analysis/?type=${analysisType}`;
+        const url = `/api/datasets/${currentDataset.id}/columns/${encodeURIComponent(selectedVariable)}/analysis/`;
+        
+        // Preparar el body de la petición
+        const requestBody = {
+            analysis_type: analysisType
+        };
         
         // Para scatter plot necesitamos una segunda variable
         if (analysisType === 'scatter') {
             const secondVariable = prompt('Sélectionnez la deuxième variable pour le scatter plot:');
             if (!secondVariable) return;
-            url += `&second_column=${encodeURIComponent(secondVariable)}`;
+            requestBody.second_column = secondVariable;
         }
         
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(requestBody)
+        });
         const data = await response.json();
         
         if (!response.ok) {
@@ -65,22 +93,24 @@ function displayAdvancedAnalysis(analysisId, data) {
                 </h6>
             </div>
             <div class="card-body">
-                <img src="${data.image}" class="img-fluid" alt="${data.analysis_type}">
+                <img src="${data.data?.plot || data.plot || data.image}" class="img-fluid" alt="${data.analysis_type}">
     `;
     
     // Agregar estadísticas específicas según el tipo
-    if (data.statistics) {
+    const stats = data.statistics || data.outlier_info || data.boxplot_stats;
+    if (stats) {
         content += '<div class="mt-3">';
         
         switch(data.analysis_type) {
             case 'outlier_map':
+                const outlierStats = data.outlier_info || stats;
                 content += `
                     <div class="alert alert-info">
-                        <strong>Outliers détectés:</strong> ${data.statistics.outlier_count} 
-                        (${data.statistics.outlier_percentage.toFixed(2)}%)
+                        <strong>Outliers détectés:</strong> ${outlierStats.total_outliers || outlierStats.outlier_count || 0} 
+                        (${outlierStats.outlier_percentage?.toFixed(2) || '0.00'}%)
                         <br>
-                        <small>IQR: ${data.statistics.iqr.toFixed(2)}, 
-                        Limites: [${data.statistics.lower_bound.toFixed(2)}, ${data.statistics.upper_bound.toFixed(2)}]</small>
+                        <small>
+                        Limites: [${outlierStats.lower_bound?.toFixed(2) || 'N/A'}, ${outlierStats.upper_bound?.toFixed(2) || 'N/A'}]</small>
                     </div>
                 `;
                 break;
@@ -204,7 +234,7 @@ function displayGeneralAnalysis(data) {
                 </h6>
             </div>
             <div class="card-body">
-                <img src="${data.image}" class="img-fluid" alt="${data.analysis_type}">
+                <img src="${data.data?.plot || data.plot || data.image}" class="img-fluid" alt="${data.analysis_type}">
     `;
     
     // Agregar información específica según el tipo

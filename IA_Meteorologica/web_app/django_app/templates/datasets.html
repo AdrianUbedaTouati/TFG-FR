@@ -3069,24 +3069,28 @@ async function generateAdvancedAnalysis(analysisId, analysisType) {
     
     try {
         // Usar el endpoint correcto según urls.py
-        let url = `/api/datasets/${currentDataset.id}/columns/${encodeURIComponent(selectedVariable)}/analysis/?type=${analysisType}`;
+        const url = `/api/datasets/${currentDataset.id}/columns/${encodeURIComponent(selectedVariable)}/analysis/`;
         
-        if (!includeOutliers) {
-            url += '&include_outliers=false';
-        }
+        // Preparar el body de la petición
+        const requestBody = {
+            analysis_type: analysisType,
+            include_outliers: includeOutliers
+        };
         
         // Para scatter plot, necesitamos una segunda variable
         if (analysisType === 'scatter') {
             const secondVariable = await selectSecondVariable(analysisId);
             if (!secondVariable) return;
-            url += `&second_variable=${encodeURIComponent(secondVariable)}`;
+            requestBody.second_variable = secondVariable;
         }
         
         const response = await fetch(url, {
-            method: 'GET',
+            method: 'POST',
             headers: {
+                'Content-Type': 'application/json',
                 'X-CSRFToken': getCookie('csrftoken')
-            }
+            },
+            body: JSON.stringify(requestBody)
         });
         
         const data = await response.json();
@@ -3177,8 +3181,9 @@ function displayAdvancedAnalysisResult(analysisId, data, analysisType) {
     `;
     
     // Mostrar imagen si existe
-    if (data.image) {
-        content += `<img src="${data.image}" class="img-fluid mb-3" alt="${analysisType}">`;
+    const imageUrl = data.data?.plot || data.plot || data.image;
+    if (imageUrl) {
+        content += `<img src="${imageUrl}" class="img-fluid mb-3" alt="${analysisType}">`;
     }
     
     // Mostrar estadísticas según el tipo
@@ -6891,6 +6896,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <!-- Script para análisis avanzados -->
-<script src="{% static 'js/dataset-analysis.js' %}"></script>
+<script src="{% static 'js/dataset-analysis.js' %}?v={% now 'U' %}"></script>
 
 {% endblock %}

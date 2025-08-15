@@ -375,7 +375,7 @@ class DatasetVariableAnalysisView(APIView):
         buffer.seek(0)
         plot_base64 = base64.b64encode(buffer.getvalue()).decode()
         plt.close(fig)
-        return plot_base64
+        return f"data:image/png;base64,{plot_base64}"
 
 
 class DatasetDownloadView(APIView):
