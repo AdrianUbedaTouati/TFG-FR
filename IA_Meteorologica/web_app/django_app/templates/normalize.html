@@ -656,6 +656,18 @@
         word-break: break-all;
         max-height: 400px;
         overflow-y: auto;
+        animation: fadeIn 0.3s ease-in;
+    }
+    
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
     
     .test-result.success {
@@ -666,6 +678,18 @@
     .test-result.error {
         border: 1px solid rgba(255, 0, 0, 0.3);
         color: #ff6b6b;
+    }
+    
+    .test-result code {
+        background: rgba(0, 212, 255, 0.1);
+        padding: 2px 6px;
+        border-radius: 4px;
+        color: var(--primary-color);
+    }
+    
+    .test-result .badge {
+        font-size: 0.85rem;
+        font-weight: normal;
     }
     
     .test-result-table {
@@ -1081,7 +1105,7 @@ def normalize(value, series=None):
                     <h6 style="color: var(--primary-color);">Probar función</h6>
                     
                     <!-- Opción 1: Valor manual -->
-                    <div class="mb-3">
+                    <div class="mb-4" style="border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 8px; padding: 15px;">
                         <label class="form-label" style="color: var(--light-color);">
                             <i class="bi bi-pencil"></i> Opción 1: Ingresar valor de prueba manual
                         </label>
@@ -1090,16 +1114,11 @@ def normalize(value, series=None):
                         <button class="btn btn-sm btn-primary mt-2" onclick="testWithManualValue()">
                             <i class="bi bi-play-circle"></i> Probar con este valor
                         </button>
-                    </div>
-                    
-                    <div class="text-center my-3" style="color: rgba(240, 249, 255, 0.6);">
-                        <hr style="border-color: rgba(0, 212, 255, 0.2);">
-                        <span>O</span>
-                        <hr style="border-color: rgba(0, 212, 255, 0.2);">
+                        <div id="manualTestResult" class="test-result mt-3" style="display: none;"></div>
                     </div>
                     
                     <!-- Opción 2: Columna del dataset -->
-                    <div class="mb-3">
+                    <div class="mb-3" style="border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 8px; padding: 15px;">
                         <label class="form-label" style="color: var(--light-color);">
                             <i class="bi bi-table"></i> Opción 2: Probar con valores de una columna
                         </label>
@@ -1116,9 +1135,8 @@ def normalize(value, series=None):
                                 <i class="bi bi-list-check"></i> Probar todos los valores únicos
                             </button>
                         </div>
+                        <div id="columnTestResult" class="test-result mt-3" style="display: none;"></div>
                     </div>
-                    
-                    <div id="testResult" class="test-result mt-3" style="display: none;"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -2372,7 +2390,7 @@ def normalize(value, series=None):
             return;
         }
         
-        await testCustomFunction(testValue);
+        await testCustomFunction(testValue, 'manualTestResult');
     }
     
     async function testFirst20Values() {
@@ -2412,7 +2430,7 @@ def normalize(value, series=None):
         
         // Ejecutar la función en cada valor
         const results = await testMultipleValues(valuesToTest);
-        displayMultipleResults(results, `Primeros ${valuesToTest.length} valores de "${columnName}"`);
+        displayMultipleResults(results, `Primeros ${valuesToTest.length} valores de "${columnName}"`, 'columnTestResult');
     }
     
     async function testAllUniqueValues() {
@@ -2445,14 +2463,14 @@ def normalize(value, series=None):
         }
         
         // Mostrar loading
-        const resultDiv = document.getElementById('testResult');
+        const resultDiv = document.getElementById('columnTestResult');
         resultDiv.className = 'test-result mt-3';
         resultDiv.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Procesando...</span></div><p class="mt-2">Probando ' + allValues.length + ' valores únicos...</p></div>';
         resultDiv.style.display = 'block';
         
         // Ejecutar la función en cada valor
         const results = await testMultipleValues(allValues);
-        displayMultipleResults(results, `Todos los valores únicos de ${columnName} (${allValues.length} valores)`);
+        displayMultipleResults(results, `Todos los valores únicos de ${columnName} (${allValues.length} valores)`, 'columnTestResult');
     }
     
     async function testMultipleValues(values) {
@@ -2501,13 +2519,13 @@ def normalize(value, series=None):
         return results;
     }
     
-    function displayMultipleResults(results, title) {
-        const resultDiv = document.getElementById('testResult');
+    function displayMultipleResults(results, title, resultDivId = 'columnTestResult') {
+        const resultDiv = document.getElementById(resultDivId);
         
         const successCount = results.filter(r => r.success).length;
         const errorCount = results.length - successCount;
         
-        let html = `<h6>${title}</h6>`;
+        let html = `<h6>${title} <small class="text-muted">(${new Date().toLocaleTimeString()})</small></h6>`;
         html += `<p class="mb-2">✅ Exitosos: ${successCount} | ❌ Errores: ${errorCount}</p>`;
         
         html += '<table class="test-result-table">';
@@ -2518,8 +2536,8 @@ def normalize(value, series=None):
             const statusIcon = result.success ? '✅' : '❌';
             const rowClass = result.success ? '' : 'style="color: #ff6b6b;"';
             html += `<tr ${rowClass}>`;
-            html += `<td>${result.input}</td>`;
-            html += `<td>${result.output}</td>`;
+            html += `<td><code>${result.input}</code></td>`;
+            html += `<td><code>${result.output}</code></td>`;
             html += `<td>${statusIcon}</td>`;
             html += '</tr>';
         });
@@ -2529,11 +2547,14 @@ def normalize(value, series=None):
         resultDiv.className = 'test-result success mt-3';
         resultDiv.innerHTML = html;
         resultDiv.style.display = 'block';
+        
+        // Hacer scroll al resultado
+        resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
     
-    async function testCustomFunction(testValue) {
+    async function testCustomFunction(testValue, resultDivId = 'manualTestResult') {
         const functionCode = document.getElementById('functionCode').value;
-        const resultDiv = document.getElementById('testResult');
+        const resultDiv = document.getElementById(resultDivId);
         
         if (!functionCode.trim()) {
             showNotification('Por favor escribe el código de la función primero', 'warning');
@@ -2544,6 +2565,14 @@ def normalize(value, series=None):
             showNotification('Por favor proporciona un valor de prueba', 'warning');
             return;
         }
+        
+        // Ocultar y mostrar el div para forzar la actualización visual
+        resultDiv.style.display = 'none';
+        
+        // Mostrar un loading mientras se procesa
+        resultDiv.className = 'test-result mt-3';
+        resultDiv.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Procesando...</div>';
+        resultDiv.style.display = 'block';
         
         try {
             const response = await fetch('/api/custom-normalization-functions/test/', {
@@ -2573,30 +2602,70 @@ def normalize(value, series=None):
                 
                 resultDiv.className = 'test-result success mt-3';
                 let html = `
-                    <h6>Resultado de la prueba</h6>
+                    <h6>Resultado de la prueba <small class="text-muted">(${new Date().toLocaleTimeString()})</small></h6>
                     <table class="test-result-table">
                         <tr>
                             <th>Valor de entrada</th>
-                            <td>${testValue}</td>
-                        </tr>
-                        <tr>
-                            <th>Resultado</th>
-                            <td>${result.result}</td>
+                            <td><code>${testValue}</code></td>
                         </tr>
                 `;
+                
+                // Si el resultado es un objeto/diccionario (múltiples columnas)
+                if (typeof result.result === 'object' && result.result !== null) {
+                    html += `
+                        <tr>
+                            <th colspan="2" class="text-center">Resultados por columna:</th>
+                        </tr>
+                    `;
+                    
+                    // Mostrar cada columna y su valor
+                    for (const [columnName, value] of Object.entries(result.result)) {
+                        html += `
+                            <tr>
+                                <th class="ps-4">${columnName}</th>
+                                <td><code>${value}</code></td>
+                            </tr>
+                        `;
+                    }
+                } else {
+                    // Resultado simple
+                    html += `
+                        <tr>
+                            <th>Resultado</th>
+                            <td><code>${result.result}</code></td>
+                        </tr>
+                    `;
+                }
                 
                 if (detectedColumnNames.length > 0) {
                     html += `
                         <tr>
                             <th>Columnas detectadas</th>
-                            <td>${detectedColumnNames.join(', ')}</td>
+                            <td>
+                                <div class="d-flex flex-wrap gap-1">
+                                    ${detectedColumnNames.map(col => `<span class="badge bg-info">${col}</span>`).join('')}
+                                </div>
+                            </td>
                         </tr>
                     `;
                 }
                 
                 html += '</table>';
+                
+                // Agregar botón para probar de nuevo
+                html += `
+                    <div class="mt-2 text-center">
+                        <button class="btn btn-sm btn-outline-primary" onclick="testWithManualValue()">
+                            <i class="bi bi-arrow-clockwise"></i> Probar de nuevo
+                        </button>
+                    </div>
+                `;
+                
                 resultDiv.innerHTML = html;
                 resultDiv.style.display = 'block';
+                
+                // Hacer scroll al resultado
+                resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             } else {
                 resultDiv.className = 'test-result error mt-3';
                 resultDiv.innerHTML = `<strong>Error:</strong> ${result.error}`;

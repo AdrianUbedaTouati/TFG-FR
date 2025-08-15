@@ -5,6 +5,21 @@
 
 {% block extra_css %}
 <style>
+    /* Fix para el modal backdrop */
+    .modal-backdrop {
+        display: none !important;
+    }
+    
+    /* Agregar nuestro propio backdrop para el modal de búsqueda */
+    #columnSearchModal.show {
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+    
+    /* Asegurar que el modal esté sobre otros elementos */
+    #columnSearchModal .modal-dialog {
+        z-index: 1060;
+    }
+    
     /* Estilos mejorados para datasets */
     .dataset-card {
         background: rgba(10, 14, 39, 0.8);
@@ -3540,6 +3555,32 @@ function showUniqueValues(columnName) {
     });
 }
 
+// Helper function para crear modales de manera segura
+window.createModal = function(element, options = {}) {
+    const defaultOptions = {
+        backdrop: false,
+        keyboard: true
+    };
+    const finalOptions = { ...defaultOptions, ...options };
+    
+    // Interceptar el constructor de Modal para evitar el warning
+    const OriginalModal = bootstrap.Modal;
+    bootstrap.Modal = function(element, config) {
+        if (config && config.backdrop !== false) {
+            console.warn('⚠️ Modal backdrop detected! Use backdrop: false to prevent gray overlay issues.');
+        }
+        console.log('Use createModal() helper function instead of new bootstrap.Modal()');
+        return new OriginalModal(element, config);
+    };
+    
+    const modal = new bootstrap.Modal(element, finalOptions);
+    
+    // Restaurar el constructor original
+    bootstrap.Modal = OriginalModal;
+    
+    return modal;
+}
+
 // Variables globales para búsqueda en columna
 window.currentColumnSearch = {
     columnName: '',
@@ -3608,11 +3649,24 @@ function _openColumnSearchModal(columnName, datasetId) {
             return;
         }
         
-        // Mostrar modal
-        const modal = new bootstrap.Modal(modalElement, {
-            backdrop: true,
-            keyboard: true
+        // Verificar primero que todos los elementos requeridos existan
+        const requiredElements = ['searchColumnName', 'matchCount', 'totalCount', 'matchPercentage'];
+        let missingElements = [];
+        
+        requiredElements.forEach(id => {
+            if (!document.getElementById(id)) {
+                missingElements.push(id);
+            }
         });
+        
+        if (missingElements.length > 0) {
+            console.error('Elementos faltantes en el modal:', missingElements);
+            alert('Error: El modal no está completamente cargado. Por favor recarga la página.');
+            return;
+        }
+        
+        // Mostrar modal usando el helper
+        const modal = window.createModal(modalElement);
         modal.show();
         
         console.log('Modal should be visible now');
