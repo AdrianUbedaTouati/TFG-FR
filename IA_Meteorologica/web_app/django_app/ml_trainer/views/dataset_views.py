@@ -87,6 +87,8 @@ class DatasetColumnsView(APIView):
         stats = {}
         for col in columns:
             col_info = detect_column_type(df[col])
+            # Add the real unique count to stats
+            col_info['unique_count'] = int(df[col].nunique())
             stats[col] = col_info
         
         # Generate preview data (first 10 rows)
@@ -140,8 +142,16 @@ class DatasetColumnDetailsView(APIView):
         # Get detailed stats
         stats = detect_column_type(column)
         
-        # Get value counts (limit to 50 most frequent)
-        value_counts = column.value_counts().head(50).to_dict()
+        # Get all value counts for the pie chart
+        all_value_counts = column.value_counts()
+        # For response, limit to 50 most frequent
+        value_counts = all_value_counts.head(50).to_dict()
+        # But also provide all counts if needed - limit to 1000 to avoid memory issues
+        if len(all_value_counts) <= 1000:
+            value_counts_complete = all_value_counts.to_dict()
+        else:
+            # For very large datasets, provide top 1000
+            value_counts_complete = all_value_counts.head(1000).to_dict()
         
         # Get frequency data
         frequency_data = []
@@ -167,8 +177,10 @@ class DatasetColumnDetailsView(APIView):
             'column_name': column_name,
             'stats': stats,
             'value_counts': value_counts,
+            'value_counts_complete': value_counts_complete,  # All value counts for pie chart
             'frequency_data': frequency_data[:100],  # Limit to 100 items
-            'total_rows': int(total_count)
+            'total_rows': int(total_count),
+            'unique_count': int(column.nunique())  # Add the real unique count
         }
         
         return success_response(response_data)

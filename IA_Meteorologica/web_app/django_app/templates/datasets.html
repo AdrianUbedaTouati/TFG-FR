@@ -1789,7 +1789,7 @@ function displayDatasetDetails(dataset, data) {
                                 <div class="col-md-6">
                                     <select class="form-select" id="analysisType1" onchange="updateAnalysisButton(1)">
                                         <option value="histogram">Histogramme</option>
-                                        <option value="pie" class="text-only">Gráfico Circular (Pie Chart)</option>
+                                        <option value="pie">Gráfico Circular (Pie Chart)</option>
                                         <option value="outlier_map" class="numeric-only">Carte des Outliers</option>
                                         <option value="boxplot" class="numeric-only">Box Plot</option>
                                         <option value="scatter" class="numeric-only">Scatter Plot (2 variables)</option>
@@ -2296,7 +2296,7 @@ function addNewAnalysis() {
                     <div class="col-md-6">
                         <select class="form-select" id="analysisType${analysisCount}" onchange="updateAnalysisButton(${analysisCount})">
                             <option value="histogram">Histogramme</option>
-                            <option value="pie" class="text-only">Gráfico Circular (Pie Chart)</option>
+                            <option value="pie">Gráfico Circular (Pie Chart)</option>
                             <option value="outlier_map" class="numeric-only">Carte des Outliers</option>
                             <option value="boxplot" class="numeric-only">Box Plot</option>
                             <option value="scatter" class="numeric-only">Scatter Plot (2 variables)</option>
@@ -2382,13 +2382,12 @@ function updateAnalysisButton(analysisId) {
         option.style.display = !isNumeric ? 'block' : 'none';
     });
     
-    // Si la opción seleccionada no es válida para el tipo de variable, cambiar a histograma o pie
+    // Si la opción seleccionada no es válida para el tipo de variable, cambiar a histograma
     const selectedAnalysis = analysisTypeSelect.value;
     if (!isNumeric && ['outlier_map', 'boxplot', 'scatter', 'lasso'].includes(selectedAnalysis)) {
         analysisTypeSelect.value = 'histogram';
-    } else if (isNumeric && selectedAnalysis === 'pie') {
-        analysisTypeSelect.value = 'histogram';
     }
+    // Ya no restringimos pie chart para variables numéricas
 }
 
 // Nueva función para ejecutar el análisis seleccionado
@@ -2435,10 +2434,12 @@ function executeAnalysis(analysisId) {
     }
 }
 
-// Función para generar gráfico circular (pie chart) para variables categóricas
+// Función para generar gráfico circular (pie chart) para cualquier tipo de variable
 function generatePieChart(analysisId) {
     const select = document.getElementById(`variableSelect${analysisId}`);
     const selectedVariable = select.value;
+    const selectedOption = select.options[select.selectedIndex];
+    const isNumeric = selectedOption && selectedOption.getAttribute('data-numeric') === 'true';
     
     if (!selectedVariable) {
         showNotification('Error', 'Por favor selecciona una variable', 'warning');
@@ -2454,35 +2455,85 @@ function generatePieChart(analysisId) {
     const colStats = data.stats[selectedVariable];
     const container = document.getElementById(`analysisResultContainer${analysisId}`);
     
-    // Buscar datos de frecuencia en diferentes lugares posibles
-    let valueCountsObj = null;
-    
-    if (colStats) {
-        if (colStats.value_counts) {
-            valueCountsObj = colStats.value_counts;
-        } else if (colStats.categories) {
-            valueCountsObj = colStats.categories;
-        } else if (colStats.top_values) {
-            // Convertir el formato top_values a un objeto de conteo
-            valueCountsObj = {};
-            if (colStats.top_values.values && colStats.top_values.counts) {
-                colStats.top_values.values.forEach((val, idx) => {
-                    valueCountsObj[val] = colStats.top_values.counts[idx];
-                });
-            }
-        }
+    // Si no hay estadísticas para esta columna
+    if (!colStats) {
+        container.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i> No hay estadísticas disponibles para esta variable
+            </div>
+        `;
+        return;
     }
     
-    // Si aún no tenemos datos, intentar obtener los datos detallados de la columna
-    if (!valueCountsObj || Object.keys(valueCountsObj).length === 0) {
-        // Hacer una petición para obtener datos detallados de la columna
-        fetch(`/api/datasets/${window.selectedDataset.id}/columns/${encodeURIComponent(selectedVariable)}/`)
-            .then(response => response.json())
-            .then(detailData => {
-                if (detailData.status === 'success' && detailData.data && detailData.data.value_counts) {
+    // Para variables numéricas, necesitamos agrupar los valores
+    if (isNumeric) {
+        generateNumericPieChart(analysisId, selectedVariable, colStats, container);
+        return;
+    }
+    
+    // Verificar que hay un dataset seleccionado
+    if (!window.selectedDataset || !window.selectedDataset.id) {
+        container.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i> No hay dataset seleccionado
+            </div>
+        `;
+        return;
+    }
+    
+    // Para variables categóricas, siempre obtener los datos completos de la columna
+    // para tener el conteo real de valores únicos
+    fetch(`/api/datasets/${window.selectedDataset.id}/columns/${encodeURIComponent(selectedVariable)}/`, {
+        method: 'GET',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(detailData => {
+            if (detailData && !detailData.error) {
+                // Usar value_counts_complete si está disponible, sino usar value_counts
+                let valueCountsObj = detailData.value_counts_complete || detailData.value_counts || {};
+                
+                // Si no hay value_counts pero hay frequency_data, usarlo
+                if (Object.keys(valueCountsObj).length === 0 && detailData.frequency_data) {
+                    valueCountsObj = {};
+                    detailData.frequency_data.forEach(item => {
+                        if (item.value !== 'null') {
+                            valueCountsObj[item.value] = item.count;
+                        }
+                    });
+                }
+                
+                // Si aún no hay datos, intentar con los stats originales
+                if (Object.keys(valueCountsObj).length === 0 && colStats) {
+                    if (colStats.value_counts) {
+                        valueCountsObj = colStats.value_counts;
+                    } else if (colStats.categories) {
+                        valueCountsObj = colStats.categories;
+                    } else if (colStats.top_values) {
+                        // Convertir el formato top_values a un objeto de conteo
+                        valueCountsObj = {};
+                        if (colStats.top_values.values && colStats.top_values.counts) {
+                            colStats.top_values.values.forEach((val, idx) => {
+                                valueCountsObj[val] = colStats.top_values.counts[idx];
+                            });
+                        }
+                    }
+                }
+                
+                if (Object.keys(valueCountsObj).length > 0) {
                     // Usar los value_counts del endpoint detallado
-                    const sortedEntries = Object.entries(detailData.data.value_counts).sort((a, b) => b[1] - a[1]);
-                    generatePieChartWithData(analysisId, selectedVariable, sortedEntries);
+                    const sortedEntries = Object.entries(valueCountsObj).sort((a, b) => b[1] - a[1]);
+                    // Agregar información sobre el número real de valores únicos
+                    // Primero del detailData, luego de colStats, luego de sortedEntries
+                    const uniqueCount = detailData.unique_count || colStats?.unique_count || sortedEntries.length;
+                    generatePieChartWithData(analysisId, selectedVariable, sortedEntries, null, uniqueCount);
                 } else {
                     container.innerHTML = `
                         <div class="alert alert-warning">
@@ -2490,31 +2541,85 @@ function generatePieChart(analysisId) {
                         </div>
                     `;
                 }
-            })
-            .catch(error => {
+            } else {
+                // Si hay error, mostrar el mensaje específico
+                const errorMsg = detailData?.error || 'No hay datos disponibles para esta variable';
                 container.innerHTML = `
-                    <div class="alert alert-danger">
-                        <i class="bi bi-exclamation-triangle"></i> Error al obtener datos: ${error.message}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> ${errorMsg}
                     </div>
                 `;
-            });
-        return;
-    }
-    
-    // Preparar datos para el gráfico
-    const sortedEntries = Object.entries(valueCountsObj).sort((a, b) => b[1] - a[1]);
-    generatePieChartWithData(analysisId, selectedVariable, sortedEntries);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching column details:', error);
+            // Si falla la petición detallada, intentar usar los datos de colStats
+            if (colStats && (colStats.categories || colStats.top_values || colStats.value_counts)) {
+                let valueCountsObj = {};
+                
+                if (colStats.value_counts) {
+                    valueCountsObj = colStats.value_counts;
+                } else if (colStats.categories) {
+                    valueCountsObj = colStats.categories;
+                } else if (colStats.top_values) {
+                    colStats.top_values.values.forEach((val, idx) => {
+                        valueCountsObj[val] = colStats.top_values.counts[idx];
+                    });
+                }
+                
+                if (Object.keys(valueCountsObj).length > 0) {
+                    const sortedEntries = Object.entries(valueCountsObj).sort((a, b) => b[1] - a[1]);
+                    const uniqueCount = colStats.unique_count || sortedEntries.length;
+                    generatePieChartWithData(analysisId, selectedVariable, sortedEntries, null, uniqueCount);
+                    return;
+                }
+            }
+            
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> Error al obtener datos: ${error.message}
+                </div>
+            `;
+        });
 }
 
 // Función auxiliar para generar el pie chart con datos
-function generatePieChartWithData(analysisId, selectedVariable, sortedEntries, maxSlices = 15) {
+function generatePieChartWithData(analysisId, selectedVariable, sortedEntries, maxSlices = null, totalUniqueCount = null) {
     const container = document.getElementById(`analysisResultContainer${analysisId}`);
+    
+    // Usar el conteo real de valores únicos si está disponible, sino usar la longitud de sortedEntries
+    const totalUnique = totalUniqueCount || sortedEntries.length;
+    
+    // Lógica inteligente para determinar el valor inicial
+    if (maxSlices === null) {
+        
+        if (totalUnique <= 10) {
+            // Si hay 10 o menos valores, mostrar todos
+            maxSlices = totalUnique;
+        } else if (totalUnique <= 20) {
+            // Entre 11-20 valores, mostrar 10
+            maxSlices = 10;
+        } else if (totalUnique <= 50) {
+            // Entre 21-50 valores, mostrar 15
+            maxSlices = 15;
+        } else if (totalUnique <= 100) {
+            // Entre 51-100 valores, mostrar 20
+            maxSlices = 20;
+        } else {
+            // Más de 100 valores, mostrar 25
+            maxSlices = 25;
+        }
+    }
+    
+    // Asegurar que maxSlices no exceda el total de entradas
+    maxSlices = Math.min(maxSlices, sortedEntries.length);
     
     // Guardar todos los datos para poder regenerar el gráfico
     window[`pieChartData_${analysisId}`] = {
         selectedVariable,
         sortedEntries,
-        currentMax: maxSlices
+        currentMax: maxSlices,
+        totalUnique: totalUnique
     };
     
     let topEntries;
@@ -2563,11 +2668,11 @@ function generatePieChartWithData(analysisId, selectedVariable, sortedEntries, m
                                    style="width: 80px;" 
                                    value="${maxSlices}" 
                                    min="3" 
-                                   max="${sortedEntries.length}"
+                                   max="${totalUnique}"
                                    onchange="updatePieChart(${analysisId})">
-                            <span class="text-muted">valores (de ${sortedEntries.length} únicos)</span>
+                            <span class="text-muted">valores (de ${totalUnique} únicos)</span>
                             <div class="ms-auto">
-                                ${maxSlices < sortedEntries.length ? `
+                                ${maxSlices < totalUnique && maxSlices < sortedEntries.length ? `
                                     <button class="btn btn-sm btn-outline-success" onclick="showAllInPie(${analysisId})">
                                         <i class="bi bi-pie-chart-fill"></i> Mostrar todos
                                     </button>
@@ -2587,9 +2692,9 @@ function generatePieChartWithData(analysisId, selectedVariable, sortedEntries, m
                         <div class="alert alert-info">
                             <strong>Estadísticas:</strong><br>
                             Total de valores: ${total}<br>
-                            Valores únicos: ${sortedEntries.length}<br>
-                            Mostrando: ${maxSlices >= sortedEntries.length ? 'Todos los' : `Top ${maxSlices}`} valores
-                            ${sortedEntries.length > maxSlices ? `<br>Agrupados como "Otros": ${sortedEntries.length - maxSlices} valores` : ''}
+                            Valores únicos: ${totalUnique}<br>
+                            Mostrando: ${maxSlices >= totalUnique ? 'Todos los' : `Top ${maxSlices}`} valores
+                            ${totalUnique > maxSlices ? `<br>Agrupados como "Otros": ${totalUnique - maxSlices} valores` : ''}
                         </div>
                         <div class="mt-3">
                             <h6>${maxSlices >= sortedEntries.length ? 'Todos los' : `Top ${maxSlices}`} valores:</h6>
@@ -2698,13 +2803,113 @@ function generatePieChartWithData(analysisId, selectedVariable, sortedEntries, m
     }, 100);
 }
 
+// Función para generar pie chart para variables numéricas
+async function generateNumericPieChart(analysisId, selectedVariable, colStats, container) {
+    // Mostrar loading
+    container.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p>Procesando valores numéricos...</p></div>';
+    
+    try {
+        // Obtener los datos detallados de la columna
+        const response = await fetch(`/api/datasets/${window.selectedDataset.id}/columns/${encodeURIComponent(selectedVariable)}/`);
+        const detailData = await response.json();
+        
+        if (detailData && !detailData.error) {
+            // Usar value_counts_complete si está disponible, sino usar value_counts
+            let valueCountsObj = detailData.value_counts_complete || detailData.value_counts || {};
+            
+            // Si no hay value_counts pero hay frequency_data, usarlo
+            if (Object.keys(valueCountsObj).length === 0 && detailData.frequency_data) {
+                valueCountsObj = {};
+                detailData.frequency_data.forEach(item => {
+                    if (item.value !== 'null') {
+                        valueCountsObj[item.value] = item.count;
+                    }
+                });
+            }
+            
+            // Si tenemos muchos valores únicos, agrupar por rangos
+            const uniqueValues = Object.keys(valueCountsObj).length;
+            
+            if (uniqueValues > 100) {
+                // Agrupar en rangos para valores numéricos
+                const numericValues = Object.entries(valueCountsObj)
+                    .map(([val, count]) => ({
+                        value: parseFloat(val),
+                        count: count
+                    }))
+                    .filter(item => !isNaN(item.value));
+                
+                if (numericValues.length > 0) {
+                    const min = Math.min(...numericValues.map(v => v.value));
+                    const max = Math.max(...numericValues.map(v => v.value));
+                    const range = max - min;
+                    const numBins = Math.min(20, Math.ceil(Math.sqrt(numericValues.length)));
+                    const binSize = range / numBins;
+                    
+                    // Crear bins
+                    const bins = {};
+                    for (let i = 0; i < numBins; i++) {
+                        const binMin = min + (i * binSize);
+                        const binMax = i === numBins - 1 ? max + 0.001 : min + ((i + 1) * binSize);
+                        const binLabel = `${binMin.toFixed(2)} - ${binMax.toFixed(2)}`;
+                        bins[binLabel] = 0;
+                    }
+                    
+                    // Asignar valores a bins
+                    numericValues.forEach(item => {
+                        const binIndex = Math.min(Math.floor((item.value - min) / binSize), numBins - 1);
+                        const binMin = min + (binIndex * binSize);
+                        const binMax = binIndex === numBins - 1 ? max + 0.001 : min + ((binIndex + 1) * binSize);
+                        const binLabel = `${binMin.toFixed(2)} - ${binMax.toFixed(2)}`;
+                        bins[binLabel] += item.count;
+                    });
+                    
+                    // Convertir bins a formato de entrada para el pie chart
+                    const sortedEntries = Object.entries(bins)
+                        .filter(([_, count]) => count > 0)
+                        .sort((a, b) => {
+                            // Ordenar por el valor mínimo del rango
+                            const aMin = parseFloat(a[0].split(' - ')[0]);
+                            const bMin = parseFloat(b[0].split(' - ')[0]);
+                            return aMin - bMin;
+                        });
+                    
+                    generatePieChartWithData(analysisId, selectedVariable + ' (Agrupado en rangos)', sortedEntries);
+                } else {
+                    container.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i> No se pudieron procesar los valores numéricos
+                        </div>
+                    `;
+                }
+            } else {
+                // Si hay pocos valores únicos, usar directamente
+                const sortedEntries = Object.entries(valueCountsObj).sort((a, b) => b[1] - a[1]);
+                generatePieChartWithData(analysisId, selectedVariable, sortedEntries);
+            }
+        } else {
+            container.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> No hay datos de frecuencia disponibles para esta variable
+                </div>
+            `;
+        }
+    } catch (error) {
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i> Error al obtener datos: ${error.message}
+            </div>
+        `;
+    }
+}
+
 // Función para actualizar el pie chart con un nuevo número de elementos
 function updatePieChart(analysisId) {
     const newMax = parseInt(document.getElementById(`pieSliceCount${analysisId}`).value);
     const data = window[`pieChartData_${analysisId}`];
     
     if (data && newMax >= 3) {
-        generatePieChartWithData(analysisId, data.selectedVariable, data.sortedEntries, newMax);
+        generatePieChartWithData(analysisId, data.selectedVariable, data.sortedEntries, newMax, data.totalUnique);
     }
 }
 
@@ -2715,7 +2920,7 @@ function showAllInPie(analysisId) {
     
     // Actualizar el input y regenerar el gráfico con todos los valores
     document.getElementById(`pieSliceCount${analysisId}`).value = data.sortedEntries.length;
-    generatePieChartWithData(analysisId, data.selectedVariable, data.sortedEntries, data.sortedEntries.length);
+    generatePieChartWithData(analysisId, data.selectedVariable, data.sortedEntries, data.sortedEntries.length, data.totalUnique);
 }
 
 // Función para mostrar todos los valores en un modal
