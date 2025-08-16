@@ -206,9 +206,10 @@ def validate_method_chain(method_chain, initial_column_type='numeric', custom_fu
         
         method_info = get_method_io_type(method, custom_func)
         
-        # Check if method can accept current type
+        # Check if method can accept current type - now just a warning, not a blocker
         if method_info['input'] not in ['any', 'unknown', current_type]:
-            return False, f"Capa {i+1}: {method} requiere entrada tipo '{method_info['input']}' pero recibe tipo '{current_type}'", None
+            # Instead of blocking, just log a warning and continue
+            print(f"Warning: Capa {i+1}: {method} expects input type '{method_info['input']}' but receives type '{current_type}'")
         
         # Check column compatibility
         if current_columns == 'multiple':

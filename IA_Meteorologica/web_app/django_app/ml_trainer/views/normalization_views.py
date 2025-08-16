@@ -331,13 +331,12 @@ class DatasetNormalizationView(APIView):
                 # Detect initial column type
                 initial_type = detect_column_data_type(df[column])
                 
-                # Validate the method chain
+                # Validate the method chain - now it only logs warnings
                 is_valid, error_msg, final_type = validate_method_chain(method_names, initial_type)
                 
-                if not is_valid:
-                    error_details = f"Error de compatibilidad en columna '{column}': {error_msg}"
-                    print(error_details)
-                    raise ValueError(error_details)
+                # Don't raise error on validation issues anymore
+                if not is_valid and error_msg:
+                    print(f"Warning in column '{column}': {error_msg}")
                 
                 current_column = column
                 for step_index, step in enumerate(method_config):
@@ -345,9 +344,16 @@ class DatasetNormalizationView(APIView):
                     keep_original = step.get('keep_original', False)
                     
                     # Check if this step has a specific input column (for multiple outputs)
-                    if 'input_column' in step and step['input_column'] in normalized_df.columns:
-                        current_column = step['input_column']
-                        print(f"Step {step_index + 1}: Using input column '{current_column}'")
+                    if 'input_column' in step:
+                        print(f"Step {step_index + 1}: input_column found: '{step['input_column']}'")
+                        print(f"Available columns after step {step_index}: {list(normalized_df.columns)[:20]}...")
+                        if step['input_column'] in normalized_df.columns:
+                            current_column = step['input_column']
+                            print(f"Step {step_index + 1}: Using input column '{current_column}'")
+                        else:
+                            print(f"WARNING: input_column '{step['input_column']}' not found in dataframe!")
+                    else:
+                        print(f"Step {step_index + 1}: No input_column specified, using '{current_column}'")
                     
                     # Get conversion from PREVIOUS step (it's stored in the previous step)
                     # Conversion happens AFTER the previous transformation, not before this one
@@ -417,7 +423,14 @@ class DatasetNormalizationView(APIView):
     def _apply_single_normalization(self, df: pd.DataFrame, column: str, method: str, 
                                    keep_original: bool, step_index: int = 0, total_steps: int = 1) -> pd.DataFrame:
         """Apply a single normalization step to a column"""
+        print(f"\n=== _apply_single_normalization ===")
+        print(f"Method: {method}")
+        print(f"Column: {column}")
+        print(f"Step: {step_index + 1}/{total_steps}")
+        print(f"Available columns: {list(df.columns)[:10]}...")  # Show first 10 columns
+        
         if column not in df.columns:
+            print(f"WARNING: Column '{column}' not found in dataframe!")
             return df
         
         normalized_df = df.copy()
@@ -906,13 +919,13 @@ class DatasetNormalizationView(APIView):
         # Get method information
         method_info = get_method_io_type(method)
         
-        # Check compatibility
+        # Check compatibility - now just log warnings instead of blocking
         if method_info['input'] not in ['any', 'unknown'] and method_info['input'] != current_type:
             # Special case: ONE_HOT can convert text to numeric, which is its purpose
             if not (method == 'ONE_HOT' and current_type == 'text'):
-                error_msg = f"Método {method} requiere entrada tipo '{method_info['input']}' pero la columna '{column}' es tipo '{current_type}'"
-                print(error_msg)
-                raise ValueError(error_msg)
+                warning_msg = f"Warning: Método {method} expects input type '{method_info['input']}' but column '{column}' is type '{current_type}'"
+                print(warning_msg)
+                # Don't raise error anymore - let it try to process
         
         # Apply the normalization based on method type
         try:
@@ -1054,6 +1067,7 @@ class DatasetNormalizationPreviewView(APIView):
         
         try:
             # First validate all normalization chains
+            # Note: We're being less strict now, allowing any method combination
             for column, method_config in normalization_config.items():
                 if column not in df.columns:
                     continue
@@ -1065,14 +1079,15 @@ class DatasetNormalizationPreviewView(APIView):
                     # Detect initial column type
                     initial_type = detect_column_data_type(df[column])
                     
-                    # Validate the method chain
+                    # For steps with input_column, we should detect the type of that column
+                    # But for now, we'll just proceed without strict validation
+                    
+                    # Validate the method chain - now it only logs warnings
                     is_valid, error_msg, final_type = validate_method_chain(method_names, initial_type)
                     
-                    if not is_valid:
-                        return Response({
-                            'success': False,
-                            'error': f"Error de compatibilidad en columna '{column}': {error_msg}"
-                        }, status=status.HTTP_400_BAD_REQUEST)
+                    # Don't block on validation errors anymore
+                    if not is_valid and error_msg:
+                        print(f"Warning in column '{column}': {error_msg}")
             
             # Apply normalization to sample
             view = DatasetNormalizationView()
@@ -1092,10 +1107,14 @@ class DatasetNormalizationPreviewView(APIView):
                             method = step.get('method', '')
                             keep_original = step.get('keep_original', False)
                             
+                            print(f"Preview - Step {step_index + 1} config: {step}")
+                            
                             # Check if this step has a specific input column (for multiple outputs)
                             if 'input_column' in step and step['input_column'] in current_df.columns:
                                 current_column = step['input_column']
                                 print(f"Preview - Step {step_index + 1}: Using input column '{current_column}'")
+                            else:
+                                print(f"Preview - Step {step_index + 1}: No input_column or not found, using '{current_column}'")
                             
                             # Get sample values before transformation
                             before_values = current_df[current_column].tolist() if current_column in current_df.columns else []
@@ -1382,14 +1401,35 @@ class DatasetNormalizationPreviewView(APIView):
                         except:
                             pass
                     
+                    # For chained transformations, we need to track the actual column being transformed
+                    target_column = column
+                    
+                    # If we have a chain, check if the last step has an input_column
+                    if isinstance(method_config, list) and len(method_config) > 0:
+                        last_step = method_config[-1]
+                        if isinstance(last_step, dict) and 'input_column' in last_step:
+                            target_column = last_step['input_column']
+                            print(f"Preview: Using input_column '{target_column}' for comparison")
+                    
                     # Traditional single column comparison
                     # Get unique values for better comparison
                     original_values = sample_df[column].dropna()
-                    if column in normalized_sample.columns:
+                    
+                    # Look for the target column in the normalized sample
+                    if target_column in normalized_sample.columns:
+                        normalized_values = normalized_sample[target_column].dropna()
+                    elif column in normalized_sample.columns:
                         normalized_values = normalized_sample[column].dropna()
                     else:
-                        # Column was removed, skip comparison
-                        continue
+                        # Try to find a column with a suffix
+                        possible_cols = [col for col in normalized_sample.columns if col.startswith(f"{target_column}_")]
+                        if possible_cols:
+                            normalized_values = normalized_sample[possible_cols[0]].dropna()
+                            print(f"Preview: Found transformed column '{possible_cols[0]}'")
+                        else:
+                            # Column was removed, skip comparison
+                            print(f"Preview: Column '{target_column}' not found in normalized sample")
+                            continue
                     
                     # For categorical/text columns, show unique value mapping
                     # Show mapping for all columns with reasonable number of unique values
@@ -1408,17 +1448,26 @@ class DatasetNormalizationPreviewView(APIView):
                             
                             # Build the mapping for all unique values
                             for idx, val in enumerate(all_unique_values):
-                                if column in normalized_temp.columns:
+                                if target_column in normalized_temp.columns:
+                                    # Found target column directly
+                                    normalized_val = normalized_temp.iloc[idx][target_column]
+                                elif column in normalized_temp.columns:
                                     # Single column output
                                     normalized_val = normalized_temp.iloc[idx][column]
                                 else:
                                     # Column was transformed or removed, try to find the new column
-                                    new_cols = [col for col in normalized_temp.columns if col not in temp_df.columns]
-                                    if new_cols:
-                                        # Use the first new column for the mapping
-                                        normalized_val = normalized_temp.iloc[idx][new_cols[0]]
+                                    # First try columns with target_column prefix
+                                    target_cols = [col for col in normalized_temp.columns if col.startswith(f"{target_column}_")]
+                                    if target_cols:
+                                        normalized_val = normalized_temp.iloc[idx][target_cols[0]]
                                     else:
-                                        normalized_val = '[Columna eliminada]'
+                                        # Try any new columns
+                                        new_cols = [col for col in normalized_temp.columns if col not in temp_df.columns]
+                                        if new_cols:
+                                            # Use the first new column for the mapping
+                                            normalized_val = normalized_temp.iloc[idx][new_cols[0]]
+                                        else:
+                                            normalized_val = '[Columna eliminada]'
                                 
                                 unique_mapping.append({
                                     'original': val,
@@ -1449,7 +1498,7 @@ class DatasetNormalizationPreviewView(APIView):
                             },
                             'normalized': {
                                 'sample': normalized_values.head(50).tolist(),
-                                'stats': detect_column_type(normalized_sample[column])
+                                'stats': detect_column_type(normalized_values)  # Use the actual normalized values
                             },
                             'unique_mapping': unique_mapping,
                             'is_categorical': True
@@ -1463,20 +1512,32 @@ class DatasetNormalizationPreviewView(APIView):
                             },
                             'normalized': {
                                 'sample': normalized_values.head(50).tolist(),
-                                'stats': detect_column_type(normalized_sample[column])
+                                'stats': detect_column_type(normalized_values)  # Use the actual normalized values
                             },
                             'is_categorical': False
                         }
             
+            # Clean NaN and Inf values before sending response
+            def clean_for_json(obj):
+                if isinstance(obj, dict):
+                    return {k: clean_for_json(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [clean_for_json(item) for item in obj]
+                elif isinstance(obj, float):
+                    if pd.isna(obj) or np.isinf(obj):
+                        return None
+                    return obj
+                return obj
+            
             response_data = {
-                'preview': comparison,
+                'preview': clean_for_json(comparison),
                 'sample_size': len(sample_df),
-                'all_column_types': all_column_types  # Add all column types for the frontend
+                'all_column_types': clean_for_json(all_column_types)
             }
             
             # Add transformation steps if available
             if transformation_steps:
-                response_data['transformation_steps'] = transformation_steps
+                response_data['transformation_steps'] = clean_for_json(transformation_steps)
             
             # Add warnings if any
             if hasattr(view, 'conversion_warnings') and view.conversion_warnings:

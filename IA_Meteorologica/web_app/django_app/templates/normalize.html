@@ -1855,7 +1855,7 @@ def normalize(value, series=None):
         
         const currentValue = select.value;
         
-        // Update select options showing all methods but organized by type
+        // Update select options showing all methods organized by type - all enabled
         select.innerHTML = `
             <option value="">Sin normalizar</option>
             ${inputType === 'numeric' ? `
@@ -1874,9 +1874,9 @@ def normalize(value, series=None):
                     </optgroup>
                 ` : ''}
                 ${textPrimary.length > 0 || textSecondary.length > 0 ? `
-                    <optgroup label="Métodos de texto (no compatibles con entrada numérica)" style="color: #999;">
+                    <optgroup label="Métodos de texto (usar con precaución)">
                         ${[...textPrimary, ...textSecondary].map(method => 
-                            `<option value="${method.value}" title="${method.description}" disabled>${method.label}</option>`
+                            `<option value="${method.value}" title="${method.description}" style="color: #FFA500;">${method.label} ⚠️</option>`
                         ).join('')}
                     </optgroup>
                 ` : ''}
@@ -1896,9 +1896,9 @@ def normalize(value, series=None):
                     </optgroup>
                 ` : ''}
                 ${numericPrimary.length > 0 || numericSecondary.length > 0 ? `
-                    <optgroup label="Métodos numéricos (no compatibles con entrada de texto)" style="color: #999;">
+                    <optgroup label="Métodos numéricos (usar con precaución)">
                         ${[...numericPrimary, ...numericSecondary].map(method => 
-                            `<option value="${method.value}" title="${method.description}" disabled>${method.label}</option>`
+                            `<option value="${method.value}" title="${method.description}" style="color: #FFA500;">${method.label} ⚠️</option>`
                         ).join('')}
                     </optgroup>
                 ` : ''}
@@ -2311,10 +2311,12 @@ def normalize(value, series=None):
                 normalizationConfig[column] = [];
             }
             
-            // Update the specific layer
+            // Update the specific layer, preserving input_column if it exists
+            const existingConfig = normalizationConfig[column][layerIndex] || {};
             normalizationConfig[column][layerIndex] = {
                 method: select.value,
-                keep_original: layerIndex < normalizationConfig[column].length - 1  // Keep original for all but last layer
+                keep_original: layerIndex < normalizationConfig[column].length - 1,  // Keep original for all but last layer
+                ...(existingConfig.input_column && { input_column: existingConfig.input_column })  // Preserve input_column if it exists
             };
             
             previewBtn.style.display = 'block';
@@ -2372,85 +2374,41 @@ def normalize(value, series=None):
         
         const layers = layersContainer.querySelectorAll('.normalization-layer');
         
-        // Update all layers including the current one to update its input indicator
-        for (let i = changedLayerIndex; i < layers.length; i++) {
+        // Update all layers after the changed one
+        for (let i = changedLayerIndex + 1; i < layers.length; i++) {
             const layer = layers[i];
-            const select = document.getElementById(`norm-${escapedColumn}-${i}`);
-            if (!select) continue;
             
-            const currentValue = select.value;
-            const info = datasetInfo.normalization_info[column];
-            
-            // Get previous layer's output type
-            let compatibleMethods = [...info.primary_methods, ...info.secondary_methods];
-            let prevOutputType = null;
+            // Update input type based on previous layer
+            let inputType = 'numeric'; // Default
             
             if (i > 0 && Array.isArray(normalizationConfig[column]) && normalizationConfig[column][i - 1]) {
                 const prevMethod = normalizationConfig[column][i - 1].method;
-                const prevMethodInfo = compatibleMethods.find(m => m.value === prevMethod);
-                
+                const info = datasetInfo.normalization_info[column];
+                const prevMethodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === prevMethod);
                 if (prevMethodInfo && prevMethodInfo.output_type) {
-                    prevOutputType = prevMethodInfo.output_type;
+                    inputType = prevMethodInfo.output_type;
                 }
-                
-                // Update the input indicator for this layer
-                const inputIndicator = layer.querySelector('.compatibility-indicator');
-                if (inputIndicator && prevOutputType) {
-                    inputIndicator.className = `compatibility-indicator ${prevOutputType}`;
-                    // Get specific data type
-                    const prevOutputDType = getOutputDataType(column, i - 1);
-                    inputIndicator.textContent = `Entrada: ${prevOutputType === 'numeric' ? 'Numérico' : 'Texto'}${prevOutputDType && prevOutputDType !== 'unknown' ? ` (${prevOutputDType})` : ''}`;
-                }
-                compatibleMethods = compatibleMethods.filter(method => {
-                    if (!method.output_type) return true;
-                    
-                    if (prevOutputType === 'numeric' && ['MIN_MAX', 'Z_SCORE', 'LSTM_TCN', 'CNN', 'TRANSFORMER', 'TREE'].includes(method.value)) {
-                        return true;
-                    }
-                    if (prevOutputType === 'text' && ['LOWER', 'STRIP', 'ONE_HOT'].includes(method.value)) {
-                        return true;
-                    }
-                    if (method.value.startsWith('CUSTOM_')) {
-                        return true;
-                    }
-                    
-                    return false;
-                });
             }
             
-            // Separate compatible methods
-            const compatiblePrimary = compatibleMethods.filter(m => info.primary_methods.some(pm => pm.value === m.value));
-            const compatibleSecondary = compatibleMethods.filter(m => info.secondary_methods.some(sm => sm.value === m.value));
+            // Update the input indicator for this layer
+            const inputIndicator = layer.querySelector('.compatibility-indicator');
+            if (inputIndicator) {
+                inputIndicator.className = `compatibility-indicator ${inputType}`;
+                // Get specific data type
+                const prevOutputDType = getOutputDataType(column, i - 1);
+                inputIndicator.textContent = `Entrada: ${inputType === 'numeric' ? 'Numérico' : 'Texto'}${prevOutputDType && prevOutputDType !== 'unknown' ? ` (${prevOutputDType})` : ''}`;
+            }
             
-            // Update select options
-            select.innerHTML = `
-                <option value="">Sin normalizar</option>
-                ${compatiblePrimary.length > 0 ? `
-                    <optgroup label="Métodos compatibles">
-                        ${compatiblePrimary.map(method => 
-                            `<option value="${method.value}" title="${method.description} → Salida: ${method.output_type === 'numeric' ? 'Numérico' : 'Texto'}">${method.label} → ${method.output_type === 'numeric' ? '123' : 'ABC'}</option>`
-                        ).join('')}
-                    </optgroup>
-                ` : ''}
-                ${compatibleSecondary.length > 0 ? `
-                    <optgroup label="Otros métodos compatibles">
-                        ${compatibleSecondary.map(method => 
-                            `<option value="${method.value}" title="${method.description} → Salida: ${method.output_type === 'numeric' ? 'Numérico' : 'Texto'}">${method.label} → ${method.output_type === 'numeric' ? '123' : 'ABC'}</option>`
-                        ).join('')}
-                    </optgroup>
-                ` : ''}
-                ${compatibleMethods.length === 0 ? `
-                    <option value="" disabled>No hay métodos compatibles con la salida anterior</option>
-                ` : ''}
-            `;
+            // Store the input type in the layer
+            layer.dataset.inputType = inputType;
             
-            // Restore previous value if still compatible
-            if (currentValue && compatibleMethods.some(m => m.value === currentValue)) {
-                select.value = currentValue;
-            } else if (currentValue) {
-                // Method is no longer compatible, clear it
-                normalizationConfig[column][i] = { method: '', keep_original: false };
-                showNotification(`El método en la capa ${i + 1} ya no es compatible y fue eliminado`, 'warning');
+            // Check if there's an input column selector and update its type
+            if (normalizationConfig[column][i] && normalizationConfig[column][i].input_column) {
+                // Update the input type based on the selected column
+                updateLayerInputTypeFromSelectedColumn(column, i);
+            } else {
+                // Update methods compatibility with the new approach
+                updateLayerMethodsCompatibility(column, i);
             }
         }
     }
@@ -2489,6 +2447,7 @@ def normalize(value, series=None):
             normConfig[column] = config.slice(0, layerIndex + 1).filter(layer => layer && layer.method);
             
             console.log('Sending normalization config:', normConfig);
+            console.log('Config details for layer', layerIndex, ':', normConfig[column][layerIndex]);
             
             const response = await fetch(`/api/datasets/${datasetId}/normalization/preview/`, {
                 method: 'POST',
@@ -2532,7 +2491,11 @@ def normalize(value, series=None):
         } finally {
             // Cerrar el modal de carga
             if (loadingModal) {
-                loadingModal.hide();
+                try {
+                    loadingModal.hide();
+                } catch (e) {
+                    console.error('Error hiding loading modal:', e);
+                }
             }
         }
     }
@@ -2748,9 +2711,9 @@ def normalize(value, series=None):
                             </optgroup>
                         ` : ''}
                         ${textPrimary.length > 0 || textSecondary.length > 0 ? `
-                            <optgroup label="Métodos de texto (no compatibles con entrada numérica)" style="color: #999;">
+                            <optgroup label="Métodos de texto (usar con precaución)">
                                 ${[...textPrimary, ...textSecondary].map(method => 
-                                    `<option value="${method.value}" title="${method.description}" disabled>${method.label}</option>`
+                                    `<option value="${method.value}" title="${method.description}" style="color: #FFA500;">${method.label} ⚠️</option>`
                                 ).join('')}
                             </optgroup>
                         ` : ''}
@@ -2770,9 +2733,9 @@ def normalize(value, series=None):
                             </optgroup>
                         ` : ''}
                         ${numericPrimary.length > 0 || numericSecondary.length > 0 ? `
-                            <optgroup label="Métodos numéricos (no compatibles con entrada de texto)" style="color: #999;">
+                            <optgroup label="Métodos numéricos (usar con precaución)">
                                 ${[...numericPrimary, ...numericSecondary].map(method => 
-                                    `<option value="${method.value}" title="${method.description}" disabled>${method.label}</option>`
+                                    `<option value="${method.value}" title="${method.description}" style="color: #FFA500;">${method.label} ⚠️</option>`
                                 ).join('')}
                             </optgroup>
                         ` : ''}
