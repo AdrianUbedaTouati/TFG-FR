@@ -1167,6 +1167,56 @@ class DatasetNormalizationPreviewView(APIView):
             # Apply full normalization
             normalized_sample = view._apply_normalization(sample_df, normalization_config)
             
+            # Detect types for ALL columns in normalized_sample (including new columns from custom functions)
+            all_column_types = {}
+            for col in normalized_sample.columns:
+                col_series = normalized_sample[col]
+                detected_type = 'text'
+                detected_dtype = 'string'
+                
+                if col_series.notna().any():
+                    non_null_values = col_series.dropna()
+                    
+                    # Check if all values are boolean
+                    if all(isinstance(v, bool) or v in [True, False, 'True', 'False', 'true', 'false'] for v in non_null_values):
+                        detected_dtype = 'bool'
+                        detected_type = 'boolean'
+                    else:
+                        try:
+                            numeric_series = pd.to_numeric(col_series, errors='coerce')
+                            if numeric_series.notna().sum() == col_series.notna().sum():
+                                # All non-null values are numeric
+                                if all(float(v).is_integer() for v in non_null_values if pd.notna(v)):
+                                    detected_type = 'integer'
+                                    if numeric_series.min() >= -2147483648 and numeric_series.max() <= 2147483647:
+                                        detected_dtype = 'int32'
+                                    else:
+                                        detected_dtype = 'int64'
+                                else:
+                                    detected_type = 'numeric'
+                                    detected_dtype = str(numeric_series.dtype)
+                            else:
+                                # Check if it's a date/datetime
+                                try:
+                                    date_series = pd.to_datetime(col_series, errors='coerce')
+                                    if date_series.notna().sum() == col_series.notna().sum():
+                                        detected_dtype = 'datetime64'
+                                        detected_type = 'datetime'
+                                    else:
+                                        detected_dtype = 'string'
+                                        detected_type = 'text'
+                                except:
+                                    detected_dtype = 'string'
+                                    detected_type = 'text'
+                        except:
+                            pass
+                
+                all_column_types[col] = {
+                    'name': col,
+                    'type': detected_type,
+                    'dtype': detected_dtype
+                }
+            
             # Prepare comparison
             comparison = {}
             for column in normalization_config.keys():
@@ -1420,7 +1470,8 @@ class DatasetNormalizationPreviewView(APIView):
             
             response_data = {
                 'preview': comparison,
-                'sample_size': len(sample_df)
+                'sample_size': len(sample_df),
+                'all_column_types': all_column_types  # Add all column types for the frontend
             }
             
             # Add transformation steps if available

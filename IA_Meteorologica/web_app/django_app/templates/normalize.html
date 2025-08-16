@@ -1767,8 +1767,29 @@ def normalize(value, series=None):
             if (response.ok) {
                 const data = await response.json();
                 
-                // Find the type info for the selected column
-                if (data.preview && data.preview[column] && data.preview[column].column_types_info) {
+                // Use all_column_types for better type detection
+                if (data.all_column_types && data.all_column_types[selectedColumn]) {
+                    const columnInfo = data.all_column_types[selectedColumn];
+                    
+                    // Update the input indicator with the correct type
+                    let typeClass = 'text';
+                    let typeLabel = 'Texto';
+                    
+                    if (columnInfo.type === 'numeric' || columnInfo.type === 'integer' || columnInfo.type === 'float') {
+                        typeClass = 'numeric';
+                        typeLabel = 'Numérico';
+                    }
+                    
+                    inputIndicator.className = `compatibility-indicator ${typeClass}`;
+                    inputIndicator.textContent = `Entrada: ${typeLabel} (${columnInfo.dtype})`;
+                    
+                    // Store the type for method filtering
+                    layer.dataset.inputType = typeClass;
+                    
+                    // Update the methods compatibility after setting the type
+                    updateLayerMethodsCompatibility(column, layerIndex);
+                } else if (data.preview && data.preview[column] && data.preview[column].column_types_info) {
+                    // Fallback to old method for backward compatibility
                     const columnInfo = data.preview[column].column_types_info.find(info => info.name === selectedColumn);
                     
                     if (columnInfo) {
@@ -1786,6 +1807,9 @@ def normalize(value, series=None):
                         
                         // Store the type for method filtering
                         layer.dataset.inputType = typeClass;
+                        
+                        // Update the methods compatibility after setting the type
+                        updateLayerMethodsCompatibility(column, layerIndex);
                     }
                 }
             }
@@ -1805,52 +1829,91 @@ def normalize(value, series=None):
         const inputType = layer.dataset.inputType || 'numeric';
         const info = datasetInfo.normalization_info[column];
         
-        // Filter methods based on input type
-        let compatibleMethods = [...info.primary_methods, ...info.secondary_methods];
+        // Separate all methods by type
+        const allMethods = [...info.primary_methods, ...info.secondary_methods];
         
-        compatibleMethods = compatibleMethods.filter(method => {
-            if (inputType === 'numeric' && ['MIN_MAX', 'Z_SCORE', 'LSTM_TCN', 'CNN', 'TRANSFORMER', 'TREE'].includes(method.value)) {
-                return true;
-            }
-            if (inputType === 'text' && ['LOWER', 'STRIP', 'ONE_HOT'].includes(method.value)) {
-                return true;
-            }
-            if (method.value.startsWith('CUSTOM_')) {
-                return true;
-            }
-            return false;
-        });
+        // Define numeric and text methods
+        const numericMethods = allMethods.filter(method => 
+            ['MIN_MAX', 'Z_SCORE', 'LSTM_TCN', 'CNN', 'TRANSFORMER', 'TREE'].includes(method.value)
+        );
         
-        // Separate into primary and secondary
-        const compatiblePrimary = compatibleMethods.filter(m => info.primary_methods.some(pm => pm.value === m.value));
-        const compatibleSecondary = compatibleMethods.filter(m => info.secondary_methods.some(sm => sm.value === m.value));
+        const textMethods = allMethods.filter(method => 
+            ['LOWER', 'STRIP', 'ONE_HOT'].includes(method.value)
+        );
+        
+        const customMethods = allMethods.filter(method => 
+            method.value.startsWith('CUSTOM_')
+        );
+        
+        // Separate into primary and secondary for each type
+        const numericPrimary = numericMethods.filter(m => info.primary_methods.some(pm => pm.value === m.value));
+        const numericSecondary = numericMethods.filter(m => info.secondary_methods.some(sm => sm.value === m.value));
+        const textPrimary = textMethods.filter(m => info.primary_methods.some(pm => pm.value === m.value));
+        const textSecondary = textMethods.filter(m => info.secondary_methods.some(sm => sm.value === m.value));
+        const customPrimary = customMethods.filter(m => info.primary_methods.some(pm => pm.value === m.value));
+        const customSecondary = customMethods.filter(m => info.secondary_methods.some(sm => sm.value === m.value));
         
         const currentValue = select.value;
         
-        // Update select options
+        // Update select options showing all methods but organized by type
         select.innerHTML = `
             <option value="">Sin normalizar</option>
-            ${compatiblePrimary.length > 0 ? `
-                <optgroup label="Métodos compatibles">
-                    ${compatiblePrimary.map(method => 
+            ${inputType === 'numeric' ? `
+                ${numericPrimary.length > 0 ? `
+                    <optgroup label="Métodos numéricos recomendados">
+                        ${numericPrimary.map(method => 
+                            `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                        ).join('')}
+                    </optgroup>
+                ` : ''}
+                ${numericSecondary.length > 0 ? `
+                    <optgroup label="Otros métodos numéricos">
+                        ${numericSecondary.map(method => 
+                            `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                        ).join('')}
+                    </optgroup>
+                ` : ''}
+                ${textPrimary.length > 0 || textSecondary.length > 0 ? `
+                    <optgroup label="Métodos de texto (no compatibles con entrada numérica)" style="color: #999;">
+                        ${[...textPrimary, ...textSecondary].map(method => 
+                            `<option value="${method.value}" title="${method.description}" disabled>${method.label}</option>`
+                        ).join('')}
+                    </optgroup>
+                ` : ''}
+            ` : `
+                ${textPrimary.length > 0 ? `
+                    <optgroup label="Métodos de texto recomendados">
+                        ${textPrimary.map(method => 
+                            `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                        ).join('')}
+                    </optgroup>
+                ` : ''}
+                ${textSecondary.length > 0 ? `
+                    <optgroup label="Otros métodos de texto">
+                        ${textSecondary.map(method => 
+                            `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                        ).join('')}
+                    </optgroup>
+                ` : ''}
+                ${numericPrimary.length > 0 || numericSecondary.length > 0 ? `
+                    <optgroup label="Métodos numéricos (no compatibles con entrada de texto)" style="color: #999;">
+                        ${[...numericPrimary, ...numericSecondary].map(method => 
+                            `<option value="${method.value}" title="${method.description}" disabled>${method.label}</option>`
+                        ).join('')}
+                    </optgroup>
+                ` : ''}
+            `}
+            ${customMethods.length > 0 ? `
+                <optgroup label="Funciones personalizadas">
+                    ${customMethods.map(method => 
                         `<option value="${method.value}" title="${method.description}">${method.label}</option>`
                     ).join('')}
                 </optgroup>
-            ` : ''}
-            ${compatibleSecondary.length > 0 ? `
-                <optgroup label="Otros métodos compatibles">
-                    ${compatibleSecondary.map(method => 
-                        `<option value="${method.value}" title="${method.description}">${method.label}</option>`
-                    ).join('')}
-                </optgroup>
-            ` : ''}
-            ${compatibleMethods.length === 0 ? `
-                <option value="" disabled>No hay métodos compatibles con el tipo de entrada</option>
             ` : ''}
         `;
         
-        // Restore value if compatible
-        if (currentValue && compatibleMethods.some(m => m.value === currentValue)) {
+        // Restore value if it exists
+        if (currentValue) {
             select.value = currentValue;
         }
     }
@@ -2502,43 +2565,28 @@ def normalize(value, series=None):
         // Get column info for methods
         const info = datasetInfo.normalization_info[column];
         
-        // Get previous layer's output type to filter compatible methods
-        let compatibleMethods = [...info.primary_methods, ...info.secondary_methods];
-        if (newLayerIndex > 0 && Array.isArray(normalizationConfig[column]) && normalizationConfig[column][newLayerIndex - 1]) {
-            const prevMethod = normalizationConfig[column][newLayerIndex - 1].method;
-            const prevMethodInfo = compatibleMethods.find(m => m.value === prevMethod);
-            
-            if (prevMethodInfo && prevMethodInfo.output_type) {
-                // Filter methods that can accept the previous layer's output
-                const prevOutputType = prevMethodInfo.output_type;
-                compatibleMethods = compatibleMethods.filter(method => {
-                    // If the method doesn't have input requirements, allow it
-                    if (!method.output_type) return true;
-                    
-                    // For the input type, we need to check if it matches the previous output
-                    // Numeric methods can accept numeric output
-                    // Text methods can accept text output
-                    if (prevOutputType === 'numeric' && ['MIN_MAX', 'Z_SCORE', 'LSTM_TCN', 'CNN', 'TRANSFORMER', 'TREE'].includes(method.value)) {
-                        return true;
-                    }
-                    if (prevOutputType === 'text' && ['LOWER', 'STRIP', 'ONE_HOT'].includes(method.value)) {
-                        return true;
-                    }
-                    // Custom functions can accept any type
-                    if (method.value.startsWith('CUSTOM_')) {
-                        return true;
-                    }
-                    
-                    return false;
-                });
-                
-                console.log(`Previous method ${prevMethod} outputs ${prevOutputType}, compatible methods:`, compatibleMethods.map(m => m.value));
-            }
-        }
+        // Get all methods and separate by type
+        const allMethods = [...info.primary_methods, ...info.secondary_methods];
         
-        // Separate compatible methods into primary and secondary
-        const compatiblePrimary = compatibleMethods.filter(m => info.primary_methods.some(pm => pm.value === m.value));
-        const compatibleSecondary = compatibleMethods.filter(m => info.secondary_methods.some(sm => sm.value === m.value));
+        const numericMethods = allMethods.filter(method => 
+            ['MIN_MAX', 'Z_SCORE', 'LSTM_TCN', 'CNN', 'TRANSFORMER', 'TREE'].includes(method.value)
+        );
+        
+        const textMethods = allMethods.filter(method => 
+            ['LOWER', 'STRIP', 'ONE_HOT'].includes(method.value)
+        );
+        
+        const customMethods = allMethods.filter(method => 
+            method.value.startsWith('CUSTOM_')
+        );
+        
+        // Separate into primary and secondary for each type
+        const numericPrimary = numericMethods.filter(m => info.primary_methods.some(pm => pm.value === m.value));
+        const numericSecondary = numericMethods.filter(m => info.secondary_methods.some(sm => sm.value === m.value));
+        const textPrimary = textMethods.filter(m => info.primary_methods.some(pm => pm.value === m.value));
+        const textSecondary = textMethods.filter(m => info.secondary_methods.some(sm => sm.value === m.value));
+        const customPrimary = customMethods.filter(m => info.primary_methods.some(pm => pm.value === m.value));
+        const customSecondary = customMethods.filter(m => info.secondary_methods.some(sm => sm.value === m.value));
         
         // Create new layer
         const newLayer = document.createElement('div');
@@ -2660,6 +2708,9 @@ def normalize(value, series=None):
             }
         }
         
+        // Set initial input type based on previous layer
+        let initialInputType = previousOutputType || 'numeric';
+        
         newLayer.innerHTML = inputColumnSelectorHtml + conversionHtml + `
             <div style="display: flex; align-items: center; gap: 10px;">
                 <span style="color: var(--primary-color); font-weight: bold;">Capa ${newLayerIndex + 1}:</span>
@@ -2681,22 +2732,57 @@ def normalize(value, series=None):
                         onchange="onNormalizationChange('${column.replace(/'/g, "\\'")}', ${newLayerIndex})"
                         style="flex: 1;">
                     <option value="">Sin normalizar</option>
-                    ${compatiblePrimary.length > 0 ? `
-                        <optgroup label="Métodos compatibles">
-                            ${compatiblePrimary.map(method => 
-                                `<option value="${method.value}" title="${method.description} → Salida: ${method.output_type === 'numeric' ? 'Numérico' : 'Texto'}">${method.label} → ${method.output_type === 'numeric' ? '123' : 'ABC'}</option>`
+                    ${initialInputType === 'numeric' ? `
+                        ${numericPrimary.length > 0 ? `
+                            <optgroup label="Métodos numéricos recomendados">
+                                ${numericPrimary.map(method => 
+                                    `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                                ).join('')}
+                            </optgroup>
+                        ` : ''}
+                        ${numericSecondary.length > 0 ? `
+                            <optgroup label="Otros métodos numéricos">
+                                ${numericSecondary.map(method => 
+                                    `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                                ).join('')}
+                            </optgroup>
+                        ` : ''}
+                        ${textPrimary.length > 0 || textSecondary.length > 0 ? `
+                            <optgroup label="Métodos de texto (no compatibles con entrada numérica)" style="color: #999;">
+                                ${[...textPrimary, ...textSecondary].map(method => 
+                                    `<option value="${method.value}" title="${method.description}" disabled>${method.label}</option>`
+                                ).join('')}
+                            </optgroup>
+                        ` : ''}
+                    ` : `
+                        ${textPrimary.length > 0 ? `
+                            <optgroup label="Métodos de texto recomendados">
+                                ${textPrimary.map(method => 
+                                    `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                                ).join('')}
+                            </optgroup>
+                        ` : ''}
+                        ${textSecondary.length > 0 ? `
+                            <optgroup label="Otros métodos de texto">
+                                ${textSecondary.map(method => 
+                                    `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                                ).join('')}
+                            </optgroup>
+                        ` : ''}
+                        ${numericPrimary.length > 0 || numericSecondary.length > 0 ? `
+                            <optgroup label="Métodos numéricos (no compatibles con entrada de texto)" style="color: #999;">
+                                ${[...numericPrimary, ...numericSecondary].map(method => 
+                                    `<option value="${method.value}" title="${method.description}" disabled>${method.label}</option>`
+                                ).join('')}
+                            </optgroup>
+                        ` : ''}
+                    `}
+                    ${customMethods.length > 0 ? `
+                        <optgroup label="Funciones personalizadas">
+                            ${customMethods.map(method => 
+                                `<option value="${method.value}" title="${method.description}">${method.label}</option>`
                             ).join('')}
                         </optgroup>
-                    ` : ''}
-                    ${compatibleSecondary.length > 0 ? `
-                        <optgroup label="Otros métodos compatibles">
-                            ${compatibleSecondary.map(method => 
-                                `<option value="${method.value}" title="${method.description} → Salida: ${method.output_type === 'numeric' ? 'Numérico' : 'Texto'}">${method.label} → ${method.output_type === 'numeric' ? '123' : 'ABC'}</option>`
-                            ).join('')}
-                        </optgroup>
-                    ` : ''}
-                    ${compatibleMethods.length === 0 ? `
-                        <option value="" disabled>No hay métodos compatibles con la salida anterior</option>
                     ` : ''}
                 </select>
                 <button class="btn btn-sm btn-outline-info preview-layer-btn" 
@@ -2707,6 +2793,9 @@ def normalize(value, series=None):
                 </button>
             </div>
         `;
+        
+        // Store the input type in the layer
+        newLayer.dataset.inputType = initialInputType;
         
         layersContainer.appendChild(newLayer);
         
