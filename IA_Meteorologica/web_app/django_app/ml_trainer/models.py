@@ -57,6 +57,38 @@ class CustomNormalizationFunction(models.Model):
         return f"{self.name} ({self.function_type})"
 
 
+# Comentado temporalmente hasta ejecutar migraciones
+# class NormalizationChain(models.Model):
+#     """Cadena de funciones de normalización aplicadas secuencialmente"""
+#     name = models.CharField(max_length=100)
+#     description = models.TextField(blank=True)
+#     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='normalization_chains')
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+#     
+#     class Meta:
+#         ordering = ['-created_at']
+#         unique_together = ['name', 'user']
+#     
+#     def __str__(self):
+#         return self.name
+
+
+# class NormalizationChainStep(models.Model):
+#     """Un paso en la cadena de normalización"""
+#     chain = models.ForeignKey(NormalizationChain, on_delete=models.CASCADE, related_name='steps')
+#     order = models.PositiveIntegerField()
+#     method = models.CharField(max_length=100, help_text="Método de normalización o ID de función personalizada")
+#     keep_original = models.BooleanField(default=False, help_text="Mantener la columna original")
+#     
+#     class Meta:
+#         ordering = ['order']
+#         unique_together = ['chain', 'order']
+#     
+#     def __str__(self):
+#         return f"{self.chain.name} - Paso {self.order}: {self.method}"
+
+
 class Dataset(models.Model):
     name = models.CharField(max_length=255)
     short_description = models.CharField(max_length=80, blank=True, null=True, help_text="Descripción corta (máx. 80 caracteres)")
@@ -71,6 +103,7 @@ class Dataset(models.Model):
     parent_dataset_name = models.CharField(max_length=255, null=True, blank=True, help_text="Nombre del dataset padre (se mantiene aunque se borre el original)")
     root_dataset_id = models.IntegerField(null=True, blank=True, help_text="ID del dataset raíz original (para mantener agrupación)")
     normalization_method = models.CharField(max_length=255, null=True, blank=True)
+    # normalization_chain = models.ForeignKey(NormalizationChain, on_delete=models.SET_NULL, null=True, blank=True, related_name='datasets')
     
     def __str__(self):
         return self.name

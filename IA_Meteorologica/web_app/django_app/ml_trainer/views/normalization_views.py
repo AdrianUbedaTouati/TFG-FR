@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from ..models import Dataset, CustomNormalizationFunction
 from ..normalization_methods import DISPATCH_NUM, DISPATCH_TEXT
 from ..normalization_mappings import get_numeric_enum, get_text_enum
+from ..normalization_compatibility import get_method_io_type, NORMALIZATION_IO_TYPES
 from ..utils import (
     load_dataset, error_response, success_response,
     validate_dataframe, detect_column_type
@@ -94,7 +95,8 @@ class DatasetNormalizationView(APIView):
                     'value': f'CUSTOM_{func.id}',
                     'label': f'{func.name} 🔧',
                     'description': func.description or f'Función personalizada: {func.name}',
-                    'is_custom': True
+                    'is_custom': True,
+                    'output_type': func.function_type  # Custom functions output the same type as their input
                 }
                 
                 if func.function_type == 'numeric':
@@ -116,17 +118,17 @@ class DatasetNormalizationView(APIView):
                     normalization_info[col] = {
                         'type': 'numeric',
                         'primary_methods': [
-                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores al rango [0, 1]'},
-                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Estandariza a media 0 y desviación 1'},
-                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Escala al rango [-1, 1] para RNN/TCN'},
-                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Normalización Z-Score para CNN'},
-                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler resistente a outliers'},
-                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación (modelos de árbol)'}
+                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores al rango [0, 1]', 'output_type': 'numeric'},
+                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Estandariza a media 0 y desviación 1', 'output_type': 'numeric'},
+                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Escala al rango [-1, 1] para RNN/TCN', 'output_type': 'numeric'},
+                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Normalización Z-Score para CNN', 'output_type': 'numeric'},
+                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler resistente a outliers', 'output_type': 'numeric'},
+                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación (modelos de árbol)', 'output_type': 'numeric'}
                         ] + custom_numeric_functions,  # Agregar funciones personalizadas numéricas
                         'secondary_methods': [
-                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte a minúsculas (si son texto)'},
-                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final'},
-                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos (0, 1, 2...)'}
+                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte a minúsculas (si son texto)', 'output_type': 'text'},
+                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final', 'output_type': 'text'},
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos (0, 1, 2...)', 'output_type': 'numeric'}
                         ] + custom_text_functions,  # Agregar funciones personalizadas de texto
                         'stats': {
                             'mean': float(df[col].mean()) if not df[col].isna().all() else None,
@@ -143,17 +145,17 @@ class DatasetNormalizationView(APIView):
                     normalization_info[col] = {
                         'type': 'text',
                         'primary_methods': [
-                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte todo a minúsculas'},
-                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final'},
-                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': f'Convierte {unique_values} categorías a códigos numéricos (0, 1, 2...)'}
+                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte todo a minúsculas', 'output_type': 'text'},
+                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final', 'output_type': 'text'},
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': f'Convierte {unique_values} categorías a códigos numéricos (0, 1, 2...)', 'output_type': 'numeric'}
                         ] + custom_text_functions,  # Agregar funciones personalizadas de texto
                         'secondary_methods': [
-                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores (si son números como texto)'},
-                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Estandariza (si son números como texto)'},
-                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Escala [-1, 1] (si son números)'},
-                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Z-Score (si son números)'},
-                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler (si son números)'},
-                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación'}
+                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores (si son números como texto)', 'output_type': 'numeric'},
+                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Estandariza (si son números como texto)', 'output_type': 'numeric'},
+                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Escala [-1, 1] (si son números)', 'output_type': 'numeric'},
+                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Z-Score (si son números)', 'output_type': 'numeric'},
+                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler (si son números)', 'output_type': 'numeric'},
+                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación', 'output_type': 'numeric'}
                         ] + custom_numeric_functions,  # Agregar funciones personalizadas numéricas
                         'stats': {
                             'unique_count': unique_values,
@@ -166,15 +168,15 @@ class DatasetNormalizationView(APIView):
                     normalization_info[col] = {
                         'type': 'unknown',
                         'primary_methods': [
-                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Intenta escalar al rango [0, 1]'},
-                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Intenta estandarizar'},
-                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Intenta escalar a [-1, 1]'},
-                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Intenta Z-Score'},
-                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'Intenta RobustScaler'},
-                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación'},
-                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Intenta convertir a minúsculas'},
-                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Intenta eliminar espacios'},
-                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos'}
+                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Intenta escalar al rango [0, 1]', 'output_type': 'numeric'},
+                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Intenta estandarizar', 'output_type': 'numeric'},
+                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Intenta escalar a [-1, 1]', 'output_type': 'numeric'},
+                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Intenta Z-Score', 'output_type': 'numeric'},
+                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'Intenta RobustScaler', 'output_type': 'numeric'},
+                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación', 'output_type': 'numeric'},
+                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Intenta convertir a minúsculas', 'output_type': 'text'},
+                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Intenta eliminar espacios', 'output_type': 'text'},
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos', 'output_type': 'numeric'}
                         ] + custom_numeric_functions + custom_text_functions,  # Agregar todas las funciones personalizadas
                         'secondary_methods': [],
                         'stats': {
@@ -302,385 +304,426 @@ class DatasetNormalizationView(APIView):
             if column not in df.columns:
                 continue
             
-            # Handle both old format (string) and new format (dict with method and keep_original)
-            if isinstance(method_config, dict):
+            # Handle both old format (string) and new format (dict/list)
+            if isinstance(method_config, list):
+                # New format: list of normalization steps (chained normalization)
+                current_column = column
+                for step_index, step in enumerate(method_config):
+                    method = step.get('method', '')
+                    keep_original = step.get('keep_original', False)
+                    
+                    # Apply single normalization step
+                    normalized_df = self._apply_single_normalization(
+                        normalized_df, current_column, method, keep_original, 
+                        step_index=step_index, total_steps=len(method_config)
+                    )
+                    
+                    # Update current_column if it was replaced
+                    if not keep_original:
+                        # Find the new column name (might have suffix)
+                        if current_column not in normalized_df.columns:
+                            # Column was replaced, look for new one with suffix
+                            new_cols = [col for col in normalized_df.columns if col.startswith(f"{current_column}_")]
+                            if new_cols:
+                                current_column = new_cols[-1]  # Use the latest created column
+                        # If column still exists (e.g., ONE_HOT replaces in place), keep using it
+            elif isinstance(method_config, dict):
+                # Single normalization (backward compatibility)
                 method = method_config.get('method', '')
                 keep_original = method_config.get('keep_original', True)
+                normalized_df = self._apply_single_normalization(
+                    normalized_df, column, method, keep_original
+                )
             else:
                 # Backward compatibility: if it's just a string, treat as method
                 method = method_config
                 keep_original = False  # Default for old format
-            
-            # Check if it's a custom function
-            if method.startswith('CUSTOM_'):
-                try:
-                    function_id = int(method.replace('CUSTOM_', ''))
-                    # Forzar lectura fresca desde la base de datos
-                    custom_func = CustomNormalizationFunction.objects.get(id=function_id)
-                    print(f"Applying custom function {custom_func.name} (ID: {function_id}) to column {column}")
+                normalized_df = self._apply_single_normalization(
+                    normalized_df, column, method, keep_original
+                )
+        
+        return normalized_df
+    
+    def _apply_single_normalization(self, df: pd.DataFrame, column: str, method: str, 
+                                   keep_original: bool, step_index: int = 0, total_steps: int = 1) -> pd.DataFrame:
+        """Apply a single normalization step to a column"""
+        if column not in df.columns:
+            return df
+        
+        normalized_df = df.copy()
+        
+        # Generate suffix for chained normalizations
+        suffix = f"_step{step_index + 1}" if total_steps > 1 else "_normalized"
+        
+        # Check if it's a custom function
+        if method.startswith('CUSTOM_'):
+            try:
+                function_id = int(method.replace('CUSTOM_', ''))
+                custom_func = CustomNormalizationFunction.objects.get(id=function_id)
+                print(f"Applying custom function {custom_func.name} (ID: {function_id}) to column {column}")
+                
+                # Create safe execution environment
+                import math
+                from datetime import datetime, timezone, timedelta
+                import re
+                import json
+                import unicodedata
+                import numpy as np
+                from scipy import stats, special
+                from sklearn import preprocessing
+                import statistics
+                from collections import Counter, defaultdict
+                import itertools
+                import functools
                     
-                    # Create safe execution environment
-                    import math
-                    from datetime import datetime, timezone, timedelta
-                    import re
-                    import json
-                    import unicodedata
-                    import numpy as np
-                    from scipy import stats, special
-                    from sklearn import preprocessing
-                    import statistics
-                    from collections import Counter, defaultdict
-                    import itertools
-                    import functools
-                    
-                    # Define allowed modules for import
-                    import _strptime  # Pre-import to avoid issues with datetime.strptime
-                    import time
-                    
-                    ALLOWED_MODULES = {
-                        'math': math,
-                        'datetime': datetime,
-                        'timezone': timezone,
-                        'timedelta': timedelta,
-                        're': re,
-                        'json': json,
-                        'unicodedata': unicodedata,
-                        '_strptime': _strptime,  # Internal module needed by datetime.strptime
-                        'time': time,  # Needed by datetime internally
-                        'numpy': np,
-                        'np': np,  # Common alias
-                        'stats': stats,  # scipy.stats
-                        'special': special,  # scipy.special
-                        'pandas': pd,
-                        'pd': pd,  # Common alias
-                        'preprocessing': preprocessing,  # sklearn.preprocessing
-                        'statistics': statistics,
-                        'Counter': Counter,
-                        'defaultdict': defaultdict,
-                        'itertools': itertools,
-                        'functools': functools,
+                # Define allowed modules for import
+                import _strptime  # Pre-import to avoid issues with datetime.strptime
+                import time
+                
+                ALLOWED_MODULES = {
+                    'math': math,
+                    'datetime': datetime,
+                    'timezone': timezone,
+                    'timedelta': timedelta,
+                    're': re,
+                    'json': json,
+                    'unicodedata': unicodedata,
+                    '_strptime': _strptime,  # Internal module needed by datetime.strptime
+                    'time': time,  # Needed by datetime internally
+                    'numpy': np,
+                    'np': np,  # Common alias
+                    'stats': stats,  # scipy.stats
+                    'special': special,  # scipy.special
+                    'pandas': pd,
+                    'pd': pd,  # Common alias
+                    'preprocessing': preprocessing,  # sklearn.preprocessing
+                    'statistics': statistics,
+                    'Counter': Counter,
+                    'defaultdict': defaultdict,
+                    'itertools': itertools,
+                    'functools': functools,
+                }
+                
+                # Create datetime module object for 'from datetime import ...'
+                import types
+                datetime_module = types.ModuleType('datetime')
+                datetime_module.datetime = datetime
+                datetime_module.timezone = timezone
+                datetime_module.timedelta = timedelta
+                
+                # Create scipy module object
+                scipy_module = types.ModuleType('scipy')
+                scipy_module.stats = stats
+                scipy_module.special = special
+                
+                # Create sklearn module object
+                sklearn_module = types.ModuleType('sklearn')
+                sklearn_module.preprocessing = preprocessing
+                
+                # Create collections module object
+                collections_module = types.ModuleType('collections')
+                collections_module.Counter = Counter
+                collections_module.defaultdict = defaultdict
+                
+                # Update ALLOWED_MODULES to use the module objects
+                ALLOWED_MODULES['datetime'] = datetime_module
+                ALLOWED_MODULES['scipy'] = scipy_module
+                ALLOWED_MODULES['sklearn'] = sklearn_module
+                ALLOWED_MODULES['collections'] = collections_module
+                
+                # Create a safe import function
+                def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+                    """Safe import function that only allows specific modules"""
+                    if name in ALLOWED_MODULES:
+                        return ALLOWED_MODULES[name]
+                    else:
+                        raise ImportError(f"Import of module '{name}' is not allowed")
+                
+                safe_globals = {
+                    '__builtins__': {
+                        '__import__': safe_import,
+                        'len': len,
+                        'str': str,
+                        'int': int,
+                        'float': float,
+                        'isinstance': isinstance,
+                        'min': min,
+                        'max': max,
+                        'abs': abs,
+                        'round': round,
+                        'sum': sum,
+                        'dict': dict,
+                        'list': list,
+                        'tuple': tuple,
+                        'set': set,
+                        'bool': bool,
+                        'type': type,
+                        'range': range,
+                        'enumerate': enumerate,
+                        'zip': zip,
+                        'map': map,
+                        'filter': filter,
+                        'sorted': sorted,
+                        'reversed': reversed,
+                        'any': any,
+                        'all': all,
+                        'pow': pow,
+                        'divmod': divmod,
+                        'print': print,  # For debugging
+                        # Add built-in exceptions
+                        'Exception': Exception,
+                        'ValueError': ValueError,
+                        'TypeError': TypeError,
+                        'KeyError': KeyError,
+                        'IndexError': IndexError,
+                        'AttributeError': AttributeError,
+                        'ImportError': ImportError,
+                        'RuntimeError': RuntimeError,
+                        'ZeroDivisionError': ZeroDivisionError,
+                        'NameError': NameError,
+                        'FileNotFoundError': FileNotFoundError,
+                        'NotImplementedError': NotImplementedError,
+                        'StopIteration': StopIteration,
                     }
+                }
+                
+                # Add safe modules
+                safe_globals['math'] = math
+                safe_globals['datetime'] = datetime
+                safe_globals['timezone'] = timezone
+                safe_globals['timedelta'] = timedelta
+                
+                # Add pandas and numpy for numeric functions
+                if custom_func.function_type == 'numeric':
+                    safe_globals['pd'] = pd
+                    safe_globals['np'] = np
+                
+                # Execute the custom function code
+                exec(custom_func.code, safe_globals)
+                
+                if 'normalize' in safe_globals:
+                    normalize_func = safe_globals['normalize']
                     
-                    # Create datetime module object for 'from datetime import ...'
-                    import types
-                    datetime_module = types.ModuleType('datetime')
-                    datetime_module.datetime = datetime
-                    datetime_module.timezone = timezone
-                    datetime_module.timedelta = timedelta
-                    
-                    # Create scipy module object
-                    scipy_module = types.ModuleType('scipy')
-                    scipy_module.stats = stats
-                    scipy_module.special = special
-                    
-                    # Create sklearn module object
-                    sklearn_module = types.ModuleType('sklearn')
-                    sklearn_module.preprocessing = preprocessing
-                    
-                    # Create collections module object
-                    collections_module = types.ModuleType('collections')
-                    collections_module.Counter = Counter
-                    collections_module.defaultdict = defaultdict
-                    
-                    # Update ALLOWED_MODULES to use the module objects
-                    ALLOWED_MODULES['datetime'] = datetime_module
-                    ALLOWED_MODULES['scipy'] = scipy_module
-                    ALLOWED_MODULES['sklearn'] = sklearn_module
-                    ALLOWED_MODULES['collections'] = collections_module
-                    
-                    # Create a safe import function
-                    def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
-                        """Safe import function that only allows specific modules"""
-                        if name in ALLOWED_MODULES:
-                            return ALLOWED_MODULES[name]
-                        else:
-                            raise ImportError(f"Import of module '{name}' is not allowed")
-                    
-                    safe_globals = {
-                        '__builtins__': {
-                            '__import__': safe_import,
-                            'len': len,
-                            'str': str,
-                            'int': int,
-                            'float': float,
-                            'isinstance': isinstance,
-                            'min': min,
-                            'max': max,
-                            'abs': abs,
-                            'round': round,
-                            'sum': sum,
-                            'dict': dict,
-                            'list': list,
-                            'tuple': tuple,
-                            'set': set,
-                            'bool': bool,
-                            'type': type,
-                            'range': range,
-                            'enumerate': enumerate,
-                            'zip': zip,
-                            'map': map,
-                            'filter': filter,
-                            'sorted': sorted,
-                            'reversed': reversed,
-                            'any': any,
-                            'all': all,
-                            'pow': pow,
-                            'divmod': divmod,
-                            'print': print,  # For debugging
-                            # Add built-in exceptions
-                            'Exception': Exception,
-                            'ValueError': ValueError,
-                            'TypeError': TypeError,
-                            'KeyError': KeyError,
-                            'IndexError': IndexError,
-                            'AttributeError': AttributeError,
-                            'ImportError': ImportError,
-                            'RuntimeError': RuntimeError,
-                            'ZeroDivisionError': ZeroDivisionError,
-                            'NameError': NameError,
-                            'FileNotFoundError': FileNotFoundError,
-                            'NotImplementedError': NotImplementedError,
-                            'StopIteration': StopIteration,
-                        }
-                    }
-                    
-                    # Add safe modules
-                    safe_globals['math'] = math
-                    safe_globals['datetime'] = datetime
-                    safe_globals['timezone'] = timezone
-                    safe_globals['timedelta'] = timedelta
-                    
-                    # Add pandas and numpy for numeric functions
-                    if custom_func.function_type == 'numeric':
-                        safe_globals['pd'] = pd
-                        safe_globals['np'] = np
-                    
-                    # Execute the custom function code
-                    exec(custom_func.code, safe_globals)
-                    
-                    if 'normalize' in safe_globals:
-                        normalize_func = safe_globals['normalize']
+                    # Check if function returns multiple columns
+                    if custom_func.new_columns and len(custom_func.new_columns) > 0:
+                        # Function returns multiple columns
+                        print(f"Custom function {custom_func.name} will create {len(custom_func.new_columns)} new columns")
                         
-                        # Check if function returns multiple columns
-                        if custom_func.new_columns and len(custom_func.new_columns) > 0:
-                            # Function returns multiple columns
-                            print(f"Custom function {custom_func.name} will create {len(custom_func.new_columns)} new columns")
-                            
-                            # Process in batches to avoid memory issues
-                            batch_size = 1000
-                            total_rows = len(df)
-                            
-                            # First, detect actual column names by running the function once
-                            actual_column_names = None
-                            if total_rows > 0:
-                                try:
-                                    sample_value = df[column].iloc[0]
-                                    if custom_func.function_type == 'numeric':
-                                        sample_result = normalize_func(sample_value, series=None)
-                                    else:
-                                        sample_result = normalize_func(sample_value)
-                                    
-                                    if isinstance(sample_result, dict):
-                                        actual_column_names = list(sample_result.keys())
-                                        print(f"Detected actual column names from function output: {actual_column_names}")
-                                except Exception as e:
-                                    print(f"Error detecting column names: {e}")
-                            
-                            # Use actual column names if detected, otherwise use saved names
-                            column_names_to_use = actual_column_names if actual_column_names else custom_func.new_columns
-                            results_dict = {col: [] for col in column_names_to_use}
-                            
-                            print(f"Processing {total_rows} rows in batches of {batch_size}")
-                            
-                            # Pre-compute series statistics if numeric to avoid recomputation
-                            series_data = None
-                            if custom_func.function_type == 'numeric':
-                                # Create a lightweight series representation
-                                series_data = {
-                                    'min': df[column].min(),
-                                    'max': df[column].max(),
-                                    'mean': df[column].mean(),
-                                    'std': df[column].std(),
-                                    'median': df[column].median(),
-                                    'count': df[column].count(),
-                                    'sum': df[column].sum()
-                                }
-                                # Add the series data to safe_globals so the function can access it
-                                safe_globals['series_stats'] = series_data
-                                print(f"Pre-computed series statistics: {series_data}")
-                            
-                            for start_idx in range(0, total_rows, batch_size):
-                                end_idx = min(start_idx + batch_size, total_rows)
-                                batch = df[column].iloc[start_idx:end_idx]
-                                
-                                if start_idx % (batch_size * 10) == 0:  # Log progress every 10 batches
-                                    print(f"Processing rows {start_idx} to {end_idx} ({(start_idx/total_rows)*100:.1f}% complete)")
-                                
-                                # Apply function to batch
+                        # Process in batches to avoid memory issues
+                        batch_size = 1000
+                        total_rows = len(df)
+                        
+                        # First, detect actual column names by running the function once
+                        actual_column_names = None
+                        if total_rows > 0:
+                            try:
+                                sample_value = df[column].iloc[0]
                                 if custom_func.function_type == 'numeric':
-                                    # For numeric functions, DO NOT pass entire series to avoid memory issues
-                                    for idx, value in batch.items():
-                                        try:
-                                            # Apply timeout for each value processing
-                                            with time_limit(5):  # 5 second timeout per value
-                                                # DO NOT pass entire series - it causes memory/performance issues
-                                                result = normalize_func(value, series=None)
-                                            
-                                            if isinstance(result, dict):
-                                                # Use actual keys from result if available
-                                                for col_name in column_names_to_use:
-                                                    results_dict[col_name].append(result.get(col_name, None))
-                                            else:
-                                                # If single value returned, use first column name
-                                                results_dict[column_names_to_use[0]].append(result)
-                                                for col_name in column_names_to_use[1:]:
-                                                    results_dict[col_name].append(None)
-                                        except TimeoutException:
-                                            print(f"Timeout in normalize function at index {idx}")
-                                            # Append None for all columns on timeout
-                                            for col_name in column_names_to_use:
-                                                results_dict[col_name].append(None)
-                                        except Exception as e:
-                                            print(f"Error in normalize function at index {idx}: {e}")
-                                            # Append None for all columns on error
-                                            for col_name in column_names_to_use:
-                                                results_dict[col_name].append(None)
+                                    sample_result = normalize_func(sample_value, series=None)
                                 else:
-                                    # For text functions, apply without series parameter
-                                    for idx, value in batch.items():
-                                        try:
-                                            # Apply timeout for each value processing
-                                            with time_limit(5):  # 5 second timeout per value
-                                                result = normalize_func(value)
-                                            
-                                            if isinstance(result, dict):
-                                                for col_name in column_names_to_use:
-                                                    results_dict[col_name].append(result.get(col_name, ''))
-                                            else:
-                                                # If single value returned, use first column name
-                                                results_dict[column_names_to_use[0]].append(result)
-                                                for col_name in column_names_to_use[1:]:
-                                                    results_dict[col_name].append('')
-                                        except TimeoutException:
-                                            print(f"Timeout in normalize function at index {idx}")
-                                            # Append empty string for all columns on timeout
-                                            for col_name in column_names_to_use:
-                                                results_dict[col_name].append('')
-                                        except Exception as e:
-                                            print(f"Error in normalize function at index {idx}: {e}")
-                                            # Append empty string for all columns on error
-                                            for col_name in column_names_to_use:
-                                                results_dict[col_name].append('')
-                            
-                            print(f"Finished processing all {total_rows} rows")
-                            
-                            # Create new columns from results
-                            # Use the actual column names from results_dict
-                            for new_col_name in results_dict.keys():
-                                normalized_df[new_col_name] = results_dict[new_col_name]
-                                print(f"Created new column: {new_col_name} with {len(results_dict[new_col_name])} values")
-                            
-                            # Remove original column if specified
-                            if custom_func.remove_original_column:
-                                normalized_df = normalized_df.drop(columns=[column])
-                                print(f"Removed original column: {column}")
-                        else:
-                            # Traditional single column output
-                            print(f"Applying traditional single-column normalization")
-                            if custom_func.function_type == 'numeric':
-                                # For numeric functions, DO NOT pass entire series
-                                # Pre-compute statistics if needed
-                                series_stats = {
-                                    'min': df[column].min(),
-                                    'max': df[column].max(),
-                                    'mean': df[column].mean(),
-                                    'std': df[column].std()
-                                }
-                                safe_globals['series_stats'] = series_stats
+                                    sample_result = normalize_func(sample_value)
                                 
-                                # Apply function without passing series
-                                normalized_df[column] = df[column].apply(
-                                    lambda x: normalize_func(x, series=None)
-                                )
+                                if isinstance(sample_result, dict):
+                                    actual_column_names = list(sample_result.keys())
+                                    print(f"Detected actual column names from function output: {actual_column_names}")
+                            except Exception as e:
+                                print(f"Error detecting column names: {e}")
+                        
+                        # Use actual column names if detected, otherwise use saved names
+                        column_names_to_use = actual_column_names if actual_column_names else custom_func.new_columns
+                        results_dict = {col: [] for col in column_names_to_use}
+                        
+                        print(f"Processing {total_rows} rows in batches of {batch_size}")
+                        
+                        # Pre-compute series statistics if numeric to avoid recomputation
+                        series_data = None
+                        if custom_func.function_type == 'numeric':
+                            # Create a lightweight series representation
+                            series_data = {
+                                'min': df[column].min(),
+                                'max': df[column].max(),
+                                'mean': df[column].mean(),
+                                'std': df[column].std(),
+                                'median': df[column].median(),
+                                'count': df[column].count(),
+                                'sum': df[column].sum()
+                            }
+                            # Add the series data to safe_globals so the function can access it
+                            safe_globals['series_stats'] = series_data
+                            print(f"Pre-computed series statistics: {series_data}")
+                        
+                        for start_idx in range(0, total_rows, batch_size):
+                            end_idx = min(start_idx + batch_size, total_rows)
+                            batch = df[column].iloc[start_idx:end_idx]
+                            
+                            if start_idx % (batch_size * 10) == 0:  # Log progress every 10 batches
+                                print(f"Processing rows {start_idx} to {end_idx} ({(start_idx/total_rows)*100:.1f}% complete)")
+                            
+                            # Apply function to batch
+                            if custom_func.function_type == 'numeric':
+                                # For numeric functions, DO NOT pass entire series to avoid memory issues
+                                for idx, value in batch.items():
+                                    try:
+                                        # Apply timeout for each value processing
+                                        with time_limit(5):  # 5 second timeout per value
+                                            # DO NOT pass entire series - it causes memory/performance issues
+                                            result = normalize_func(value, series=None)
+                                        
+                                        if isinstance(result, dict):
+                                            # Use actual keys from result if available
+                                            for col_name in column_names_to_use:
+                                                results_dict[col_name].append(result.get(col_name, None))
+                                        else:
+                                            # If single value returned, use first column name
+                                            results_dict[column_names_to_use[0]].append(result)
+                                            for col_name in column_names_to_use[1:]:
+                                                results_dict[col_name].append(None)
+                                    except TimeoutException:
+                                        print(f"Timeout in normalize function at index {idx}")
+                                        # Append None for all columns on timeout
+                                        for col_name in column_names_to_use:
+                                            results_dict[col_name].append(None)
+                                    except Exception as e:
+                                        print(f"Error in normalize function at index {idx}: {e}")
+                                        # Append None for all columns on error
+                                        for col_name in column_names_to_use:
+                                            results_dict[col_name].append(None)
                             else:
-                                # For text functions, just provide the value
-                                normalized_df[column] = df[column].apply(normalize_func)
-                            print(f"Traditional normalization complete for column {column}")
-                        continue
+                                # For text functions, apply without series parameter
+                                for idx, value in batch.items():
+                                    try:
+                                        # Apply timeout for each value processing
+                                        with time_limit(5):  # 5 second timeout per value
+                                            result = normalize_func(value)
+                                        
+                                        if isinstance(result, dict):
+                                            for col_name in column_names_to_use:
+                                                results_dict[col_name].append(result.get(col_name, ''))
+                                        else:
+                                            # If single value returned, use first column name
+                                            results_dict[column_names_to_use[0]].append(result)
+                                            for col_name in column_names_to_use[1:]:
+                                                results_dict[col_name].append('')
+                                    except TimeoutException:
+                                        print(f"Timeout in normalize function at index {idx}")
+                                        # Append empty string for all columns on timeout
+                                        for col_name in column_names_to_use:
+                                            results_dict[col_name].append('')
+                                    except Exception as e:
+                                        print(f"Error in normalize function at index {idx}: {e}")
+                                        # Append empty string for all columns on error
+                                        for col_name in column_names_to_use:
+                                            results_dict[col_name].append('')
+                        
+                        print(f"Finished processing all {total_rows} rows")
+                        
+                        # Create new columns from results
+                        # Use the actual column names from results_dict
+                        for new_col_name in results_dict.keys():
+                            normalized_df[new_col_name] = results_dict[new_col_name]
+                            print(f"Created new column: {new_col_name} with {len(results_dict[new_col_name])} values")
+                        
+                        # Remove original column if specified
+                        if custom_func.remove_original_column:
+                            normalized_df = normalized_df.drop(columns=[column])
+                            print(f"Removed original column: {column}")
                     else:
-                        print(f"Custom function {custom_func.name} does not define 'normalize' function")
-                except CustomNormalizationFunction.DoesNotExist:
-                    print(f"Custom normalization function with ID {function_id} not found")
-                except Exception as e:
-                    import traceback
-                    error_msg = f"Error applying custom normalization {method} to column {column}: {str(e)}"
-                    print(error_msg)
-                    
-                    # Crear un mensaje de error detallado tipo terminal
-                    error_details = {
-                        'column': column,
-                        'method': method,
-                        'function_name': custom_func.name if 'custom_func' in locals() else 'Unknown',
-                        'error_type': type(e).__name__,
-                        'error_message': str(e),
-                        'traceback': traceback.format_exc()
-                    }
-                    
-                    raise ValueError(f"Custom function error in column '{column}':\n\n"
-                                   f"Function: {error_details['function_name']}\n"
-                                   f"Error Type: {error_details['error_type']}\n"
-                                   f"Error Message: {error_details['error_message']}\n\n"
-                                   f"Traceback:\n{error_details['traceback']}")
-            
-            # Try numeric normalization first
-            norm_enum = get_numeric_enum(method)
-            if norm_enum in DISPATCH_NUM:
-                try:
-                    # Attempt to convert to numeric if it's not already
-                    if df[column].dtype == 'object':
-                        # Try to convert text to numeric
-                        numeric_series = pd.to_numeric(df[column], errors='coerce')
-                        if not numeric_series.isna().all():  # If at least some values converted
-                            func = DISPATCH_NUM[norm_enum]
-                            if keep_original:
-                                new_column_name = f"{column}_normalized"
-                                normalized_df[new_column_name] = func(numeric_series)
-                            else:
-                                normalized_df[column] = func(numeric_series)
-                            continue
-                    else:
-                        # Already numeric
+                        # Traditional single column output
+                        print(f"Applying traditional single-column normalization")
+                        if custom_func.function_type == 'numeric':
+                            # For numeric functions, DO NOT pass entire series
+                            # Pre-compute statistics if needed
+                            series_stats = {
+                                'min': df[column].min(),
+                                'max': df[column].max(),
+                                'mean': df[column].mean(),
+                                'std': df[column].std()
+                            }
+                            safe_globals['series_stats'] = series_stats
+                            
+                            # Apply function without passing series
+                            normalized_df[column] = df[column].apply(
+                                lambda x: normalize_func(x, series=None)
+                            )
+                        else:
+                            # For text functions, just provide the value
+                            normalized_df[column] = df[column].apply(normalize_func)
+                        print(f"Traditional normalization complete for column {column}")
+                    return normalized_df
+                else:
+                    print(f"Custom function {custom_func.name} does not define 'normalize' function")
+            except CustomNormalizationFunction.DoesNotExist:
+                print(f"Custom normalization function with ID {function_id} not found")
+            except Exception as e:
+                import traceback
+                error_msg = f"Error applying custom normalization {method} to column {column}: {str(e)}"
+                print(error_msg)
+                
+                # Crear un mensaje de error detallado tipo terminal
+                error_details = {
+                    'column': column,
+                    'method': method,
+                    'function_name': custom_func.name if 'custom_func' in locals() else 'Unknown',
+                    'error_type': type(e).__name__,
+                    'error_message': str(e),
+                    'traceback': traceback.format_exc()
+                }
+                
+                raise ValueError(f"Custom function error in column '{column}':\n\n"
+                               f"Function: {error_details['function_name']}\n"
+                               f"Error Type: {error_details['error_type']}\n"
+                               f"Error Message: {error_details['error_message']}\n\n"
+                               f"Traceback:\n{error_details['traceback']}")
+        
+        # Try numeric normalization first
+        norm_enum = get_numeric_enum(method)
+        if norm_enum in DISPATCH_NUM:
+            try:
+                # Attempt to convert to numeric if it's not already
+                if normalized_df[column].dtype == 'object':
+                    # Try to convert text to numeric
+                    numeric_series = pd.to_numeric(normalized_df[column], errors='coerce')
+                    if not numeric_series.isna().all():  # If at least some values converted
                         func = DISPATCH_NUM[norm_enum]
                         if keep_original:
-                            # Create new column with normalized values
-                            new_column_name = f"{column}_normalized"
-                            normalized_df[new_column_name] = func(df[column])
+                            new_column_name = f"{column}{suffix}"
+                            normalized_df[new_column_name] = func(numeric_series)
                         else:
-                            # Replace original column
-                            normalized_df[column] = func(df[column])
-                        continue
-                except Exception:
-                    pass
-            
-            # Try text normalization
-            text_enum = get_text_enum(method)
-            if text_enum in DISPATCH_TEXT:
-                try:
-                    func = DISPATCH_TEXT[text_enum]
+                            normalized_df[column] = func(numeric_series)
+                        return normalized_df
+                else:
+                    # Already numeric
+                    func = DISPATCH_NUM[norm_enum]
                     if keep_original:
-                        new_column_name = f"{column}_normalized"
-                        normalized_df[new_column_name] = func(df[column])
+                        # Create new column with normalized values
+                        new_column_name = f"{column}{suffix}"
+                        normalized_df[new_column_name] = func(normalized_df[column])
                     else:
-                        normalized_df[column] = func(df[column])
-                except Exception as e:
-                    print(f"Error applying text normalization {method} to column {column}: {str(e)}")
+                        # Replace original column
+                        normalized_df[column] = func(normalized_df[column])
+                    return normalized_df
+            except Exception as e:
+                print(f"Error applying numeric normalization {method} to column {column}: {str(e)}")
         
-        print(f"_apply_normalization completed. Final DataFrame shape: {normalized_df.shape}")
-        print(f"Final columns: {list(normalized_df.columns)}")
+        # Try text normalization
+        text_enum = get_text_enum(method)
+        if text_enum in DISPATCH_TEXT:
+            try:
+                func = DISPATCH_TEXT[text_enum]
+                if keep_original:
+                    new_column_name = f"{column}{suffix}"
+                    normalized_df[new_column_name] = func(normalized_df[column])
+                else:
+                    normalized_df[column] = func(normalized_df[column])
+                return normalized_df
+            except Exception as e:
+                print(f"Error applying text normalization {method} to column {column}: {str(e)}")
+        
+        # Return the modified dataframe
         return normalized_df
     
     def _save_normalized_copy(self, original_dataset, normalized_df, 
-                              copy_name, config, short_description='', long_description=''):
+                          copy_name, config, short_description='', long_description=''):
         """Save normalized dataset as a new copy"""
         print(f"_save_normalized_copy called with copy_name: {copy_name}")
         
@@ -763,6 +806,7 @@ class DatasetNormalizationPreviewView(APIView):
         # Get normalization parameters
         normalization_config = request.data.get('normalization', {})
         sample_size = min(request.data.get('sample_size', 100), 1000)
+        show_steps = request.data.get('show_steps', False)  # New parameter to show transformation steps
         
         # Load dataset
         df = load_dataset(dataset.file.path)
@@ -775,6 +819,57 @@ class DatasetNormalizationPreviewView(APIView):
         try:
             # Apply normalization to sample
             view = DatasetNormalizationView()
+            
+            # If show_steps is true and we have chained normalizations, show step-by-step
+            transformation_steps = {}
+            
+            if show_steps:
+                for column, method_config in normalization_config.items():
+                    if isinstance(method_config, list) and len(method_config) > 1:
+                        # Show transformation for each step
+                        steps_preview = []
+                        current_df = sample_df.copy()
+                        
+                        for step_index, step in enumerate(method_config):
+                            method = step.get('method', '')
+                            keep_original = step.get('keep_original', False)
+                            
+                            # Get sample values before transformation
+                            before_values = current_df[column].head(10).tolist() if column in current_df.columns else []
+                            
+                            # Apply single step
+                            current_df = view._apply_single_normalization(
+                                current_df, column, method, keep_original,
+                                step_index=step_index, total_steps=len(method_config)
+                            )
+                            
+                            # Get sample values after transformation
+                            # Find the transformed column (might have a new name)
+                            transformed_col = column
+                            if keep_original:
+                                # Find the new column
+                                new_cols = [col for col in current_df.columns if col.startswith(f"{column}_step{step_index + 1}")]
+                                if new_cols:
+                                    transformed_col = new_cols[0]
+                            
+                            after_values = current_df[transformed_col].head(10).tolist() if transformed_col in current_df.columns else []
+                            
+                            steps_preview.append({
+                                'step': step_index + 1,
+                                'method': method,
+                                'keep_original': keep_original,
+                                'before': before_values,
+                                'after': after_values,
+                                'column_name': transformed_col
+                            })
+                            
+                            # Update column for next step if not keeping original
+                            if not keep_original:
+                                column = transformed_col
+                        
+                        transformation_steps[column] = steps_preview
+            
+            # Apply full normalization
             normalized_sample = view._apply_normalization(sample_df, normalization_config)
             
             # Prepare comparison
@@ -782,8 +877,18 @@ class DatasetNormalizationPreviewView(APIView):
             for column in normalization_config.keys():
                 if column in df.columns:
                     # Check if this is a custom function with multiple outputs
-                    method = normalization_config[column]
-                    if method.startswith('CUSTOM_'):
+                    method_config = normalization_config[column]
+                    
+                    # Extract method from config (handle both old and new formats)
+                    if isinstance(method_config, list):
+                        # For chained normalization, check if any step is custom
+                        method = None  # We'll handle chained normalization differently
+                    elif isinstance(method_config, dict):
+                        method = method_config.get('method', '')
+                    else:
+                        method = method_config
+                    
+                    if method and isinstance(method, str) and method.startswith('CUSTOM_'):
                         try:
                             function_id = int(method.replace('CUSTOM_', ''))
                             custom_func = CustomNormalizationFunction.objects.get(id=function_id)
@@ -851,7 +956,7 @@ class DatasetNormalizationPreviewView(APIView):
                         # Apply the same normalization to all unique values
                         try:
                             view = DatasetNormalizationView()
-                            normalized_temp = view._apply_normalization(temp_df.copy(), {column: method})
+                            normalized_temp = view._apply_normalization(temp_df.copy(), {column: method_config})
                             
                             # Build the mapping for all unique values
                             for idx, val in enumerate(all_unique_values):
@@ -915,10 +1020,16 @@ class DatasetNormalizationPreviewView(APIView):
                             'is_categorical': False
                         }
             
-            return success_response({
+            response_data = {
                 'preview': comparison,
                 'sample_size': len(sample_df)
-            })
+            }
+            
+            # Add transformation steps if available
+            if transformation_steps:
+                response_data['transformation_steps'] = transformation_steps
+            
+            return success_response(response_data)
             
         except ValueError as e:
             # Error específico de función personalizada con formato detallado

@@ -687,6 +687,77 @@
         animation: fadeIn 0.3s ease-in;
     }
     
+    .normalization-layers {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    
+    .normalization-layer {
+        padding: 10px;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 8px;
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        position: relative;
+    }
+    
+    .normalization-layer > div:first-child {
+        margin-bottom: 8px;
+    }
+    
+    .layer-controls {
+        margin-top: 10px;
+        text-align: center;
+        position: relative;
+        z-index: 10;
+    }
+    
+    .add-layer-btn {
+        background: rgba(0, 212, 255, 0.1);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        color: var(--primary-color);
+        padding: 8px 16px;
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 0.9rem;
+        position: relative;
+        z-index: 100;
+        display: inline-block;
+        pointer-events: auto;
+    }
+    
+    .add-layer-btn:hover {
+        background: rgba(0, 212, 255, 0.2);
+        border-color: var(--primary-color);
+        box-shadow: var(--neon-glow);
+    }
+    
+    .remove-layer-btn {
+        background: transparent;
+        border: none;
+        color: #ff4444;
+        cursor: pointer;
+        padding: 5px;
+        transition: all 0.3s ease;
+        position: relative;
+        z-index: 100;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: auto;
+    }
+    
+    .remove-layer-btn:hover {
+        color: #ff6666;
+        transform: scale(1.1);
+    }
+    
+    .remove-layer-btn:active {
+        transform: scale(0.95);
+    }
+    
     @keyframes fadeIn {
         from {
             opacity: 0;
@@ -724,6 +795,140 @@
         width: 100%;
         border-collapse: collapse;
         margin-top: 10px;
+    }
+    
+    .compatibility-indicator {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        margin-left: 8px;
+        background: rgba(0, 212, 255, 0.1);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        color: var(--primary-color);
+    }
+    
+    .compatibility-indicator.numeric {
+        background: rgba(0, 212, 255, 0.1);
+        border-color: rgba(0, 212, 255, 0.3);
+        color: #00d4ff;
+    }
+    
+    .compatibility-indicator.text {
+        background: rgba(255, 204, 0, 0.1);
+        border-color: rgba(255, 204, 0, 0.3);
+        color: #ffcc00;
+    }
+    
+    .compatibility-arrow {
+        display: inline-block;
+        margin: 0 5px;
+        color: var(--primary-color);
+        font-size: 1.2rem;
+    }
+    
+    .transformation-steps {
+        margin-bottom: 20px;
+    }
+    
+    .transformation-step {
+        background: rgba(0, 212, 255, 0.05);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .transformation-step::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: linear-gradient(90deg, var(--primary-color), transparent);
+    }
+    
+    .step-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 15px;
+    }
+    
+    .step-title {
+        color: var(--primary-color);
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+    
+    .step-method {
+        background: rgba(0, 212, 255, 0.1);
+        padding: 4px 12px;
+        border-radius: 15px;
+        color: var(--primary-color);
+        font-size: 0.9rem;
+    }
+    
+    .preview-comparison {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 20px;
+        align-items: start;
+    }
+    
+    .preview-arrow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding-top: 30px;
+        color: var(--primary-color);
+        font-size: 2rem;
+    }
+    
+    .preview-column {
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        padding: 15px;
+    }
+    
+    .preview-column h6 {
+        color: rgba(240, 249, 255, 0.8);
+        margin-bottom: 10px;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+    }
+    
+    .preview-values {
+        font-family: 'Fira Code', monospace;
+        line-height: 1.6;
+    }
+    
+    .preview-value {
+        padding: 2px 8px;
+        margin: 2px 0;
+        background: rgba(0, 212, 255, 0.05);
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    }
+    
+    .preview-value:hover {
+        background: rgba(0, 212, 255, 0.1);
+        transform: translateX(5px);
+    }
+    
+    .step-info {
+        margin-top: 15px;
+        padding: 10px;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 6px;
+        font-size: 0.85rem;
+    }
+    
+    .step-info i {
+        margin-right: 5px;
     }
     
     .test-result-table th,
@@ -1221,18 +1426,46 @@ def normalize(value, series=None):
         try {
             // Agregar timestamp para evitar cache
             const timestamp = new Date().getTime();
-            const response = await fetch(`/api/datasets/${datasetId}/normalization/?t=${timestamp}`, {
+            const url = `/api/datasets/${datasetId}/normalization/?t=${timestamp}`;
+            console.log('Fetching from URL:', url);
+            
+            const response = await fetch(url, {
                 cache: 'no-store'
             });
-            if (!response.ok) throw new Error('Error loading dataset info');
             
-            datasetInfo = await response.json();
-            console.log('Dataset info loaded:', datasetInfo);
+            console.log('Response status:', response.status);
+            console.log('Response ok:', response.ok);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Error response:', errorText);
+                throw new Error(`Error loading dataset info: ${response.status} ${response.statusText}`);
+            }
+            
+            const responseText = await response.text();
+            console.log('Raw response:', responseText);
+            
+            try {
+                datasetInfo = JSON.parse(responseText);
+                console.log('Parsed dataset info:', datasetInfo);
+            } catch (parseError) {
+                console.error('Error parsing JSON:', parseError);
+                throw new Error('Invalid JSON response from server');
+            }
             
             // Actualizar información del dataset
-            document.getElementById('dataset-name').textContent = datasetInfo.dataset.name;
-            document.getElementById('dataset-rows').textContent = datasetInfo.dataset.shape[0].toLocaleString();
-            document.getElementById('dataset-cols').textContent = datasetInfo.dataset.shape[1];
+            const nameElement = document.getElementById('dataset-name');
+            const rowsElement = document.getElementById('dataset-rows');
+            const colsElement = document.getElementById('dataset-cols');
+            
+            if (nameElement) nameElement.textContent = datasetInfo.dataset.name;
+            else console.error('dataset-name element not found');
+            
+            if (rowsElement) rowsElement.textContent = datasetInfo.dataset.shape[0].toLocaleString();
+            else console.error('dataset-rows element not found');
+            
+            if (colsElement) colsElement.textContent = datasetInfo.dataset.shape[1];
+            else console.error('dataset-cols element not found');
             
             // Sugerir nombre para el dataset normalizado
             // Contar cuántas normalizaciones existen
@@ -1248,16 +1481,37 @@ def normalize(value, series=None):
             renderNormalizedCopies();
             
         } catch (error) {
-            console.error('Error:', error);
-            showNotification('Error al cargar información del dataset', 'error');
+            console.error('Error loading dataset info:', error);
+            console.error('Error details:', error.message);
+            console.error('Stack trace:', error.stack);
+            showNotification('Error al cargar información del dataset: ' + error.message, 'error');
         }
     }
 
     function renderVariables() {
+        console.log('renderVariables called');
         const grid = document.getElementById('variables-grid');
+        if (!grid) {
+            console.error('variables-grid element not found!');
+            return;
+        }
+        
+        console.log('datasetInfo:', datasetInfo);
+        console.log('normalization_info:', datasetInfo?.normalization_info);
+        
         grid.innerHTML = '';
         
-        for (const [column, info] of Object.entries(datasetInfo.normalization_info)) {
+        if (!datasetInfo || !datasetInfo.normalization_info) {
+            console.error('No normalization info available');
+            grid.innerHTML = '<div class="alert alert-warning">No se encontró información de normalización</div>';
+            return;
+        }
+        
+        const entries = Object.entries(datasetInfo.normalization_info);
+        console.log(`Found ${entries.length} columns to render`);
+        
+        for (const [column, info] of entries) {
+            console.log(`Creating card for column: ${column}`);
             const card = createVariableCard(column, info);
             grid.appendChild(card);
         }
@@ -1266,6 +1520,9 @@ def normalize(value, series=None):
     function createVariableCard(column, info) {
         const card = document.createElement('div');
         card.className = 'variable-card';
+        
+        // Escapar el nombre de la columna para uso en IDs y funciones
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
         
         // Determinar el tipo de badge
         const typeClass = `type-${info.type}`;
@@ -1298,30 +1555,39 @@ def normalize(value, series=None):
                 <span class="variable-type ${typeClass}">${typeLabel}</span>
             </div>
             ${statsHtml}
-            <select class="normalization-select" id="norm-${column}" onchange="onNormalizationChange('${column}')">
-                <option value="">Sin normalizar</option>
-                <optgroup label="Métodos principales">
-                    ${info.primary_methods.map(method => 
-                        `<option value="${method.value}" title="${method.description}">${method.label}</option>`
-                    ).join('')}
-                </optgroup>
-                ${info.secondary_methods.length > 0 ? `
-                    <optgroup label="Otros métodos">
-                        ${info.secondary_methods.map(method => 
-                            `<option value="${method.value}" title="${method.description}">${method.label}</option>`
-                        ).join('')}
-                    </optgroup>
-                ` : ''}
-            </select>
-            <div class="keep-original-container" id="keep-original-${column}" style="display: none;">
-                <label class="keep-original-label">
-                    <input type="checkbox" class="keep-original-checkbox" id="keep-original-checkbox-${column}" 
-                           onchange="onKeepOriginalChange('${column}')" checked>
-                    <span>Mantener columna original</span>
-                </label>
+            <div class="normalization-layers" id="layers-${escapedColumn}" data-column="${column}">
+                <div class="normalization-layer" data-layer-index="0">
+                    <select class="normalization-select" id="norm-${escapedColumn}-0" onchange="onNormalizationChange('${column.replace(/'/g, "\\'")}', 0)">
+                        <option value="">Sin normalizar</option>
+                        <optgroup label="Métodos principales">
+                            ${info.primary_methods.map(method => 
+                                `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                            ).join('')}
+                        </optgroup>
+                        ${info.secondary_methods.length > 0 ? `
+                            <optgroup label="Otros métodos">
+                                ${info.secondary_methods.map(method => 
+                                    `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                                ).join('')}
+                            </optgroup>
+                        ` : ''}
+                    </select>
+                    <div class="keep-original-container" id="keep-original-${escapedColumn}-0" style="display: none;">
+                        <label class="keep-original-label">
+                            <input type="checkbox" class="keep-original-checkbox" id="keep-original-checkbox-${escapedColumn}-0" 
+                                   onchange="onKeepOriginalChange('${column.replace(/'/g, "\\'")}', 0)" checked>
+                            <span>Mantener columna original</span>
+                        </label>
+                    </div>
+                </div>
             </div>
-            <button class="preview-btn" onclick="previewNormalization('${column}')" 
-                    id="preview-btn-${column}" style="display: none;">
+            <div class="layer-controls" style="display: none;" id="layer-controls-${escapedColumn}" data-column="${column}">
+                <button type="button" class="add-layer-btn" onclick="event.preventDefault(); addNormalizationLayer('${column.replace(/'/g, "\\'")}')" title="Añadir capa de normalización">
+                    <i class="bi bi-plus-circle"></i> Añadir capa
+                </button>
+            </div>
+            <button class="preview-btn" onclick="previewNormalization('${column.replace(/'/g, "\\'")}')" 
+                    id="preview-btn-${escapedColumn}" style="display: none;">
                 <i class="bi bi-eye"></i> Previsualizar
             </button>
         `;
@@ -1329,11 +1595,13 @@ def normalize(value, series=None):
         return card;
     }
 
-    function onNormalizationChange(column) {
-        const select = document.getElementById(`norm-${column}`);
-        const previewBtn = document.getElementById(`preview-btn-${column}`);
-        const keepOriginalContainer = document.getElementById(`keep-original-${column}`);
-        const keepOriginalCheckbox = document.getElementById(`keep-original-checkbox-${column}`);
+    function onNormalizationChange(column, layerIndex = 0) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const select = document.getElementById(`norm-${escapedColumn}-${layerIndex}`);
+        const previewBtn = document.getElementById(`preview-btn-${escapedColumn}`);
+        const keepOriginalContainer = document.getElementById(`keep-original-${escapedColumn}-${layerIndex}`);
+        const keepOriginalCheckbox = document.getElementById(`keep-original-checkbox-${escapedColumn}-${layerIndex}`);
+        const layerControls = document.getElementById(`layer-controls-${escapedColumn}`);
         
         // Lista de funciones por defecto
         const defaultFunctions = [
@@ -1349,11 +1617,19 @@ def normalize(value, series=None):
         ];
         
         if (select.value) {
-            normalizationConfig[column] = {
+            // Initialize array if not exists
+            if (!Array.isArray(normalizationConfig[column])) {
+                normalizationConfig[column] = [];
+            }
+            
+            // Update the specific layer
+            normalizationConfig[column][layerIndex] = {
                 method: select.value,
-                keep_original: true  // Por defecto mantener la columna original
+                keep_original: layerIndex < normalizationConfig[column].length - 1  // Keep original for all but last layer
             };
+            
             previewBtn.style.display = 'block';
+            layerControls.style.display = 'block';
             
             // Mostrar checkbox solo para funciones por defecto
             if (defaultFunctions.includes(select.value)) {
@@ -1361,21 +1637,121 @@ def normalize(value, series=None):
             } else {
                 keepOriginalContainer.style.display = 'none';
                 // Para funciones personalizadas, siempre mantener original
-                normalizationConfig[column].keep_original = true;
+                normalizationConfig[column][layerIndex].keep_original = true;
             }
+            
+            // Update compatibility of subsequent layers
+            updateSubsequentLayersCompatibility(column, layerIndex);
         } else {
-            delete normalizationConfig[column];
-            previewBtn.style.display = 'none';
+            // Remove this layer
+            if (Array.isArray(normalizationConfig[column])) {
+                normalizationConfig[column].splice(layerIndex, 1);
+                if (normalizationConfig[column].length === 0) {
+                    delete normalizationConfig[column];
+                    previewBtn.style.display = 'none';
+                    layerControls.style.display = 'none';
+                }
+            }
             keepOriginalContainer.style.display = 'none';
         }
         
         updateSelectedCount();
     }
+    
+    function updateSubsequentLayersCompatibility(column, changedLayerIndex) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const layersContainer = document.getElementById(`layers-${escapedColumn}`);
+        
+        if (!layersContainer) return;
+        
+        const layers = layersContainer.querySelectorAll('.normalization-layer');
+        
+        // Update all layers including the current one to update its input indicator
+        for (let i = changedLayerIndex; i < layers.length; i++) {
+            const layer = layers[i];
+            const select = document.getElementById(`norm-${escapedColumn}-${i}`);
+            if (!select) continue;
+            
+            const currentValue = select.value;
+            const info = datasetInfo.normalization_info[column];
+            
+            // Get previous layer's output type
+            let compatibleMethods = [...info.primary_methods, ...info.secondary_methods];
+            let prevOutputType = null;
+            
+            if (i > 0 && Array.isArray(normalizationConfig[column]) && normalizationConfig[column][i - 1]) {
+                const prevMethod = normalizationConfig[column][i - 1].method;
+                const prevMethodInfo = compatibleMethods.find(m => m.value === prevMethod);
+                
+                if (prevMethodInfo && prevMethodInfo.output_type) {
+                    prevOutputType = prevMethodInfo.output_type;
+                }
+                
+                // Update the input indicator for this layer
+                const inputIndicator = layer.querySelector('.compatibility-indicator');
+                if (inputIndicator && prevOutputType) {
+                    inputIndicator.className = `compatibility-indicator ${prevOutputType}`;
+                    inputIndicator.textContent = `Entrada: ${prevOutputType === 'numeric' ? 'Numérico' : 'Texto'}`;
+                }
+                compatibleMethods = compatibleMethods.filter(method => {
+                    if (!method.output_type) return true;
+                    
+                    if (prevOutputType === 'numeric' && ['MIN_MAX', 'Z_SCORE', 'LSTM_TCN', 'CNN', 'TRANSFORMER', 'TREE'].includes(method.value)) {
+                        return true;
+                    }
+                    if (prevOutputType === 'text' && ['LOWER', 'STRIP', 'ONE_HOT'].includes(method.value)) {
+                        return true;
+                    }
+                    if (method.value.startsWith('CUSTOM_')) {
+                        return true;
+                    }
+                    
+                    return false;
+                });
+            }
+            
+            // Separate compatible methods
+            const compatiblePrimary = compatibleMethods.filter(m => info.primary_methods.some(pm => pm.value === m.value));
+            const compatibleSecondary = compatibleMethods.filter(m => info.secondary_methods.some(sm => sm.value === m.value));
+            
+            // Update select options
+            select.innerHTML = `
+                <option value="">Sin normalizar</option>
+                ${compatiblePrimary.length > 0 ? `
+                    <optgroup label="Métodos compatibles">
+                        ${compatiblePrimary.map(method => 
+                            `<option value="${method.value}" title="${method.description} → Salida: ${method.output_type === 'numeric' ? 'Numérico' : 'Texto'}">${method.label} → ${method.output_type === 'numeric' ? '123' : 'ABC'}</option>`
+                        ).join('')}
+                    </optgroup>
+                ` : ''}
+                ${compatibleSecondary.length > 0 ? `
+                    <optgroup label="Otros métodos compatibles">
+                        ${compatibleSecondary.map(method => 
+                            `<option value="${method.value}" title="${method.description} → Salida: ${method.output_type === 'numeric' ? 'Numérico' : 'Texto'}">${method.label} → ${method.output_type === 'numeric' ? '123' : 'ABC'}</option>`
+                        ).join('')}
+                    </optgroup>
+                ` : ''}
+                ${compatibleMethods.length === 0 ? `
+                    <option value="" disabled>No hay métodos compatibles con la salida anterior</option>
+                ` : ''}
+            `;
+            
+            // Restore previous value if still compatible
+            if (currentValue && compatibleMethods.some(m => m.value === currentValue)) {
+                select.value = currentValue;
+            } else if (currentValue) {
+                // Method is no longer compatible, clear it
+                normalizationConfig[column][i] = { method: '', keep_original: false };
+                showNotification(`El método en la capa ${i + 1} ya no es compatible y fue eliminado`, 'warning');
+            }
+        }
+    }
 
-    function onKeepOriginalChange(column) {
-        const checkbox = document.getElementById(`keep-original-checkbox-${column}`);
-        if (normalizationConfig[column]) {
-            normalizationConfig[column].keep_original = checkbox.checked;
+    function onKeepOriginalChange(column, layerIndex = 0) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const checkbox = document.getElementById(`keep-original-checkbox-${escapedColumn}-${layerIndex}`);
+        if (Array.isArray(normalizationConfig[column]) && normalizationConfig[column][layerIndex]) {
+            normalizationConfig[column][layerIndex].keep_original = checkbox.checked;
         }
     }
 
@@ -1388,12 +1764,224 @@ def normalize(value, series=None):
         const applyBtn = document.getElementById('apply-normalization');
         applyBtn.disabled = count === 0;
     }
+    
+    function addNormalizationLayer(column) {
+        console.log('Adding normalization layer for column:', column);
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const layersContainer = document.getElementById(`layers-${escapedColumn}`);
+        
+        if (!layersContainer) {
+            console.error('Layers container not found for column:', column);
+            return;
+        }
+        
+        const existingLayers = layersContainer.querySelectorAll('.normalization-layer');
+        const newLayerIndex = existingLayers.length;
+        
+        // Get column info for methods
+        const info = datasetInfo.normalization_info[column];
+        
+        // Get previous layer's output type to filter compatible methods
+        let compatibleMethods = [...info.primary_methods, ...info.secondary_methods];
+        if (newLayerIndex > 0 && Array.isArray(normalizationConfig[column]) && normalizationConfig[column][newLayerIndex - 1]) {
+            const prevMethod = normalizationConfig[column][newLayerIndex - 1].method;
+            const prevMethodInfo = compatibleMethods.find(m => m.value === prevMethod);
+            
+            if (prevMethodInfo && prevMethodInfo.output_type) {
+                // Filter methods that can accept the previous layer's output
+                const prevOutputType = prevMethodInfo.output_type;
+                compatibleMethods = compatibleMethods.filter(method => {
+                    // If the method doesn't have input requirements, allow it
+                    if (!method.output_type) return true;
+                    
+                    // For the input type, we need to check if it matches the previous output
+                    // Numeric methods can accept numeric output
+                    // Text methods can accept text output
+                    if (prevOutputType === 'numeric' && ['MIN_MAX', 'Z_SCORE', 'LSTM_TCN', 'CNN', 'TRANSFORMER', 'TREE'].includes(method.value)) {
+                        return true;
+                    }
+                    if (prevOutputType === 'text' && ['LOWER', 'STRIP', 'ONE_HOT'].includes(method.value)) {
+                        return true;
+                    }
+                    // Custom functions can accept any type
+                    if (method.value.startsWith('CUSTOM_')) {
+                        return true;
+                    }
+                    
+                    return false;
+                });
+                
+                console.log(`Previous method ${prevMethod} outputs ${prevOutputType}, compatible methods:`, compatibleMethods.map(m => m.value));
+            }
+        }
+        
+        // Separate compatible methods into primary and secondary
+        const compatiblePrimary = compatibleMethods.filter(m => info.primary_methods.some(pm => pm.value === m.value));
+        const compatibleSecondary = compatibleMethods.filter(m => info.secondary_methods.some(sm => sm.value === m.value));
+        
+        // Create new layer
+        const newLayer = document.createElement('div');
+        newLayer.className = 'normalization-layer';
+        newLayer.setAttribute('data-layer-index', newLayerIndex);
+        newLayer.style.marginTop = '10px';
+        
+        // Get previous layer output type for display
+        let previousOutputType = null;
+        if (newLayerIndex > 0 && Array.isArray(normalizationConfig[column]) && normalizationConfig[column][newLayerIndex - 1]) {
+            const prevMethod = normalizationConfig[column][newLayerIndex - 1].method;
+            const prevMethodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === prevMethod);
+            if (prevMethodInfo && prevMethodInfo.output_type) {
+                previousOutputType = prevMethodInfo.output_type;
+            }
+        }
+        
+        newLayer.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="color: var(--primary-color); font-weight: bold;">Capa ${newLayerIndex + 1}:</span>
+                ${previousOutputType ? `
+                    <span class="compatibility-indicator ${previousOutputType}">
+                        Entrada: ${previousOutputType === 'numeric' ? 'Numérico' : 'Texto'}
+                    </span>
+                ` : ''}
+                <button type="button" class="remove-layer-btn" data-column="${column}" data-layer-index="${newLayerIndex}"
+                        style="background: transparent; border: none; color: #ff4444; cursor: pointer; padding: 5px; position: relative; z-index: 100; width: 30px; height: 30px;">
+                    <i class="bi bi-x-circle"></i>
+                </button>
+            </div>
+            <select class="normalization-select" id="norm-${escapedColumn}-${newLayerIndex}" 
+                    onchange="onNormalizationChange('${column.replace(/'/g, "\\'")}', ${newLayerIndex})">
+                <option value="">Sin normalizar</option>
+                ${compatiblePrimary.length > 0 ? `
+                    <optgroup label="Métodos compatibles">
+                        ${compatiblePrimary.map(method => 
+                            `<option value="${method.value}" title="${method.description} → Salida: ${method.output_type === 'numeric' ? 'Numérico' : 'Texto'}">${method.label} → ${method.output_type === 'numeric' ? '123' : 'ABC'}</option>`
+                        ).join('')}
+                    </optgroup>
+                ` : ''}
+                ${compatibleSecondary.length > 0 ? `
+                    <optgroup label="Otros métodos compatibles">
+                        ${compatibleSecondary.map(method => 
+                            `<option value="${method.value}" title="${method.description} → Salida: ${method.output_type === 'numeric' ? 'Numérico' : 'Texto'}">${method.label} → ${method.output_type === 'numeric' ? '123' : 'ABC'}</option>`
+                        ).join('')}
+                    </optgroup>
+                ` : ''}
+                ${compatibleMethods.length === 0 ? `
+                    <option value="" disabled>No hay métodos compatibles con la salida anterior</option>
+                ` : ''}
+            </select>
+            <div class="keep-original-container" id="keep-original-${escapedColumn}-${newLayerIndex}" style="display: none;">
+                <label class="keep-original-label">
+                    <input type="checkbox" class="keep-original-checkbox" id="keep-original-checkbox-${escapedColumn}-${newLayerIndex}" 
+                           onchange="onKeepOriginalChange('${column.replace(/'/g, "\\'")}', ${newLayerIndex})" checked>
+                    <span>Mantener columna original</span>
+                </label>
+            </div>
+        `;
+        
+        layersContainer.appendChild(newLayer);
+        
+        // Add event listener using data attributes
+        const removeBtn = newLayer.querySelector('.remove-layer-btn');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const col = this.getAttribute('data-column');
+                const idx = parseInt(this.getAttribute('data-layer-index'));
+                console.log('Remove button clicked:', col, idx);
+                removeNormalizationLayer(col, idx);
+            });
+        }
+    }
+    
+    function removeNormalizationLayer(column, layerIndex) {
+        console.log('Removing layer:', column, layerIndex);
+        
+        // Don't allow removing the first layer
+        if (layerIndex === 0) {
+            showNotification('No se puede eliminar la primera capa', 'warning');
+            return;
+        }
+        
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const layersContainer = document.getElementById(`layers-${escapedColumn}`);
+        
+        if (!layersContainer) {
+            console.error('Layers container not found for column:', column);
+            return;
+        }
+        
+        const layerToRemove = layersContainer.querySelector(`[data-layer-index="${layerIndex}"]`);
+        
+        if (layerToRemove) {
+            layerToRemove.remove();
+            console.log('Layer removed successfully');
+            
+            // Remove from config
+            if (Array.isArray(normalizationConfig[column])) {
+                normalizationConfig[column].splice(layerIndex, 1);
+                
+                // Reindex remaining layers
+                const remainingLayers = layersContainer.querySelectorAll('.normalization-layer');
+                remainingLayers.forEach((layer, index) => {
+                    layer.setAttribute('data-layer-index', index);
+                    // Update IDs and event handlers
+                    const select = layer.querySelector('.normalization-select');
+                    const keepContainer = layer.querySelector('.keep-original-container');
+                    const keepCheckbox = layer.querySelector('.keep-original-checkbox');
+                    const layerLabel = layer.querySelector('span');
+                    const removeBtn = layer.querySelector('.remove-layer-btn');
+                    
+                    if (select) {
+                        select.id = `norm-${escapedColumn}-${index}`;
+                        select.setAttribute('onchange', `onNormalizationChange('${column.replace(/'/g, "\\'")}', ${index})`);
+                    }
+                    if (keepContainer) {
+                        keepContainer.id = `keep-original-${escapedColumn}-${index}`;
+                    }
+                    if (keepCheckbox) {
+                        keepCheckbox.id = `keep-original-checkbox-${escapedColumn}-${index}`;
+                        keepCheckbox.setAttribute('onchange', `onKeepOriginalChange('${column.replace(/'/g, "\\'")}', ${index})`);
+                    }
+                    if (layerLabel) {
+                        layerLabel.textContent = `Capa ${index + 1}:`;
+                    }
+                    if (removeBtn) {
+                        if (index > 0) {  // Show remove button for all layers except first
+                            removeBtn.style.display = 'inline-flex';
+                            removeBtn.setAttribute('onclick', `event.stopPropagation(); removeNormalizationLayer('${column.replace(/'/g, "\\'")}', ${index})`);
+                        } else {
+                            removeBtn.style.display = 'none';  // Hide remove button for first layer
+                        }
+                    }
+                });
+                
+                if (normalizationConfig[column].length === 0) {
+                    delete normalizationConfig[column];
+                    document.getElementById(`preview-btn-${escapedColumn}`).style.display = 'none';
+                    document.getElementById(`layer-controls-${escapedColumn}`).style.display = 'none';
+                }
+            }
+        }
+        
+        updateSelectedCount();
+    }
 
     async function previewNormalization(column) {
         const config = normalizationConfig[column];
         if (!config) return;
         
         try {
+            // Prepare the config - handle both single and array formats
+            let normConfig = {};
+            if (Array.isArray(config)) {
+                // For chained normalization, send as array
+                normConfig[column] = config.filter(layer => layer && layer.method);
+            } else {
+                // Legacy single normalization
+                normConfig[column] = config;
+            }
+            
             const response = await fetch(`/api/datasets/${datasetId}/normalization/preview/`, {
                 method: 'POST',
                 headers: {
@@ -1401,10 +1989,9 @@ def normalize(value, series=None):
                     'X-CSRFToken': getCookie('csrftoken')
                 },
                 body: JSON.stringify({
-                    normalization: {
-                        [column]: config.method
-                    },
-                    sample_size: 100
+                    normalization: normConfig,
+                    sample_size: 100,
+                    show_steps: true  // Request transformation steps
                 })
             });
             
@@ -1472,9 +2059,135 @@ def normalize(value, series=None):
         
         let bodyHtml = '';
         
+        // Show transformation steps if available
+        if (response.transformation_steps && response.transformation_steps[column]) {
+            const steps = response.transformation_steps[column];
+            bodyHtml += `
+                <div class="transformation-steps">
+                    <h4><i class="bi bi-layers"></i> Pasos de transformación</h4>
+                    <div class="steps-container">
+            `;
+            
+            steps.forEach((step, index) => {
+                // Get method display name
+                const methodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
+                                  ...datasetInfo.normalization_info[column].secondary_methods]
+                                  .find(m => m.value === step.method);
+                const methodLabel = methodInfo ? methodInfo.label : step.method;
+                
+                bodyHtml += `
+                    <div class="transformation-step">
+                        <div class="step-header">
+                            <div class="step-title">
+                                <i class="bi bi-stack"></i> Capa ${step.step}
+                            </div>
+                            <div class="step-method">
+                                ${methodLabel}
+                            </div>
+                        </div>
+                        
+                        <div class="preview-comparison">
+                            <div class="preview-column">
+                                <h6><i class="bi bi-box-arrow-in-right"></i> Entrada</h6>
+                                <div class="preview-values">
+                                    ${step.before.slice(0, 10).map(val => 
+                                        `<div class="preview-value">${val !== null && val !== undefined ? val : '<span style="color: #888;">null</span>'}</div>`
+                                    ).join('')}
+                                    ${step.before.length > 10 ? `<div style="text-align: center; color: #888; margin-top: 5px;">... y ${step.before.length - 10} más</div>` : ''}
+                                </div>
+                            </div>
+                            
+                            <div class="preview-arrow">
+                                <i class="bi bi-arrow-right"></i>
+                            </div>
+                            
+                            <div class="preview-column">
+                                <h6><i class="bi bi-box-arrow-right"></i> Salida</h6>
+                                <div class="preview-values">
+                                    ${step.after.slice(0, 10).map(val => 
+                                        `<div class="preview-value">${val !== null && val !== undefined ? 
+                                            (typeof val === 'number' ? val.toFixed(4) : val) : 
+                                            '<span style="color: #888;">null</span>'}</div>`
+                                    ).join('')}
+                                    ${step.after.length > 10 ? `<div style="text-align: center; color: #888; margin-top: 5px;">... y ${step.after.length - 10} más</div>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="step-info">
+                            ${step.keep_original ? 
+                                `<div style="color: rgba(0, 212, 255, 0.8);">
+                                    <i class="bi bi-check-circle"></i> Columna original mantenida
+                                </div>` : 
+                                `<div style="color: rgba(255, 200, 100, 0.8);">
+                                    <i class="bi bi-x-circle"></i> Columna original reemplazada
+                                </div>`
+                            }
+                            ${step.column_name && step.column_name !== column ? 
+                                `<div style="color: rgba(0, 255, 150, 0.8); margin-top: 5px;">
+                                    <i class="bi bi-plus-circle"></i> Nueva columna creada: <strong>${step.column_name}</strong>
+                                </div>` : ''
+                            }
+                            ${methodInfo && methodInfo.output_type ? 
+                                `<div style="color: rgba(240, 249, 255, 0.6); margin-top: 5px;">
+                                    <i class="bi bi-tag"></i> Tipo de salida: <span class="compatibility-indicator ${methodInfo.output_type}">
+                                        ${methodInfo.output_type === 'numeric' ? 'Numérico' : 'Texto'}
+                                    </span>
+                                </div>` : ''
+                            }
+                        </div>
+                    </div>
+                `;
+            });
+            
+            bodyHtml += `
+                    </div>
+                </div>
+                
+                <!-- Resumen de la cadena de transformación -->
+                <div style="margin-top: 20px; padding: 15px; background: rgba(0, 212, 255, 0.1); border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.3);">
+                    <h5 style="color: var(--primary-color); margin-bottom: 10px;">
+                        <i class="bi bi-diagram-3"></i> Resumen de la cadena
+                    </h5>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        ${steps.map((step, idx) => {
+                            const methodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
+                                              ...datasetInfo.normalization_info[column].secondary_methods]
+                                              .find(m => m.value === step.method);
+                            let inputType = 'unknown';
+                            if (idx === 0) {
+                                inputType = datasetInfo.normalization_info[column].type;
+                            } else if (steps[idx-1]) {
+                                const prevMethodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
+                                                       ...datasetInfo.normalization_info[column].secondary_methods]
+                                                       .find(m => m.value === steps[idx-1].method);
+                                inputType = prevMethodInfo ? prevMethodInfo.output_type : 'unknown';
+                            }
+                            const outputType = methodInfo ? methodInfo.output_type : 'unknown';
+                            
+                            return `
+                                ${idx > 0 ? '<i class="bi bi-arrow-right" style="color: rgba(0, 212, 255, 0.5);"></i>' : ''}
+                                <div style="background: rgba(0, 0, 0, 0.3); padding: 5px 15px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px;">
+                                    <span class="compatibility-indicator ${inputType}" style="font-size: 0.7rem;">
+                                        ${inputType === 'numeric' ? '123' : 'ABC'}
+                                    </span>
+                                    <span style="color: var(--light-color);">${methodInfo ? methodInfo.label : step.method}</span>
+                                    <span class="compatibility-indicator ${outputType}" style="font-size: 0.7rem;">
+                                        ${outputType === 'numeric' ? '123' : 'ABC'}
+                                    </span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+                
+                <hr style="border-color: rgba(0, 212, 255, 0.3); margin: 20px 0;">
+            `;
+        }
+        
         if (preview.new_columns) {
             // Multiple columns output (including one-hot encoding)
-            bodyHtml = `
+            bodyHtml += `
                 <div class="alert alert-info">
                     <i class="bi bi-info-circle"></i> Esta función generará ${preview.new_columns.length} nueva${preview.new_columns.length > 1 ? 's' : ''} columna${preview.new_columns.length > 1 ? 's' : ''}
                     ${preview.remove_original ? '<br><i class="bi bi-trash"></i> La columna original será eliminada' : '<br><i class="bi bi-arrow-right"></i> La columna original se mantendrá'}
@@ -1846,10 +2559,21 @@ def normalize(value, series=None):
         for (let i = 0; i < columns.length; i++) {
             const column = columns[i];
             const config = normalizationConfig[column];
-            const method = config.method || config; // Compatibilidad con formato anterior
             
-            updateProgress(currentStep, totalSteps, `Normalizando: ${column}`, `Método: ${method}`);
-            addProgressLog(`⚙️ Normalizando "${column}" con método ${method}...`);
+            let methodDescription = '';
+            if (Array.isArray(config)) {
+                // Chained normalization
+                const methods = config.filter(layer => layer && layer.method).map(layer => layer.method);
+                methodDescription = methods.length > 1 ? 
+                    `${methods.length} pasos: ${methods.join(' → ')}` : 
+                    methods[0] || 'Sin método';
+            } else {
+                // Single normalization
+                methodDescription = config.method || config;
+            }
+            
+            updateProgress(currentStep, totalSteps, `Normalizando: ${column}`, `Método: ${methodDescription}`);
+            addProgressLog(`⚙️ Normalizando "${column}" con ${methodDescription}...`);
             
             // Simular tiempo de procesamiento
             await delay(800 + Math.random() * 400);
@@ -1912,7 +2636,7 @@ def normalize(value, series=None):
                 const cancelBtn = document.getElementById('cancelNormalization');
                 cancelBtn.textContent = 'Cerrar';
                 cancelBtn.className = 'btn btn-secondary';
-                cancelBtn.onclick = hideProgressModal;
+                cancelBtn.onclick = function() { hideProgressModal(); };
                 
                 throw new Error('Error en función personalizada');
             } else {
@@ -2880,6 +3604,8 @@ def normalize(value, series=None):
     }
     
     // Modificar la función createVariableCard para incluir funciones personalizadas
+    // COMENTADO: Esta función duplicada sobrescribe la nueva implementación con capas
+    /*
     function createVariableCard(column, info) {
         console.log(`Creating card for ${column}:`, info);
         console.log(`Primary methods:`, info.primary_methods);
@@ -2949,6 +3675,7 @@ def normalize(value, series=None):
         
         return card;
     }
+    */
     
     function showPreviewError(errorMessage) {
         const modal = document.getElementById('preview-modal');
@@ -3163,5 +3890,6 @@ def normalize(value, series=None):
         }
     }
     
+    // Fin del script - todas las funciones cerradas correctamente
 </script>
 {% endblock %}
