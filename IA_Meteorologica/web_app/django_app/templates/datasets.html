@@ -902,6 +902,113 @@ let analysisCount = 1;
 let analysisCharts = {}; // Store multiple charts by analysis ID
 let analysisData = {}; // Store analysis data for report generation
 
+// Function to parse normalization info and create badge
+function getNormalizationBadge(normalizationMethod) {
+    try {
+        // Parse the normalization method string
+        const config = typeof normalizationMethod === 'string' ? 
+            normalizationMethod.replace(/'/g, '"').replace(/True/g, 'true').replace(/False/g, 'false') : 
+            normalizationMethod;
+        
+        let normInfo;
+        try {
+            normInfo = typeof config === 'string' ? JSON.parse(config) : config;
+        } catch (e) {
+            // If parsing fails, return a simple badge
+            return `<div class="text-center small mb-2" style="color: #9333ea;">
+                <i class="bi bi-gear"></i> Normalizado
+            </div>`;
+        }
+        
+        // Count columns with keep_original = true
+        let columnsKept = 0;
+        let totalColumns = 0;
+        
+        for (const [column, layers] of Object.entries(normInfo)) {
+            totalColumns++;
+            if (Array.isArray(layers)) {
+                // Check if any layer has keep_original = true
+                const hasKeptOriginal = layers.some(layer => layer && layer.keep_original === true);
+                if (hasKeptOriginal) {
+                    columnsKept++;
+                }
+            } else if (layers && layers.keep_original === true) {
+                columnsKept++;
+            }
+        }
+        
+        // Create badge based on columns kept
+        const badgeColor = columnsKept > 0 ? '#00d4ff' : '#9333ea';
+        const badgeIcon = columnsKept > 0 ? 'bi-shield-check' : 'bi-gear';
+        const badgeText = columnsKept > 0 ? 
+            `${columnsKept} columna${columnsKept !== 1 ? 's' : ''} original${columnsKept !== 1 ? 'es' : ''} conservada${columnsKept !== 1 ? 's' : ''}` : 
+            'Sin columnas originales';
+        
+        return `<div class="text-center small mb-2" style="color: ${badgeColor};">
+            <i class="bi ${badgeIcon}"></i> ${badgeText}
+        </div>`;
+        
+    } catch (error) {
+        console.error('Error parsing normalization method:', error);
+        return '';
+    }
+}
+
+// Function to get detailed normalization info for modal
+function getDetailedNormalizationInfo(normalizationMethod) {
+    try {
+        // Parse the normalization method string
+        const config = typeof normalizationMethod === 'string' ? 
+            normalizationMethod.replace(/'/g, '"').replace(/True/g, 'true').replace(/False/g, 'false') : 
+            normalizationMethod;
+        
+        let normInfo;
+        try {
+            normInfo = typeof config === 'string' ? JSON.parse(config) : config;
+        } catch (e) {
+            return '<p class="mb-0">Información de normalización no disponible</p>';
+        }
+        
+        let html = '<div class="mt-2">';
+        
+        for (const [column, layers] of Object.entries(normInfo)) {
+            let keepOriginal = false;
+            let methods = [];
+            
+            if (Array.isArray(layers)) {
+                // Multi-layer normalization
+                methods = layers.map(layer => layer.method).filter(m => m);
+                keepOriginal = layers.some(layer => layer && layer.keep_original === true);
+            } else if (typeof layers === 'object' && layers !== null) {
+                // Single layer object
+                methods = [layers.method].filter(m => m);
+                keepOriginal = layers.keep_original === true;
+            } else if (typeof layers === 'string') {
+                // Legacy format
+                methods = [layers];
+            }
+            
+            html += `
+                <div class="mb-2 p-2" style="background: rgba(0, 212, 255, 0.05); border-radius: 5px;">
+                    <strong>${column}:</strong>
+                    <span class="ms-2">${methods.join(' → ') || 'Sin método'}</span>
+                    ${keepOriginal ? 
+                        '<span class="badge bg-info ms-2"><i class="bi bi-shield-check"></i> Original conservada</span>' : 
+                        '<span class="badge bg-secondary ms-2"><i class="bi bi-x-circle"></i> Original eliminada</span>'
+                    }
+                </div>
+            `;
+        }
+        
+        html += '</div>';
+        return html;
+        
+    } catch (error) {
+        console.error('Error parsing normalization method:', error);
+        return '<p class="mb-0">Error al procesar información de normalización</p>';
+    }
+}
+
 // Función para obtener el CSRF token
 function getCookie(name) {
     let cookieValue = null;
@@ -1391,6 +1498,7 @@ function createDatasetCard(dataset, type = 'original') {
                 <i class="bi bi-arrow-return-right"></i> Desde: <strong>${dataset.parent_dataset_name}</strong>
             </p>
         ` : '<div style="height: 20px;"></div>'}
+        ${dataset.is_normalized && dataset.normalization_method ? getNormalizationBadge(dataset.normalization_method) : ''}
         <p class="text-muted small text-center mb-2" style="font-size: 0.85rem; opacity: 0.8; line-height: 1.3;">
             ${dataset.short_description || dataset.display_description || 'Dataset météorologique'}
         </p>
@@ -1686,6 +1794,12 @@ function displayDatasetDetails(dataset, data) {
                             <div class="mb-2">
                                 <strong class="text-muted">Dataset padre directo:</strong>
                                 <p class="mb-0">${dataset.parent_dataset_name}</p>
+                            </div>
+                        ` : ''}
+                        ${dataset.is_normalized && dataset.normalization_method ? `
+                            <div class="mb-2">
+                                <strong class="text-muted">Información de normalización:</strong>
+                                ${getDetailedNormalizationInfo(dataset.normalization_method)}
                             </div>
                         ` : ''}
                         ${dataset.is_normalized && dataset.genealogy && dataset.genealogy.length > 0 ? `

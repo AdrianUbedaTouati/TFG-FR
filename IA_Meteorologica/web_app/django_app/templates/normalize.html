@@ -1057,6 +1057,50 @@
         background: rgba(255, 107, 107, 0.1);
         border-color: #ff6b6b;
     }
+    
+    /* Estilos para el checkbox global de columna */
+    .keep-original-container {
+        animation: fadeIn 0.3s ease-in;
+    }
+    
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    /* Hacer el checkbox global más prominente */
+    .variable-card .keep-original-container[id^="keep-original-"]:not([id*="-0"]):not([id*="-1"]):not([id*="-2"]):not([id*="-3"]):not([id*="-4"]):not([id*="-5"]):not([id*="-6"]):not([id*="-7"]):not([id*="-8"]):not([id*="-9"]) {
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(147, 51, 234, 0.05) 100%) !important;
+        border: 2px solid rgba(0, 212, 255, 0.4) !important;
+        box-shadow: 0 2px 10px rgba(0, 212, 255, 0.2);
+        margin-bottom: 15px;
+    }
+    
+    .variable-card .keep-original-container[id^="keep-original-"]:not([id*="-0"]):not([id*="-1"]):not([id*="-2"]):not([id*="-3"]):not([id*="-4"]):not([id*="-5"]):not([id*="-6"]):not([id*="-7"]):not([id*="-8"]):not([id*="-9"]):hover {
+        border-color: rgba(0, 212, 255, 0.6) !important;
+        box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+    }
+    
+    .keep-original-label {
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .keep-original-label:hover {
+        color: var(--primary-color) !important;
+    }
+    
+    .keep-original-checkbox {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
 </style>
 {% endblock %}
 
@@ -2268,13 +2312,13 @@ def normalize(value, series=None):
                 </button>
             </div>
             
-            <!-- Checkbox para mantener columna original (fuera de las capas) -->
-            <div class="keep-original-container" id="keep-original-${escapedColumn}" style="display: none; margin-top: 10px; padding: 10px; background: rgba(0, 212, 255, 0.05); border-radius: 8px;">
+            <!-- Checkbox global para mantener columna original en todas las capas -->
+            <div class="keep-original-container" id="keep-original-${escapedColumn}" style="display: none; margin-top: 10px; padding: 10px; background: rgba(0, 212, 255, 0.05); border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.2);">
                 <label class="keep-original-label" style="display: flex; align-items: center; gap: 10px;">
                     <input type="checkbox" class="keep-original-checkbox" id="keep-original-checkbox-${escapedColumn}" 
                            onchange="onKeepOriginalChange('${column.replace(/'/g, "\\'")}')">
-                    <span>Mantener columna original</span>
-                    <i class="bi bi-info-circle" title="Si se activa, se creará una nueva columna con los valores normalizados y se conservará la columna original"></i>
+                    <span style="font-weight: 600;">Mantener columna original (aplicar a todas las capas)</span>
+                    <i class="bi bi-info-circle" title="Si se activa, mantendrá la columna original en todas las capas de normalización"></i>
                 </label>
             </div>
             
@@ -2346,6 +2390,12 @@ def normalize(value, series=None):
             previewBtn.style.display = 'block';
             layerControls.style.display = 'block';
             
+            // Mostrar el checkbox global de la columna
+            const globalKeepOriginalContainer = document.getElementById(`keep-original-${escapedColumn}`);
+            if (globalKeepOriginalContainer) {
+                globalKeepOriginalContainer.style.display = 'block';
+            }
+            
             // Mostrar checkbox solo para funciones por defecto
             if (defaultFunctions.includes(select.value)) {
                 keepOriginalContainer.style.display = 'block';
@@ -2385,6 +2435,12 @@ def normalize(value, series=None):
                 }
             }
             keepOriginalContainer.style.display = 'none';
+            
+            // Ocultar checkbox global si no hay normalizaciones
+            const globalKeepOriginalContainer = document.getElementById(`keep-original-${escapedColumn}`);
+            if (globalKeepOriginalContainer) {
+                globalKeepOriginalContainer.style.display = 'none';
+            }
             
             // Hide output type indicator when no method is selected
             const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex}`);
@@ -2449,9 +2505,15 @@ def normalize(value, series=None):
         
         // Update all layers in the config to use the same keep_original value
         if (Array.isArray(normalizationConfig[column])) {
-            normalizationConfig[column].forEach(layer => {
+            normalizationConfig[column].forEach((layer, index) => {
                 if (layer) {
                     layer.keep_original = checkbox.checked;
+                    
+                    // Also update the per-layer checkbox if it exists
+                    const layerCheckbox = document.getElementById(`keep-original-checkbox-${escapedColumn}-${index}`);
+                    if (layerCheckbox) {
+                        layerCheckbox.checked = checkbox.checked;
+                    }
                 }
             });
         }
@@ -2465,6 +2527,18 @@ def normalize(value, series=None):
         if (Array.isArray(normalizationConfig[column]) && normalizationConfig[column][layerIndex]) {
             normalizationConfig[column][layerIndex].keep_original = checkbox.checked;
             console.log(`Updated keep_original for layer ${layerIndex + 1} of column '${column}' to:`, checkbox.checked);
+            
+            // Check if all layers have the same value to sync with global checkbox
+            const allLayersHaveSameValue = normalizationConfig[column].every(layer => 
+                layer && layer.keep_original === checkbox.checked
+            );
+            
+            if (allLayersHaveSameValue) {
+                const globalCheckbox = document.getElementById(`keep-original-checkbox-${escapedColumn}`);
+                if (globalCheckbox) {
+                    globalCheckbox.checked = checkbox.checked;
+                }
+            }
         }
     }
     
