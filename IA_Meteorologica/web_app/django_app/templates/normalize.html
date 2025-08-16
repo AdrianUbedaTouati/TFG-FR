@@ -2251,6 +2251,15 @@ def normalize(value, series=None):
                             <i class="bi bi-eye"></i>
                         </button>
                     </div>
+                    <div class="keep-original-container" id="keep-original-${escapedColumn}-0" style="display: none; margin-top: 10px;">
+                        <label class="form-check-label" style="display: flex; align-items: center; gap: 8px; color: rgba(240, 249, 255, 0.8);">
+                            <input type="checkbox" class="form-check-input keep-original-checkbox" 
+                                   id="keep-original-checkbox-${escapedColumn}-0" 
+                                   onchange="onKeepOriginalChangeForLayer('${column.replace(/'/g, "\\'")}', 0)"
+                                   style="margin: 0;">
+                            <span style="font-size: 0.9rem;">Mantener columna original</span>
+                        </label>
+                    </div>
                 </div>
             </div>
             <div class="layer-controls" style="display: none;" id="layer-controls-${escapedColumn}" data-column="${column}">
@@ -2283,7 +2292,7 @@ def normalize(value, series=None):
         const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
         const select = document.getElementById(`norm-${escapedColumn}-${layerIndex}`);
         const previewBtn = document.getElementById(`preview-btn-${escapedColumn}`);
-        const keepOriginalContainer = document.getElementById(`keep-original-${escapedColumn}`);
+        const keepOriginalContainer = document.getElementById(`keep-original-${escapedColumn}-${layerIndex}`);  // Per-layer checkbox
         const layerControls = document.getElementById(`layer-controls-${escapedColumn}`);
         
         // Mostrar/ocultar botón de preview de la capa
@@ -2311,11 +2320,26 @@ def normalize(value, series=None):
                 normalizationConfig[column] = [];
             }
             
-            // Update the specific layer, preserving input_column if it exists
+            // Update the specific layer, preserving input_column and keep_original if they exist
             const existingConfig = normalizationConfig[column][layerIndex] || {};
+            
+            // Get the current checkbox state for this layer
+            const checkbox = document.getElementById(`keep-original-checkbox-${escapedColumn}-${layerIndex}`);
+            let keepOriginalValue = false;
+            
+            // If checkbox exists, use its value; otherwise use existing value or default
+            if (checkbox) {
+                keepOriginalValue = checkbox.checked;
+            } else if (existingConfig.hasOwnProperty('keep_original')) {
+                keepOriginalValue = existingConfig.keep_original;
+            } else {
+                // Default: keep original for all but last layer
+                keepOriginalValue = layerIndex < normalizationConfig[column].length - 1;
+            }
+            
             normalizationConfig[column][layerIndex] = {
                 method: select.value,
-                keep_original: layerIndex < normalizationConfig[column].length - 1,  // Keep original for all but last layer
+                keep_original: keepOriginalValue,
                 ...(existingConfig.input_column && { input_column: existingConfig.input_column })  // Preserve input_column if it exists
             };
             
@@ -2325,6 +2349,12 @@ def normalize(value, series=None):
             // Mostrar checkbox solo para funciones por defecto
             if (defaultFunctions.includes(select.value)) {
                 keepOriginalContainer.style.display = 'block';
+                
+                // Initialize checkbox state based on config
+                const checkbox = document.getElementById(`keep-original-checkbox-${escapedColumn}-${layerIndex}`);
+                if (checkbox && normalizationConfig[column][layerIndex]) {
+                    checkbox.checked = normalizationConfig[column][layerIndex].keep_original;
+                }
             } else {
                 keepOriginalContainer.style.display = 'none';
                 // Para funciones personalizadas, siempre mantener original
@@ -2424,6 +2454,17 @@ def normalize(value, series=None):
                     layer.keep_original = checkbox.checked;
                 }
             });
+        }
+    }
+    
+    function onKeepOriginalChangeForLayer(column, layerIndex) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const checkbox = document.getElementById(`keep-original-checkbox-${escapedColumn}-${layerIndex}`);
+        
+        // Update only the specific layer's keep_original value
+        if (Array.isArray(normalizationConfig[column]) && normalizationConfig[column][layerIndex]) {
+            normalizationConfig[column][layerIndex].keep_original = checkbox.checked;
+            console.log(`Updated keep_original for layer ${layerIndex + 1} of column '${column}' to:`, checkbox.checked);
         }
     }
     
@@ -2755,6 +2796,15 @@ def normalize(value, series=None):
                     <i class="bi bi-eye"></i>
                 </button>
             </div>
+            <div class="keep-original-container" id="keep-original-${escapedColumn}-${newLayerIndex}" style="display: none; margin-top: 10px;">
+                <label class="form-check-label" style="display: flex; align-items: center; gap: 8px; color: rgba(240, 249, 255, 0.8);">
+                    <input type="checkbox" class="form-check-input keep-original-checkbox" 
+                           id="keep-original-checkbox-${escapedColumn}-${newLayerIndex}" 
+                           onchange="onKeepOriginalChangeForLayer('${column.replace(/'/g, "\\'")}', ${newLayerIndex})"
+                           style="margin: 0;">
+                    <span style="font-size: 0.9rem;">Mantener columna original</span>
+                </label>
+            </div>
         `;
         
         // Store the input type in the layer
@@ -2823,7 +2873,7 @@ def normalize(value, series=None):
                     }
                     if (keepCheckbox) {
                         keepCheckbox.id = `keep-original-checkbox-${escapedColumn}-${index}`;
-                        keepCheckbox.setAttribute('onchange', `onKeepOriginalChange('${column.replace(/'/g, "\\'")}', ${index})`);
+                        keepCheckbox.setAttribute('onchange', `onKeepOriginalChangeForLayer('${column.replace(/'/g, "\\'")}', ${index})`);
                     }
                     if (layerLabel) {
                         layerLabel.textContent = `Capa ${index + 1}:`;
