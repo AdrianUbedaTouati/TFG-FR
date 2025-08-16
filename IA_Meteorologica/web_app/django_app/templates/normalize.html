@@ -1644,6 +1644,18 @@ def normalize(value, series=None):
                         outputIndicator.style.display = 'inline-block';
                         outputIndicator.style.background = 'rgba(147, 51, 234, 0.2)';
                         outputIndicator.style.borderColor = 'rgba(147, 51, 234, 0.5)';
+                        
+                        // After setting up the indicator, try to get real column names
+                        if (func.new_columns && func.new_columns.length > 0) {
+                            // Asynchronously fetch real column names
+                            getRealColumnNames(column, layerIndex).then(realNames => {
+                                if (realNames && realNames.length > 0) {
+                                    outputIndicator.dataset.realColumns = JSON.stringify(realNames);
+                                    // Update any existing next layer input selector
+                                    updateNextLayerInputSelector(column, layerIndex);
+                                }
+                            });
+                        }
                     }
                 })
                 .catch(error => {
@@ -1678,6 +1690,191 @@ def normalize(value, series=None):
         } else {
             outputIndicator.style.display = 'none';
         }
+    }
+    
+    async function getRealColumnNames(column, layerIndex) {
+        // Build config up to this layer
+        const previewConfig = {};
+        if (!normalizationConfig[column] || !Array.isArray(normalizationConfig[column])) {
+            return null;
+        }
+        
+        previewConfig[column] = normalizationConfig[column].slice(0, layerIndex + 1).filter(layer => layer && layer.method);
+        
+        try {
+            const response = await fetch(`/api/datasets/${datasetId}/normalization/preview/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    normalization: previewConfig,
+                    sample_size: 5  // Small sample just to get column names
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Extract real column names from the preview
+                if (data.preview && data.preview[column]) {
+                    const colData = data.preview[column];
+                    
+                    if (colData.new_columns) {
+                        return colData.new_columns;
+                    } else if (colData.column_types_info) {
+                        return colData.column_types_info.map(info => info.name);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching real column names:', error);
+        }
+        
+        return null;
+    }
+    
+    async function updateLayerInputTypeFromSelectedColumn(column, layerIndex) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const layer = document.querySelector(`#layers-${escapedColumn} [data-layer-index="${layerIndex}"]`);
+        if (!layer) return;
+        
+        const inputIndicator = layer.querySelector('.compatibility-indicator');
+        if (!inputIndicator) return;
+        
+        // Get the selected input column
+        const selectedColumn = normalizationConfig[column][layerIndex]?.input_column;
+        if (!selectedColumn) return;
+        
+        // Build config up to previous layer to get column types
+        const previewConfig = {};
+        previewConfig[column] = normalizationConfig[column].slice(0, layerIndex).filter(layer => layer && layer.method);
+        
+        try {
+            const response = await fetch(`/api/datasets/${datasetId}/normalization/preview/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    normalization: previewConfig,
+                    sample_size: 5
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Find the type info for the selected column
+                if (data.preview && data.preview[column] && data.preview[column].column_types_info) {
+                    const columnInfo = data.preview[column].column_types_info.find(info => info.name === selectedColumn);
+                    
+                    if (columnInfo) {
+                        // Update the input indicator with the correct type
+                        let typeClass = 'text';
+                        let typeLabel = 'Texto';
+                        
+                        if (columnInfo.type === 'numeric' || columnInfo.type === 'integer' || columnInfo.type === 'float') {
+                            typeClass = 'numeric';
+                            typeLabel = 'Numérico';
+                        }
+                        
+                        inputIndicator.className = `compatibility-indicator ${typeClass}`;
+                        inputIndicator.textContent = `Entrada: ${typeLabel} (${columnInfo.dtype})`;
+                        
+                        // Store the type for method filtering
+                        layer.dataset.inputType = typeClass;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error updating input type:', error);
+        }
+    }
+    
+    function updateLayerMethodsCompatibility(column, layerIndex) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const layer = document.querySelector(`#layers-${escapedColumn} [data-layer-index="${layerIndex}"]`);
+        if (!layer) return;
+        
+        const select = layer.querySelector('.normalization-select');
+        if (!select) return;
+        
+        const inputType = layer.dataset.inputType || 'numeric';
+        const info = datasetInfo.normalization_info[column];
+        
+        // Filter methods based on input type
+        let compatibleMethods = [...info.primary_methods, ...info.secondary_methods];
+        
+        compatibleMethods = compatibleMethods.filter(method => {
+            if (inputType === 'numeric' && ['MIN_MAX', 'Z_SCORE', 'LSTM_TCN', 'CNN', 'TRANSFORMER', 'TREE'].includes(method.value)) {
+                return true;
+            }
+            if (inputType === 'text' && ['LOWER', 'STRIP', 'ONE_HOT'].includes(method.value)) {
+                return true;
+            }
+            if (method.value.startsWith('CUSTOM_')) {
+                return true;
+            }
+            return false;
+        });
+        
+        // Separate into primary and secondary
+        const compatiblePrimary = compatibleMethods.filter(m => info.primary_methods.some(pm => pm.value === m.value));
+        const compatibleSecondary = compatibleMethods.filter(m => info.secondary_methods.some(sm => sm.value === m.value));
+        
+        const currentValue = select.value;
+        
+        // Update select options
+        select.innerHTML = `
+            <option value="">Sin normalizar</option>
+            ${compatiblePrimary.length > 0 ? `
+                <optgroup label="Métodos compatibles">
+                    ${compatiblePrimary.map(method => 
+                        `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                    ).join('')}
+                </optgroup>
+            ` : ''}
+            ${compatibleSecondary.length > 0 ? `
+                <optgroup label="Otros métodos compatibles">
+                    ${compatibleSecondary.map(method => 
+                        `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                    ).join('')}
+                </optgroup>
+            ` : ''}
+            ${compatibleMethods.length === 0 ? `
+                <option value="" disabled>No hay métodos compatibles con el tipo de entrada</option>
+            ` : ''}
+        `;
+        
+        // Restore value if compatible
+        if (currentValue && compatibleMethods.some(m => m.value === currentValue)) {
+            select.value = currentValue;
+        }
+    }
+    
+    function onInputColumnChange(column, layerIndex) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const inputColSelect = document.getElementById(`input-col-${escapedColumn}-${layerIndex}`);
+        
+        if (!inputColSelect || !Array.isArray(normalizationConfig[column])) {
+            return;
+        }
+        
+        // Store the selected input column in the current layer's config
+        if (normalizationConfig[column][layerIndex]) {
+            normalizationConfig[column][layerIndex].input_column = inputColSelect.value;
+        }
+        
+        console.log('Updated config with input column:', normalizationConfig[column]);
+        
+        // Update the input type indicator for this layer based on the selected column
+        updateLayerInputTypeFromSelectedColumn(column, layerIndex);
+        
+        // Update compatibility of this layer's methods
+        updateLayerMethodsCompatibility(column, layerIndex);
     }
     
     function onConversionChange(column, layerIndex) {
@@ -1759,6 +1956,132 @@ def normalize(value, series=None):
             }
         } else {
             outputIndicator.style.display = 'none';
+        }
+    }
+    
+    async function updateNextLayerInputSelector(column, layerIndex) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const method = normalizationConfig[column][layerIndex]?.method;
+        
+        if (!method || !method.startsWith('CUSTOM_')) return;
+        
+        // Check if there's a next layer
+        const nextLayerIndex = layerIndex + 1;
+        const layersContainer = document.getElementById(`layers-${escapedColumn}`);
+        if (!layersContainer) return;
+        
+        const nextLayer = layersContainer.querySelector(`[data-layer-index="${nextLayerIndex}"]`);
+        if (!nextLayer) return;
+        
+        // Get the output columns from this layer
+        const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex}`);
+        if (!outputIndicator || !outputIndicator.dataset.expectedColumns) return;
+        
+        try {
+            // First try to get real column names via preview
+            let realColumnNames = null;
+            
+            // Build config up to this layer
+            const previewConfig = {};
+            previewConfig[column] = normalizationConfig[column].slice(0, layerIndex + 1).filter(layer => layer && layer.method);
+            
+            try {
+                const response = await fetch(`/api/datasets/${datasetId}/normalization/preview/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        normalization: previewConfig,
+                        sample_size: 5  // Just need a small sample to get column names
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Check if we have column info
+                    if (data.preview && data.preview[column]) {
+                        const colData = data.preview[column];
+                        
+                        if (colData.new_columns) {
+                            realColumnNames = colData.new_columns;
+                        } else if (colData.column_types_info) {
+                            realColumnNames = colData.column_types_info.map(info => info.name);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.log('Could not fetch real column names, using expected ones');
+            }
+            
+            // Use real names if available, otherwise fall back to expected
+            const outputColumns = realColumnNames || JSON.parse(outputIndicator.dataset.expectedColumns);
+            
+            // Store real column names for future use
+            if (realColumnNames) {
+                outputIndicator.dataset.realColumns = JSON.stringify(realColumnNames);
+            }
+            
+            // Check if we need to add/update the input selector
+            let inputSelector = nextLayer.querySelector('.input-column-selector');
+            
+            if (outputColumns && outputColumns.length > 1) {
+                if (!inputSelector) {
+                    // Create the input selector
+                    const selectorHtml = `
+                        <div class="input-column-selector" style="margin: 10px 0; padding: 10px; background: rgba(0, 212, 255, 0.05); border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 8px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <i class="bi bi-columns-gap" style="color: var(--primary-color);"></i>
+                                <span style="color: rgba(240, 249, 255, 0.8); font-weight: 500;">Columna de entrada:</span>
+                                <select class="input-column-select" id="input-col-${escapedColumn}-${nextLayerIndex}" 
+                                        onchange="onInputColumnChange('${column.replace(/'/g, "\\'")}', ${nextLayerIndex})"
+                                        style="flex: 1; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color); padding: 5px 10px; border-radius: 5px;">
+                                    ${outputColumns.map((col, idx) => 
+                                        `<option value="${col}" ${idx === 0 ? 'selected' : ''}>${col}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            <div style="margin-top: 5px; font-size: 0.85rem; color: rgba(240, 249, 255, 0.6);">
+                                <i class="bi bi-info-circle"></i> La capa anterior genera múltiples columnas. Selecciona sobre cuál aplicar la normalización.
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Insert at the beginning of the layer
+                    nextLayer.insertAdjacentHTML('afterbegin', selectorHtml);
+                    
+                    // Update config
+                    if (!normalizationConfig[column][nextLayerIndex]) {
+                        normalizationConfig[column][nextLayerIndex] = {};
+                    }
+                    normalizationConfig[column][nextLayerIndex].input_column = outputColumns[0];
+                } else {
+                    // Update existing selector
+                    const select = inputSelector.querySelector('select');
+                    if (select) {
+                        const currentValue = select.value;
+                        select.innerHTML = outputColumns.map((col, idx) => 
+                            `<option value="${col}" ${col === currentValue ? 'selected' : ''}>${col}</option>`
+                        ).join('');
+                        
+                        // Update config if value changed
+                        if (!outputColumns.includes(currentValue) && outputColumns.length > 0) {
+                            normalizationConfig[column][nextLayerIndex].input_column = outputColumns[0];
+                            select.value = outputColumns[0];
+                        }
+                    }
+                }
+            } else if (inputSelector) {
+                // Remove the selector if no longer needed
+                inputSelector.remove();
+                if (normalizationConfig[column][nextLayerIndex]) {
+                    delete normalizationConfig[column][nextLayerIndex].input_column;
+                }
+            }
+        } catch (e) {
+            console.error('Error updating input selector:', e);
         }
     }
 
@@ -1950,6 +2273,9 @@ def normalize(value, series=None):
             if (layerIndex === 0 && normalizationConfig[column][0].conversion) {
                 updateLayerOutputTypeIndicatorWithConversion(column, 0, select.value, normalizationConfig[column][0].conversion);
             }
+            
+            // Update input column selector for next layer if it exists
+            updateNextLayerInputSelector(column, layerIndex);
             
             // Update compatibility of subsequent layers
             updateSubsequentLayersCompatibility(column, layerIndex);
@@ -2223,6 +2549,9 @@ def normalize(value, series=None):
         // Get previous layer output type for display
         let previousOutputType = null;
         let previousOutputDType = null;
+        let previousOutputColumns = null;
+        let inputColumnSelectorHtml = '';
+        
         if (newLayerIndex > 0 && Array.isArray(normalizationConfig[column]) && normalizationConfig[column][newLayerIndex - 1]) {
             const prevMethod = normalizationConfig[column][newLayerIndex - 1].method;
             const prevMethodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === prevMethod);
@@ -2230,6 +2559,63 @@ def normalize(value, series=None):
                 previousOutputType = prevMethodInfo.output_type;
                 // Get the specific data type using getOutputDataType function
                 previousOutputDType = getOutputDataType(column, newLayerIndex - 1);
+            }
+            
+            // Check if previous method generates multiple columns
+            if (prevMethod.startsWith('CUSTOM_')) {
+                // Get info about the custom function
+                const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${newLayerIndex - 1}`);
+                if (outputIndicator) {
+                    try {
+                        // First try to use real columns if available
+                        if (outputIndicator.dataset.realColumns) {
+                            previousOutputColumns = JSON.parse(outputIndicator.dataset.realColumns);
+                        } else if (outputIndicator.dataset.expectedColumns) {
+                            previousOutputColumns = JSON.parse(outputIndicator.dataset.expectedColumns);
+                        }
+                        
+                        console.log('Previous layer outputs columns:', previousOutputColumns);
+                        
+                        // Create column selector for input
+                        if (previousOutputColumns && previousOutputColumns.length > 1) {
+                            inputColumnSelectorHtml = `
+                                <div class="input-column-selector" style="margin: 10px 0; padding: 10px; background: rgba(0, 212, 255, 0.05); border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <i class="bi bi-columns-gap" style="color: var(--primary-color);"></i>
+                                        <span style="color: rgba(240, 249, 255, 0.8); font-weight: 500;">Columna de entrada:</span>
+                                        <select class="input-column-select" id="input-col-${escapedColumn}-${newLayerIndex}" 
+                                                onchange="onInputColumnChange('${column.replace(/'/g, "\\'")}', ${newLayerIndex})"
+                                                style="flex: 1; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color); padding: 5px 10px; border-radius: 5px;">
+                                            ${previousOutputColumns.map((col, idx) => 
+                                                `<option value="${col}" ${idx === 0 ? 'selected' : ''}>${col}</option>`
+                                            ).join('')}
+                                        </select>
+                                    </div>
+                                    <div style="margin-top: 5px; font-size: 0.85rem; color: rgba(240, 249, 255, 0.6);">
+                                        <i class="bi bi-info-circle"></i> La capa anterior genera múltiples columnas. Selecciona sobre cuál aplicar la normalización.
+                                    </div>
+                                </div>
+                            `;
+                            
+                            // Initialize the config with the selected input column
+                            if (!normalizationConfig[column][newLayerIndex]) {
+                                normalizationConfig[column][newLayerIndex] = {};
+                            }
+                            normalizationConfig[column][newLayerIndex].input_column = previousOutputColumns[0];
+                            
+                            // Try to get real column names if not already available
+                            if (!outputIndicator.dataset.realColumns) {
+                                // Trigger async update to get real names
+                                setTimeout(() => updateNextLayerInputSelector(column, newLayerIndex - 1), 100);
+                            }
+                            
+                            // Also trigger update of input type based on selected column
+                            setTimeout(() => updateLayerInputTypeFromSelectedColumn(column, newLayerIndex), 200);
+                        }
+                    } catch (e) {
+                        console.error('Error parsing columns:', e);
+                    }
+                }
             }
         }
         
@@ -2274,7 +2660,7 @@ def normalize(value, series=None):
             }
         }
         
-        newLayer.innerHTML = conversionHtml + `
+        newLayer.innerHTML = inputColumnSelectorHtml + conversionHtml + `
             <div style="display: flex; align-items: center; gap: 10px;">
                 <span style="color: var(--primary-color); font-weight: bold;">Capa ${newLayerIndex + 1}:</span>
                 ${previousOutputType ? `

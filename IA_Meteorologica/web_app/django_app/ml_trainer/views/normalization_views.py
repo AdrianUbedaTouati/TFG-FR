@@ -344,6 +344,11 @@ class DatasetNormalizationView(APIView):
                     method = step.get('method', '')
                     keep_original = step.get('keep_original', False)
                     
+                    # Check if this step has a specific input column (for multiple outputs)
+                    if 'input_column' in step and step['input_column'] in normalized_df.columns:
+                        current_column = step['input_column']
+                        print(f"Step {step_index + 1}: Using input column '{current_column}'")
+                    
                     # Get conversion from PREVIOUS step (it's stored in the previous step)
                     # Conversion happens AFTER the previous transformation, not before this one
                     if step_index > 0 and 'conversion' in method_config[step_index - 1]:
@@ -1086,6 +1091,11 @@ class DatasetNormalizationPreviewView(APIView):
                         for step_index, step in enumerate(method_config):
                             method = step.get('method', '')
                             keep_original = step.get('keep_original', False)
+                            
+                            # Check if this step has a specific input column (for multiple outputs)
+                            if 'input_column' in step and step['input_column'] in current_df.columns:
+                                current_column = step['input_column']
+                                print(f"Preview - Step {step_index + 1}: Using input column '{current_column}'")
                             
                             # Get sample values before transformation
                             before_values = current_df[current_column].tolist() if current_column in current_df.columns else []
