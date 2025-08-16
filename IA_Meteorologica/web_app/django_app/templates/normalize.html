@@ -1616,11 +1616,22 @@ def normalize(value, series=None):
                         let outputText = '';
                         
                         if (func.new_columns && func.new_columns.length > 0) {
+                            // Store the function info for later use
+                            outputIndicator.dataset.customFunctionId = method.replace('CUSTOM_', '');
+                            outputIndicator.dataset.expectedColumns = JSON.stringify(func.new_columns);
+                            
                             outputText = `
                                 <i class="bi bi-arrow-right" style="opacity: 0.7;"></i>
                                 Salida: ${func.new_columns.length} columna${func.new_columns.length > 1 ? 's' : ''}
-                                (${func.function_type === 'numeric' ? 'Numérico' : 'Texto'})
-                                <i class="bi bi-layers" title="${func.new_columns.join(', ')}"></i>
+                                <button class="btn btn-sm btn-link p-0 ms-1" style="color: var(--primary-color);" 
+                                        onclick="showColumnDetails('${column.replace(/'/g, "\\'")}', ${layerIndex})"
+                                        title="Ver detalles de columnas">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                                <br>
+                                <span style="font-size: 0.75rem; opacity: 0.8;">
+                                    ${func.new_columns.slice(0, 2).join(', ')}${func.new_columns.length > 2 ? '...' : ''}
+                                </span>
                             `;
                         } else {
                             outputText = `
@@ -2079,6 +2090,9 @@ def normalize(value, series=None):
             return;
         }
         
+        // Mostrar indicador de carga
+        const loadingModal = showLoadingModal(`Generando previsualización de capa ${layerIndex + 1}...`);
+        
         try {
             // Prepare config up to this layer
             let normConfig = {};
@@ -2126,6 +2140,11 @@ def normalize(value, series=None):
         } catch (error) {
             console.error('Error al previsualizar capa:', error);
             showNotification('Error al generar previsualización de la capa', 'error');
+        } finally {
+            // Cerrar el modal de carga
+            if (loadingModal) {
+                loadingModal.hide();
+            }
         }
     }
     
@@ -2396,6 +2415,9 @@ def normalize(value, series=None):
         const config = normalizationConfig[column];
         if (!config) return;
         
+        // Mostrar indicador de carga
+        const loadingModal = showLoadingModal('Generando previsualización...');
+        
         try {
             // Prepare the config - handle both single and array formats
             let normConfig = {};
@@ -2461,6 +2483,11 @@ def normalize(value, series=None):
             // Para otros errores, solo registrar en consola sin mostrar notificación
             else {
                 console.error('Error procesando respuesta:', error);
+            }
+        } finally {
+            // Cerrar el modal de carga
+            if (loadingModal) {
+                loadingModal.hide();
             }
         }
     }
@@ -2869,19 +2896,51 @@ ${response.details}
                 `;
             }
             
+            // Check if all values are None/null (indicating complete failure)
+            let hasAnyValidData = false;
+            for (const newCol of preview.new_columns) {
+                if (preview[newCol] && preview[newCol].sample) {
+                    const validValues = preview[newCol].sample.filter(val => val !== null && val !== undefined);
+                    if (validValues.length > 0) {
+                        hasAnyValidData = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!hasAnyValidData && preview.custom_function_errors) {
+                bodyHtml += `
+                    <div class="alert alert-warning" style="background: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.5); color: var(--light-color); margin-top: 20px;">
+                        <h5><i class="bi bi-exclamation-circle"></i> Operación fallida completamente</h5>
+                        <p>La función personalizada no pudo procesar ningún valor correctamente. Todos los valores resultantes son nulos.</p>
+                        <p>Por favor, revisa los errores anteriores y ajusta tu función.</p>
+                    </div>
+                `;
+            }
+            
             // Show preview for each new column
             for (const newCol of preview.new_columns) {
                 if (preview[newCol]) {
                     const colData = preview[newCol];
+                    
+                    // Count non-null values
+                    const validValues = (colData.sample || []).filter(val => val !== null && val !== undefined);
+                    const nullCount = (colData.sample || []).length - validValues.length;
+                    
                     bodyHtml += `
                         <div style="margin-top: 20px; border-top: 1px solid rgba(0, 212, 255, 0.2); padding-top: 20px;">
                             <h5 style="color: var(--primary-color);">
-                                Vista previa: ${newCol}
+                                <i class="bi bi-columns-gap"></i> ${newCol}
                                 ${colData.detected_type && colData.detected_dtype ? `
-                                    <span style="font-size: 0.8rem; font-weight: normal;">
-                                        - Tipo: <span class="compatibility-indicator ${colData.detected_type}">
+                                    <span style="font-size: 0.8rem; font-weight: normal; margin-left: 10px;">
+                                        <span class="compatibility-indicator ${colData.detected_type}" style="padding: 4px 12px;">
                                             ${colData.detected_type === 'numeric' ? 'Numérico' : 'Texto'} (${colData.detected_dtype})
                                         </span>
+                                    </span>
+                                ` : ''}
+                                ${nullCount > 0 ? `
+                                    <span style="font-size: 0.75rem; color: rgba(255, 193, 7, 0.8); margin-left: 10px;">
+                                        <i class="bi bi-exclamation-triangle"></i> ${nullCount} valores nulos
                                     </span>
                                 ` : ''}
                             </h5>
@@ -2889,7 +2948,7 @@ ${response.details}
                                 <table class="preview-table">
                                     <thead style="position: sticky; top: 0; background-color: var(--dark-color); z-index: 10;">
                                         <tr>
-                                            <th>Índice</th>
+                                            <th style="width: 80px;">Índice</th>
                                             <th>Valor</th>
                                         </tr>
                                     </thead>
@@ -2897,7 +2956,10 @@ ${response.details}
                                         ${(colData.sample || []).slice(0, 20).map((val, idx) => `
                                             <tr>
                                                 <td>${idx + 1}</td>
-                                                <td>${typeof val === 'number' ? val.toFixed(4) : val}</td>
+                                                <td>${val !== null && val !== undefined ? 
+                                                    (typeof val === 'number' ? val.toFixed(4) : val) : 
+                                                    '<span style="color: #888; font-style: italic;">null</span>'
+                                                }</td>
                                             </tr>
                                         `).join('')}
                                     </tbody>
@@ -3470,6 +3532,44 @@ ${response.details}
         window.location.href = `/datasets/${id}/normalize/`;
     }
 
+    function showLoadingModal(message = 'Cargando...') {
+        // Crear el modal de carga si no existe
+        let loadingModal = document.getElementById('loadingModal');
+        if (!loadingModal) {
+            loadingModal = document.createElement('div');
+            loadingModal.id = 'loadingModal';
+            loadingModal.className = 'modal';
+            loadingModal.innerHTML = `
+                <div class="modal-dialog modal-sm modal-dialog-centered">
+                    <div class="modal-content" style="background: rgba(15, 17, 20, 0.95); border: 1px solid rgba(0, 212, 255, 0.3);">
+                        <div class="modal-body text-center" style="padding: 30px;">
+                            <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                            <p class="loading-message" style="color: var(--light-color); margin: 0;">${message}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(loadingModal);
+        } else {
+            // Actualizar el mensaje
+            const messageElement = loadingModal.querySelector('.loading-message');
+            if (messageElement) {
+                messageElement.textContent = message;
+            }
+        }
+        
+        // Mostrar el modal usando Bootstrap
+        const bsModal = new bootstrap.Modal(loadingModal, {
+            backdrop: 'static',
+            keyboard: false
+        });
+        bsModal.show();
+        
+        return bsModal;
+    }
+    
     function showNotification(message, type) {
         // Implementar notificaciones toast
         const toast = document.createElement('div');
@@ -4527,6 +4627,212 @@ def normalize(value, series=None):
     }
     
     // Hacer las funciones globales para que puedan ser llamadas desde el HTML generado dinámicamente
+    function showColumnDetails(column, layerIndex) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex}`);
+        
+        if (!outputIndicator) return;
+        
+        const customFunctionId = outputIndicator.dataset.customFunctionId;
+        const expectedColumns = JSON.parse(outputIndicator.dataset.expectedColumns || '[]');
+        
+        // Mostrar modal de carga
+        const loadingModal = showLoadingModal('Obteniendo detalles de columnas...');
+        
+        // Construir la configuración de normalización para esta columna
+        const currentConfig = {};
+        if (normalizationConfig[column] && normalizationConfig[column][layerIndex]) {
+            currentConfig[column] = [normalizationConfig[column][layerIndex]];
+        }
+        
+        // Hacer preview para obtener los tipos detectados
+        fetch(`/api/datasets/${datasetId}/normalization/preview/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                normalization: currentConfig,
+                sample_size: 10  // Solo necesitamos una pequeña muestra
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            loadingModal.hide();
+            
+            // Crear el contenido del modal
+            let columnsHtml = '';
+            
+            if (data.preview && data.preview[column] && data.preview[column].column_types_info) {
+                // Usar la información de tipos detectados
+                const columnTypesInfo = data.preview[column].column_types_info;
+                
+                columnsHtml = `
+                    <div class="column-details-container">
+                        <h5 style="color: var(--primary-color); margin-bottom: 20px;">
+                            <i class="bi bi-table"></i> Columnas generadas por la función
+                        </h5>
+                        <div class="columns-list" style="max-height: 400px; overflow-y: auto;">
+                `;
+                
+                columnTypesInfo.forEach((colInfo, idx) => {
+                    // Determine type class and icon based on specific type
+                    let typeClass = 'text';
+                    let typeIcon = 'bi-fonts';
+                    let typeLabel = 'Texto';
+                    let typeColor = 'rgba(255, 107, 107, 0.5)';
+                    
+                    switch(colInfo.type) {
+                        case 'integer':
+                            typeClass = 'numeric';
+                            typeIcon = 'bi-123';
+                            typeLabel = 'Entero';
+                            typeColor = 'rgba(0, 212, 255, 0.5)';
+                            break;
+                        case 'float':
+                            typeClass = 'numeric';
+                            typeIcon = 'bi-percent';
+                            typeLabel = 'Decimal';
+                            typeColor = 'rgba(0, 212, 255, 0.5)';
+                            break;
+                        case 'boolean':
+                            typeClass = 'boolean';
+                            typeIcon = 'bi-toggle-on';
+                            typeLabel = 'Booleano';
+                            typeColor = 'rgba(147, 51, 234, 0.5)';
+                            break;
+                        case 'datetime':
+                            typeClass = 'datetime';
+                            typeIcon = 'bi-calendar-date';
+                            typeLabel = 'Fecha/Hora';
+                            typeColor = 'rgba(255, 193, 7, 0.5)';
+                            break;
+                        case 'numeric':
+                            typeClass = 'numeric';
+                            typeIcon = 'bi-123';
+                            typeLabel = 'Numérico';
+                            typeColor = 'rgba(0, 212, 255, 0.5)';
+                            break;
+                        default:
+                            typeClass = 'text';
+                            typeIcon = 'bi-fonts';
+                            typeLabel = 'Texto';
+                            typeColor = 'rgba(255, 107, 107, 0.5)';
+                    }
+                    
+                    columnsHtml += `
+                        <div class="column-detail-item" style="background: rgba(0, 212, 255, 0.05); 
+                             border: 1px solid rgba(0, 212, 255, 0.3); 
+                             border-radius: 10px; 
+                             padding: 15px; 
+                             margin-bottom: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <span style="font-weight: bold; color: var(--primary-color); font-size: 1.1rem;">
+                                        ${colInfo.name}
+                                    </span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <span style="background: ${typeColor}; 
+                                                 padding: 4px 12px; 
+                                                 border-radius: 20px; 
+                                                 font-size: 0.9rem;
+                                                 color: white;
+                                                 display: flex;
+                                                 align-items: center;
+                                                 gap: 5px;">
+                                        <i class="bi ${typeIcon}"></i> ${typeLabel}
+                                    </span>
+                                    <span style="background: rgba(0, 0, 0, 0.3); 
+                                                 padding: 4px 10px; 
+                                                 border-radius: 5px; 
+                                                 font-family: monospace; 
+                                                 font-size: 0.85rem; 
+                                                 color: #00d4ff;">
+                                        ${colInfo.dtype}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                columnsHtml += `
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Fallback: mostrar las columnas esperadas sin información de tipos
+                columnsHtml = `
+                    <div class="column-details-container">
+                        <h5 style="color: var(--primary-color); margin-bottom: 20px;">
+                            <i class="bi bi-table"></i> Columnas esperadas
+                        </h5>
+                        <div class="columns-list">
+                `;
+                
+                expectedColumns.forEach((colName, idx) => {
+                    columnsHtml += `
+                        <div class="column-detail-item" style="background: rgba(0, 212, 255, 0.05); 
+                             border: 1px solid rgba(0, 212, 255, 0.3); 
+                             border-radius: 10px; 
+                             padding: 15px; 
+                             margin-bottom: 10px;">
+                            <span style="font-weight: bold; color: var(--primary-color);">
+                                ${idx + 1}. ${colName}
+                            </span>
+                        </div>
+                    `;
+                });
+                
+                columnsHtml += `
+                        </div>
+                        <div style="margin-top: 15px; color: rgba(240, 249, 255, 0.6); font-size: 0.9rem;">
+                            <i class="bi bi-info-circle"></i> Los tipos de datos se detectarán automáticamente al aplicar la función
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Mostrar en un modal
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content" style="background: rgba(15, 17, 20, 0.95); border: 1px solid rgba(0, 212, 255, 0.3);">
+                        <div class="modal-header" style="border-bottom: 1px solid rgba(0, 212, 255, 0.2);">
+                            <h5 class="modal-title" style="color: var(--light-color);">
+                                Detalles de columnas - ${column}
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            ${columnsHtml}
+                        </div>
+                        <div class="modal-footer" style="border-top: 1px solid rgba(0, 212, 255, 0.2);">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+            
+            // Limpiar el modal cuando se cierre
+            modal.addEventListener('hidden.bs.modal', function () {
+                modal.remove();
+            });
+        })
+        .catch(error => {
+            loadingModal.hide();
+            console.error('Error getting column details:', error);
+            showNotification('Error al obtener detalles de las columnas', 'error');
+        });
+    }
+    
     window.editFunction = async function(functionId) {
         console.log('editFunction called with ID:', functionId);
         try {

@@ -635,9 +635,33 @@ class DatasetNormalizationView(APIView):
                                             result = normalize_func(value, series=None)
                                         
                                         if isinstance(result, dict):
-                                            # Use actual keys from result if available
-                                            for col_name in column_names_to_use:
-                                                results_dict[col_name].append(result.get(col_name, None))
+                                            # If the result has different keys than expected, adapt
+                                            result_keys = list(result.keys())
+                                            if result_keys != column_names_to_use:
+                                                # Update column names to match actual output
+                                                print(f"Updating column names from {column_names_to_use} to {result_keys}")
+                                                # Create new results_dict with actual keys
+                                                new_results_dict = {key: [] for key in result_keys}
+                                                # Copy existing values
+                                                for i, key in enumerate(result_keys):
+                                                    if i < len(column_names_to_use):
+                                                        old_key = column_names_to_use[i]
+                                                        if old_key in results_dict:
+                                                            new_results_dict[key] = results_dict[old_key].copy()
+                                                    else:
+                                                        new_results_dict[key] = []
+                                                # Fill with previous values
+                                                for key in result_keys:
+                                                    while len(new_results_dict[key]) < idx - start_idx:
+                                                        new_results_dict[key].append(None)
+                                                results_dict = new_results_dict
+                                                column_names_to_use = result_keys
+                                            
+                                            # Now append the values
+                                            for col_name in result.keys():
+                                                if col_name not in results_dict:
+                                                    results_dict[col_name] = [None] * (idx - start_idx)
+                                                results_dict[col_name].append(result[col_name])
                                         else:
                                             # If single value returned, use first column name
                                             results_dict[column_names_to_use[0]].append(result)
@@ -672,8 +696,33 @@ class DatasetNormalizationView(APIView):
                                             result = normalize_func(value)
                                         
                                         if isinstance(result, dict):
-                                            for col_name in column_names_to_use:
-                                                results_dict[col_name].append(result.get(col_name, ''))
+                                            # If the result has different keys than expected, adapt
+                                            result_keys = list(result.keys())
+                                            if result_keys != column_names_to_use:
+                                                # Update column names to match actual output
+                                                print(f"Updating column names from {column_names_to_use} to {result_keys}")
+                                                # Create new results_dict with actual keys
+                                                new_results_dict = {key: [] for key in result_keys}
+                                                # Copy existing values
+                                                for i, key in enumerate(result_keys):
+                                                    if i < len(column_names_to_use):
+                                                        old_key = column_names_to_use[i]
+                                                        if old_key in results_dict:
+                                                            new_results_dict[key] = results_dict[old_key].copy()
+                                                    else:
+                                                        new_results_dict[key] = []
+                                                # Fill with previous values
+                                                for key in result_keys:
+                                                    while len(new_results_dict[key]) < idx - start_idx:
+                                                        new_results_dict[key].append('')
+                                                results_dict = new_results_dict
+                                                column_names_to_use = result_keys
+                                            
+                                            # Now append the values
+                                            for col_name in result.keys():
+                                                if col_name not in results_dict:
+                                                    results_dict[col_name] = [''] * (idx - start_idx)
+                                                results_dict[col_name].append(result[col_name])
                                         else:
                                             # If single value returned, use first column name
                                             results_dict[column_names_to_use[0]].append(result)
@@ -711,25 +760,61 @@ class DatasetNormalizationView(APIView):
                             # Detect the actual data type of the created column
                             col_series = pd.Series(results_dict[new_col_name])
                             
-                            # Try to infer the best dtype
+                            # Try to infer the best dtype with more specific types
                             if col_series.notna().any():  # If there's at least one non-null value
-                                # Try to convert to numeric
-                                try:
-                                    numeric_series = pd.to_numeric(col_series, errors='coerce')
-                                    if numeric_series.notna().sum() == col_series.notna().sum():
-                                        # All non-null values are numeric
-                                        normalized_df[new_col_name] = numeric_series
-                                        detected_dtype = str(numeric_series.dtype)
-                                        detected_type = 'numeric'
-                                    else:
-                                        # Some values couldn't be converted to numeric
-                                        detected_dtype = 'object'
+                                # Get non-null values for analysis
+                                non_null_values = col_series.dropna()
+                                
+                                # Check if all values are boolean
+                                if all(isinstance(v, bool) or v in [True, False, 'True', 'False', 'true', 'false'] for v in non_null_values):
+                                    detected_dtype = 'bool'
+                                    detected_type = 'boolean'
+                                    normalized_df[new_col_name] = col_series.astype('bool')
+                                else:
+                                    # Try to convert to numeric
+                                    try:
+                                        numeric_series = pd.to_numeric(col_series, errors='coerce')
+                                        if numeric_series.notna().sum() == col_series.notna().sum():
+                                            # All non-null values are numeric
+                                            normalized_df[new_col_name] = numeric_series
+                                            
+                                            # Check if all values are integers
+                                            if all(float(v).is_integer() for v in non_null_values if pd.notna(v)):
+                                                # Convert to integer type
+                                                if numeric_series.min() >= -2147483648 and numeric_series.max() <= 2147483647:
+                                                    detected_dtype = 'int32'
+                                                else:
+                                                    detected_dtype = 'int64'
+                                                detected_type = 'integer'
+                                                # Use nullable integer if there are NaN values
+                                                if col_series.isna().any():
+                                                    normalized_df[new_col_name] = numeric_series.astype('Int64')
+                                                else:
+                                                    normalized_df[new_col_name] = numeric_series.astype('int64')
+                                            else:
+                                                # It's a float
+                                                detected_dtype = str(numeric_series.dtype)
+                                                detected_type = 'float'
+                                        else:
+                                            # Some values couldn't be converted to numeric
+                                            # Check if it's a date/datetime
+                                            try:
+                                                date_series = pd.to_datetime(col_series, errors='coerce')
+                                                if date_series.notna().sum() == col_series.notna().sum():
+                                                    detected_dtype = 'datetime64'
+                                                    detected_type = 'datetime'
+                                                    normalized_df[new_col_name] = date_series
+                                                else:
+                                                    detected_dtype = 'string'
+                                                    detected_type = 'text'
+                                            except:
+                                                detected_dtype = 'string'
+                                                detected_type = 'text'
+                                    except:
+                                        detected_dtype = 'string'
                                         detected_type = 'text'
-                                except:
-                                    detected_dtype = 'object'
-                                    detected_type = 'text'
                             else:
-                                detected_dtype = 'object'
+                                detected_dtype = 'string'
                                 detected_type = 'text'
                             
                             detected_column_types[new_col_name] = {
@@ -738,6 +823,20 @@ class DatasetNormalizationView(APIView):
                             }
                             
                             print(f"Created new column: {new_col_name} with {len(results_dict[new_col_name])} values - Type: {detected_type} ({detected_dtype})")
+                        
+                        # Store detected column types and names for later use
+                        if hasattr(self, '_custom_function_column_types'):
+                            if column not in self._custom_function_column_types:
+                                self._custom_function_column_types[column] = {}
+                            self._custom_function_column_types[column] = detected_column_types
+                        else:
+                            self._custom_function_column_types = {column: detected_column_types}
+                        
+                        # Also store the actual column names detected from the function output
+                        if hasattr(self, '_custom_function_detected_columns'):
+                            self._custom_function_detected_columns[column] = list(results_dict.keys())
+                        else:
+                            self._custom_function_detected_columns = {column: list(results_dict.keys())}
                         
                         # Remove original column if specified
                         if custom_func.remove_original_column:
@@ -1068,7 +1167,12 @@ class DatasetNormalizationPreviewView(APIView):
                     # Extract method from config (handle both old and new formats)
                     if isinstance(method_config, list):
                         # For chained normalization, check if any step is custom
-                        method = None  # We'll handle chained normalization differently
+                        # Check the last step to see if it's a custom function
+                        if method_config:
+                            last_step = method_config[-1]
+                            method = last_step.get('method', '') if isinstance(last_step, dict) else last_step
+                        else:
+                            method = None
                     elif isinstance(method_config, dict):
                         method = method_config.get('method', '')
                     else:
@@ -1112,19 +1216,47 @@ class DatasetNormalizationPreviewView(APIView):
                                         # Detect the actual data type
                                         col_series = normalized_sample[new_col]
                                         
-                                        # Try to infer the best dtype
+                                        # Try to infer the best dtype with more specific types
                                         detected_type = 'text'
-                                        detected_dtype = 'object'
+                                        detected_dtype = 'string'
                                         
                                         if col_series.notna().any():
-                                            try:
-                                                numeric_series = pd.to_numeric(col_series, errors='coerce')
-                                                if numeric_series.notna().sum() == col_series.notna().sum():
-                                                    # All non-null values are numeric
-                                                    detected_type = 'numeric'
-                                                    detected_dtype = str(numeric_series.dtype)
-                                            except:
-                                                pass
+                                            non_null_values = col_series.dropna()
+                                            
+                                            # Check if all values are boolean
+                                            if all(isinstance(v, bool) or v in [True, False, 'True', 'False', 'true', 'false'] for v in non_null_values):
+                                                detected_dtype = 'bool'
+                                                detected_type = 'boolean'
+                                            else:
+                                                try:
+                                                    numeric_series = pd.to_numeric(col_series, errors='coerce')
+                                                    if numeric_series.notna().sum() == col_series.notna().sum():
+                                                        # All non-null values are numeric
+                                                        # Check if all values are integers
+                                                        if all(float(v).is_integer() for v in non_null_values if pd.notna(v)):
+                                                            detected_type = 'integer'
+                                                            if numeric_series.min() >= -2147483648 and numeric_series.max() <= 2147483647:
+                                                                detected_dtype = 'int32'
+                                                            else:
+                                                                detected_dtype = 'int64'
+                                                        else:
+                                                            detected_type = 'float'
+                                                            detected_dtype = str(numeric_series.dtype)
+                                                    else:
+                                                        # Check if it's a date/datetime
+                                                        try:
+                                                            date_series = pd.to_datetime(col_series, errors='coerce')
+                                                            if date_series.notna().sum() == col_series.notna().sum():
+                                                                detected_dtype = 'datetime64'
+                                                                detected_type = 'datetime'
+                                                            else:
+                                                                detected_dtype = 'string'
+                                                                detected_type = 'text'
+                                                        except:
+                                                            detected_dtype = 'string'
+                                                            detected_type = 'text'
+                                                except:
+                                                    pass
                                         
                                         column_types_info.append({
                                             'name': new_col,
@@ -1141,6 +1273,24 @@ class DatasetNormalizationPreviewView(APIView):
                                         }
                                 
                                 comparison[column]['column_types_info'] = column_types_info
+                                
+                                # If we have stored column types from the actual execution, use those
+                                if hasattr(view, '_custom_function_column_types') and column in view._custom_function_column_types:
+                                    stored_types = view._custom_function_column_types[column]
+                                    # Update column_types_info with the stored information
+                                    updated_types_info = []
+                                    for col_name, type_info in stored_types.items():
+                                        updated_types_info.append({
+                                            'name': col_name,
+                                            'type': type_info['type'],
+                                            'dtype': type_info['dtype']
+                                        })
+                                    comparison[column]['column_types_info'] = updated_types_info
+                                
+                                # Also update the new_columns list with the actual detected columns
+                                if hasattr(view, '_custom_function_detected_columns') and column in view._custom_function_detected_columns:
+                                    comparison[column]['new_columns'] = view._custom_function_detected_columns[column]
+                                    comparison[column]['detected_columns'] = True
                                 
                                 # Add error information if any
                                 if hasattr(view, 'custom_function_errors') and view.custom_function_errors:
