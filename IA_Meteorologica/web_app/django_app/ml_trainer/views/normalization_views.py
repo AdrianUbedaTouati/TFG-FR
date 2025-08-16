@@ -649,7 +649,17 @@ class DatasetNormalizationView(APIView):
                                         for col_name in column_names_to_use:
                                             results_dict[col_name].append(None)
                                     except Exception as e:
-                                        print(f"Error in normalize function at index {idx}: {e}")
+                                        error_msg = f"Error en función personalizada '{custom_func.name}' at index {idx}: {e}"
+                                        print(error_msg)
+                                        # Track errors for reporting
+                                        if not hasattr(self, 'custom_function_errors'):
+                                            self.custom_function_errors = []
+                                        self.custom_function_errors.append({
+                                            'index': idx,
+                                            'value': value,
+                                            'error': str(e),
+                                            'function': custom_func.name
+                                        })
                                         # Append None for all columns on error
                                         for col_name in column_names_to_use:
                                             results_dict[col_name].append(None)
@@ -675,18 +685,59 @@ class DatasetNormalizationView(APIView):
                                         for col_name in column_names_to_use:
                                             results_dict[col_name].append('')
                                     except Exception as e:
-                                        print(f"Error in normalize function at index {idx}: {e}")
+                                        error_msg = f"Error en función personalizada '{custom_func.name}' at index {idx}: {e}"
+                                        print(error_msg)
+                                        # Track errors for reporting
+                                        if not hasattr(self, 'custom_function_errors'):
+                                            self.custom_function_errors = []
+                                        self.custom_function_errors.append({
+                                            'index': idx,
+                                            'value': value,
+                                            'error': str(e),
+                                            'function': custom_func.name
+                                        })
                                         # Append empty string for all columns on error
                                         for col_name in column_names_to_use:
                                             results_dict[col_name].append('')
                         
                         print(f"Finished processing all {total_rows} rows")
                         
-                        # Create new columns from results
+                        # Create new columns from results and detect their types
                         # Use the actual column names from results_dict
+                        detected_column_types = {}
                         for new_col_name in results_dict.keys():
                             normalized_df[new_col_name] = results_dict[new_col_name]
-                            print(f"Created new column: {new_col_name} with {len(results_dict[new_col_name])} values")
+                            
+                            # Detect the actual data type of the created column
+                            col_series = pd.Series(results_dict[new_col_name])
+                            
+                            # Try to infer the best dtype
+                            if col_series.notna().any():  # If there's at least one non-null value
+                                # Try to convert to numeric
+                                try:
+                                    numeric_series = pd.to_numeric(col_series, errors='coerce')
+                                    if numeric_series.notna().sum() == col_series.notna().sum():
+                                        # All non-null values are numeric
+                                        normalized_df[new_col_name] = numeric_series
+                                        detected_dtype = str(numeric_series.dtype)
+                                        detected_type = 'numeric'
+                                    else:
+                                        # Some values couldn't be converted to numeric
+                                        detected_dtype = 'object'
+                                        detected_type = 'text'
+                                except:
+                                    detected_dtype = 'object'
+                                    detected_type = 'text'
+                            else:
+                                detected_dtype = 'object'
+                                detected_type = 'text'
+                            
+                            detected_column_types[new_col_name] = {
+                                'type': detected_type,
+                                'dtype': detected_dtype
+                            }
+                            
+                            print(f"Created new column: {new_col_name} with {len(results_dict[new_col_name])} values - Type: {detected_type} ({detected_dtype})")
                         
                         # Remove original column if specified
                         if custom_func.remove_original_column:
@@ -1052,14 +1103,66 @@ class DatasetNormalizationPreviewView(APIView):
                                     'remove_original': custom_func.remove_original_column
                                 }
                                 
-                                # Add preview for each new column
+                                # Add preview for each new column and detect types
+                                column_types_info = []
                                 for new_col in columns_to_use:
                                     if new_col in normalized_sample.columns:
                                         new_values = normalized_sample[new_col].dropna()
+                                        
+                                        # Detect the actual data type
+                                        col_series = normalized_sample[new_col]
+                                        
+                                        # Try to infer the best dtype
+                                        detected_type = 'text'
+                                        detected_dtype = 'object'
+                                        
+                                        if col_series.notna().any():
+                                            try:
+                                                numeric_series = pd.to_numeric(col_series, errors='coerce')
+                                                if numeric_series.notna().sum() == col_series.notna().sum():
+                                                    # All non-null values are numeric
+                                                    detected_type = 'numeric'
+                                                    detected_dtype = str(numeric_series.dtype)
+                                            except:
+                                                pass
+                                        
+                                        column_types_info.append({
+                                            'name': new_col,
+                                            'type': detected_type,
+                                            'dtype': detected_dtype
+                                        })
+                                        
                                         comparison[column][new_col] = {
                                             'sample': new_values.head(50).tolist(),
                                             'stats': detect_column_type(normalized_sample[new_col]),
-                                            'unique_count': normalized_sample[new_col].nunique()
+                                            'unique_count': normalized_sample[new_col].nunique(),
+                                            'detected_type': detected_type,
+                                            'detected_dtype': detected_dtype
+                                        }
+                                
+                                comparison[column]['column_types_info'] = column_types_info
+                                
+                                # Add error information if any
+                                if hasattr(view, 'custom_function_errors') and view.custom_function_errors:
+                                    # Group errors by unique error message
+                                    error_summary = {}
+                                    for error in view.custom_function_errors:
+                                        if error['function'] == custom_func.name:
+                                            error_msg = error['error']
+                                            if error_msg not in error_summary:
+                                                error_summary[error_msg] = {
+                                                    'count': 0,
+                                                    'example_values': []
+                                                }
+                                            error_summary[error_msg]['count'] += 1
+                                            if len(error_summary[error_msg]['example_values']) < 5:
+                                                error_summary[error_msg]['example_values'].append(error['value'])
+                                    
+                                    if error_summary:
+                                        comparison[column]['custom_function_errors'] = {
+                                            'function_name': custom_func.name,
+                                            'total_errors': len(view.custom_function_errors),
+                                            'error_summary': error_summary
                                         }
                                 
                                 # Add original column info
@@ -1352,6 +1455,38 @@ class CustomNormalizationFunctionView(APIView):
                 {'error': 'Función no encontrada'}, 
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class CustomNormalizationFunctionInfoView(APIView):
+    """Get info about a custom normalization function"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, pk):
+        """Get information about a custom normalization function"""
+        try:
+            # Verificar que la función pertenezca al usuario o sea admin
+            if request.user.is_staff:
+                function = CustomNormalizationFunction.objects.get(pk=pk)
+            else:
+                function = CustomNormalizationFunction.objects.get(pk=pk, user=request.user)
+            
+            # Return simplified info for frontend
+            return Response({
+                'success': True,
+                'function': {
+                    'id': function.id,
+                    'name': function.name,
+                    'function_type': function.function_type,
+                    'new_columns': function.new_columns or [],
+                    'remove_original_column': function.remove_original_column,
+                    'description': function.description
+                }
+            })
+        except CustomNormalizationFunction.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Función no encontrada'
+            }, status=status.HTTP_404_NOT_FOUND)
 
 
 class CustomNormalizationFunctionTestView(APIView):

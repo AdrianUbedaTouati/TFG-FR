@@ -20,6 +20,7 @@ urlpatterns = [
     # Custom normalization function endpoints
     path('custom-normalization-functions/', views.CustomNormalizationFunctionView.as_view(), name='custom-normalization-functions'),
     path('custom-normalization-functions/<int:pk>/', views.CustomNormalizationFunctionView.as_view(), name='custom-normalization-function-detail'),
+    path('custom-normalization-functions/<int:pk>/info/', views.CustomNormalizationFunctionInfoView.as_view(), name='custom-normalization-function-info'),
     path('custom-normalization-functions/test/', views.CustomNormalizationFunctionTestView.as_view(), name='custom-normalization-function-test'),
     
     # Model definition endpoints
