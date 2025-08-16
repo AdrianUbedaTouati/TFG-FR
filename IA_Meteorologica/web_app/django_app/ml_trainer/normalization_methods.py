@@ -4,8 +4,13 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
 from enum import Enum, auto
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Union
+from typing import Callable, Dict, Union, Tuple, Optional
 import numpy as np
+try:
+    from .type_conversion import ensure_numeric_compatibility, TypeConversionWarning
+except ImportError:
+    # Fallback if module structure is different
+    from type_conversion import ensure_numeric_compatibility, TypeConversionWarning
 
 # ────────────────────────────────
 # 1. Definir los Enum permitidos
@@ -33,9 +38,11 @@ def min_max_numeric(serie: pd.Series) -> pd.Series:
     if mask.sum() == 0:  # Todos son NaN
         return serie
     
-    result = serie.copy()
+    # Asegurar compatibilidad numérica
+    result, warning = ensure_numeric_compatibility(serie)
+    
     esc = MinMaxScaler()
-    result.loc[mask] = esc.fit_transform(serie.loc[mask].to_frame()).ravel()
+    result.loc[mask] = esc.fit_transform(result.loc[mask].to_frame()).ravel()
     return result
 
 def z_score_numeric(serie: pd.Series) -> pd.Series:
@@ -43,9 +50,11 @@ def z_score_numeric(serie: pd.Series) -> pd.Series:
     if mask.sum() == 0:
         return serie
     
-    result = serie.copy()
+    # Asegurar compatibilidad numérica
+    result, warning = ensure_numeric_compatibility(serie)
+    
     esc = StandardScaler()
-    result.loc[mask] = esc.fit_transform(serie.loc[mask].to_frame()).ravel()
+    result.loc[mask] = esc.fit_transform(result.loc[mask].to_frame()).ravel()
     return result
 
 def lstm_tcn_norm(serie: pd.Series) -> pd.Series:
@@ -53,9 +62,11 @@ def lstm_tcn_norm(serie: pd.Series) -> pd.Series:
     if mask.sum() == 0:
         return serie
     
-    result = serie.copy()
+    # Asegurar compatibilidad numérica
+    result, warning = ensure_numeric_compatibility(serie)
+    
     esc = MinMaxScaler(feature_range=(-1, 1))
-    result.loc[mask] = esc.fit_transform(serie.loc[mask].to_frame()).ravel()
+    result.loc[mask] = esc.fit_transform(result.loc[mask].to_frame()).ravel()
     return result
 
 def cnn_norm(serie: pd.Series) -> pd.Series:
@@ -66,9 +77,11 @@ def transformer_norm(serie: pd.Series) -> pd.Series:
     if mask.sum() == 0:
         return serie
     
-    result = serie.copy()
+    # Asegurar compatibilidad numérica
+    result, warning = ensure_numeric_compatibility(serie)
+    
     esc = RobustScaler()
-    result.loc[mask] = esc.fit_transform(serie.loc[mask].to_frame()).ravel()
+    result.loc[mask] = esc.fit_transform(result.loc[mask].to_frame()).ravel()
     return result
 
 def tree_norm(serie: pd.Series) -> pd.Series:

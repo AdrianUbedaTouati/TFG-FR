@@ -303,6 +303,35 @@
         opacity: 0.5;
         cursor: not-allowed;
     }
+    
+    .conversion-container {
+        margin: 15px 0;
+        padding: 15px;
+        background: rgba(147, 51, 234, 0.1);
+        border: 1px solid rgba(147, 51, 234, 0.3);
+        border-radius: 10px;
+        animation: fadeIn 0.3s ease;
+    }
+    
+    .conversion-select {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        color: var(--light-color);
+        padding: 8px 12px;
+        border-radius: 5px;
+        transition: all 0.3s ease;
+    }
+    
+    .conversion-select:hover {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+    }
+    
+    .conversion-select:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+    }
 
     .normalized-copies {
         margin-top: 30px;
@@ -1393,6 +1422,22 @@ def normalize(value, series=None):
     let selectedFunctionType = 'numeric';
     let detectedColumnNames = [];
 
+    // Función para obtener el token CSRF
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
     document.addEventListener('DOMContentLoaded', function() {
         console.log('normalize.html script loaded');
         loadDatasetInfo();
@@ -1488,6 +1533,188 @@ def normalize(value, series=None):
         }
     }
 
+    function getConversionOptions(outputType) {
+        // Get conversion options based on the output type
+        if (!datasetInfo.conversion_options) {
+            return [];
+        }
+        
+        // For now, we'll return same-type conversions
+        // In the future, we could add cross-type conversions
+        const key = `${outputType}_to_${outputType}`;
+        return datasetInfo.conversion_options[key] || [];
+    }
+    
+    function getConversionLabel(conversionValue) {
+        // Find the conversion label from all conversion options
+        if (!datasetInfo.conversion_options) {
+            return conversionValue;
+        }
+        
+        for (const key in datasetInfo.conversion_options) {
+            const options = datasetInfo.conversion_options[key];
+            for (const option of options) {
+                if (option.value === conversionValue) {
+                    return option.label;
+                }
+            }
+        }
+        
+        return conversionValue;
+    }
+    
+    function getOutputDataType(column, layerIndex) {
+        // Get the output data type for a specific layer
+        if (!normalizationConfig[column] || !normalizationConfig[column][layerIndex]) {
+            // Return original column dtype if no method selected
+            return datasetInfo.normalization_info[column]?.dtype || 'unknown';
+        }
+        
+        const step = normalizationConfig[column][layerIndex];
+        const method = step.method;
+        const conversion = step.conversion;
+        
+        // If there's a conversion, that determines the output type
+        if (conversion) {
+            // Extract dtype from conversion (e.g., TO_FLOAT64 -> float64)
+            if (conversion === 'TO_FLOAT64') return 'float64';
+            if (conversion === 'TO_FLOAT32') return 'float32';
+            if (conversion === 'TO_INT64') return 'Int64';
+            if (conversion === 'TO_INT32') return 'Int32';
+            if (conversion === 'TO_INT16') return 'Int16';
+            if (conversion === 'TO_STRING') return 'object';
+            if (conversion === 'TO_NUMERIC') return 'float64';  // Default numeric conversion
+        }
+        
+        // Otherwise, get the output dtype from the method
+        const methodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
+                           ...datasetInfo.normalization_info[column].secondary_methods]
+                           .find(m => m.value === method);
+        
+        return methodInfo?.output_dtype || 'unknown';
+    }
+    
+    function updateLayerOutputTypeIndicator(column, layerIndex, method) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex}`);
+        
+        if (!outputIndicator) return;
+        
+        if (!method) {
+            outputIndicator.style.display = 'none';
+            return;
+        }
+        
+        // Get method info
+        const info = datasetInfo.normalization_info[column];
+        const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === method);
+        
+        if (methodInfo) {
+            const outputType = methodInfo.output_type || 'unknown';
+            const outputDType = methodInfo.output_dtype || 'unknown';
+            
+            outputIndicator.innerHTML = `
+                <i class="bi bi-arrow-right" style="opacity: 0.7;"></i>
+                Salida: ${outputType === 'numeric' ? 'Numérico' : outputType === 'text' ? 'Texto' : 'Desconocido'}
+                ${outputDType !== 'unknown' ? ` (${outputDType})` : ''}
+            `;
+            outputIndicator.style.display = 'inline-block';
+            
+            // Update color based on type
+            if (outputType === 'numeric') {
+                outputIndicator.style.background = 'rgba(0, 212, 255, 0.2)';
+                outputIndicator.style.borderColor = 'rgba(0, 212, 255, 0.5)';
+            } else if (outputType === 'text') {
+                outputIndicator.style.background = 'rgba(255, 107, 107, 0.2)';
+                outputIndicator.style.borderColor = 'rgba(255, 107, 107, 0.5)';
+            }
+        } else {
+            outputIndicator.style.display = 'none';
+        }
+    }
+    
+    function onConversionChange(column, layerIndex) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const convSelect = document.getElementById(`conv-${escapedColumn}-${layerIndex}`);
+        
+        if (!convSelect || !Array.isArray(normalizationConfig[column])) {
+            return;
+        }
+        
+        // Store the conversion in the previous layer's config
+        if (layerIndex > 0 && normalizationConfig[column][layerIndex - 1]) {
+            if (convSelect.value) {
+                normalizationConfig[column][layerIndex - 1].conversion = convSelect.value;
+            } else {
+                delete normalizationConfig[column][layerIndex - 1].conversion;
+            }
+            
+            // Update the output type indicator of the previous layer to reflect the conversion
+            const prevMethod = normalizationConfig[column][layerIndex - 1].method;
+            if (prevMethod) {
+                updateLayerOutputTypeIndicatorWithConversion(column, layerIndex - 1, prevMethod, convSelect.value);
+            }
+        }
+        
+        console.log('Updated config with conversion:', normalizationConfig[column]);
+    }
+    
+    function updateLayerOutputTypeIndicatorWithConversion(column, layerIndex, method, conversion) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex}`);
+        
+        if (!outputIndicator) return;
+        
+        if (!method) {
+            outputIndicator.style.display = 'none';
+            return;
+        }
+        
+        // Get method info
+        const info = datasetInfo.normalization_info[column];
+        const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === method);
+        
+        if (methodInfo) {
+            let outputType = methodInfo.output_type || 'unknown';
+            let outputDType = methodInfo.output_dtype || 'unknown';
+            
+            // If there's a conversion, override the output dtype
+            if (conversion) {
+                if (conversion === 'TO_FLOAT64') outputDType = 'float64';
+                else if (conversion === 'TO_FLOAT32') outputDType = 'float32';
+                else if (conversion === 'TO_INT64') outputDType = 'Int64';
+                else if (conversion === 'TO_INT32') outputDType = 'Int32';
+                else if (conversion === 'TO_INT16') outputDType = 'Int16';
+                else if (conversion === 'TO_STRING') {
+                    outputDType = 'object';
+                    outputType = 'text';
+                } else if (conversion === 'TO_NUMERIC') {
+                    outputDType = 'float64';
+                    outputType = 'numeric';
+                }
+            }
+            
+            outputIndicator.innerHTML = `
+                <i class="bi bi-arrow-right" style="opacity: 0.7;"></i>
+                Salida: ${outputType === 'numeric' ? 'Numérico' : outputType === 'text' ? 'Texto' : 'Desconocido'}
+                ${outputDType !== 'unknown' ? ` (${outputDType})` : ''}
+                ${conversion ? ' <i class="bi bi-arrow-down-up" title="Con conversión"></i>' : ''}
+            `;
+            outputIndicator.style.display = 'inline-block';
+            
+            // Update color based on type
+            if (outputType === 'numeric') {
+                outputIndicator.style.background = 'rgba(0, 212, 255, 0.2)';
+                outputIndicator.style.borderColor = 'rgba(0, 212, 255, 0.5)';
+            } else if (outputType === 'text') {
+                outputIndicator.style.background = 'rgba(255, 107, 107, 0.2)';
+                outputIndicator.style.borderColor = 'rgba(255, 107, 107, 0.5)';
+            }
+        } else {
+            outputIndicator.style.display = 'none';
+        }
+    }
+
     function renderVariables() {
         console.log('renderVariables called');
         const grid = document.getElementById('variables-grid');
@@ -1557,27 +1784,39 @@ def normalize(value, series=None):
             ${statsHtml}
             <div class="normalization-layers" id="layers-${escapedColumn}" data-column="${column}">
                 <div class="normalization-layer" data-layer-index="0">
-                    <select class="normalization-select" id="norm-${escapedColumn}-0" onchange="onNormalizationChange('${column.replace(/'/g, "\\'")}', 0)">
-                        <option value="">Sin normalizar</option>
-                        <optgroup label="Métodos principales">
-                            ${info.primary_methods.map(method => 
-                                `<option value="${method.value}" title="${method.description}">${method.label}</option>`
-                            ).join('')}
-                        </optgroup>
-                        ${info.secondary_methods.length > 0 ? `
-                            <optgroup label="Otros métodos">
-                                ${info.secondary_methods.map(method => 
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                        <span style="color: var(--primary-color); font-weight: bold;">Capa 1:</span>
+                        <span class="compatibility-indicator ${info.type}">
+                            Entrada: ${typeLabel}${info.dtype ? ` (${info.dtype})` : ''}
+                        </span>
+                        <span class="output-type-indicator" id="output-type-${escapedColumn}-0" style="display: none; margin-left: 10px; padding: 2px 8px; background: rgba(147, 51, 234, 0.2); border: 1px solid rgba(147, 51, 234, 0.5); border-radius: 4px; font-size: 0.85rem;">
+                            <!-- Output type will be updated when method is selected -->
+                        </span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <select class="normalization-select" id="norm-${escapedColumn}-0" 
+                                onchange="onNormalizationChange('${column.replace(/'/g, "\\'")}', 0)"
+                                style="flex: 1;">
+                            <option value="">Sin normalizar</option>
+                            <optgroup label="Métodos principales">
+                                ${info.primary_methods.map(method => 
                                     `<option value="${method.value}" title="${method.description}">${method.label}</option>`
                                 ).join('')}
                             </optgroup>
-                        ` : ''}
-                    </select>
-                    <div class="keep-original-container" id="keep-original-${escapedColumn}-0" style="display: none;">
-                        <label class="keep-original-label">
-                            <input type="checkbox" class="keep-original-checkbox" id="keep-original-checkbox-${escapedColumn}-0" 
-                                   onchange="onKeepOriginalChange('${column.replace(/'/g, "\\'")}', 0)" checked>
-                            <span>Mantener columna original</span>
-                        </label>
+                            ${info.secondary_methods.length > 0 ? `
+                                <optgroup label="Otros métodos">
+                                    ${info.secondary_methods.map(method => 
+                                        `<option value="${method.value}" title="${method.description}">${method.label}</option>`
+                                    ).join('')}
+                                </optgroup>
+                            ` : ''}
+                        </select>
+                        <button class="btn btn-sm btn-outline-info preview-layer-btn" 
+                                onclick="previewLayer('${column.replace(/'/g, "\\'")}', 0)" 
+                                title="Previsualizar esta capa"
+                                style="display: none;">
+                            <i class="bi bi-eye"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1586,9 +1825,21 @@ def normalize(value, series=None):
                     <i class="bi bi-plus-circle"></i> Añadir capa
                 </button>
             </div>
+            
+            <!-- Checkbox para mantener columna original (fuera de las capas) -->
+            <div class="keep-original-container" id="keep-original-${escapedColumn}" style="display: none; margin-top: 10px; padding: 10px; background: rgba(0, 212, 255, 0.05); border-radius: 8px;">
+                <label class="keep-original-label" style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" class="keep-original-checkbox" id="keep-original-checkbox-${escapedColumn}" 
+                           onchange="onKeepOriginalChange('${column.replace(/'/g, "\\'")}')">
+                    <span>Mantener columna original</span>
+                    <i class="bi bi-info-circle" title="Si se activa, se creará una nueva columna con los valores normalizados y se conservará la columna original"></i>
+                </label>
+            </div>
+            
+            <!-- Botón de previsualización general -->
             <button class="preview-btn" onclick="previewNormalization('${column.replace(/'/g, "\\'")}')" 
                     id="preview-btn-${escapedColumn}" style="display: none;">
-                <i class="bi bi-eye"></i> Previsualizar
+                <i class="bi bi-eye"></i> Previsualizar transformación completa
             </button>
         `;
         
@@ -1599,9 +1850,14 @@ def normalize(value, series=None):
         const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
         const select = document.getElementById(`norm-${escapedColumn}-${layerIndex}`);
         const previewBtn = document.getElementById(`preview-btn-${escapedColumn}`);
-        const keepOriginalContainer = document.getElementById(`keep-original-${escapedColumn}-${layerIndex}`);
-        const keepOriginalCheckbox = document.getElementById(`keep-original-checkbox-${escapedColumn}-${layerIndex}`);
+        const keepOriginalContainer = document.getElementById(`keep-original-${escapedColumn}`);
         const layerControls = document.getElementById(`layer-controls-${escapedColumn}`);
+        
+        // Mostrar/ocultar botón de preview de la capa
+        const layerPreviewBtn = document.querySelector(`#layers-${escapedColumn} [data-layer-index="${layerIndex}"] .preview-layer-btn`);
+        if (layerPreviewBtn) {
+            layerPreviewBtn.style.display = select.value ? 'inline-block' : 'none';
+        }
         
         // Lista de funciones por defecto
         const defaultFunctions = [
@@ -1640,6 +1896,14 @@ def normalize(value, series=None):
                 normalizationConfig[column][layerIndex].keep_original = true;
             }
             
+            // Update output type indicator
+            updateLayerOutputTypeIndicator(column, layerIndex, select.value);
+            
+            // Also update output type if it's the first layer and a conversion is set
+            if (layerIndex === 0 && normalizationConfig[column][0].conversion) {
+                updateLayerOutputTypeIndicatorWithConversion(column, 0, select.value, normalizationConfig[column][0].conversion);
+            }
+            
             // Update compatibility of subsequent layers
             updateSubsequentLayersCompatibility(column, layerIndex);
         } else {
@@ -1653,6 +1917,12 @@ def normalize(value, series=None):
                 }
             }
             keepOriginalContainer.style.display = 'none';
+            
+            // Hide output type indicator when no method is selected
+            const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex}`);
+            if (outputIndicator) {
+                outputIndicator.style.display = 'none';
+            }
         }
         
         updateSelectedCount();
@@ -1691,7 +1961,9 @@ def normalize(value, series=None):
                 const inputIndicator = layer.querySelector('.compatibility-indicator');
                 if (inputIndicator && prevOutputType) {
                     inputIndicator.className = `compatibility-indicator ${prevOutputType}`;
-                    inputIndicator.textContent = `Entrada: ${prevOutputType === 'numeric' ? 'Numérico' : 'Texto'}`;
+                    // Get specific data type
+                    const prevOutputDType = getOutputDataType(column, i - 1);
+                    inputIndicator.textContent = `Entrada: ${prevOutputType === 'numeric' ? 'Numérico' : 'Texto'}${prevOutputDType && prevOutputDType !== 'unknown' ? ` (${prevOutputDType})` : ''}`;
                 }
                 compatibleMethods = compatibleMethods.filter(method => {
                     if (!method.output_type) return true;
@@ -1747,13 +2019,81 @@ def normalize(value, series=None):
         }
     }
 
-    function onKeepOriginalChange(column, layerIndex = 0) {
+    function onKeepOriginalChange(column) {
         const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
-        const checkbox = document.getElementById(`keep-original-checkbox-${escapedColumn}-${layerIndex}`);
-        if (Array.isArray(normalizationConfig[column]) && normalizationConfig[column][layerIndex]) {
-            normalizationConfig[column][layerIndex].keep_original = checkbox.checked;
+        const checkbox = document.getElementById(`keep-original-checkbox-${escapedColumn}`);
+        
+        // Update all layers in the config to use the same keep_original value
+        if (Array.isArray(normalizationConfig[column])) {
+            normalizationConfig[column].forEach(layer => {
+                if (layer) {
+                    layer.keep_original = checkbox.checked;
+                }
+            });
         }
     }
+    
+    async function previewLayer(column, layerIndex) {
+        console.log('previewLayer called:', column, layerIndex);
+        const config = normalizationConfig[column];
+        console.log('Current config:', config);
+        
+        if (!config || !Array.isArray(config) || !config[layerIndex]) {
+            showNotification('No hay configuración para esta capa', 'warning');
+            return;
+        }
+        
+        try {
+            // Prepare config up to this layer
+            let normConfig = {};
+            // Include all layers up to and including the specified layer
+            normConfig[column] = config.slice(0, layerIndex + 1).filter(layer => layer && layer.method);
+            
+            console.log('Sending normalization config:', normConfig);
+            
+            const response = await fetch(`/api/datasets/${datasetId}/normalization/preview/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    normalization: normConfig,
+                    sample_size: 100,
+                    show_steps: true
+                })
+            });
+            
+            const data = await response.json();
+            console.log('Preview response:', data);
+            
+            if (!response.ok) {
+                console.error('Error response:', data);
+                
+                if (data.error_type === 'CustomFunctionError') {
+                    showPreviewError(data.details || data.message);
+                    return;
+                }
+                
+                let errorMessage = 'Error al generar previsualización';
+                if (data.error) {
+                    errorMessage = data.error;
+                }
+                
+                showNotification(errorMessage, 'error');
+                return;
+            }
+            
+            // Use the same preview function as the complete transformation
+            showPreview(data, column, layerIndex);
+            
+        } catch (error) {
+            console.error('Error al previsualizar capa:', error);
+            showNotification('Error al generar previsualización de la capa', 'error');
+        }
+    }
+    
+    // Función removida - ahora usamos showPreview para ambos casos
 
     function updateSelectedCount() {
         const count = Object.keys(normalizationConfig).length;
@@ -1827,54 +2167,103 @@ def normalize(value, series=None):
         
         // Get previous layer output type for display
         let previousOutputType = null;
+        let previousOutputDType = null;
         if (newLayerIndex > 0 && Array.isArray(normalizationConfig[column]) && normalizationConfig[column][newLayerIndex - 1]) {
             const prevMethod = normalizationConfig[column][newLayerIndex - 1].method;
             const prevMethodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === prevMethod);
             if (prevMethodInfo && prevMethodInfo.output_type) {
                 previousOutputType = prevMethodInfo.output_type;
+                // Get the specific data type using getOutputDataType function
+                previousOutputDType = getOutputDataType(column, newLayerIndex - 1);
             }
         }
         
-        newLayer.innerHTML = `
+        // Add conversion dropdown before this layer if not the first layer
+        let conversionHtml = '';
+        if (newLayerIndex > 0 && previousOutputType) {
+            // Check if we need automatic conversion (e.g., after ONE_HOT)
+            let autoConversion = '';
+            if (normalizationConfig[column] && normalizationConfig[column][newLayerIndex - 1]) {
+                const prevMethod = normalizationConfig[column][newLayerIndex - 1].method;
+                // If previous method was ONE_HOT, suggest float conversion
+                if (prevMethod === 'ONE_HOT') {
+                    autoConversion = 'TO_FLOAT64';
+                }
+            }
+            
+            conversionHtml = `
+                <div class="conversion-container" style="margin: 15px 0; padding: 15px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.3); border-radius: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <i class="bi bi-arrow-down-square" style="color: var(--primary-color);"></i>
+                        <span style="color: rgba(240, 249, 255, 0.8); font-weight: 500;">Conversión de tipo:</span>
+                        <select class="conversion-select" id="conv-${escapedColumn}-${newLayerIndex}" 
+                                onchange="onConversionChange('${column.replace(/'/g, "\\'")}', ${newLayerIndex})"
+                                style="flex: 1; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color); padding: 5px 10px; border-radius: 5px;">
+                            <option value="">Sin conversión</option>
+                            ${getConversionOptions(previousOutputType).map(conv => 
+                                `<option value="${conv.value}" title="${conv.description}" ${conv.value === autoConversion ? 'selected' : ''}>${conv.label}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    ${autoConversion ? `
+                        <div style="margin-top: 10px; font-size: 0.85rem; color: rgba(255, 193, 7, 0.8);">
+                            <i class="bi bi-info-circle"></i> Conversión sugerida después de ONE_HOT para compatibilidad con métodos numéricos
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            // If auto-conversion was set, also update the config
+            if (autoConversion && normalizationConfig[column][newLayerIndex - 1]) {
+                normalizationConfig[column][newLayerIndex - 1].conversion = autoConversion;
+            }
+        }
+        
+        newLayer.innerHTML = conversionHtml + `
             <div style="display: flex; align-items: center; gap: 10px;">
                 <span style="color: var(--primary-color); font-weight: bold;">Capa ${newLayerIndex + 1}:</span>
                 ${previousOutputType ? `
                     <span class="compatibility-indicator ${previousOutputType}">
-                        Entrada: ${previousOutputType === 'numeric' ? 'Numérico' : 'Texto'}
+                        Entrada: ${previousOutputType === 'numeric' ? 'Numérico' : 'Texto'}${previousOutputDType && previousOutputDType !== 'unknown' ? ` (${previousOutputDType})` : ''}
                     </span>
                 ` : ''}
+                <span class="output-type-indicator" id="output-type-${escapedColumn}-${newLayerIndex}" style="display: none; margin-left: 10px; padding: 2px 8px; background: rgba(147, 51, 234, 0.2); border: 1px solid rgba(147, 51, 234, 0.5); border-radius: 4px; font-size: 0.85rem;">
+                    <!-- Output type will be updated when method is selected -->
+                </span>
                 <button type="button" class="remove-layer-btn" data-column="${column}" data-layer-index="${newLayerIndex}"
                         style="background: transparent; border: none; color: #ff4444; cursor: pointer; padding: 5px; position: relative; z-index: 100; width: 30px; height: 30px;">
                     <i class="bi bi-x-circle"></i>
                 </button>
             </div>
-            <select class="normalization-select" id="norm-${escapedColumn}-${newLayerIndex}" 
-                    onchange="onNormalizationChange('${column.replace(/'/g, "\\'")}', ${newLayerIndex})">
-                <option value="">Sin normalizar</option>
-                ${compatiblePrimary.length > 0 ? `
-                    <optgroup label="Métodos compatibles">
-                        ${compatiblePrimary.map(method => 
-                            `<option value="${method.value}" title="${method.description} → Salida: ${method.output_type === 'numeric' ? 'Numérico' : 'Texto'}">${method.label} → ${method.output_type === 'numeric' ? '123' : 'ABC'}</option>`
-                        ).join('')}
-                    </optgroup>
-                ` : ''}
-                ${compatibleSecondary.length > 0 ? `
-                    <optgroup label="Otros métodos compatibles">
-                        ${compatibleSecondary.map(method => 
-                            `<option value="${method.value}" title="${method.description} → Salida: ${method.output_type === 'numeric' ? 'Numérico' : 'Texto'}">${method.label} → ${method.output_type === 'numeric' ? '123' : 'ABC'}</option>`
-                        ).join('')}
-                    </optgroup>
-                ` : ''}
-                ${compatibleMethods.length === 0 ? `
-                    <option value="" disabled>No hay métodos compatibles con la salida anterior</option>
-                ` : ''}
-            </select>
-            <div class="keep-original-container" id="keep-original-${escapedColumn}-${newLayerIndex}" style="display: none;">
-                <label class="keep-original-label">
-                    <input type="checkbox" class="keep-original-checkbox" id="keep-original-checkbox-${escapedColumn}-${newLayerIndex}" 
-                           onchange="onKeepOriginalChange('${column.replace(/'/g, "\\'")}', ${newLayerIndex})" checked>
-                    <span>Mantener columna original</span>
-                </label>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <select class="normalization-select" id="norm-${escapedColumn}-${newLayerIndex}" 
+                        onchange="onNormalizationChange('${column.replace(/'/g, "\\'")}', ${newLayerIndex})"
+                        style="flex: 1;">
+                    <option value="">Sin normalizar</option>
+                    ${compatiblePrimary.length > 0 ? `
+                        <optgroup label="Métodos compatibles">
+                            ${compatiblePrimary.map(method => 
+                                `<option value="${method.value}" title="${method.description} → Salida: ${method.output_type === 'numeric' ? 'Numérico' : 'Texto'}">${method.label} → ${method.output_type === 'numeric' ? '123' : 'ABC'}</option>`
+                            ).join('')}
+                        </optgroup>
+                    ` : ''}
+                    ${compatibleSecondary.length > 0 ? `
+                        <optgroup label="Otros métodos compatibles">
+                            ${compatibleSecondary.map(method => 
+                                `<option value="${method.value}" title="${method.description} → Salida: ${method.output_type === 'numeric' ? 'Numérico' : 'Texto'}">${method.label} → ${method.output_type === 'numeric' ? '123' : 'ABC'}</option>`
+                            ).join('')}
+                        </optgroup>
+                    ` : ''}
+                    ${compatibleMethods.length === 0 ? `
+                        <option value="" disabled>No hay métodos compatibles con la salida anterior</option>
+                    ` : ''}
+                </select>
+                <button class="btn btn-sm btn-outline-info preview-layer-btn" 
+                        onclick="previewLayer('${column.replace(/'/g, "\\'")}', ${newLayerIndex})" 
+                        title="Previsualizar esta capa"
+                        style="display: none;">
+                    <i class="bi bi-eye"></i>
+                </button>
             </div>
         `;
         
@@ -2040,35 +2429,202 @@ def normalize(value, series=None):
         }
     }
 
-    function showPreview(response) {
+    function showPreview(response, specificColumn = null, layerIndex = null) {
         const modal = document.getElementById('preview-modal');
         const body = document.getElementById('preview-body');
         const title = document.getElementById('preview-title');
         
-        // Extraer la columna del preview (asumimos que solo se envió una columna)
-        const columns = Object.keys(response.preview || {});
-        if (columns.length === 0) {
-            showNotification('No se recibieron datos de previsualización', 'error');
+        console.log('showPreview called with:', { response, specificColumn, layerIndex });
+        
+        // Check for errors first
+        if (response.error || response.error_type) {
+            let errorHtml = `
+                <div style="text-align: center; padding: 40px;">
+                    <i class="bi bi-exclamation-triangle" style="font-size: 3rem; color: #ff6b6b;"></i>
+                    <h4 style="margin-top: 20px; color: #ff6b6b;">Error en la previsualización</h4>
+                    <div style="color: rgba(240, 249, 255, 0.7); margin-top: 20px; text-align: left; background: rgba(255, 107, 107, 0.1); padding: 20px; border-radius: 10px; border: 1px solid rgba(255, 107, 107, 0.3);">
+                        ${response.error || response.message || 'Error desconocido'}
+                    </div>
+                    ${response.details ? `
+                        <details style="margin-top: 20px; text-align: left;">
+                            <summary style="cursor: pointer; color: var(--primary-color);">Ver detalles técnicos</summary>
+                            <pre style="margin-top: 10px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; overflow-x: auto; font-size: 0.85rem; color: #ff6b6b;">
+${response.details}
+                            </pre>
+                        </details>
+                    ` : ''}
+                    <button class="btn btn-secondary" onclick="closePreview()" style="margin-top: 20px;">
+                        Cerrar
+                    </button>
+                </div>
+            `;
+            body.innerHTML = errorHtml;
+            modal.style.display = 'block';
             return;
         }
         
-        const column = columns[0];
-        const preview = response.preview[column];
+        // Extraer la columna del preview
+        const columns = Object.keys(response.preview || {});
+        if (columns.length === 0) {
+            // Si no hay preview pero hay transformation_steps, intentar mostrar eso
+            if (response.transformation_steps) {
+                const stepColumns = Object.keys(response.transformation_steps);
+                if (stepColumns.length === 0) {
+                    showNotification('No se recibieron datos de previsualización', 'error');
+                    return;
+                }
+                // Use the first column from transformation_steps
+                specificColumn = stepColumns[0];
+            } else {
+                showNotification('No se recibieron datos de previsualización', 'error');
+                return;
+            }
+        }
         
-        title.textContent = `Previsualización: ${column}`;
+        const column = specificColumn || columns[0];
+        const preview = response.preview ? response.preview[column] : null;
+        
+        // Adjust title based on whether it's a layer preview or complete preview
+        if (layerIndex !== null) {
+            title.textContent = `Previsualización - ${column} - Capa ${layerIndex + 1}`;
+        } else {
+            title.textContent = `Previsualización completa: ${column}`;
+        }
         
         let bodyHtml = '';
+        
+        // Show warnings if any
+        if (response.warnings && response.warnings.length > 0) {
+            bodyHtml += `
+                <div class="alert alert-warning" style="background: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.5); border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+                    <h5 style="color: #ffd93d; margin-bottom: 10px;"><i class="bi bi-exclamation-triangle"></i> Advertencias de conversión de tipo</h5>
+                    <ul style="margin-bottom: 0; list-style-type: none; padding-left: 0;">
+                        ${response.warnings.map(warning => `<li style="margin-bottom: 5px;"><i class="bi bi-info-circle"></i> ${warning.warning}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        // Get initial and final statistics
+        const initialType = datasetInfo.normalization_info[column].type;
+        const initialStats = datasetInfo.normalization_info[column].stats;
+        
+        // Show summary card at the top
+        bodyHtml += `
+            <div style="background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(147, 51, 234, 0.1)); border: 2px solid var(--primary-color); border-radius: 15px; padding: 20px; margin-bottom: 30px;">
+                <h4 style="color: var(--primary-color); margin-bottom: 20px;">
+                    <i class="bi bi-diagram-3"></i> ${layerIndex !== null ? `Resumen hasta la capa ${layerIndex + 1}` : 'Resumen de la transformación completa'}
+                </h4>
+                
+                <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 30px; align-items: center;">
+                    <!-- Initial state -->
+                    <div style="text-align: center;">
+                        <h5 style="color: rgba(240, 249, 255, 0.8); margin-bottom: 10px;">Estado inicial</h5>
+                        <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px;">
+                            <div class="compatibility-indicator ${initialType}" style="font-size: 1.2rem; margin-bottom: 10px;">
+                                ${initialType === 'numeric' ? 'Numérico' : 'Texto'}
+                            </div>
+                            ${initialStats ? `
+                                <div style="font-size: 0.9rem; color: rgba(240, 249, 255, 0.6);">
+                                    ${initialType === 'numeric' ? `
+                                        Media: ${initialStats.mean ? initialStats.mean.toFixed(2) : 'N/A'}<br>
+                                        Rango: [${initialStats.min ? initialStats.min.toFixed(2) : 'N/A'}, ${initialStats.max ? initialStats.max.toFixed(2) : 'N/A'}]
+                                    ` : `
+                                        ${initialStats.unique_count} valores únicos
+                                    `}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    
+                    <!-- Arrow -->
+                    <div style="font-size: 3rem; color: var(--primary-color);">
+                        <i class="bi bi-arrow-right"></i>
+                    </div>
+                    
+                    <!-- Final state -->
+                    <div style="text-align: center;">
+                        <h5 style="color: rgba(240, 249, 255, 0.8); margin-bottom: 10px;">${layerIndex !== null ? 'Estado después de esta capa' : 'Estado final'}</h5>
+                        <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px;">
+                            ${response.transformation_steps && response.transformation_steps[column] ? (() => {
+                                // For layer preview, use the specified layer as the "last" step
+                                const effectiveLastIndex = layerIndex !== null ? layerIndex : response.transformation_steps[column].length - 1;
+                                const lastStep = response.transformation_steps[column][effectiveLastIndex];
+                                if (!lastStep) {
+                                    return '<div style="color: #ff6b6b;">No se encontró información para esta capa</div>';
+                                }
+                                const lastMethodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
+                                                        ...datasetInfo.normalization_info[column].secondary_methods]
+                                                        .find(m => m.value === lastStep.method);
+                                const outputType = lastMethodInfo ? lastMethodInfo.output_type : 'unknown';
+                                
+                                return `
+                                    <div class="compatibility-indicator ${outputType}" style="font-size: 1.2rem; margin-bottom: 10px;">
+                                        ${outputType === 'numeric' ? 'Numérico' : outputType === 'text' ? 'Texto' : 'Desconocido'}
+                                    </div>
+                                    ${response.preview[column] && response.preview[column].normalized && response.preview[column].normalized.stats ? `
+                                        <div style="font-size: 0.9rem; color: rgba(240, 249, 255, 0.6);">
+                                            ${outputType === 'numeric' ? `
+                                                Media: ${response.preview[column].normalized.stats.mean ? response.preview[column].normalized.stats.mean.toFixed(2) : 'N/A'}<br>
+                                                Rango: [${response.preview[column].normalized.stats.min ? response.preview[column].normalized.stats.min.toFixed(2) : 'N/A'}, 
+                                                        ${response.preview[column].normalized.stats.max ? response.preview[column].normalized.stats.max.toFixed(2) : 'N/A'}]
+                                            ` : `
+                                                Valores transformados
+                                            `}
+                                        </div>
+                                    ` : ''}
+                                `;
+                            })() : ''}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Chain summary -->
+                ${response.transformation_steps && response.transformation_steps[column] ? `
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(0, 212, 255, 0.3);">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                            ${(layerIndex !== null ? response.transformation_steps[column].slice(0, layerIndex + 1) : response.transformation_steps[column]).map((step, idx) => {
+                                const methodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
+                                                  ...datasetInfo.normalization_info[column].secondary_methods]
+                                                  .find(m => m.value === step.method);
+                                return `
+                                    ${idx > 0 ? '<i class="bi bi-arrow-right" style="color: rgba(0, 212, 255, 0.5);"></i>' : ''}
+                                    <div style="background: rgba(0, 0, 0, 0.3); padding: 5px 15px; border-radius: 20px;">
+                                        <span style="color: var(--light-color);">${methodInfo ? methodInfo.label : step.method}</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
         
         // Show transformation steps if available
         if (response.transformation_steps && response.transformation_steps[column]) {
             const steps = response.transformation_steps[column];
-            bodyHtml += `
-                <div class="transformation-steps">
-                    <h4><i class="bi bi-layers"></i> Pasos de transformación</h4>
-                    <div class="steps-container">
-            `;
             
-            steps.forEach((step, index) => {
+            // For layer preview, only show the specific layer transformation
+            const stepsToShow = layerIndex !== null ? 
+                (steps[layerIndex] ? [steps[layerIndex]] : []) : 
+                steps;
+            
+            if (stepsToShow.length === 0) {
+                bodyHtml += `
+                    <div style="text-align: center; padding: 40px; background: rgba(255, 107, 107, 0.1); border-radius: 10px; margin-top: 20px;">
+                        <i class="bi bi-exclamation-circle" style="font-size: 2rem; color: #ff6b6b;"></i>
+                        <h5 style="color: #ff6b6b; margin-top: 10px;">No se encontraron datos para la capa ${layerIndex + 1}</h5>
+                        <p style="color: rgba(240, 249, 255, 0.7);">Verifica que la capa tenga un método de normalización seleccionado.</p>
+                    </div>
+                `;
+            } else {
+                bodyHtml += `
+                    <div class="transformation-steps">
+                        <h4><i class="bi bi-layers"></i> ${layerIndex !== null ? `Transformación de la capa ${layerIndex + 1}` : 'Detalle de cada transformación'}</h4>
+                        <div class="steps-container">
+                `;
+                
+                stepsToShow.forEach((step, index) => {
                 // Get method display name
                 const methodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
                                   ...datasetInfo.normalization_info[column].secondary_methods]
@@ -2085,6 +2641,14 @@ def normalize(value, series=None):
                                 ${methodLabel}
                             </div>
                         </div>
+                        
+                        ${step.conversion ? `
+                            <div style="margin: 10px 0; padding: 10px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.3); border-radius: 8px;">
+                                <i class="bi bi-arrow-down-square"></i> 
+                                <span style="color: rgba(240, 249, 255, 0.8);">Conversión aplicada: </span>
+                                <strong>${getConversionLabel(step.conversion)}</strong>
+                            </div>
+                        ` : ''}
                         
                         <div class="preview-comparison">
                             <div class="preview-column">
@@ -2145,9 +2709,10 @@ def normalize(value, series=None):
                 </div>
                 
                 <!-- Resumen de la cadena de transformación -->
+                ${layerIndex === null ? `
                 <div style="margin-top: 20px; padding: 15px; background: rgba(0, 212, 255, 0.1); border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.3);">
                     <h5 style="color: var(--primary-color); margin-bottom: 10px;">
-                        <i class="bi bi-diagram-3"></i> Resumen de la cadena
+                        <i class="bi bi-diagram-3"></i> Resumen de la cadena completa
                     </h5>
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         ${steps.map((step, idx) => {
@@ -2180,12 +2745,28 @@ def normalize(value, series=None):
                         }).join('')}
                     </div>
                 </div>
+                ` : ''}
                 
                 <hr style="border-color: rgba(0, 212, 255, 0.3); margin: 20px 0;">
             `;
+            }
+        } else {
+            // No transformation steps available
+            if (layerIndex !== null) {
+                bodyHtml += `
+                    <div style="text-align: center; padding: 40px; background: rgba(255, 107, 107, 0.1); border-radius: 10px; margin-top: 20px;">
+                        <i class="bi bi-exclamation-triangle" style="font-size: 3rem; color: #ff6b6b;"></i>
+                        <h4 style="color: #ff6b6b; margin-top: 20px;">No se encontraron pasos de transformación</h4>
+                        <p style="color: rgba(240, 249, 255, 0.7); margin-top: 10px;">
+                            No se pudo obtener la información de transformación para la capa ${layerIndex + 1}.
+                            <br>Asegúrate de que la capa tenga un método de normalización seleccionado.
+                        </p>
+                    </div>
+                `;
+            }
         }
         
-        if (preview.new_columns) {
+        if (preview && preview.new_columns) {
             // Multiple columns output (including one-hot encoding)
             bodyHtml += `
                 <div class="alert alert-info">
@@ -2639,6 +3220,25 @@ def normalize(value, series=None):
                 cancelBtn.onclick = function() { hideProgressModal(); };
                 
                 throw new Error('Error en función personalizada');
+            } else if (errorData.error && errorData.error.includes('Error de compatibilidad')) {
+                // Error de compatibilidad de tipos
+                addProgressLog('❌ ERROR DE COMPATIBILIDAD');
+                addProgressLog('═'.repeat(50));
+                addProgressLog(errorData.error);
+                addProgressLog('═'.repeat(50));
+                addProgressLog('⚠️ Revisa la cadena de normalización para asegurar compatibilidad entre capas');
+                
+                // Actualizar el estado del paso actual
+                document.getElementById('currentStepText').textContent = 'Error de compatibilidad';
+                document.getElementById('currentStepDetails').textContent = errorData.error;
+                
+                // Cambiar el botón de cancelar a cerrar
+                const cancelBtn = document.getElementById('cancelNormalization');
+                cancelBtn.textContent = 'Cerrar';
+                cancelBtn.className = 'btn btn-secondary';
+                cancelBtn.onclick = function() { hideProgressModal(); };
+                
+                throw new Error('Error de compatibilidad');
             } else {
                 throw new Error(errorData.error || 'Error al aplicar normalización');
             }
@@ -2647,6 +3247,14 @@ def normalize(value, series=None):
         const result = await response.json();
         console.log('Response from server:', result); // Debug log
         currentStep++;
+        
+        // Mostrar advertencias si las hay
+        if (result.warnings && result.warnings.length > 0) {
+            addProgressLog('⚠️ ADVERTENCIAS DE CONVERSIÓN DE TIPO:');
+            result.warnings.forEach(warning => {
+                addProgressLog(`   - ${warning.warning}`);
+            });
+        }
         
         // Paso: Finalización
         updateProgress(currentStep, totalSteps, 'Finalizando...', 'Proceso completado exitosamente');

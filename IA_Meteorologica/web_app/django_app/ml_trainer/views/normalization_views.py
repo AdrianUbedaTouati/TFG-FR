@@ -20,7 +20,10 @@ from contextlib import contextmanager
 from ..models import Dataset, CustomNormalizationFunction
 from ..normalization_methods import DISPATCH_NUM, DISPATCH_TEXT
 from ..normalization_mappings import get_numeric_enum, get_text_enum
-from ..normalization_compatibility import get_method_io_type, NORMALIZATION_IO_TYPES
+from ..normalization_compatibility import (
+    get_method_io_type, NORMALIZATION_IO_TYPES, 
+    validate_method_chain, detect_column_data_type
+)
 from ..utils import (
     load_dataset, error_response, success_response,
     validate_dataframe, detect_column_type
@@ -107,6 +110,9 @@ class DatasetNormalizationView(APIView):
             print(f"Custom numeric functions: {len(custom_numeric_functions)}")
             print(f"Custom text functions: {len(custom_text_functions)}")
             
+            # Import conversion options
+            from ..type_conversions import TYPE_CONVERSIONS
+            
             # Analizar cada columna para determinar métodos de normalización disponibles
             normalization_info = {}
             
@@ -115,20 +121,22 @@ class DatasetNormalizationView(APIView):
                 
                 if df[col].dtype in ['int64', 'float64']:
                     # Columna numérica
+                    col_dtype = str(df[col].dtype)
                     normalization_info[col] = {
                         'type': 'numeric',
+                        'dtype': col_dtype,  # Add specific dtype
                         'primary_methods': [
-                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores al rango [0, 1]', 'output_type': 'numeric'},
-                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Estandariza a media 0 y desviación 1', 'output_type': 'numeric'},
-                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Escala al rango [-1, 1] para RNN/TCN', 'output_type': 'numeric'},
-                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Normalización Z-Score para CNN', 'output_type': 'numeric'},
-                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler resistente a outliers', 'output_type': 'numeric'},
-                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación (modelos de árbol)', 'output_type': 'numeric'}
+                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores al rango [0, 1]', 'output_type': 'numeric', 'output_dtype': 'float64'},
+                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Estandariza a media 0 y desviación 1', 'output_type': 'numeric', 'output_dtype': 'float64'},
+                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Escala al rango [-1, 1] para RNN/TCN', 'output_type': 'numeric', 'output_dtype': 'float64'},
+                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Normalización Z-Score para CNN', 'output_type': 'numeric', 'output_dtype': 'float64'},
+                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler resistente a outliers', 'output_type': 'numeric', 'output_dtype': 'float64'},
+                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación (modelos de árbol)', 'output_type': 'numeric', 'output_dtype': col_dtype}
                         ] + custom_numeric_functions,  # Agregar funciones personalizadas numéricas
                         'secondary_methods': [
-                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte a minúsculas (si son texto)', 'output_type': 'text'},
-                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final', 'output_type': 'text'},
-                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos (0, 1, 2...)', 'output_type': 'numeric'}
+                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte a minúsculas (si son texto)', 'output_type': 'text', 'output_dtype': 'object'},
+                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final', 'output_type': 'text', 'output_dtype': 'object'},
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos (0, 1, 2...)', 'output_type': 'numeric', 'output_dtype': 'Int64'}
                         ] + custom_text_functions,  # Agregar funciones personalizadas de texto
                         'stats': {
                             'mean': float(df[col].mean()) if not df[col].isna().all() else None,
@@ -144,18 +152,19 @@ class DatasetNormalizationView(APIView):
                     
                     normalization_info[col] = {
                         'type': 'text',
+                        'dtype': 'object',  # Add specific dtype
                         'primary_methods': [
-                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte todo a minúsculas', 'output_type': 'text'},
-                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final', 'output_type': 'text'},
-                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': f'Convierte {unique_values} categorías a códigos numéricos (0, 1, 2...)', 'output_type': 'numeric'}
+                            {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte todo a minúsculas', 'output_type': 'text', 'output_dtype': 'object'},
+                            {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final', 'output_type': 'text', 'output_dtype': 'object'},
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': f'Convierte {unique_values} categorías a códigos numéricos (0, 1, 2...)', 'output_type': 'numeric', 'output_dtype': 'Int64'}
                         ] + custom_text_functions,  # Agregar funciones personalizadas de texto
                         'secondary_methods': [
-                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores (si son números como texto)', 'output_type': 'numeric'},
-                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Estandariza (si son números como texto)', 'output_type': 'numeric'},
-                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Escala [-1, 1] (si son números)', 'output_type': 'numeric'},
-                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Z-Score (si son números)', 'output_type': 'numeric'},
-                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler (si son números)', 'output_type': 'numeric'},
-                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación', 'output_type': 'numeric'}
+                            {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores (si son números como texto)', 'output_type': 'numeric', 'output_dtype': 'float64'},
+                            {'value': 'Z_SCORE', 'label': 'Z-Score', 'description': 'Estandariza (si son números como texto)', 'output_type': 'numeric', 'output_dtype': 'float64'},
+                            {'value': 'LSTM_TCN', 'label': 'LSTM/TCN [-1, 1]', 'description': 'Escala [-1, 1] (si son números)', 'output_type': 'numeric', 'output_dtype': 'float64'},
+                            {'value': 'CNN', 'label': 'CNN (Z-Score)', 'description': 'Z-Score (si son números)', 'output_type': 'numeric', 'output_dtype': 'float64'},
+                            {'value': 'TRANSFORMER', 'label': 'Transformer (Robust)', 'description': 'RobustScaler (si son números)', 'output_type': 'numeric', 'output_dtype': 'float64'},
+                            {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación', 'output_type': 'numeric', 'output_dtype': 'object'}
                         ] + custom_numeric_functions,  # Agregar funciones personalizadas numéricas
                         'stats': {
                             'unique_count': unique_values,
@@ -198,6 +207,7 @@ class DatasetNormalizationView(APIView):
                     'columns': list(df.columns)
                 },
                 'normalization_info': normalization_info,
+                'conversion_options': TYPE_CONVERSIONS,  # Add conversion options
                 'normalized_copies': [
                     {
                         'id': copy.id,
@@ -261,12 +271,18 @@ class DatasetNormalizationView(APIView):
                 )
                 print(f"Dataset saved successfully: {new_dataset.name}")
                 
-                return success_response({
+                response_data = {
                     'dataset_id': new_dataset.id,
                     'dataset_name': new_dataset.name,
                     'normalization_applied': normalization_config,
                     'new_shape': list(normalized_df.shape)
-                }, message=SUCCESS_NORMALIZATION_COMPLETE)
+                }
+                
+                # Add warnings if any
+                if hasattr(self, 'conversion_warnings') and self.conversion_warnings:
+                    response_data['warnings'] = self.conversion_warnings
+                
+                return success_response(response_data, message=SUCCESS_NORMALIZATION_COMPLETE)
             else:
                 # Overwrite original
                 csv_content = normalized_df.to_csv(index=False)
@@ -299,6 +315,7 @@ class DatasetNormalizationView(APIView):
     def _apply_normalization(self, df: pd.DataFrame, config: dict) -> pd.DataFrame:
         """Apply normalization based on configuration"""
         normalized_df = df.copy()
+        self.conversion_warnings = []  # Store warnings for type conversions
         
         for column, method_config in config.items():
             if column not in df.columns:
@@ -307,10 +324,58 @@ class DatasetNormalizationView(APIView):
             # Handle both old format (string) and new format (dict/list)
             if isinstance(method_config, list):
                 # New format: list of normalization steps (chained normalization)
+                
+                # Extract method names for validation
+                method_names = [step.get('method', '') for step in method_config]
+                
+                # Detect initial column type
+                initial_type = detect_column_data_type(df[column])
+                
+                # Validate the method chain
+                is_valid, error_msg, final_type = validate_method_chain(method_names, initial_type)
+                
+                if not is_valid:
+                    error_details = f"Error de compatibilidad en columna '{column}': {error_msg}"
+                    print(error_details)
+                    raise ValueError(error_details)
+                
                 current_column = column
                 for step_index, step in enumerate(method_config):
                     method = step.get('method', '')
                     keep_original = step.get('keep_original', False)
+                    
+                    # Get conversion from PREVIOUS step (it's stored in the previous step)
+                    # Conversion happens AFTER the previous transformation, not before this one
+                    if step_index > 0 and 'conversion' in method_config[step_index - 1]:
+                        conversion = method_config[step_index - 1].get('conversion', None)
+                        
+                        if conversion and current_column in normalized_df.columns:
+                            from ..conversion_functions import apply_conversion, get_conversion_warnings
+                            try:
+                                # Get warning if any
+                                warning_msg = get_conversion_warnings(
+                                    normalized_df[current_column].dtype, conversion
+                                )
+                                
+                                # Apply conversion
+                                normalized_df[current_column] = apply_conversion(
+                                    normalized_df[current_column], conversion
+                                )
+                                
+                                # Add conversion warning
+                                if hasattr(self, 'conversion_warnings'):
+                                    base_msg = f"Conversión de tipo aplicada en columna '{current_column}': {conversion}"
+                                    if warning_msg:
+                                        base_msg += f" - ⚠️ {warning_msg}"
+                                    self.conversion_warnings.append({
+                                        'column': current_column,
+                                        'method': conversion,
+                                        'warning': base_msg
+                                    })
+                            except Exception as e:
+                                error_msg = f"Error aplicando {conversion} a columna {current_column}: {str(e)}"
+                                print(error_msg)
+                                raise ValueError(error_msg)
                     
                     # Apply single normalization step
                     normalized_df = self._apply_single_normalization(
@@ -675,51 +740,67 @@ class DatasetNormalizationView(APIView):
                                f"Error Message: {error_details['error_message']}\n\n"
                                f"Traceback:\n{error_details['traceback']}")
         
-        # Try numeric normalization first
-        norm_enum = get_numeric_enum(method)
-        if norm_enum in DISPATCH_NUM:
-            try:
-                # Attempt to convert to numeric if it's not already
-                if normalized_df[column].dtype == 'object':
-                    # Try to convert text to numeric
-                    numeric_series = pd.to_numeric(normalized_df[column], errors='coerce')
-                    if not numeric_series.isna().all():  # If at least some values converted
-                        func = DISPATCH_NUM[norm_enum]
-                        if keep_original:
-                            new_column_name = f"{column}{suffix}"
-                            normalized_df[new_column_name] = func(numeric_series)
-                        else:
-                            normalized_df[column] = func(numeric_series)
-                        return normalized_df
-                else:
-                    # Already numeric
+        # Check if column exists
+        if column not in normalized_df.columns:
+            print(f"Column {column} not found in dataframe")
+            return normalized_df
+            
+        # Detect the current data type of the column using our enhanced detection
+        current_type = detect_column_data_type(normalized_df[column])
+        
+        # Get method information
+        method_info = get_method_io_type(method)
+        
+        # Check compatibility
+        if method_info['input'] not in ['any', 'unknown'] and method_info['input'] != current_type:
+            # Special case: ONE_HOT can convert text to numeric, which is its purpose
+            if not (method == 'ONE_HOT' and current_type == 'text'):
+                error_msg = f"Método {method} requiere entrada tipo '{method_info['input']}' pero la columna '{column}' es tipo '{current_type}'"
+                print(error_msg)
+                raise ValueError(error_msg)
+        
+        # Apply the normalization based on method type
+        try:
+            # Handle numeric methods
+            if method in ['MIN_MAX', 'Z_SCORE', 'LSTM_TCN', 'CNN', 'TRANSFORMER', 'TREE']:
+                norm_enum = get_numeric_enum(method)
+                if norm_enum in DISPATCH_NUM:
                     func = DISPATCH_NUM[norm_enum]
+                    
+                    # Check if we need type conversion warning
+                    if pd.api.types.is_integer_dtype(normalized_df[column]) and method != 'TREE':
+                        if hasattr(self, 'conversion_warnings'):
+                            self.conversion_warnings.append({
+                                'column': column,
+                                'method': method,
+                                'warning': f"La columna '{column}' será convertida de entero a decimal para la normalización {method}"
+                            })
+                    
                     if keep_original:
-                        # Create new column with normalized values
                         new_column_name = f"{column}{suffix}"
                         normalized_df[new_column_name] = func(normalized_df[column])
                     else:
-                        # Replace original column
                         normalized_df[column] = func(normalized_df[column])
-                    return normalized_df
-            except Exception as e:
-                print(f"Error applying numeric normalization {method} to column {column}: {str(e)}")
+            
+            # Handle text methods
+            elif method in ['LOWER', 'STRIP', 'ONE_HOT']:
+                text_enum = get_text_enum(method)
+                if text_enum in DISPATCH_TEXT:
+                    func = DISPATCH_TEXT[text_enum]
+                    if keep_original:
+                        new_column_name = f"{column}{suffix}"
+                        normalized_df[new_column_name] = func(normalized_df[column])
+                    else:
+                        normalized_df[column] = func(normalized_df[column])
+            
+            else:
+                print(f"Unknown method: {method}")
+                
+        except Exception as e:
+            error_msg = f"Error aplicando {method} a columna {column}: {str(e)}"
+            print(error_msg)
+            raise ValueError(error_msg)
         
-        # Try text normalization
-        text_enum = get_text_enum(method)
-        if text_enum in DISPATCH_TEXT:
-            try:
-                func = DISPATCH_TEXT[text_enum]
-                if keep_original:
-                    new_column_name = f"{column}{suffix}"
-                    normalized_df[new_column_name] = func(normalized_df[column])
-                else:
-                    normalized_df[column] = func(normalized_df[column])
-                return normalized_df
-            except Exception as e:
-                print(f"Error applying text normalization {method} to column {column}: {str(e)}")
-        
-        # Return the modified dataframe
         return normalized_df
     
     def _save_normalized_copy(self, original_dataset, normalized_df, 
@@ -817,6 +898,27 @@ class DatasetNormalizationPreviewView(APIView):
         sample_df = df.head(sample_size)
         
         try:
+            # First validate all normalization chains
+            for column, method_config in normalization_config.items():
+                if column not in df.columns:
+                    continue
+                    
+                if isinstance(method_config, list):
+                    # Extract method names for validation
+                    method_names = [step.get('method', '') for step in method_config]
+                    
+                    # Detect initial column type
+                    initial_type = detect_column_data_type(df[column])
+                    
+                    # Validate the method chain
+                    is_valid, error_msg, final_type = validate_method_chain(method_names, initial_type)
+                    
+                    if not is_valid:
+                        return Response({
+                            'success': False,
+                            'error': f"Error de compatibilidad en columna '{column}': {error_msg}"
+                        }, status=status.HTTP_400_BAD_REQUEST)
+            
             # Apply normalization to sample
             view = DatasetNormalizationView()
             
@@ -825,38 +927,71 @@ class DatasetNormalizationPreviewView(APIView):
             
             if show_steps:
                 for column, method_config in normalization_config.items():
-                    if isinstance(method_config, list) and len(method_config) > 1:
-                        # Show transformation for each step
+                    if isinstance(method_config, list) and len(method_config) > 0:
+                        # Show transformation for each step (even if it's just one step)
                         steps_preview = []
                         current_df = sample_df.copy()
+                        current_column = column  # Track the current column name as it may change
                         
                         for step_index, step in enumerate(method_config):
                             method = step.get('method', '')
                             keep_original = step.get('keep_original', False)
                             
                             # Get sample values before transformation
-                            before_values = current_df[column].head(10).tolist() if column in current_df.columns else []
+                            before_values = current_df[current_column].tolist() if current_column in current_df.columns else []
+                            
+                            # Initialize conversion variable
+                            conversion = None
+                            
+                            # Apply conversion from PREVIOUS step (conversions happen AFTER the transformation)
+                            if step_index > 0 and 'conversion' in method_config[step_index - 1]:
+                                conversion = method_config[step_index - 1].get('conversion', None)
+                                
+                                if conversion and current_column in current_df.columns:
+                                    from ..conversion_functions import apply_conversion, get_conversion_warnings
+                                    try:
+                                        # Get warning if any
+                                        warning_msg = get_conversion_warnings(
+                                            current_df[current_column].dtype, conversion
+                                        )
+                                        if warning_msg and hasattr(view, 'conversion_warnings'):
+                                            view.conversion_warnings.append({
+                                                'column': current_column,
+                                                'method': conversion,
+                                                'warning': f"Conversión {conversion}: {warning_msg}"
+                                            })
+                                        
+                                        current_df[current_column] = apply_conversion(current_df[current_column], conversion)
+                                    except Exception as e:
+                                        error_msg = f"Error aplicando {conversion} a columna {current_column}: {str(e)}"
+                                        print(error_msg)
+                                        # Return error response instead of silently failing
+                                        return Response({
+                                            'success': False,
+                                            'error': error_msg
+                                        }, status=status.HTTP_400_BAD_REQUEST)
                             
                             # Apply single step
                             current_df = view._apply_single_normalization(
-                                current_df, column, method, keep_original,
+                                current_df, current_column, method, keep_original,
                                 step_index=step_index, total_steps=len(method_config)
                             )
                             
                             # Get sample values after transformation
                             # Find the transformed column (might have a new name)
-                            transformed_col = column
+                            transformed_col = current_column
                             if keep_original:
                                 # Find the new column
-                                new_cols = [col for col in current_df.columns if col.startswith(f"{column}_step{step_index + 1}")]
+                                new_cols = [col for col in current_df.columns if col.startswith(f"{current_column}_step{step_index + 1}")]
                                 if new_cols:
                                     transformed_col = new_cols[0]
                             
-                            after_values = current_df[transformed_col].head(10).tolist() if transformed_col in current_df.columns else []
+                            after_values = current_df[transformed_col].tolist() if transformed_col in current_df.columns else []
                             
                             steps_preview.append({
                                 'step': step_index + 1,
                                 'method': method,
+                                'conversion': conversion,  # Add conversion info
                                 'keep_original': keep_original,
                                 'before': before_values,
                                 'after': after_values,
@@ -865,7 +1000,7 @@ class DatasetNormalizationPreviewView(APIView):
                             
                             # Update column for next step if not keeping original
                             if not keep_original:
-                                column = transformed_col
+                                current_column = transformed_col
                         
                         transformation_steps[column] = steps_preview
             
@@ -1028,6 +1163,10 @@ class DatasetNormalizationPreviewView(APIView):
             # Add transformation steps if available
             if transformation_steps:
                 response_data['transformation_steps'] = transformation_steps
+            
+            # Add warnings if any
+            if hasattr(view, 'conversion_warnings') and view.conversion_warnings:
+                response_data['warnings'] = view.conversion_warnings
             
             return success_response(response_data)
             
