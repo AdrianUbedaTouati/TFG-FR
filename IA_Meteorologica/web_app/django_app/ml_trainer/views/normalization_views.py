@@ -1717,20 +1717,78 @@ class DatasetNormalizationPreviewView(APIView):
                     # Show mapping for all columns with reasonable number of unique values
                     if df[column].dtype == 'object' or df[column].nunique() < 1000:
                         unique_mapping = []
-                        # Get ALL unique values from the full dataset, no limit
-                        all_unique_values = df[column].dropna().unique()
                         
-                        # Create a temporary dataframe with all unique values to normalize them
-                        temp_df = pd.DataFrame({column: all_unique_values})
-                        
-                        # Apply the same normalization to all unique values
-                        try:
+                        # For layer-specific preview, we need to get the input data for that specific layer
+                        if show_steps and isinstance(method_config, list) and len(method_config) > 1:
+                            # We have a multi-layer transformation
+                            # Apply all transformations except the last one to get the input for the last layer
+                            try:
+                                # Get all but the last transformation
+                                previous_transformations = method_config[:-1]
+                                last_transformation = method_config[-1]
+                                
+                                # Apply previous transformations to the full dataset
+                                view = DatasetNormalizationView()
+                                intermediate_df = view._apply_normalization(df.copy(), {column: previous_transformations})
+                                
+                                # Find the output column from the previous transformations
+                                # Track the column name as it changes through transformations
+                                intermediate_column = column
+                                for step_idx, step in enumerate(previous_transformations):
+                                    if step.get('keep_original', False):
+                                        # Column was kept, look for the new column with step suffix
+                                        step_col = f"{intermediate_column}_step{step_idx + 1}"
+                                        if step_col in intermediate_df.columns:
+                                            intermediate_column = step_col
+                                    # If keep_original is False, the column name stays the same
+                                
+                                # Get unique values from the intermediate column
+                                if intermediate_column in intermediate_df.columns:
+                                    all_unique_values = intermediate_df[intermediate_column].dropna().unique()
+                                    temp_column_name = intermediate_column
+                                    print(f"Layer preview: Using intermediate column '{intermediate_column}' with {len(all_unique_values)} unique values")
+                                    print(f"Layer preview: Sample values from intermediate: {list(all_unique_values)[:5]}")
+                                else:
+                                    # Fallback to original column
+                                    all_unique_values = df[column].dropna().unique()
+                                    temp_column_name = column
+                                    print(f"Layer preview: WARNING - Using original column '{column}' instead of intermediate")
+                                
+                                # Create temp dataframe with intermediate values
+                                temp_df = pd.DataFrame({temp_column_name: all_unique_values})
+                                
+                                # Apply only the last transformation
+                                normalized_temp = view._apply_normalization(temp_df.copy(), {temp_column_name: last_transformation})
+                                
+                            except Exception as e:
+                                print(f"Error applying intermediate transformations: {e}")
+                                # Fallback to using sample data
+                                last_step = transformation_steps[column][-1]
+                                all_unique_values = pd.Series(last_step['before']).dropna().unique()
+                                temp_column_name = column
+                                temp_df = pd.DataFrame({temp_column_name: all_unique_values})
+                                view = DatasetNormalizationView()
+                                last_method_config = method_config[-1]
+                                normalized_temp = view._apply_normalization(temp_df.copy(), {temp_column_name: last_method_config})
+                        else:
+                            # Single transformation or no show_steps
+                            # Get ALL unique values from the full dataset, no limit
+                            all_unique_values = df[column].dropna().unique()
+                            temp_column_name = column
+                            temp_df = pd.DataFrame({temp_column_name: all_unique_values})
+                            
+                            # Apply the normalization
                             view = DatasetNormalizationView()
                             normalized_temp = view._apply_normalization(temp_df.copy(), {column: method_config})
-                            
-                            # Build the mapping for all unique values
+                        
+                        # Build the mapping for all unique values
+                        try:
                             for idx, val in enumerate(all_unique_values):
-                                if target_column in normalized_temp.columns:
+                                # When dealing with layer preview, look for the appropriate column
+                                if temp_column_name in normalized_temp.columns:
+                                    # Direct match with temp column name
+                                    normalized_val = normalized_temp.iloc[idx][temp_column_name]
+                                elif target_column in normalized_temp.columns:
                                     # Found target column directly
                                     normalized_val = normalized_temp.iloc[idx][target_column]
                                 elif column in normalized_temp.columns:
@@ -1743,13 +1801,18 @@ class DatasetNormalizationPreviewView(APIView):
                                     if target_cols:
                                         normalized_val = normalized_temp.iloc[idx][target_cols[0]]
                                     else:
-                                        # Try any new columns
-                                        new_cols = [col for col in normalized_temp.columns if col not in temp_df.columns]
-                                        if new_cols:
-                                            # Use the first new column for the mapping
-                                            normalized_val = normalized_temp.iloc[idx][new_cols[0]]
+                                        # Try columns with temp_column_name prefix
+                                        temp_cols = [col for col in normalized_temp.columns if col.startswith(temp_column_name) and col != temp_column_name]
+                                        if temp_cols:
+                                            normalized_val = normalized_temp.iloc[idx][temp_cols[0]]
                                         else:
-                                            normalized_val = '[Columna eliminada]'
+                                            # Try any new columns
+                                            new_cols = [col for col in normalized_temp.columns if col not in temp_df.columns]
+                                            if new_cols:
+                                                # Use the first new column for the mapping
+                                                normalized_val = normalized_temp.iloc[idx][new_cols[0]]
+                                            else:
+                                                normalized_val = '[Columna eliminada]'
                                 
                                 unique_mapping.append({
                                     'original': val,
