@@ -46,8 +46,7 @@ class CustomNormalizationFunction(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='custom_functions')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    # Nuevos campos para controlar columnas
-    remove_original_column = models.BooleanField(default=True, help_text="Si eliminar la columna original después de normalizar")
+    # Campo para controlar columnas nuevas
     new_columns = models.JSONField(default=list, help_text="Lista de nombres de columnas nuevas que creará la función")
     
     class Meta:

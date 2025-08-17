@@ -1,49 +1,59 @@
 # Column Removal Fix Summary
 
 ## Problem
-When normalizing a dataset column, the original column was always retained regardless of the "Mantener columna original" (Keep original column) checkbox state. The expected behavior is that columns should be removed by default unless the checkbox is explicitly checked.
+Columns were not being removed during multi-layer normalization even when all layers had `keep_original=False`.
 
-## Root Causes Identified
+## Root Cause
+The column detection pattern was looking for columns with an underscore separator (e.g., `column_*`), but the actual column names were created without a separator between the base name and suffix (e.g., `column_step1` instead of `column_step1`).
 
-### Frontend Issues (normalize.html)
-1. **Line 2380-2381**: Default value for `keep_original` was set to `true` for all but the last layer in multi-layer normalizations
-2. **Line 2411**: For custom functions, `keep_original` was always forced to `true`
+## Fix Applied
+Changed the column detection pattern from:
+```python
+col.startswith(f"{column}_")  # Looking for "column_*"
+```
 
-### Backend Issues (normalization_views.py)
-1. **Line 424**: Default value for `keep_original` in single normalization was `True` instead of `False`
+To:
+```python
+col.startswith(column) and col != column and len(col) > len(column)  # Looking for any column that starts with the base name
+```
 
-## Fixes Applied
+## Files Modified
+1. **ml_trainer/views/normalization_views.py**
+   - Line 415: Fixed column detection for removal after multi-layer normalization
+   - Line 402: Fixed column tracking between normalization steps
+   - Line 1231: Fixed column detection in preview for keep_original cases
+   - Line 1492: Fixed column detection in preview comparison
+   - Line 1527: Fixed column detection for unique value mapping
 
-### Frontend Changes (normalize.html)
-1. Changed default `keep_original` value from `layerIndex < normalizationConfig[column].length - 1` to `false`
-2. For custom functions, now respects the existing configuration instead of forcing `true`
+## How It Works Now
 
-### Backend Changes (normalization_views.py)
-1. Changed the default for `keep_original` from `True` to `False` in single normalization dict config
+### Multi-Layer Normalization Flow:
+1. Step 1: `numeric_col` → creates `numeric_col_step1`
+2. Step 2: `numeric_col_step1` → creates `numeric_col_step2`
+3. After all steps: If no layer has `keep_original=True`, removes `numeric_col`
 
-## Expected Behavior After Fix
+### Column Detection:
+- Old: Only found columns like `numeric_col_*` (with underscore)
+- New: Finds any column that starts with `numeric_col` and is longer (e.g., `numeric_col_step1`, `numeric_col_normalized`)
 
-### Single Layer Normalization
-- **Checkbox unchecked (default)**: Original column is transformed in place (for methods like MIN_MAX, Z_SCORE, LOWER, etc.)
-- **Checkbox checked**: Original column is kept, new column with suffix is created
+## Testing the Fix
 
-### Multi-Layer Normalization
-- **All checkboxes unchecked (default)**: Original column is removed, only normalized columns remain
-- **At least one checkbox checked**: Original column is kept along with all intermediate normalized columns
+To verify the fix works:
 
-### Custom Functions
-- **Checkbox unchecked (default)**: Original column is removed if the custom function specifies `remove_original_column=True`
-- **Checkbox checked**: Original column is always kept
+1. Create a dataset with numeric columns
+2. Apply multi-layer normalization with all `keep_original=False`:
+   ```json
+   {
+     "numeric_col": [
+       {"method": "MIN_MAX", "keep_original": false},
+       {"method": "Z_SCORE", "keep_original": false}
+     ]
+   }
+   ```
+3. The result should only contain the final transformed column (`numeric_col_step2`), not the original `numeric_col`
 
-## Testing
-A test script `test_column_removal.py` has been created to verify all scenarios work correctly. The script tests:
-1. Single normalization with `keep_original=False`
-2. Single normalization with `keep_original=True`
-3. Multi-layer normalization with all `keep_original=False`
-4. Multi-layer normalization with at least one `keep_original=True`
-5. Text normalization with `keep_original=False`
+## Additional Notes
 
-## Usage Notes
-- The checkbox is now **unchecked by default** for all normalization methods
-- Users must explicitly check the box if they want to keep the original column
-- This provides a cleaner dataset by default, removing redundant columns after normalization
+- Single-layer normalizations with `keep_original=False` still transform in-place (no column removal needed)
+- Custom functions have their own removal logic based on `remove_original_column` flag
+- The fix maintains backward compatibility with existing normalized datasets

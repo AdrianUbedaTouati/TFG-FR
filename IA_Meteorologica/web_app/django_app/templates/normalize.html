@@ -1328,16 +1328,6 @@
                               placeholder="Describe qué hace tu función de normalización..."></textarea>
                 </div>
                 
-                <!-- Opciones de columnas -->
-                <div class="mb-3">
-                    <label class="form-label" style="color: var(--light-color);">Opciones de columnas:</label>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="removeOriginalColumn" checked>
-                        <label class="form-check-label" for="removeOriginalColumn" style="color: var(--light-color);">
-                            Eliminar columna original después de normalizar
-                        </label>
-                    </div>
-                </div>
                 
                 <!-- Nuevas columnas -->
                 <div class="mb-3">
@@ -4222,7 +4212,6 @@ ${response.details}
             document.getElementById('functionDescription').value = functionData.description;
             
             // Cargar configuración de columnas
-            document.getElementById('removeOriginalColumn').checked = functionData.remove_original_column !== undefined ? functionData.remove_original_column : true;
             document.getElementById('numNewColumns').value = functionData.new_columns && functionData.new_columns.length > 0 ? functionData.new_columns.length : 1;
             
             // Cargar nombres de columnas existentes
@@ -4256,7 +4245,6 @@ ${response.details}
             modalTitle.innerHTML = '<i class="bi bi-code-slash"></i> Crear Función de Normalización Personalizada';
             document.getElementById('functionName').value = '';
             document.getElementById('functionDescription').value = '';
-            document.getElementById('removeOriginalColumn').checked = true;
             document.getElementById('numNewColumns').value = '1';
             updateNewColumnsInputs();
             updateCodeExample();
@@ -4346,7 +4334,6 @@ ${response.details}
         
         const codeEditor = document.getElementById('functionCode');
         const numColumns = parseInt(document.getElementById('numNewColumns').value) || 1;
-        const removeOriginal = document.getElementById('removeOriginalColumn').checked;
         
         console.log('Updating code example for type:', selectedFunctionType);
         
@@ -4863,7 +4850,6 @@ def normalize(value, series=None):
             const method = editingId ? 'PUT' : 'POST';
             
             // Recopilar información de las nuevas columnas
-            const removeOriginal = document.getElementById('removeOriginalColumn').checked;
             const numNewColumns = parseInt(document.getElementById('numNewColumns').value) || 1;
             let newColumns = [];
             
@@ -4883,7 +4869,6 @@ def normalize(value, series=None):
                 description: description,
                 code: code,
                 function_type: selectedFunctionType,
-                remove_original_column: removeOriginal,
                 new_columns: newColumns
             };
             

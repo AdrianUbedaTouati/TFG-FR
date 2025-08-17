@@ -399,7 +399,7 @@ class DatasetNormalizationView(APIView):
                         # Find the new column name (might have suffix)
                         if current_column not in normalized_df.columns:
                             # Column was replaced, look for new one with suffix
-                            new_cols = [col for col in normalized_df.columns if col.startswith(f"{current_column}_")]
+                            new_cols = [col for col in normalized_df.columns if col.startswith(current_column) and col != current_column and len(col) > len(current_column)]
                             if new_cols:
                                 current_column = new_cols[-1]  # Use the latest created column
                         # If column still exists (e.g., ONE_HOT replaces in place), keep using it
@@ -412,7 +412,7 @@ class DatasetNormalizationView(APIView):
                     
                     if not any_keep_original and column in normalized_df.columns:
                         # Check if there are new columns created (with suffix)
-                        new_cols = [col for col in normalized_df.columns if col.startswith(f"{column}_") and col != column]
+                        new_cols = [col for col in normalized_df.columns if col.startswith(column) and col != column and len(col) > len(column)]
                         if new_cols:
                             # There are new columns, so we can safely remove the original
                             print(f"Removing original column '{column}' as no layer requested to keep it")
@@ -872,8 +872,8 @@ class DatasetNormalizationView(APIView):
                             self._custom_function_detected_columns = {column: list(results_dict.keys())}
                         
                         # For multi-layer, don't remove here - it will be handled at the end
-                        # For single layer, remove if both keep_original is False AND custom_func says to remove
-                        if total_steps == 1 and not keep_original and custom_func.remove_original_column:
+                        # For single layer, remove if keep_original is False
+                        if total_steps == 1 and not keep_original:
                             normalized_df = normalized_df.drop(columns=[column])
                             print(f"Removed original column: {column}")
                     else:
@@ -902,9 +902,9 @@ class DatasetNormalizationView(APIView):
                                 # For text functions, just provide the value
                                 normalized_df[new_column_name] = df[column].apply(normalize_func)
                         else:
-                            # Single normalization
-                            if keep_original and custom_func.remove_original_column:
-                                # User wants to keep but function wants to remove - create new column
+                            # Single normalization - respect keep_original setting
+                            if keep_original:
+                                # User wants to keep original - create new column
                                 new_column_name = f"{column}{suffix}"
                                 if custom_func.function_type == 'numeric':
                                     series_stats = {
@@ -1228,7 +1228,7 @@ class DatasetNormalizationPreviewView(APIView):
                             transformed_col = current_column
                             if keep_original:
                                 # Find the new column
-                                new_cols = [col for col in current_df.columns if col.startswith(f"{current_column}_step{step_index + 1}")]
+                                new_cols = [col for col in current_df.columns if col == f"{current_column}_step{step_index + 1}"]
                                 if new_cols:
                                     transformed_col = new_cols[0]
                             
@@ -1336,8 +1336,8 @@ class DatasetNormalizationPreviewView(APIView):
                                 normalized_columns = set(normalized_sample.columns)
                                 new_columns_detected = list(normalized_columns - original_columns)
                                 
-                                # If custom function removed the original column, detect new columns differently
-                                if custom_func.remove_original_column and column not in normalized_sample.columns:
+                                # Detect new columns
+                                if column not in normalized_sample.columns:
                                     # All columns that didn't exist before are new
                                     actual_new_columns = new_columns_detected
                                 else:
@@ -1350,7 +1350,7 @@ class DatasetNormalizationPreviewView(APIView):
                                 # Handle multiple column output
                                 comparison[column] = {
                                     'new_columns': columns_to_use,
-                                    'remove_original': custom_func.remove_original_column
+                                    'remove_original': False  # Ahora se controla desde la normalización
                                 }
                                 
                                 # Add preview for each new column and detect types
@@ -1489,7 +1489,7 @@ class DatasetNormalizationPreviewView(APIView):
                         normalized_values = normalized_sample[column].dropna()
                     else:
                         # Try to find a column with a suffix
-                        possible_cols = [col for col in normalized_sample.columns if col.startswith(f"{target_column}_")]
+                        possible_cols = [col for col in normalized_sample.columns if col.startswith(target_column) and col != target_column and len(col) > len(target_column)]
                         if possible_cols:
                             normalized_values = normalized_sample[possible_cols[0]].dropna()
                             print(f"Preview: Found transformed column '{possible_cols[0]}'")
@@ -1524,7 +1524,7 @@ class DatasetNormalizationPreviewView(APIView):
                                 else:
                                     # Column was transformed or removed, try to find the new column
                                     # First try columns with target_column prefix
-                                    target_cols = [col for col in normalized_temp.columns if col.startswith(f"{target_column}_")]
+                                    target_cols = [col for col in normalized_temp.columns if col.startswith(target_column) and col != target_column and len(col) > len(target_column)]
                                     if target_cols:
                                         normalized_val = normalized_temp.iloc[idx][target_cols[0]]
                                     else:
@@ -1734,8 +1734,7 @@ class CustomNormalizationFunctionView(APIView):
                 if 'code' in request.data:
                     function.code = request.data['code']
                     print(f"Code updated to: {function.code[:50]}...{function.code[-50:]}")
-                if 'remove_original_column' in request.data:
-                    function.remove_original_column = request.data['remove_original_column']
+                # Campo remove_original_column eliminado - ahora se controla desde la normalización
                 if 'new_columns' in request.data:
                     function.new_columns = request.data['new_columns']
                 
@@ -1817,7 +1816,7 @@ class CustomNormalizationFunctionInfoView(APIView):
                     'name': function.name,
                     'function_type': function.function_type,
                     'new_columns': function.new_columns or [],
-                    'remove_original_column': function.remove_original_column,
+                    # 'remove_original_column' campo eliminado
                     'description': function.description
                 }
             })
