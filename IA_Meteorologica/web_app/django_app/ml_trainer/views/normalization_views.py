@@ -403,10 +403,25 @@ class DatasetNormalizationView(APIView):
                             if new_cols:
                                 current_column = new_cols[-1]  # Use the latest created column
                         # If column still exists (e.g., ONE_HOT replaces in place), keep using it
+                
+                # After all layers, check if we need to remove the original column
+                # Only remove if NONE of the layers wanted to keep the original
+                if isinstance(method_config, list) and len(method_config) > 0:
+                    # Check if any layer has keep_original = True
+                    any_keep_original = any(step.get('keep_original', False) for step in method_config)
+                    
+                    if not any_keep_original and column in normalized_df.columns:
+                        # Check if there are new columns created (with suffix)
+                        new_cols = [col for col in normalized_df.columns if col.startswith(f"{column}_") and col != column]
+                        if new_cols:
+                            # There are new columns, so we can safely remove the original
+                            print(f"Removing original column '{column}' as no layer requested to keep it")
+                            normalized_df = normalized_df.drop(columns=[column])
+                        # If no new columns, the original was transformed in place, so don't drop it
             elif isinstance(method_config, dict):
                 # Single normalization (backward compatibility)
                 method = method_config.get('method', '')
-                keep_original = method_config.get('keep_original', True)
+                keep_original = method_config.get('keep_original', False)
                 normalized_df = self._apply_single_normalization(
                     normalized_df, column, method, keep_original
                 )
@@ -856,31 +871,69 @@ class DatasetNormalizationView(APIView):
                         else:
                             self._custom_function_detected_columns = {column: list(results_dict.keys())}
                         
-                        # Remove original column if specified
-                        if custom_func.remove_original_column:
+                        # For multi-layer, don't remove here - it will be handled at the end
+                        # For single layer, remove if both keep_original is False AND custom_func says to remove
+                        if total_steps == 1 and not keep_original and custom_func.remove_original_column:
                             normalized_df = normalized_df.drop(columns=[column])
                             print(f"Removed original column: {column}")
                     else:
                         # Traditional single column output
                         print(f"Applying traditional single-column normalization")
-                        if custom_func.function_type == 'numeric':
-                            # For numeric functions, DO NOT pass entire series
-                            # Pre-compute statistics if needed
-                            series_stats = {
-                                'min': df[column].min(),
-                                'max': df[column].max(),
-                                'mean': df[column].mean(),
-                                'std': df[column].std()
-                            }
-                            safe_globals['series_stats'] = series_stats
-                            
-                            # Apply function without passing series
-                            normalized_df[column] = df[column].apply(
-                                lambda x: normalize_func(x, series=None)
-                            )
+                        
+                        # For multi-layer normalizations, always create new columns
+                        if total_steps > 1:
+                            new_column_name = f"{column}{suffix}"
+                            if custom_func.function_type == 'numeric':
+                                # For numeric functions, DO NOT pass entire series
+                                # Pre-compute statistics if needed
+                                series_stats = {
+                                    'min': df[column].min(),
+                                    'max': df[column].max(),
+                                    'mean': df[column].mean(),
+                                    'std': df[column].std()
+                                }
+                                safe_globals['series_stats'] = series_stats
+                                
+                                # Apply function without passing series
+                                normalized_df[new_column_name] = df[column].apply(
+                                    lambda x: normalize_func(x, series=None)
+                                )
+                            else:
+                                # For text functions, just provide the value
+                                normalized_df[new_column_name] = df[column].apply(normalize_func)
                         else:
-                            # For text functions, just provide the value
-                            normalized_df[column] = df[column].apply(normalize_func)
+                            # Single normalization
+                            if keep_original and custom_func.remove_original_column:
+                                # User wants to keep but function wants to remove - create new column
+                                new_column_name = f"{column}{suffix}"
+                                if custom_func.function_type == 'numeric':
+                                    series_stats = {
+                                        'min': df[column].min(),
+                                        'max': df[column].max(),
+                                        'mean': df[column].mean(),
+                                        'std': df[column].std()
+                                    }
+                                    safe_globals['series_stats'] = series_stats
+                                    normalized_df[new_column_name] = df[column].apply(
+                                        lambda x: normalize_func(x, series=None)
+                                    )
+                                else:
+                                    normalized_df[new_column_name] = df[column].apply(normalize_func)
+                            else:
+                                # Replace in place
+                                if custom_func.function_type == 'numeric':
+                                    series_stats = {
+                                        'min': df[column].min(),
+                                        'max': df[column].max(),
+                                        'mean': df[column].mean(),
+                                        'std': df[column].std()
+                                    }
+                                    safe_globals['series_stats'] = series_stats
+                                    normalized_df[column] = df[column].apply(
+                                        lambda x: normalize_func(x, series=None)
+                                    )
+                                else:
+                                    normalized_df[column] = df[column].apply(normalize_func)
                         print(f"Traditional normalization complete for column {column}")
                     return normalized_df
                 else:
@@ -944,22 +997,36 @@ class DatasetNormalizationView(APIView):
                                 'warning': f"La columna '{column}' será convertida de entero a decimal para la normalización {method}"
                             })
                     
-                    if keep_original:
+                    # For multi-layer normalizations, always create new columns
+                    # The original will be removed at the end if no layer has keep_original=True
+                    if total_steps > 1:
                         new_column_name = f"{column}{suffix}"
                         normalized_df[new_column_name] = func(normalized_df[column])
                     else:
-                        normalized_df[column] = func(normalized_df[column])
+                        # Single normalization - use the original keep_original logic
+                        if keep_original:
+                            new_column_name = f"{column}{suffix}"
+                            normalized_df[new_column_name] = func(normalized_df[column])
+                        else:
+                            normalized_df[column] = func(normalized_df[column])
             
             # Handle text methods
             elif method in ['LOWER', 'STRIP', 'ONE_HOT']:
                 text_enum = get_text_enum(method)
                 if text_enum in DISPATCH_TEXT:
                     func = DISPATCH_TEXT[text_enum]
-                    if keep_original:
+                    # For multi-layer normalizations, always create new columns
+                    # The original will be removed at the end if no layer has keep_original=True
+                    if total_steps > 1:
                         new_column_name = f"{column}{suffix}"
                         normalized_df[new_column_name] = func(normalized_df[column])
                     else:
-                        normalized_df[column] = func(normalized_df[column])
+                        # Single normalization - use the original keep_original logic
+                        if keep_original:
+                            new_column_name = f"{column}{suffix}"
+                            normalized_df[new_column_name] = func(normalized_df[column])
+                        else:
+                            normalized_df[column] = func(normalized_df[column])
             
             else:
                 print(f"Unknown method: {method}")

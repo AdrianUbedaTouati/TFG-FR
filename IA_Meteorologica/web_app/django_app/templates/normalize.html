@@ -2377,8 +2377,8 @@ def normalize(value, series=None):
             } else if (existingConfig.hasOwnProperty('keep_original')) {
                 keepOriginalValue = existingConfig.keep_original;
             } else {
-                // Default: keep original for all but last layer
-                keepOriginalValue = layerIndex < normalizationConfig[column].length - 1;
+                // Default: do not keep original (false)
+                keepOriginalValue = false;
             }
             
             normalizationConfig[column][layerIndex] = {
@@ -2407,8 +2407,10 @@ def normalize(value, series=None):
                 }
             } else {
                 keepOriginalContainer.style.display = 'none';
-                // Para funciones personalizadas, siempre mantener original
-                normalizationConfig[column][layerIndex].keep_original = true;
+                // Para funciones personalizadas, usar el valor por defecto (false)
+                if (!normalizationConfig[column][layerIndex].hasOwnProperty('keep_original')) {
+                    normalizationConfig[column][layerIndex].keep_original = false;
+                }
             }
             
             // Update output type indicator
