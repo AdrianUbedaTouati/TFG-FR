@@ -3142,81 +3142,11 @@ ${response.details}
         const initialType = datasetInfo.normalization_info[column].type;
         const initialStats = datasetInfo.normalization_info[column].stats;
         
-        // Show summary card at the top
+        // Skip the summary card - user requested to remove it
+        
+        // Chain summary section
         bodyHtml += `
-            <div style="background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(147, 51, 234, 0.1)); border: 2px solid var(--primary-color); border-radius: 15px; padding: 20px; margin-bottom: 30px;">
-                <h4 style="color: var(--primary-color); margin-bottom: 20px;">
-                    <i class="bi bi-diagram-3"></i> ${layerIndex !== null ? `Resumen hasta la capa ${layerIndex + 1}` : 'Resumen de la transformación completa'}
-                </h4>
-                
-                <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 30px; align-items: center;">
-                    <!-- Initial state -->
-                    <div style="text-align: center;">
-                        <h5 style="color: rgba(240, 249, 255, 0.8); margin-bottom: 10px;">Estado inicial</h5>
-                        <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px;">
-                            <div class="compatibility-indicator ${initialType}" style="font-size: 1.2rem; margin-bottom: 10px;">
-                                ${initialType === 'numeric' ? 'Numérico' : 'Texto'}
-                            </div>
-                            ${initialStats ? `
-                                <div style="font-size: 0.9rem; color: rgba(240, 249, 255, 0.6);">
-                                    ${initialType === 'numeric' ? `
-                                        Media: ${initialStats.mean ? initialStats.mean.toFixed(2) : 'N/A'}<br>
-                                        Rango: [${initialStats.min ? initialStats.min.toFixed(2) : 'N/A'}, ${initialStats.max ? initialStats.max.toFixed(2) : 'N/A'}]
-                                    ` : `
-                                        ${initialStats.unique_count} valores únicos
-                                    `}
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                    
-                    <!-- Arrow -->
-                    <div style="font-size: 3rem; color: var(--primary-color);">
-                        <i class="bi bi-arrow-right"></i>
-                    </div>
-                    
-                    <!-- Final state -->
-                    <div style="text-align: center;">
-                        <h5 style="color: rgba(240, 249, 255, 0.8); margin-bottom: 10px;">${layerIndex !== null ? 'Estado después de esta capa' : 'Estado final'}</h5>
-                        <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px;">
-                            ${response.transformation_steps && response.transformation_steps[column] ? (() => {
-                                // For layer preview, use the specified layer as the "last" step
-                                const effectiveLastIndex = layerIndex !== null ? layerIndex : response.transformation_steps[column].length - 1;
-                                const lastStep = response.transformation_steps[column][effectiveLastIndex];
-                                if (!lastStep) {
-                                    return '<div style="color: #ff6b6b;">No se encontró información para esta capa</div>';
-                                }
-                                // Use output_type from step if available, otherwise fallback to method info
-                                const outputType = lastStep.output_type || (() => {
-                                    const lastMethodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
-                                                            ...datasetInfo.normalization_info[column].secondary_methods]
-                                                            .find(m => m.value === lastStep.method);
-                                    return lastMethodInfo ? lastMethodInfo.output_type : 'unknown';
-                                })();
-                                
-                                return `
-                                    <div class="compatibility-indicator ${outputType}" style="font-size: 1.2rem; margin-bottom: 10px;">
-                                        ${outputType === 'numeric' ? 'Numérico' : outputType === 'text' ? 'Texto' : 'Desconocido'}
-                                    </div>
-                                    ${response.preview[column] && response.preview[column].normalized && response.preview[column].normalized.stats ? `
-                                        <div style="font-size: 0.9rem; color: rgba(240, 249, 255, 0.6);">
-                                            ${outputType === 'numeric' ? `
-                                                Media: ${response.preview[column].normalized.stats.mean ? response.preview[column].normalized.stats.mean.toFixed(2) : 'N/A'}<br>
-                                                Rango: [${response.preview[column].normalized.stats.min ? response.preview[column].normalized.stats.min.toFixed(2) : 'N/A'}, 
-                                                        ${response.preview[column].normalized.stats.max ? response.preview[column].normalized.stats.max.toFixed(2) : 'N/A'}]
-                                            ` : `
-                                                Valores transformados
-                                            `}
-                                        </div>
-                                    ` : ''}
-                                `;
-                            })() : ''}
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Chain summary -->
-                ${response.transformation_steps && response.transformation_steps[column] ? `
+            ${response.transformation_steps && response.transformation_steps[column] ? `
                     <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(0, 212, 255, 0.3);">
                         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;">
                             ${(layerIndex !== null ? response.transformation_steps[column].slice(0, layerIndex + 1) : response.transformation_steps[column]).map((step, idx) => {
@@ -3254,13 +3184,18 @@ ${response.details}
                     </div>
                 `;
             } else {
-                bodyHtml += `
-                    <div class="transformation-steps">
-                        <h4><i class="bi bi-layers"></i> ${layerIndex !== null ? `Transformación de la capa ${layerIndex + 1}` : 'Detalle de cada transformación'}</h4>
-                        <div class="steps-container">
-                `;
+                // Only show transformation details if it's NOT a multi-column output
+                const preview = response.preview && response.preview[column];
+                const hasMultipleOutputs = preview && preview.new_columns && preview.new_columns.length > 0;
                 
-                stepsToShow.forEach((step, index) => {
+                if (!hasMultipleOutputs) {
+                    bodyHtml += `
+                        <div class="transformation-steps">
+                            <h4><i class="bi bi-layers"></i> ${layerIndex !== null ? `Transformación de la capa ${layerIndex + 1}` : 'Detalle de cada transformación'}</h4>
+                            <div class="steps-container">
+                    `;
+                    
+                    stepsToShow.forEach((step, index) => {
                 // Get method display name
                 const methodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
                                   ...datasetInfo.normalization_info[column].secondary_methods]
@@ -3385,6 +3320,7 @@ ${response.details}
                 
                 <hr style="border-color: rgba(0, 212, 255, 0.3); margin: 20px 0;">
             `;
+                }  // End of if (!hasMultipleOutputs)
             }
         } else {
             // No transformation steps available
