@@ -2963,10 +2963,13 @@ def normalize(value, series=None):
         console.log(`Fetching column types for ${column}, output columns:`, outputColumns);
         
         try {
-            // Use the exact same approach as showColumnDetails
+            // Need to send all layers up to and including the last layer to ensure dependencies are satisfied
             const currentConfig = {};
-            if (normalizationConfig[column] && normalizationConfig[column][lastLayerIndex]) {
-                currentConfig[column] = [normalizationConfig[column][lastLayerIndex]];
+            if (Array.isArray(normalizationConfig[column])) {
+                // Include all layers up to the last layer to ensure columns like 'trend' exist
+                currentConfig[column] = normalizationConfig[column].slice(0, lastLayerIndex + 1);
+            } else if (normalizationConfig[column]) {
+                currentConfig[column] = [normalizationConfig[column]];
             }
             
             const response = await fetch(`/api/datasets/${datasetId}/normalization/preview/`, {
