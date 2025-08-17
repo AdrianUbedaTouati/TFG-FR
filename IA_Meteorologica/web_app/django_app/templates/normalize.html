@@ -2626,112 +2626,62 @@ def normalize(value, series=None):
             const convSelect = document.getElementById(`output-conv-${escapedColumn}`);
             if (!convSelect) return;
             
-            // Get the actual output type by tracing through all layers
-            let outputType = datasetInfo.normalization_info[column].type; // Start with original column type
-            let outputDType = datasetInfo.normalization_info[column].dtype || 'unknown';
+            // Clear cached type information when function changes
+            if (outputIndicator) {
+                delete outputIndicator.dataset.columnTypes;
+                delete outputIndicator.dataset.columnTypesInfo;
+                delete outputIndicator.dataset.outputType;
+            }
             
-            if (Array.isArray(normalizationConfig[column])) {
-                // For chained normalization, trace through each layer
-                for (let i = 0; i < normalizationConfig[column].length; i++) {
-                    const layer = normalizationConfig[column][i];
-                    if (!layer || !layer.method) continue;
-                    
-                    // Get method info
-                    const info = datasetInfo.normalization_info[column];
-                    const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === layer.method);
-                    
-                    if (methodInfo) {
-                        outputType = methodInfo.output_type || outputType;
-                        outputDType = methodInfo.output_dtype || outputDType;
-                    }
-                    
-                    // Check if this layer has a conversion that changes the type
-                    if (layer.conversion) {
-                        const conversions = {
-                            'TO_STRING': { type: 'text', dtype: 'object' },
-                            'TO_NUMERIC': { type: 'numeric', dtype: 'float64' },
-                            'TO_FLOAT64': { type: 'numeric', dtype: 'float64' },
-                            'TO_FLOAT32': { type: 'numeric', dtype: 'float32' },
-                            'TO_INT64': { type: 'numeric', dtype: 'int64' },
-                            'TO_INT32': { type: 'numeric', dtype: 'int32' },
-                            'TO_INT16': { type: 'numeric', dtype: 'int16' },
-                            'TRUNCATE': { type: outputType, dtype: outputDType }  // Maintains current type
-                        };
-                        
-                        if (conversions[layer.conversion]) {
-                            outputType = conversions[layer.conversion].type;
-                            outputDType = conversions[layer.conversion].dtype;
+            // Fetch actual output type using preview (same as showColumnDetails)
+            console.log(`Fetching actual output type for single column: ${column}`);
+            
+            // Make preview call to get accurate type
+            fetchSingleColumnOutputType(column).then(detectedType => {
+                let outputType = detectedType || 'text'; // Default to text if detection fails
+                
+                console.log(`Single column output type detected: ${outputType}`);
+                
+                // Store the detected type
+                if (outputIndicator) {
+                    outputIndicator.dataset.outputType = outputType;
+                }
+                
+                // Use the same getConversionOptions function as layer conversions
+                console.log(`Output conversion: getting options for outputType = ${outputType}`);
+                const options = getConversionOptions(outputType);
+                console.log(`Output conversion: Available conversions:`, options.map(c => c.value));
+                
+                // Build select options - same format as layer conversions
+                let html = '<option value="">Sin conversión</option>';
+                
+                options.forEach(conv => {
+                    let label = conv.label;
+                    // If it's TRUNCATE and we have params, show them
+                    if (conv.value === 'TRUNCATE' && normalizationConfig[column].output_conversion_params) {
+                        const params = normalizationConfig[column].output_conversion_params;
+                        if (params.chars !== undefined) {
+                            label = `Truncar texto (${params.chars} chars)`;
+                        } else if (params.decimals !== undefined) {
+                            label = `Truncar decimales (${params.decimals})`;
                         }
                     }
-                }
-            } else if (typeof normalizationConfig[column] === 'object' && normalizationConfig[column].method) {
-                // Single normalization
-                const layer = normalizationConfig[column];
-                const info = datasetInfo.normalization_info[column];
-                const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === layer.method);
+                    html += `<option value="${conv.value}" title="${conv.description || ''}">${label}</option>`;
+                });
                 
-                if (methodInfo) {
-                    outputType = methodInfo.output_type || outputType;
-                    outputDType = methodInfo.output_dtype || outputDType;
-                }
+                convSelect.innerHTML = html;
                 
-                // Check if there's a conversion
-                if (layer.conversion) {
-                    const conversions = {
-                        'TO_STRING': { type: 'text', dtype: 'object' },
-                        'TO_NUMERIC': { type: 'numeric', dtype: 'float64' },
-                        'TO_FLOAT64': { type: 'numeric', dtype: 'float64' },
-                        'TO_FLOAT32': { type: 'numeric', dtype: 'float32' },
-                        'TO_INT64': { type: 'numeric', dtype: 'int64' },
-                        'TO_INT32': { type: 'numeric', dtype: 'int32' },
-                        'TO_INT16': { type: 'numeric', dtype: 'int16' },
-                        'TRUNCATE': { type: outputType, dtype: outputDType }  // Maintains current type
-                    };
+                // Set current value if exists
+                // For arrays, output_conversion is stored as a property of the array
+                // For objects, it's a direct property
+                const currentConversion = Array.isArray(normalizationConfig[column]) 
+                    ? normalizationConfig[column].output_conversion 
+                    : normalizationConfig[column].output_conversion;
                     
-                    if (conversions[layer.conversion]) {
-                        outputType = conversions[layer.conversion].type;
-                        outputDType = conversions[layer.conversion].dtype;
-                    }
+                if (currentConversion) {
+                    convSelect.value = currentConversion;
                 }
-            }
-            
-            // Log the final output type for debugging
-            console.log(`Output conversion for column '${column}': Final outputType = ${outputType} (dtype: ${outputDType})`);
-            
-            // Use the same getConversionOptions function as layer conversions
-            console.log(`Output conversion: getting options for outputType = ${outputType}`);
-            const options = getConversionOptions(outputType);
-            console.log(`Output conversion: Available conversions:`, options.map(c => c.value));
-            
-            // Build select options - same format as layer conversions
-            let html = '<option value="">Sin conversión</option>';
-            
-            options.forEach(conv => {
-                let label = conv.label;
-                // If it's TRUNCATE and we have params, show them
-                if (conv.value === 'TRUNCATE' && normalizationConfig[column].output_conversion_params) {
-                    const params = normalizationConfig[column].output_conversion_params;
-                    if (params.chars !== undefined) {
-                        label = `Truncar texto (${params.chars} chars)`;
-                    } else if (params.decimals !== undefined) {
-                        label = `Truncar decimales (${params.decimals})`;
-                    }
-                }
-                html += `<option value="${conv.value}" title="${conv.description || ''}">${label}</option>`;
             });
-            
-            convSelect.innerHTML = html;
-            
-            // Set current value if exists
-            // For arrays, output_conversion is stored as a property of the array
-            // For objects, it's a direct property
-            const currentConversion = Array.isArray(normalizationConfig[column]) 
-                ? normalizationConfig[column].output_conversion 
-                : normalizationConfig[column].output_conversion;
-                
-            if (currentConversion) {
-                convSelect.value = currentConversion;
-            }
         }
     }
     
@@ -2952,6 +2902,78 @@ def normalize(value, series=None):
         }
         
         return null;
+    }
+    
+    async function fetchSingleColumnOutputType(column) {
+        // Fetch the actual output type for a single column transformation chain
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
+        const lastLayerIndex = Array.isArray(normalizationConfig[column]) ? normalizationConfig[column].length - 1 : 0;
+        
+        console.log(`Fetching single column output type for ${column}`);
+        
+        try {
+            // Send complete configuration to get accurate type
+            const currentConfig = {};
+            if (Array.isArray(normalizationConfig[column])) {
+                currentConfig[column] = normalizationConfig[column];
+            } else if (normalizationConfig[column]) {
+                currentConfig[column] = [normalizationConfig[column]];
+            }
+            
+            const response = await fetch(`/api/datasets/${datasetId}/normalization/preview/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    normalization: currentConfig,
+                    sample_size: 10  // Small sample just to get type
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Check all_column_types first
+                if (data.all_column_types && data.all_column_types[column]) {
+                    const colType = data.all_column_types[column].type;
+                    console.log(`Single column type from all_column_types: ${column} = ${colType}`);
+                    return colType === 'integer' || colType === 'float' || colType === 'numeric' ? 'numeric' : 'text';
+                }
+                
+                // Check preview data
+                if (data.preview && data.preview[column]) {
+                    const preview = data.preview[column];
+                    
+                    // Check if column still exists (wasn't removed by transformation)
+                    if (preview.normalized && preview.normalized.stats) {
+                        const dtype = preview.normalized.stats.dtype || '';
+                        console.log(`Single column type from preview stats: ${column} dtype = ${dtype}`);
+                        
+                        // Check if it's numeric based on dtype
+                        if (dtype.includes('int') || dtype.includes('float') || dtype === 'numeric') {
+                            return 'numeric';
+                        }
+                        return 'text';
+                    }
+                }
+                
+                // If column was transformed but still exists, check for its type in any form
+                for (const colName in data.all_column_types) {
+                    if (colName === column || colName.startsWith(column)) {
+                        const colType = data.all_column_types[colName].type;
+                        console.log(`Single column type found as ${colName}: ${colType}`);
+                        return colType === 'integer' || colType === 'float' || colType === 'numeric' ? 'numeric' : 'text';
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching single column output type:', error);
+        }
+        
+        // Default to text if we can't determine
+        return 'text';
     }
     
     async function fetchColumnTypesForOutput(column, outputColumns) {
@@ -4068,6 +4090,16 @@ def normalize(value, series=None):
             if (layerIndex < normalizationConfig[column].length - 1) {
                 updateConversionOptionsForLayer(column, layerIndex + 1);
             }
+            
+            // Clear any cached type information when changing methods
+            const allIndicators = document.querySelectorAll(`[id^="output-type-${escapedColumn}-"]`);
+            allIndicators.forEach(indicator => {
+                delete indicator.dataset.columnTypes;
+                delete indicator.dataset.columnTypesInfo;
+                delete indicator.dataset.outputType;
+                delete indicator.dataset.realColumns;
+                delete indicator.dataset.expectedColumns;
+            });
             
             // Always update output conversion options when any layer changes
             updateOutputConversionOptions(column);
