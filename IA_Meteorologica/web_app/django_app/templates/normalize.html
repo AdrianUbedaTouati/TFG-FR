@@ -1542,6 +1542,12 @@ def normalize(value, series=None):
         return cookieValue;
     }
     
+    // Helper function to escape column names for use in HTML IDs
+    function escapeColumnForId(column) {
+        // Replace ALL non-alphanumeric characters with underscores
+        return column.replace(/[^a-zA-Z0-9]/g, '_');
+    }
+    
     document.addEventListener('DOMContentLoaded', function() {
         console.log('normalize.html script loaded');
         loadDatasetInfo();
@@ -1747,7 +1753,7 @@ def normalize(value, series=None):
     }
     
     function updateLayerOutputTypeIndicator(column, layerIndex, method) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex}`);
         
         if (!outputIndicator) return;
@@ -1888,7 +1894,7 @@ def normalize(value, series=None):
     }
     
     function updateConversionOptionsForLayer(column, layerIndex) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const convSelect = document.getElementById(`conv-${escapedColumn}-${layerIndex}`);
         
         if (!convSelect || layerIndex === 0) return;
@@ -2024,7 +2030,7 @@ def normalize(value, series=None):
     }
     
     async function updateLayerInputTypeFromSelectedColumn(column, layerIndex) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const layer = document.querySelector(`#layers-${escapedColumn} [data-layer-index="${layerIndex}"]`);
         if (!layer) return;
         
@@ -2107,7 +2113,7 @@ def normalize(value, series=None):
     }
     
     function updateLayerMethodsCompatibility(column, layerIndex) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const layer = document.querySelector(`#layers-${escapedColumn} [data-layer-index="${layerIndex}"]`);
         if (!layer) return;
         
@@ -2207,7 +2213,7 @@ def normalize(value, series=None):
     }
     
     function onInputColumnChange(column, layerIndex) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const inputColSelect = document.getElementById(`input-col-${escapedColumn}-${layerIndex}`);
         
         if (!inputColSelect || !Array.isArray(normalizationConfig[column])) {
@@ -2241,7 +2247,7 @@ def normalize(value, series=None):
     }
     
     function updateLayerInputColumnNames(column) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         
         if (!Array.isArray(normalizationConfig[column])) {
             return;
@@ -2286,7 +2292,7 @@ def normalize(value, series=None):
     }
     
     function onConversionChange(column, layerIndex) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const convSelect = document.getElementById(`conv-${escapedColumn}-${layerIndex}`);
         
         if (!convSelect || !Array.isArray(normalizationConfig[column])) {
@@ -2324,7 +2330,7 @@ def normalize(value, series=None):
     }
     
     function showTruncateParamsDialog(column, layerIndex) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         
         // Determine if the output of previous layer is text or numeric
         let outputType = 'numeric';
@@ -2483,7 +2489,7 @@ def normalize(value, series=None):
             updateLayerInputTypeAfterConversion(column, layerIndex, 'TRUNCATE');
             
             // Update the conversion dropdown label to show parameters
-            const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+            const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
             const convSelect = document.getElementById(`conv-${escapedColumn}-${layerIndex}`);
             if (convSelect) {
                 // Update the option text to show the parameters
@@ -2502,7 +2508,7 @@ def normalize(value, series=None):
     }
     
     function updateOutputConversionOptions(column) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const convSelect = document.getElementById(`output-conv-${escapedColumn}`);
         
         if (!convSelect) {
@@ -2606,7 +2612,7 @@ def normalize(value, series=None):
     }
     
     function onOutputConversionChange(column) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const convSelect = document.getElementById(`output-conv-${escapedColumn}`);
         
         if (!convSelect || !normalizationConfig[column]) {
@@ -2634,7 +2640,7 @@ def normalize(value, series=None):
     }
     
     function showOutputTruncateDialog(column) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         
         // Determine output type of last layer
         let outputType = 'numeric';
@@ -2744,7 +2750,7 @@ def normalize(value, series=None):
     }
     
     function applyOutputTruncateParams(column) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const decimalsInput = document.getElementById('outputTruncateDecimals');
         const charsInput = document.getElementById('outputTruncateChars');
         
@@ -2771,7 +2777,7 @@ def normalize(value, series=None):
     }
     
     function updateLayerInputTypeAfterConversion(column, layerIndex, conversion) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const layersContainer = document.getElementById(`layers-${escapedColumn}`);
         if (!layersContainer) return;
         
@@ -2841,7 +2847,7 @@ def normalize(value, series=None):
     }
     
     function updateLayerOutputTypeIndicatorWithConversion(column, layerIndex, method, conversion) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex}`);
         
         if (!outputIndicator) return;
@@ -2904,7 +2910,7 @@ def normalize(value, series=None):
     }
     
     async function updateNextLayerInputSelector(column, layerIndex) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const method = normalizationConfig[column][layerIndex]?.method;
         
         if (!method || !method.startsWith('CUSTOM_')) return;
@@ -3063,7 +3069,8 @@ def normalize(value, series=None):
         card.className = 'variable-card';
         
         // Escapar el nombre de la columna para uso en IDs y funciones
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        // Replace ALL special characters with underscores to ensure valid HTML IDs
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         
         // Determinar el tipo de badge
         const typeClass = `type-${info.type}`;
@@ -3178,7 +3185,7 @@ def normalize(value, series=None):
     }
 
     function onNormalizationChange(column, layerIndex = 0) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const select = document.getElementById(`norm-${escapedColumn}-${layerIndex}`);
         const previewBtn = document.getElementById(`preview-btn-${escapedColumn}`);
         const keepOriginalContainer = document.getElementById(`keep-original-${escapedColumn}-${layerIndex}`);  // Per-layer checkbox
@@ -3323,7 +3330,7 @@ def normalize(value, series=None):
     }
     
     function updateSubsequentLayersCompatibility(column, changedLayerIndex) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const layersContainer = document.getElementById(`layers-${escapedColumn}`);
         
         if (!layersContainer) return;
@@ -3370,7 +3377,7 @@ def normalize(value, series=None):
     }
 
     function onKeepOriginalChangeForLayer(column, layerIndex) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const checkbox = document.getElementById(`keep-original-checkbox-${escapedColumn}-${layerIndex}`);
         
         // Update only the specific layer's keep_original value
@@ -3467,7 +3474,7 @@ def normalize(value, series=None):
     
     function addNormalizationLayer(column) {
         console.log('Adding normalization layer for column:', column);
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const layersContainer = document.getElementById(`layers-${escapedColumn}`);
         
         if (!layersContainer) {
@@ -3781,7 +3788,7 @@ def normalize(value, series=None):
             return;
         }
         
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const layersContainer = document.getElementById(`layers-${escapedColumn}`);
         
         if (!layersContainer) {
@@ -6014,7 +6021,7 @@ def normalize(value, series=None):
     
     // Hacer las funciones globales para que puedan ser llamadas desde el HTML generado dinámicamente
     function showColumnDetails(column, layerIndex) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex}`);
         
         if (!outputIndicator) return;
