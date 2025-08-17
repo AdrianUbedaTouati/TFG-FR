@@ -317,9 +317,12 @@
         background: rgba(0, 0, 0, 0.3);
         border: 1px solid rgba(0, 212, 255, 0.3);
         color: var(--light-color);
-        padding: 8px 12px;
+        padding: 6px 10px;
         border-radius: 5px;
         transition: all 0.3s ease;
+        font-size: 0.85rem;
+        width: 100%;
+        max-width: 100%;
     }
     
     .conversion-select:hover {
@@ -331,6 +334,25 @@
         outline: none;
         border-color: var(--primary-color);
         box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+    }
+    
+    .conversion-select option {
+        background: var(--dark-color);
+        color: var(--light-color);
+        padding: 5px;
+    }
+    
+    .conversion-container {
+        overflow: hidden;
+    }
+    
+    .btn-close {
+        filter: invert(1);
+        opacity: 0.8;
+    }
+    
+    .btn-close:hover {
+        opacity: 1;
     }
 
     .normalized-copies {
@@ -1527,6 +1549,10 @@ def normalize(value, series=None):
             try {
                 datasetInfo = JSON.parse(responseText);
                 console.log('Parsed dataset info:', datasetInfo);
+                console.log('Conversion options received:', datasetInfo.conversion_options);
+                if (datasetInfo.conversion_options && datasetInfo.conversion_options.numeric_to_numeric) {
+                    console.log('Numeric to numeric conversions:', datasetInfo.conversion_options.numeric_to_numeric);
+                }
             } catch (parseError) {
                 console.error('Error parsing JSON:', parseError);
                 throw new Error('Invalid JSON response from server');
@@ -1568,15 +1594,59 @@ def normalize(value, series=None):
     }
 
     function getConversionOptions(outputType) {
-        // Get conversion options based on the output type
+        // Get ALL conversion options, regardless of compatibility
         if (!datasetInfo.conversion_options) {
             return [];
         }
         
-        // For now, we'll return same-type conversions
-        // In the future, we could add cross-type conversions
-        const key = `${outputType}_to_${outputType}`;
-        return datasetInfo.conversion_options[key] || [];
+        console.log(`Getting conversion options for outputType: ${outputType}`);
+        
+        // Collect all available conversions
+        let allConversions = [];
+        
+        // Add all conversion options from all categories
+        for (const key in datasetInfo.conversion_options) {
+            const options = datasetInfo.conversion_options[key];
+            console.log(`Processing category ${key}:`, options);
+            for (const option of options) {
+                // Check if this conversion is already added (avoid duplicates)
+                if (!allConversions.find(conv => conv.value === option.value)) {
+                    // Special handling for TRUNCATE - only show for numeric outputs
+                    if (option.value === 'TRUNCATE') {
+                        console.log(`Found TRUNCATE, outputType=${outputType}`);
+                        // Only include TRUNCATE if the output type is numeric, unknown, or mixed (multi-column outputs)
+                        if (outputType === 'text') {
+                            console.log(`Skipping TRUNCATE because outputType is text`);
+                            continue; // Skip TRUNCATE only for text outputs
+                        }
+                        // Allow TRUNCATE for numeric, unknown, and mixed types
+                    }
+                    
+                    // Add a note if it's a cross-type conversion
+                    const [fromType, toType] = key.split('_to_');
+                    let label = option.label;
+                    if (outputType && fromType !== outputType) {
+                        label += ` (${fromType} → ${toType})`;
+                    }
+                    allConversions.push({
+                        ...option,
+                        label: label,
+                        originalKey: key
+                    });
+                }
+            }
+        }
+        
+        // Sort conversions to show compatible ones first
+        allConversions.sort((a, b) => {
+            const aCompatible = a.originalKey.startsWith(`${outputType}_to_`);
+            const bCompatible = b.originalKey.startsWith(`${outputType}_to_`);
+            if (aCompatible && !bCompatible) return -1;
+            if (!aCompatible && bCompatible) return 1;
+            return a.label.localeCompare(b.label);
+        });
+        
+        return allConversions;
     }
     
     function getConversionLabel(conversionValue) {
@@ -1767,6 +1837,139 @@ def normalize(value, series=None):
         }
         
         return null;
+    }
+    
+    function updateConversionOptionsForLayer(column, layerIndex) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const convSelect = document.getElementById(`conv-${escapedColumn}-${layerIndex}`);
+        
+        if (!convSelect || layerIndex === 0) return;
+        
+        // Get the output type of the previous layer
+        let outputType = 'unknown';
+        
+        console.log(`updateConversionOptionsForLayer: column=${column}, layerIndex=${layerIndex}`);
+        
+        if (normalizationConfig[column] && normalizationConfig[column][layerIndex - 1]) {
+            const prevLayer = normalizationConfig[column][layerIndex - 1];
+            const prevMethod = prevLayer.method;
+            console.log(`Previous layer method: ${prevMethod}`);
+            
+            // Check if there's an input_column specified for current layer
+            const currentInputColumn = normalizationConfig[column][layerIndex]?.input_column;
+            console.log(`Current input column: ${currentInputColumn}`);
+            
+            if (currentInputColumn) {
+                // For multi-column outputs, we need to determine the type of the specific column
+                // First, try to get the actual type from the layer's input type indicator
+                const layerElement = document.querySelector(`#layers-${escapedColumn} [data-layer-index="${layerIndex}"]`);
+                if (layerElement && layerElement.dataset.inputType) {
+                    outputType = layerElement.dataset.inputType;
+                } else {
+                    // Fallback to pattern matching
+                    if (currentInputColumn.endsWith('_year') || 
+                        currentInputColumn.endsWith('_month') || 
+                        currentInputColumn.endsWith('_day') ||
+                        currentInputColumn.endsWith('_hour') ||
+                        currentInputColumn.endsWith('_minute') ||
+                        currentInputColumn.endsWith('_second')) {
+                        outputType = 'numeric';
+                    } else if (currentInputColumn.endsWith('_day_name') || 
+                              currentInputColumn.endsWith('_month_name')) {
+                        outputType = 'text';
+                    } else if (currentInputColumn === 'Formatted Date') {
+                        // Only the exact "Formatted Date" is text, not columns derived from it
+                        outputType = 'text';
+                    } else {
+                        // Default to the method's output type
+                        const methodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
+                                          ...datasetInfo.normalization_info[column].secondary_methods]
+                                          .find(m => m.value === prevMethod);
+                        outputType = methodInfo?.output_type || 'numeric'; // Default to numeric instead of unknown
+                        
+                        // If output type is 'mixed', try to be more specific based on the column
+                        if (outputType === 'mixed' && currentInputColumn) {
+                            // For mixed outputs, assume numeric unless we know it's text
+                            outputType = 'numeric'; // Default to numeric for mixed types
+                        }
+                    }
+                }
+            } else {
+                // Single output or first layer after original column
+                // Check if it's actually the output of the previous layer
+                const prevOutputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex - 1}`);
+                if (prevOutputIndicator && prevOutputIndicator.textContent) {
+                    // Try to extract type from the output indicator text
+                    if (prevOutputIndicator.textContent.includes('Numérico')) {
+                        outputType = 'numeric';
+                    } else if (prevOutputIndicator.textContent.includes('Texto')) {
+                        outputType = 'text';
+                    } else {
+                        // Fallback to method info
+                        const methodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
+                                          ...datasetInfo.normalization_info[column].secondary_methods]
+                                          .find(m => m.value === prevMethod);
+                        outputType = methodInfo?.output_type || 'numeric';
+                    }
+                } else {
+                    // Use method's output type
+                    const methodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
+                                      ...datasetInfo.normalization_info[column].secondary_methods]
+                                      .find(m => m.value === prevMethod);
+                    outputType = methodInfo?.output_type || 'numeric';
+                    
+                    // If output type is 'mixed', default to numeric
+                    if (outputType === 'mixed') {
+                        outputType = 'numeric'; // Default to numeric for mixed types
+                    }
+                }
+            }
+            
+            // Check if there's already a conversion applied
+            if (prevLayer.conversion) {
+                // Conversion changes the output type
+                if (['TO_STRING'].includes(prevLayer.conversion)) {
+                    outputType = 'text';
+                } else if (['TO_NUMERIC', 'TO_FLOAT64', 'TO_FLOAT32', 'TO_INT64', 'TO_INT32', 'TO_INT16', 'TRUNCATE'].includes(prevLayer.conversion)) {
+                    outputType = 'numeric';
+                }
+            }
+        }
+        
+        // Get conversion options and populate the select
+        console.log(`Layer ${layerIndex} for column ${column}: outputType = ${outputType}`);
+        const conversionOptions = getConversionOptions(outputType);
+        console.log(`Available conversions:`, conversionOptions.map(c => c.value));
+        const currentValue = convSelect.value;
+        
+        // Build options HTML
+        let optionsHtml = '<option value="">Sin conversión</option>';
+        conversionOptions.forEach(conv => {
+            let label = conv.label;
+            // If it's TRUNCATE and we have params, show them
+            if (conv.value === 'TRUNCATE' && layerIndex > 0 && 
+                normalizationConfig[column][layerIndex - 1]?.conversion_params?.decimals !== undefined) {
+                const decimals = normalizationConfig[column][layerIndex - 1].conversion_params.decimals;
+                label = `Truncar decimales (${decimals})`;
+            }
+            optionsHtml += `<option value="${conv.value}" title="${conv.description}">${label}</option>`;
+        });
+        
+        convSelect.innerHTML = optionsHtml;
+        
+        // Restore previous value if it exists and is still valid
+        if (currentValue) {
+            convSelect.value = currentValue;
+        }
+        
+        // Check for auto-conversion (e.g., after ONE_HOT)
+        if (normalizationConfig[column] && normalizationConfig[column][layerIndex - 1]) {
+            const prevMethod = normalizationConfig[column][layerIndex - 1].method;
+            if (prevMethod === 'ONE_HOT' && !currentValue) {
+                convSelect.value = 'TO_FLOAT64';
+                normalizationConfig[column][layerIndex - 1].conversion = 'TO_FLOAT64';
+            }
+        }
     }
     
     async function updateLayerInputTypeFromSelectedColumn(column, layerIndex) {
@@ -1978,6 +2181,12 @@ def normalize(value, series=None):
         if (inputColumnNameSpan) {
             inputColumnNameSpan.textContent = inputColSelect.value;
         }
+        
+        // Update conversion options based on the new input column type
+        if (layerIndex < normalizationConfig[column].length - 1) {
+            // Update the conversion options for the next layer
+            updateConversionOptionsForLayer(column, layerIndex + 1);
+        }
     }
     
     function updateLayerInputColumnNames(column) {
@@ -2033,22 +2242,222 @@ def normalize(value, series=None):
             return;
         }
         
-        // Store the conversion in the previous layer's config
-        if (layerIndex > 0 && normalizationConfig[column][layerIndex - 1]) {
-            if (convSelect.value) {
-                normalizationConfig[column][layerIndex - 1].conversion = convSelect.value;
-            } else {
-                delete normalizationConfig[column][layerIndex - 1].conversion;
-            }
-            
-            // Update the output type indicator of the previous layer to reflect the conversion
-            const prevMethod = normalizationConfig[column][layerIndex - 1].method;
-            if (prevMethod) {
-                updateLayerOutputTypeIndicatorWithConversion(column, layerIndex - 1, prevMethod, convSelect.value);
+        // Check if the selected conversion requires parameters
+        if (convSelect.value === 'TRUNCATE') {
+            showTruncateParamsDialog(column, layerIndex);
+            return; // Don't update anything yet, wait for params
+        } else {
+            // Store the conversion in the previous layer's config
+            if (layerIndex > 0 && normalizationConfig[column][layerIndex - 1]) {
+                if (convSelect.value) {
+                    normalizationConfig[column][layerIndex - 1].conversion = convSelect.value;
+                    // Remove any conversion params if switching from TRUNCATE to another conversion
+                    delete normalizationConfig[column][layerIndex - 1].conversion_params;
+                } else {
+                    delete normalizationConfig[column][layerIndex - 1].conversion;
+                    delete normalizationConfig[column][layerIndex - 1].conversion_params;
+                }
+                
+                // Update the output type indicator of the previous layer to reflect the conversion
+                const prevMethod = normalizationConfig[column][layerIndex - 1].method;
+                if (prevMethod) {
+                    updateLayerOutputTypeIndicatorWithConversion(column, layerIndex - 1, prevMethod, convSelect.value);
+                }
+                
+                // Update the input type indicator of the current layer
+                updateLayerInputTypeAfterConversion(column, layerIndex, convSelect.value);
             }
         }
         
         console.log('Updated config with conversion:', normalizationConfig[column]);
+    }
+    
+    function showTruncateParamsDialog(column, layerIndex) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        
+        // Create a simple dialog for truncate parameters
+        const currentDecimals = normalizationConfig[column][layerIndex - 1]?.conversion_params?.decimals || 2;
+        
+        // Create modal HTML
+        const modalHtml = `
+            <div class="modal fade" id="truncateParamsModal" tabindex="-1" style="display: none;">
+                <div class="modal-dialog modal-sm">
+                    <div class="modal-content" style="background: var(--dark-color); border: 1px solid var(--primary-color);">
+                        <div class="modal-header" style="border-bottom: 1px solid rgba(0, 212, 255, 0.3);">
+                            <h5 class="modal-title" style="color: var(--primary-color);">
+                                <i class="bi bi-scissors"></i> Parámetros de Truncamiento
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label" style="color: var(--light-color);">
+                                    Número de decimales:
+                                </label>
+                                <input type="number" 
+                                       id="truncateDecimals" 
+                                       class="form-control" 
+                                       value="${currentDecimals}"
+                                       min="-10" 
+                                       max="10" 
+                                       step="1"
+                                       style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
+                                <small class="form-text" style="color: rgba(240, 249, 255, 0.6);">
+                                    Positivo: decimales después del punto<br>
+                                    Negativo: dígitos antes del punto<br>
+                                    Ej: -2 trunca a centenas (1234 → 1200)
+                                </small>
+                            </div>
+                        </div>
+                        <div class="modal-footer" style="border-top: 1px solid rgba(0, 212, 255, 0.3);">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary" onclick="applyTruncateParams('${column.replace(/'/g, "\\'")}', ${layerIndex})">
+                                Aplicar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove any existing modal
+        const existingModal = document.getElementById('truncateParamsModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('truncateParamsModal'));
+        modal.show();
+        
+        // Handle modal close without saving
+        document.getElementById('truncateParamsModal').addEventListener('hidden.bs.modal', function () {
+            const convSelect = document.getElementById(`conv-${escapedColumn}-${layerIndex}`);
+            // If no params were saved, revert to no conversion
+            const hasParams = normalizationConfig[column][layerIndex - 1]?.conversion_params?.decimals !== undefined;
+            if (!hasParams) {
+                convSelect.value = '';
+                if (normalizationConfig[column][layerIndex - 1]) {
+                    delete normalizationConfig[column][layerIndex - 1].conversion;
+                    delete normalizationConfig[column][layerIndex - 1].conversion_params;
+                }
+                // Reset the indicators
+                const prevMethod = normalizationConfig[column][layerIndex - 1]?.method;
+                if (prevMethod) {
+                    updateLayerOutputTypeIndicatorWithConversion(column, layerIndex - 1, prevMethod, null);
+                }
+                updateLayerInputTypeAfterConversion(column, layerIndex, null);
+            }
+            this.remove();
+        });
+    }
+    
+    function applyTruncateParams(column, layerIndex) {
+        const decimals = parseInt(document.getElementById('truncateDecimals').value);
+        
+        if (layerIndex > 0 && normalizationConfig[column][layerIndex - 1]) {
+            normalizationConfig[column][layerIndex - 1].conversion = 'TRUNCATE';
+            normalizationConfig[column][layerIndex - 1].conversion_params = {
+                decimals: decimals
+            };
+            
+            // Update the indicators
+            const prevMethod = normalizationConfig[column][layerIndex - 1].method;
+            if (prevMethod) {
+                updateLayerOutputTypeIndicatorWithConversion(column, layerIndex - 1, prevMethod, 'TRUNCATE');
+            }
+            updateLayerInputTypeAfterConversion(column, layerIndex, 'TRUNCATE');
+            
+            // Update the conversion dropdown label to show parameters
+            const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+            const convSelect = document.getElementById(`conv-${escapedColumn}-${layerIndex}`);
+            if (convSelect) {
+                // Update the option text to show the decimals
+                const truncateOption = Array.from(convSelect.options).find(opt => opt.value === 'TRUNCATE');
+                if (truncateOption) {
+                    truncateOption.text = `Truncar decimales (${decimals})`;
+                }
+            }
+        }
+        
+        // Close modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('truncateParamsModal'));
+        modal.hide();
+        
+        console.log('Applied truncate params:', normalizationConfig[column]);
+    }
+    
+    function updateLayerInputTypeAfterConversion(column, layerIndex, conversion) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const layersContainer = document.getElementById(`layers-${escapedColumn}`);
+        if (!layersContainer) return;
+        
+        const currentLayer = layersContainer.querySelector(`[data-layer-index="${layerIndex}"]`);
+        if (!currentLayer) return;
+        
+        const inputIndicator = currentLayer.querySelector('.compatibility-indicator');
+        if (!inputIndicator) return;
+        
+        // Get the previous layer's output type
+        let inputType = 'text';
+        let inputDType = 'unknown';
+        
+        if (layerIndex > 0 && normalizationConfig[column] && normalizationConfig[column][layerIndex - 1]) {
+            const prevConfig = normalizationConfig[column][layerIndex - 1];
+            const prevMethod = prevConfig.method;
+            
+            if (prevMethod) {
+                const info = datasetInfo.normalization_info[column];
+                const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === prevMethod);
+                
+                if (methodInfo) {
+                    inputType = methodInfo.output_type || 'text';
+                    inputDType = methodInfo.output_dtype || 'unknown';
+                }
+            }
+            
+            // Apply conversion type if specified
+            if (conversion) {
+                // Update dtype based on conversion
+                if (conversion === 'TO_FLOAT64') {
+                    inputDType = 'float64';
+                    inputType = 'numeric';
+                } else if (conversion === 'TO_FLOAT32') {
+                    inputDType = 'float32';
+                    inputType = 'numeric';
+                } else if (conversion === 'TO_INT64') {
+                    inputDType = 'int64';
+                    inputType = 'numeric';
+                } else if (conversion === 'TO_INT32') {
+                    inputDType = 'int32';
+                    inputType = 'numeric';
+                } else if (conversion === 'TO_STRING') {
+                    inputDType = 'string';
+                    inputType = 'text';
+                } else if (conversion === 'TO_DATETIME') {
+                    inputDType = 'datetime64';
+                    inputType = 'text';
+                } else if (conversion === 'TO_BOOL') {
+                    inputDType = 'bool';
+                    inputType = 'numeric';
+                } else if (conversion === 'TRUNCATE') {
+                    // Truncate maintains the numeric type
+                    inputType = 'numeric';
+                    // Keep the existing dtype or default to float64
+                    if (!inputDType || inputDType === 'unknown') {
+                        inputDType = 'float64';
+                    }
+                }
+            }
+        }
+        
+        // Update the indicator
+        const typeLabel = inputType === 'numeric' ? 'Numérico' : 'Texto';
+        inputIndicator.textContent = `Entrada: ${typeLabel}${inputDType !== 'unknown' ? ` (${inputDType})` : ''}`;
+        inputIndicator.className = `compatibility-indicator ${inputType}`;
     }
     
     function updateLayerOutputTypeIndicatorWithConversion(column, layerIndex, method, conversion) {
@@ -2083,6 +2492,13 @@ def normalize(value, series=None):
                 } else if (conversion === 'TO_NUMERIC') {
                     outputDType = 'float64';
                     outputType = 'numeric';
+                } else if (conversion === 'TRUNCATE') {
+                    // Truncate maintains numeric type
+                    outputType = 'numeric';
+                    // Keep existing dtype or use the method's output dtype
+                    if (!outputDType || outputDType === 'unknown') {
+                        outputDType = methodInfo.output_dtype || 'float64';
+                    }
                 }
             }
             
@@ -2450,6 +2866,11 @@ def normalize(value, series=None):
             
             // Update compatibility of subsequent layers
             updateSubsequentLayersCompatibility(column, layerIndex);
+            
+            // Update conversion options for next layer if exists
+            if (layerIndex < normalizationConfig[column].length - 1) {
+                updateConversionOptionsForLayer(column, layerIndex + 1);
+            }
         } else {
             // Remove this layer
             if (Array.isArray(normalizationConfig[column])) {
@@ -2673,6 +3094,16 @@ def normalize(value, series=None):
                 previousOutputType = prevMethodInfo.output_type;
                 // Get the specific data type using getOutputDataType function
                 previousOutputDType = getOutputDataType(column, newLayerIndex - 1);
+                
+                // Check if there's a conversion that changes the type
+                const prevConversion = normalizationConfig[column][newLayerIndex - 1].conversion;
+                if (prevConversion) {
+                    if (['TO_STRING'].includes(prevConversion)) {
+                        previousOutputType = 'text';
+                    } else if (['TO_NUMERIC', 'TO_FLOAT64', 'TO_FLOAT32', 'TO_INT64', 'TO_INT32', 'TO_INT16', 'TRUNCATE'].includes(prevConversion)) {
+                        previousOutputType = 'numeric';
+                    }
+                }
             }
             
             // Check if previous method generates new columns
@@ -2743,7 +3174,7 @@ def normalize(value, series=None):
         
         // Add conversion dropdown before this layer if not the first layer
         let conversionHtml = '';
-        if (newLayerIndex > 0 && previousOutputType) {
+        if (newLayerIndex > 0) {
             // Check if we need automatic conversion (e.g., after ONE_HOT)
             let autoConversion = '';
             if (normalizationConfig[column] && normalizationConfig[column][newLayerIndex - 1]) {
@@ -2755,22 +3186,21 @@ def normalize(value, series=None):
             }
             
             conversionHtml = `
-                <div class="conversion-container" style="margin: 15px 0; padding: 15px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.3); border-radius: 10px;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <i class="bi bi-arrow-down-square" style="color: var(--primary-color);"></i>
-                        <span style="color: rgba(240, 249, 255, 0.8); font-weight: 500;">Conversión de tipo:</span>
+                <div class="conversion-container" style="margin: 15px 0; padding: 12px; background: rgba(147, 51, 234, 0.08); border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 8px;">
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="bi bi-arrow-down-square" style="color: var(--primary-color); font-size: 0.9rem;"></i>
+                            <span style="color: rgba(240, 249, 255, 0.8); font-weight: 500; font-size: 0.9rem;">Conversión de tipo:</span>
+                        </div>
                         <select class="conversion-select" id="conv-${escapedColumn}-${newLayerIndex}" 
                                 onchange="onConversionChange('${column.replace(/'/g, "\\'")}', ${newLayerIndex})"
-                                style="flex: 1; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color); padding: 5px 10px; border-radius: 5px;">
+                                style="width: 100%; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color); padding: 6px 10px; border-radius: 5px; font-size: 0.85rem;">
                             <option value="">Sin conversión</option>
-                            ${getConversionOptions(previousOutputType).map(conv => 
-                                `<option value="${conv.value}" title="${conv.description}" ${conv.value === autoConversion ? 'selected' : ''}>${conv.label}</option>`
-                            ).join('')}
                         </select>
                     </div>
                     ${autoConversion ? `
-                        <div style="margin-top: 10px; font-size: 0.85rem; color: rgba(255, 193, 7, 0.8);">
-                            <i class="bi bi-info-circle"></i> Conversión sugerida después de ONE_HOT para compatibilidad con métodos numéricos
+                        <div style="margin-top: 8px; font-size: 0.8rem; color: rgba(255, 193, 7, 0.8); line-height: 1.3;">
+                            <i class="bi bi-info-circle" style="font-size: 0.75rem;"></i> Conversión sugerida después de ONE_HOT para compatibilidad con métodos numéricos
                         </div>
                     ` : ''}
                 </div>
@@ -2905,6 +3335,11 @@ def normalize(value, series=None):
                 console.log('Remove button clicked:', col, idx);
                 removeNormalizationLayer(col, idx);
             });
+        }
+        
+        // Populate conversion options after layer is created
+        if (newLayerIndex > 0) {
+            updateConversionOptionsForLayer(column, newLayerIndex);
         }
     }
     

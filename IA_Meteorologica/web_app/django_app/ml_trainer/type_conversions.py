@@ -39,6 +39,14 @@ TYPE_CONVERSIONS = {
             'description': 'Convierte a enteros de 16 bits (pierde decimales)',
             'input': 'numeric',
             'output': 'numeric'
+        },
+        {
+            'value': 'TRUNCATE',
+            'label': 'Truncar decimales',
+            'description': 'Trunca el número a N decimales (sin redondear)',
+            'input': 'numeric',
+            'output': 'numeric',
+            'requires_params': True
         }
     ],
     'numeric_to_text': [

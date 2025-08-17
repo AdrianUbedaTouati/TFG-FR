@@ -379,38 +379,58 @@ class DatasetNormalizationView(APIView):
                     else:
                         print(f"Step {step_index + 1}: No input_column specified, using '{current_column}'")
                     
-                    # Get conversion from PREVIOUS step (it's stored in the previous step)
-                    # Conversion happens AFTER the previous transformation, not before this one
-                    if step_index > 0 and 'conversion' in method_config[step_index - 1]:
-                        conversion = method_config[step_index - 1].get('conversion', None)
+                    # IMPORTANT: Apply conversion from PREVIOUS step before processing current step
+                    if step_index > 0:
+                        prev_step = method_config[step_index - 1]
+                        prev_conversion = prev_step.get('conversion', None)
                         
-                        if conversion and current_column in normalized_df.columns:
-                            from ..conversion_functions import apply_conversion, get_conversion_warnings
-                            try:
-                                # Get warning if any
-                                warning_msg = get_conversion_warnings(
-                                    normalized_df[current_column].dtype, conversion
-                                )
+                        if prev_conversion:
+                            # Determine which column to apply the conversion to
+                            # CRITICAL: If current step has input_column, apply conversion to THAT column
+                            # This handles multi-output transformations correctly
+                            conversion_target = None
+                            
+                            if 'input_column' in step and step['input_column'] in normalized_df.columns:
+                                # Current step specifies which column it wants - apply conversion to that
+                                conversion_target = step['input_column']
+                                print(f"Step {step_index + 1}: Will apply conversion to input_column '{conversion_target}'")
+                            else:
+                                # No specific input column, use current_column
+                                conversion_target = current_column
+                                print(f"Step {step_index + 1}: Will apply conversion to current column '{conversion_target}'")
+                            
+                            if conversion_target in normalized_df.columns:
+                                from ..conversion_functions import apply_conversion, get_conversion_warnings
+                                try:
+                                    print(f"Step {step_index + 1}: Applying conversion '{prev_conversion}' from previous step to column '{conversion_target}'")
+                                    
+                                    # Get warning if any
+                                    warning_msg = get_conversion_warnings(
+                                        normalized_df[conversion_target].dtype, prev_conversion
+                                    )
+                                    
+                                    # Apply conversion with parameters
+                                    conversion_params = prev_step.get('conversion_params', None)
+                                    normalized_df[conversion_target] = apply_conversion(
+                                        normalized_df[conversion_target], 
+                                        prev_conversion,
+                                        params=conversion_params
+                                    )
                                 
-                                # Apply conversion
-                                normalized_df[current_column] = apply_conversion(
-                                    normalized_df[current_column], conversion
-                                )
-                                
-                                # Add conversion warning
-                                if hasattr(self, 'conversion_warnings'):
-                                    base_msg = f"Conversión de tipo aplicada en columna '{current_column}': {conversion}"
-                                    if warning_msg:
-                                        base_msg += f" - ⚠️ {warning_msg}"
-                                    self.conversion_warnings.append({
-                                        'column': current_column,
-                                        'method': conversion,
-                                        'warning': base_msg
-                                    })
-                            except Exception as e:
-                                error_msg = f"Error aplicando {conversion} a columna {current_column}: {str(e)}"
-                                print(error_msg)
-                                raise ValueError(error_msg)
+                                    # Add conversion warning
+                                    if hasattr(self, 'conversion_warnings'):
+                                        base_msg = f"Conversión de tipo aplicada en columna '{conversion_target}': {prev_conversion}"
+                                        if warning_msg:
+                                            base_msg += f" - ⚠️ {warning_msg}"
+                                        self.conversion_warnings.append({
+                                            'column': conversion_target,
+                                            'method': prev_conversion,
+                                            'warning': base_msg
+                                        })
+                                except Exception as e:
+                                    error_msg = f"Error aplicando {prev_conversion} a columna {conversion_target}: {str(e)}"
+                                    print(error_msg)
+                                    raise ValueError(error_msg)
                     
                     # Store the input column for this step
                     step_input = current_column
@@ -494,6 +514,51 @@ class DatasetNormalizationView(APIView):
                     })
                     
                     print(f"Step {step_index + 1} complete: input='{step_input}', outputs={step_outputs}, keep_original={keep_original}")
+                
+                # Apply conversion from the LAST step if it exists
+                if len(method_config) > 0:
+                    last_step = method_config[-1]
+                    last_conversion = last_step.get('conversion', None)
+                    if last_conversion:
+                        # Determine which column to apply the final conversion to
+                        # If there's a next step that would use a specific input_column, we should have applied it already
+                        # For the last step, we apply to its output
+                        final_conversion_target = current_column
+                        
+                        # But if the last step had keep_original=True, we need to find the actual output
+                        if last_step.get('keep_original', False):
+                            # Find the step output column
+                            expected_suffix = f"_step{len(method_config)}"
+                            for col in normalized_df.columns:
+                                if col.startswith(current_column) and col.endswith(expected_suffix):
+                                    final_conversion_target = col
+                                    break
+                        
+                        if final_conversion_target in normalized_df.columns:
+                            from ..conversion_functions import apply_conversion, get_conversion_warnings
+                            try:
+                                print(f"Applying final conversion '{last_conversion}' to column '{final_conversion_target}'")
+                                conversion_params = last_step.get('conversion_params', None)
+                                normalized_df[final_conversion_target] = apply_conversion(
+                                    normalized_df[final_conversion_target], 
+                                    last_conversion,
+                                    params=conversion_params
+                                )
+                                
+                                # Add warning if any
+                                warning_msg = get_conversion_warnings(
+                                    normalized_df[final_conversion_target].dtype, last_conversion
+                                )
+                                if hasattr(self, 'conversion_warnings') and warning_msg:
+                                    self.conversion_warnings.append({
+                                        'column': final_conversion_target,
+                                        'method': last_conversion,
+                                        'warning': f"Conversión de tipo aplicada en columna '{final_conversion_target}': {last_conversion} - ⚠️ {warning_msg}"
+                                    })
+                            except Exception as e:
+                                error_msg = f"Error aplicando conversión final {last_conversion} a columna {final_conversion_target}: {str(e)}"
+                                print(error_msg)
+                                raise ValueError(error_msg)
                 
                 # After all layers, manage column retention using the step_info we collected
                 if isinstance(method_config, list) and len(method_config) > 0 and step_info:
@@ -1364,6 +1429,47 @@ class DatasetNormalizationPreviewView(APIView):
                             keep_original = step.get('keep_original', False)
                             
                             print(f"Preview - Step {step_index + 1} config: {step}")
+                            print(f"Preview - Current columns in dataframe: {list(current_df.columns)}")
+                            
+                            # IMPORTANT: Apply conversion from PREVIOUS step before processing current step
+                            if step_index > 0:
+                                prev_step = method_config[step_index - 1]
+                                prev_conversion = prev_step.get('conversion', None)
+                                if prev_conversion:
+                                    # Determine which column to apply the conversion to
+                                    # CRITICAL: If current step has input_column, that's the column that needs conversion
+                                    if 'input_column' in step and step['input_column'] in current_df.columns:
+                                        conversion_target = step['input_column']
+                                        print(f"Preview - Step {step_index + 1}: Will apply conversion to input_column '{conversion_target}'")
+                                    else:
+                                        conversion_target = current_column
+                                        print(f"Preview - Step {step_index + 1}: Will apply conversion to current column '{conversion_target}'")
+                                    
+                                    if conversion_target in current_df.columns:
+                                        from ..conversion_functions import apply_conversion, get_conversion_warnings
+                                        try:
+                                            print(f"Preview - Step {step_index + 1}: Applying conversion '{prev_conversion}' from previous step to column '{conversion_target}'")
+                                            print(f"Column dtype before conversion: {current_df[conversion_target].dtype}")
+                                            print(f"Sample values before conversion: {current_df[conversion_target].head(3).tolist()}")
+                                            
+                                            # Apply the conversion with parameters if available
+                                            conversion_params = prev_step.get('conversion_params', None)
+                                            current_df[conversion_target] = apply_conversion(
+                                                current_df[conversion_target], 
+                                                prev_conversion,
+                                                params=conversion_params
+                                            )
+                                            
+                                            print(f"Column dtype after conversion: {current_df[conversion_target].dtype}")
+                                            print(f"Sample values after conversion: {current_df[conversion_target].head(3).tolist()}")
+                                            
+                                        except Exception as e:
+                                            error_msg = f"Error aplicando {prev_conversion} a columna {conversion_target}: {str(e)}"
+                                            print(error_msg)
+                                            return Response({
+                                                'success': False,
+                                                'error': error_msg
+                                            }, status=status.HTTP_400_BAD_REQUEST)
                             
                             # Check if this step has a specific input column (for multiple outputs)
                             if 'input_column' in step and step['input_column'] in current_df.columns:
@@ -1375,37 +1481,6 @@ class DatasetNormalizationPreviewView(APIView):
                             # Get sample values before transformation
                             before_values = current_df[current_column].tolist() if current_column in current_df.columns else []
                             
-                            # Initialize conversion variable
-                            conversion = None
-                            
-                            # Apply conversion from PREVIOUS step (conversions happen AFTER the transformation)
-                            if step_index > 0 and 'conversion' in method_config[step_index - 1]:
-                                conversion = method_config[step_index - 1].get('conversion', None)
-                                
-                                if conversion and current_column in current_df.columns:
-                                    from ..conversion_functions import apply_conversion, get_conversion_warnings
-                                    try:
-                                        # Get warning if any
-                                        warning_msg = get_conversion_warnings(
-                                            current_df[current_column].dtype, conversion
-                                        )
-                                        if warning_msg and hasattr(view, 'conversion_warnings'):
-                                            view.conversion_warnings.append({
-                                                'column': current_column,
-                                                'method': conversion,
-                                                'warning': f"Conversión {conversion}: {warning_msg}"
-                                            })
-                                        
-                                        current_df[current_column] = apply_conversion(current_df[current_column], conversion)
-                                    except Exception as e:
-                                        error_msg = f"Error aplicando {conversion} a columna {current_column}: {str(e)}"
-                                        print(error_msg)
-                                        # Return error response instead of silently failing
-                                        return Response({
-                                            'success': False,
-                                            'error': error_msg
-                                        }, status=status.HTTP_400_BAD_REQUEST)
-                            
                             # Apply single step
                             current_df = view._apply_single_normalization(
                                 current_df, current_column, method, keep_original,
@@ -1415,13 +1490,30 @@ class DatasetNormalizationPreviewView(APIView):
                             # Get sample values after transformation
                             # Find the transformed column (might have a new name)
                             transformed_col = current_column
-                            if keep_original:
-                                # Find the new column
-                                new_cols = [col for col in current_df.columns if col == f"{current_column}_step{step_index + 1}"]
-                                if new_cols:
-                                    transformed_col = new_cols[0]
+                            
+                            # For methods that create new columns with _stepN suffix
+                            if not keep_original and method not in ['date_extraction', 'custom'] and not method.startswith('CUSTOM_'):
+                                # Standard normalization methods that transform in-place
+                                transformed_col = current_column
+                            elif keep_original or method in ['date_extraction'] or method.startswith('CUSTOM_'):
+                                # Methods that create new columns
+                                if keep_original:
+                                    # Find the new column with _stepN suffix
+                                    new_cols = [col for col in current_df.columns if col == f"{current_column}_step{step_index + 1}"]
+                                    if new_cols:
+                                        transformed_col = new_cols[0]
+                                # For date_extraction and custom functions that create multiple columns,
+                                # the transformed_col should remain as current_column if input_column was specified
+                                elif 'input_column' in step:
+                                    transformed_col = current_column  # Keep using the input column
                             
                             after_values = current_df[transformed_col].tolist() if transformed_col in current_df.columns else []
+                            
+                            # Note: Conversion is now applied BEFORE the transformation (see above)
+                            # This ensures conversions happen between layers, not after
+                            conversion = step.get('conversion', None)
+                            if conversion:
+                                print(f"Preview - Step {step_index + 1}: This step has conversion '{conversion}' which will be applied before the NEXT step")
                             
                             # Detect output type for this step
                             output_type = 'text'
@@ -1446,6 +1538,35 @@ class DatasetNormalizationPreviewView(APIView):
                             # Update column for next step if not keeping original
                             if not keep_original:
                                 current_column = transformed_col
+                        
+                        # Apply conversion from the LAST step if it exists
+                        if len(method_config) > 0:
+                            last_step = method_config[-1]
+                            last_conversion = last_step.get('conversion', None)
+                            if last_conversion:
+                                # Apply to the final output column
+                                final_column = current_column
+                                if not last_step.get('keep_original', False):
+                                    # If not keeping original, the column name is current_column
+                                    final_column = current_column
+                                else:
+                                    # If keeping original, look for the step column
+                                    step_col = f"{current_column}_step{len(method_config)}"
+                                    if step_col in current_df.columns:
+                                        final_column = step_col
+                                
+                                if final_column in current_df.columns:
+                                    from ..conversion_functions import apply_conversion
+                                    try:
+                                        print(f"Preview - Applying final conversion '{last_conversion}' to column '{final_column}'")
+                                        conversion_params = last_step.get('conversion_params', None)
+                                        current_df[final_column] = apply_conversion(
+                                            current_df[final_column], 
+                                            last_conversion,
+                                            params=conversion_params
+                                        )
+                                    except Exception as e:
+                                        print(f"Error applying final conversion: {e}")
                         
                         transformation_steps[column] = steps_preview
             
@@ -1748,6 +1869,24 @@ class DatasetNormalizationPreviewView(APIView):
                                     intermediate_column = last_transformation['input_column']
                                     print(f"Layer preview: Last transformation specifies input_column: '{intermediate_column}'")
                                 
+                                # IMPORTANT: Apply conversion from the last previous transformation if it exists
+                                # This is needed for layer preview to show correct values
+                                if len(previous_transformations) > 0:
+                                    last_prev_step = previous_transformations[-1]
+                                    if 'conversion' in last_prev_step and intermediate_column in intermediate_df.columns:
+                                        from ..conversion_functions import apply_conversion
+                                        try:
+                                            print(f"Layer preview: Applying conversion '{last_prev_step['conversion']}' to column '{intermediate_column}'")
+                                            conversion_params = last_prev_step.get('conversion_params', None)
+                                            intermediate_df[intermediate_column] = apply_conversion(
+                                                intermediate_df[intermediate_column],
+                                                last_prev_step['conversion'],
+                                                params=conversion_params
+                                            )
+                                            print(f"Layer preview: Conversion applied successfully")
+                                        except Exception as e:
+                                            print(f"Layer preview: Error applying conversion: {e}")
+                                
                                 # Get unique values from the intermediate column
                                 if intermediate_column in intermediate_df.columns:
                                     all_unique_values = intermediate_df[intermediate_column].dropna().unique()
@@ -1763,6 +1902,11 @@ class DatasetNormalizationPreviewView(APIView):
                                     temp_column_name = intermediate_column
                                     print(f"Layer preview: Using intermediate column '{intermediate_column}' with {len(all_unique_values)} unique values")
                                     print(f"Layer preview: Sample values from intermediate: {list(all_unique_values)[:5]}")
+                                    
+                                    # Check if values look truncated (if conversion was TRUNCATE)
+                                    if len(previous_transformations) > 0 and previous_transformations[-1].get('conversion') == 'TRUNCATE':
+                                        decimals = previous_transformations[-1].get('conversion_params', {}).get('decimals', 2)
+                                        print(f"Layer preview: Values should be truncated to {decimals} decimals")
                                 else:
                                     # Fallback to original column
                                     all_unique_values = df[column].dropna().unique()
