@@ -91,6 +91,8 @@
         background: radial-gradient(circle, rgba(0, 212, 255, 0.05) 0%, transparent 70%);
         transition: all 0.3s ease;
         opacity: 0;
+        pointer-events: none;
+        z-index: 0;
     }
 
     .variable-card:hover::before {
@@ -223,7 +225,8 @@
         transition: all 0.3s ease;
         font-size: 0.85rem;
         position: relative;
-        z-index: 1;
+        z-index: 10;
+        pointer-events: auto;
     }
 
     .preview-btn:hover {
@@ -1123,6 +1126,51 @@
         height: 18px;
         cursor: pointer;
     }
+    
+    /* Fix for clickable elements */
+    .variable-card {
+        position: relative;
+    }
+    
+    .normalization-layers,
+    .layer-controls,
+    .output-conversion-container {
+        position: relative;
+        z-index: 1;
+    }
+    
+    /* Ensure preview button is always clickable */
+    .preview-btn,
+    .preview-layer-btn {
+        position: relative;
+        z-index: 20 !important;
+        pointer-events: auto !important;
+    }
+    
+    /* Fix potential overlay issues */
+    .variable-card > * {
+        position: relative;
+    }
+    
+    /* Ensure all interactive elements are above decorative elements */
+    .normalization-layers,
+    .layer-controls,
+    .output-conversion-container,
+    .preview-btn,
+    .add-layer-btn,
+    select,
+    input,
+    button {
+        position: relative;
+        z-index: 2;
+    }
+    
+    /* Decorative elements should be behind */
+    .variable-card::before,
+    .variable-card::after {
+        z-index: 0;
+        pointer-events: none;
+    }
 </style>
 {% endblock %}
 
@@ -1611,15 +1659,15 @@ def normalize(value, series=None):
             for (const option of options) {
                 // Check if this conversion is already added (avoid duplicates)
                 if (!allConversions.find(conv => conv.value === option.value)) {
-                    // Special handling for TRUNCATE - only show for numeric outputs
+                    // Special handling for TRUNCATE - now available for both numeric and text
                     if (option.value === 'TRUNCATE') {
                         console.log(`Found TRUNCATE, outputType=${outputType}`);
-                        // Only include TRUNCATE if the output type is numeric, unknown, or mixed (multi-column outputs)
+                        // TRUNCATE is now available for all types
+                        // Update label based on output type
                         if (outputType === 'text') {
-                            console.log(`Skipping TRUNCATE because outputType is text`);
-                            continue; // Skip TRUNCATE only for text outputs
+                            option.label = 'Truncar texto';
+                            option.description = 'Limita el texto a N caracteres';
                         }
-                        // Allow TRUNCATE for numeric, unknown, and mixed types
                     }
                     
                     // Add a note if it's a cross-type conversion
@@ -1947,10 +1995,13 @@ def normalize(value, series=None):
         conversionOptions.forEach(conv => {
             let label = conv.label;
             // If it's TRUNCATE and we have params, show them
-            if (conv.value === 'TRUNCATE' && layerIndex > 0 && 
-                normalizationConfig[column][layerIndex - 1]?.conversion_params?.decimals !== undefined) {
-                const decimals = normalizationConfig[column][layerIndex - 1].conversion_params.decimals;
-                label = `Truncar decimales (${decimals})`;
+            if (conv.value === 'TRUNCATE' && layerIndex > 0 && normalizationConfig[column][layerIndex - 1]?.conversion_params) {
+                const params = normalizationConfig[column][layerIndex - 1].conversion_params;
+                if (params.chars !== undefined) {
+                    label = `Truncar texto (${params.chars} chars)`;
+                } else if (params.decimals !== undefined) {
+                    label = `Truncar decimales (${params.decimals})`;
+                }
             }
             optionsHtml += `<option value="${conv.value}" title="${conv.description}">${label}</option>`;
         });
@@ -2275,8 +2326,39 @@ def normalize(value, series=None):
     function showTruncateParamsDialog(column, layerIndex) {
         const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
         
+        // Determine if the output of previous layer is text or numeric
+        let outputType = 'numeric';
+        if (layerIndex > 0 && normalizationConfig[column] && normalizationConfig[column][layerIndex - 1]) {
+            const prevLayer = normalizationConfig[column][layerIndex - 1];
+            const prevMethod = prevLayer.method;
+            
+            // Check if there's an input_column specified for current layer
+            const currentInputColumn = normalizationConfig[column][layerIndex]?.input_column;
+            
+            // Try to determine the type
+            const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex - 1}`);
+            if (outputIndicator && outputIndicator.textContent) {
+                if (outputIndicator.textContent.includes('Texto')) {
+                    outputType = 'text';
+                }
+            }
+            
+            // Check if it's a text column based on patterns
+            if (currentInputColumn && (
+                currentInputColumn.endsWith('_day_name') || 
+                currentInputColumn.endsWith('_month_name') ||
+                currentInputColumn === 'Summary' ||
+                currentInputColumn === 'Precip Type' ||
+                currentInputColumn === 'Daily Summary'
+            )) {
+                outputType = 'text';
+            }
+        }
+        
         // Create a simple dialog for truncate parameters
-        const currentDecimals = normalizationConfig[column][layerIndex - 1]?.conversion_params?.decimals || 2;
+        const currentParams = normalizationConfig[column][layerIndex - 1]?.conversion_params || {};
+        const currentDecimals = currentParams.decimals || 2;
+        const currentChars = currentParams.chars || 50;
         
         // Create modal HTML
         const modalHtml = `
@@ -2290,28 +2372,48 @@ def normalize(value, series=None):
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label" style="color: var(--light-color);">
-                                    Número de decimales:
-                                </label>
-                                <input type="number" 
-                                       id="truncateDecimals" 
-                                       class="form-control" 
-                                       value="${currentDecimals}"
-                                       min="-10" 
-                                       max="10" 
-                                       step="1"
-                                       style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
-                                <small class="form-text" style="color: rgba(240, 249, 255, 0.6);">
-                                    Positivo: decimales después del punto<br>
-                                    Negativo: dígitos antes del punto<br>
-                                    Ej: -2 trunca a centenas (1234 → 1200)
-                                </small>
-                            </div>
+                            ${outputType === 'numeric' ? `
+                                <div class="mb-3">
+                                    <label class="form-label" style="color: var(--light-color);">
+                                        Número de decimales:
+                                    </label>
+                                    <input type="number" 
+                                           id="truncateDecimals" 
+                                           class="form-control" 
+                                           value="${currentDecimals}"
+                                           min="-10" 
+                                           max="10" 
+                                           step="1"
+                                           style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
+                                    <small class="form-text" style="color: rgba(240, 249, 255, 0.6);">
+                                        Positivo: decimales después del punto<br>
+                                        Negativo: dígitos antes del punto<br>
+                                        Ej: -2 trunca a centenas (1234 → 1200)
+                                    </small>
+                                </div>
+                            ` : `
+                                <div class="mb-3">
+                                    <label class="form-label" style="color: var(--light-color);">
+                                        Número de caracteres:
+                                    </label>
+                                    <input type="number" 
+                                           id="truncateChars" 
+                                           class="form-control" 
+                                           value="${currentChars}"
+                                           min="1" 
+                                           max="1000" 
+                                           step="1"
+                                           style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
+                                    <small class="form-text" style="color: rgba(240, 249, 255, 0.6);">
+                                        Limita el texto a este número de caracteres<br>
+                                        Ej: 10 caracteres: "Hello World" → "Hello Worl"
+                                    </small>
+                                </div>
+                            `}
                         </div>
                         <div class="modal-footer" style="border-top: 1px solid rgba(0, 212, 255, 0.3);">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="button" class="btn btn-primary" onclick="applyTruncateParams('${column.replace(/'/g, "\\'")}', ${layerIndex})">
+                            <button type="button" class="btn btn-primary" onclick="applyTruncateParams('${column.replace(/'/g, "\\'")}', ${layerIndex}, '${outputType}')">
                                 Aplicar
                             </button>
                         </div>
@@ -2355,14 +2457,23 @@ def normalize(value, series=None):
         });
     }
     
-    function applyTruncateParams(column, layerIndex) {
-        const decimals = parseInt(document.getElementById('truncateDecimals').value);
+    function applyTruncateParams(column, layerIndex, outputType) {
+        let params = {};
+        let labelText = '';
+        
+        if (outputType === 'numeric') {
+            const decimals = parseInt(document.getElementById('truncateDecimals').value);
+            params = { decimals: decimals };
+            labelText = `Truncar decimales (${decimals})`;
+        } else {
+            const chars = parseInt(document.getElementById('truncateChars').value);
+            params = { chars: chars, decimals: chars }; // decimals is used as fallback
+            labelText = `Truncar texto (${chars} chars)`;
+        }
         
         if (layerIndex > 0 && normalizationConfig[column][layerIndex - 1]) {
             normalizationConfig[column][layerIndex - 1].conversion = 'TRUNCATE';
-            normalizationConfig[column][layerIndex - 1].conversion_params = {
-                decimals: decimals
-            };
+            normalizationConfig[column][layerIndex - 1].conversion_params = params;
             
             // Update the indicators
             const prevMethod = normalizationConfig[column][layerIndex - 1].method;
@@ -2375,10 +2486,10 @@ def normalize(value, series=None):
             const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
             const convSelect = document.getElementById(`conv-${escapedColumn}-${layerIndex}`);
             if (convSelect) {
-                // Update the option text to show the decimals
+                // Update the option text to show the parameters
                 const truncateOption = Array.from(convSelect.options).find(opt => opt.value === 'TRUNCATE');
                 if (truncateOption) {
-                    truncateOption.text = `Truncar decimales (${decimals})`;
+                    truncateOption.text = labelText;
                 }
             }
         }
@@ -2388,6 +2499,325 @@ def normalize(value, series=None):
         modal.hide();
         
         console.log('Applied truncate params:', normalizationConfig[column]);
+    }
+    
+    function updateOutputConversionOptions(column) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const convSelect = document.getElementById(`output-conv-${escapedColumn}`);
+        
+        if (!convSelect) {
+            return;
+        }
+        
+        // Handle both single normalization (object) and chained normalization (array)
+        let lastLayer = null;
+        let outputType = 'mixed';
+        let outputDType = 'unknown';
+        
+        if (Array.isArray(normalizationConfig[column])) {
+            // Chained normalization
+            const lastLayerIndex = normalizationConfig[column].length - 1;
+            lastLayer = normalizationConfig[column][lastLayerIndex];
+        } else if (typeof normalizationConfig[column] === 'object') {
+            // Single normalization
+            lastLayer = normalizationConfig[column];
+        }
+        
+        if (!lastLayer || !lastLayer.method) {
+            convSelect.innerHTML = '<option value="">Sin conversión</option>';
+            return;
+        }
+        
+        // Get method info
+        const info = datasetInfo.normalization_info[column];
+        const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === lastLayer.method);
+        
+        if (methodInfo) {
+            outputType = methodInfo.output_type || 'mixed';
+            outputDType = methodInfo.output_dtype || 'unknown';
+        }
+        
+        // Check if there's already a conversion that changes the type
+        if (lastLayer.conversion) {
+            const conversions = {
+                'TO_STRING': { type: 'text', dtype: 'object' },
+                'TO_NUMERIC': { type: 'numeric', dtype: 'float64' },
+                'TO_FLOAT64': { type: 'numeric', dtype: 'float64' },
+                'TO_FLOAT32': { type: 'numeric', dtype: 'float32' },
+                'TO_INT64': { type: 'numeric', dtype: 'int64' },
+                'TO_INT32': { type: 'numeric', dtype: 'int32' },
+                'TO_INT16': { type: 'numeric', dtype: 'int16' },
+                'TRUNCATE': { type: outputType, dtype: outputDType }  // Maintains type
+            };
+            
+            if (conversions[lastLayer.conversion]) {
+                outputType = conversions[lastLayer.conversion].type;
+                outputDType = conversions[lastLayer.conversion].dtype;
+            }
+        }
+        
+        // Check if it's a multi-output function
+        const lastLayerIndex = Array.isArray(normalizationConfig[column]) ? normalizationConfig[column].length - 1 : 0;
+        const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${lastLayerIndex}`);
+        let isMultiOutput = false;
+        if (outputIndicator && (outputIndicator.dataset.expectedColumns || outputIndicator.dataset.realColumns)) {
+            try {
+                const columns = JSON.parse(outputIndicator.dataset.realColumns || outputIndicator.dataset.expectedColumns);
+                isMultiOutput = columns.length > 1;
+            } catch (e) {
+                console.error('Error parsing columns:', e);
+            }
+        }
+        
+        // Get conversion options based on output type
+        let options = [];
+        
+        // For multi-output or mixed type, allow all conversions
+        if (isMultiOutput || outputType === 'mixed') {
+            options = [
+                { value: 'TO_FLOAT64', label: 'Convertir a Float64', group: 'numeric' },
+                { value: 'TO_FLOAT32', label: 'Convertir a Float32', group: 'numeric' },
+                { value: 'TO_INT64', label: 'Convertir a Int64', group: 'numeric' },
+                { value: 'TO_INT32', label: 'Convertir a Int32', group: 'numeric' },
+                { value: 'TO_INT16', label: 'Convertir a Int16', group: 'numeric' },
+                { value: 'TRUNCATE', label: 'Truncar valores', group: 'both', requiresParams: true },
+                { value: 'TO_STRING', label: 'Convertir a Texto', group: 'text' },
+                { value: 'TO_NUMERIC', label: 'Convertir a Numérico', group: 'numeric' }
+            ];
+        } else if (outputType === 'numeric') {
+            options = [
+                { value: 'TO_FLOAT64', label: 'Convertir a Float64' },
+                { value: 'TO_FLOAT32', label: 'Convertir a Float32' },
+                { value: 'TO_INT64', label: 'Convertir a Int64' },
+                { value: 'TO_INT32', label: 'Convertir a Int32' },
+                { value: 'TO_INT16', label: 'Convertir a Int16' },
+                { value: 'TRUNCATE', label: 'Truncar decimales', requiresParams: true },
+                { value: 'TO_STRING', label: 'Convertir a Texto' }
+            ];
+        } else if (outputType === 'text') {
+            options = [
+                { value: 'TO_STRING', label: 'Asegurar tipo Texto' },
+                { value: 'TRUNCATE', label: 'Truncar texto', requiresParams: true },
+                { value: 'TO_NUMERIC', label: 'Convertir a Numérico' }
+            ];
+        }
+        
+        // Build select options
+        let html = '<option value="">Sin conversión</option>';
+        
+        if (isMultiOutput || outputType === 'mixed') {
+            // Group by type for multi-output
+            const numericOptions = options.filter(o => o.group === 'numeric');
+            const textOptions = options.filter(o => o.group === 'text');
+            const bothOptions = options.filter(o => o.group === 'both');
+            
+            if (numericOptions.length > 0) {
+                html += '<optgroup label="Conversiones numéricas">';
+                numericOptions.forEach(opt => {
+                    html += `<option value="${opt.value}">${opt.label}</option>`;
+                });
+                html += '</optgroup>';
+            }
+            
+            if (textOptions.length > 0) {
+                html += '<optgroup label="Conversiones de texto">';
+                textOptions.forEach(opt => {
+                    html += `<option value="${opt.value}">${opt.label}</option>`;
+                });
+                html += '</optgroup>';
+            }
+            
+            if (bothOptions.length > 0) {
+                html += '<optgroup label="Conversiones generales">';
+                bothOptions.forEach(opt => {
+                    html += `<option value="${opt.value}">${opt.label}</option>`;
+                });
+                html += '</optgroup>';
+            }
+        } else {
+            // Simple list for single output
+            options.forEach(opt => {
+                html += `<option value="${opt.value}">${opt.label}</option>`;
+            });
+        }
+        
+        convSelect.innerHTML = html;
+        
+        // Set current value if exists
+        // For arrays, output_conversion is stored as a property of the array
+        // For objects, it's a direct property
+        const currentConversion = Array.isArray(normalizationConfig[column]) 
+            ? normalizationConfig[column].output_conversion 
+            : normalizationConfig[column].output_conversion;
+            
+        if (currentConversion) {
+            convSelect.value = currentConversion;
+        }
+    }
+    
+    function onOutputConversionChange(column) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const convSelect = document.getElementById(`output-conv-${escapedColumn}`);
+        
+        if (!convSelect || !normalizationConfig[column]) {
+            return;
+        }
+        
+        // Check if the selected conversion requires parameters
+        if (convSelect.value === 'TRUNCATE') {
+            showOutputTruncateDialog(column);
+            return;
+        }
+        
+        // Store the output conversion
+        // For both arrays and objects, we can set properties
+        if (convSelect.value) {
+            normalizationConfig[column].output_conversion = convSelect.value;
+            // Remove any params if switching from TRUNCATE
+            delete normalizationConfig[column].output_conversion_params;
+        } else {
+            delete normalizationConfig[column].output_conversion;
+            delete normalizationConfig[column].output_conversion_params;
+        }
+        
+        console.log('Updated output conversion:', normalizationConfig[column]);
+    }
+    
+    function showOutputTruncateDialog(column) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        
+        // Determine output type of last layer
+        let outputType = 'numeric';
+        let lastLayer = null;
+        
+        if (Array.isArray(normalizationConfig[column])) {
+            lastLayer = normalizationConfig[column][normalizationConfig[column].length - 1];
+        } else if (typeof normalizationConfig[column] === 'object') {
+            lastLayer = normalizationConfig[column];
+        }
+        
+        if (lastLayer && lastLayer.method) {
+            const info = datasetInfo.normalization_info[column];
+            const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === lastLayer.method);
+            if (methodInfo && methodInfo.output_type === 'text') {
+                outputType = 'text';
+            }
+        }
+        
+        // Get current params
+        const currentParams = normalizationConfig[column].output_conversion_params || {};
+        const currentDecimals = currentParams.decimals || 2;
+        const currentChars = currentParams.chars || 50;
+        
+        // Create modal HTML
+        const modalHtml = `
+            <div class="modal fade" id="outputTruncateModal" tabindex="-1" style="display: none;">
+                <div class="modal-dialog modal-sm">
+                    <div class="modal-content" style="background: var(--dark-color); border: 1px solid var(--primary-color);">
+                        <div class="modal-header" style="border-bottom: 1px solid rgba(0, 212, 255, 0.3);">
+                            <h5 class="modal-title" style="color: var(--primary-color);">
+                                <i class="bi bi-scissors"></i> Truncamiento de Salida
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            ${outputType === 'numeric' ? `
+                                <div class="mb-3">
+                                    <label class="form-label" style="color: var(--light-color);">
+                                        Número de decimales:
+                                    </label>
+                                    <input type="number" 
+                                           id="outputTruncateDecimals" 
+                                           class="form-control" 
+                                           value="${currentDecimals}"
+                                           min="-10" 
+                                           max="10" 
+                                           step="1"
+                                           style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
+                                    <small class="form-text" style="color: rgba(240, 249, 255, 0.6);">
+                                        Aplicado a todas las columnas numéricas de salida
+                                    </small>
+                                </div>
+                            ` : `
+                                <div class="mb-3">
+                                    <label class="form-label" style="color: var(--light-color);">
+                                        Número de caracteres:
+                                    </label>
+                                    <input type="number" 
+                                           id="outputTruncateChars" 
+                                           class="form-control" 
+                                           value="${currentChars}"
+                                           min="1" 
+                                           max="1000" 
+                                           step="1"
+                                           style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
+                                    <small class="form-text" style="color: rgba(240, 249, 255, 0.6);">
+                                        Aplicado a todas las columnas de texto de salida
+                                    </small>
+                                </div>
+                            `}
+                        </div>
+                        <div class="modal-footer" style="border-top: 1px solid rgba(0, 212, 255, 0.3);">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary" onclick="applyOutputTruncateParams('${column.replace(/'/g, "\\'")}')">\n                                Aplicar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove any existing modal
+        const existingModal = document.getElementById('outputTruncateModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('outputTruncateModal'));
+        modal.show();
+        
+        // Handle modal close without saving
+        document.getElementById('outputTruncateModal').addEventListener('hidden.bs.modal', function () {
+            const convSelect = document.getElementById(`output-conv-${escapedColumn}`);
+            // If no params were saved, revert to no conversion
+            if (!normalizationConfig[column].output_conversion_params) {
+                convSelect.value = '';
+                delete normalizationConfig[column].output_conversion;
+            }
+            // Remove modal from DOM
+            this.remove();
+        });
+    }
+    
+    function applyOutputTruncateParams(column) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        const decimalsInput = document.getElementById('outputTruncateDecimals');
+        const charsInput = document.getElementById('outputTruncateChars');
+        
+        if (!normalizationConfig[column]) {
+            return;
+        }
+        
+        // Store the truncate params
+        normalizationConfig[column].output_conversion = 'TRUNCATE';
+        normalizationConfig[column].output_conversion_params = {};
+        
+        if (decimalsInput) {
+            normalizationConfig[column].output_conversion_params.decimals = parseInt(decimalsInput.value) || 2;
+        }
+        if (charsInput) {
+            normalizationConfig[column].output_conversion_params.chars = parseInt(charsInput.value) || 50;
+        }
+        
+        // Close modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('outputTruncateModal'));
+        modal.hide();
+        
+        console.log('Applied output truncate params:', normalizationConfig[column]);
     }
     
     function updateLayerInputTypeAfterConversion(column, layerIndex, conversion) {
@@ -2769,6 +3199,21 @@ def normalize(value, series=None):
                 </button>
             </div>
             
+            <!-- Output conversion selector -->
+            <div class="output-conversion-container" id="output-conv-container-${escapedColumn}" style="display: none; margin-top: 15px; padding: 12px; background: rgba(147, 51, 234, 0.08); border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 8px; position: relative; z-index: 1;">
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <i class="bi bi-arrow-right-square" style="color: var(--secondary-color); font-size: 0.9rem;"></i>
+                        <span style="color: rgba(240, 249, 255, 0.8); font-weight: 500; font-size: 0.9rem;">Conversión de salida final:</span>
+                    </div>
+                    <select class="output-conversion-select" id="output-conv-${escapedColumn}" 
+                            onchange="onOutputConversionChange('${column.replace(/'/g, "\\'")}')"
+                            style="width: 100%; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color); padding: 6px 10px; border-radius: 5px; font-size: 0.85rem;">
+                        <option value="">Sin conversión</option>
+                    </select>
+                </div>
+            </div>
+            
             <!-- Botón de previsualización general -->
             <button class="preview-btn" onclick="previewNormalization('${column.replace(/'/g, "\\'")}')" 
                     id="preview-btn-${escapedColumn}" style="display: none;">
@@ -2785,6 +3230,7 @@ def normalize(value, series=None):
         const previewBtn = document.getElementById(`preview-btn-${escapedColumn}`);
         const keepOriginalContainer = document.getElementById(`keep-original-${escapedColumn}-${layerIndex}`);  // Per-layer checkbox
         const layerControls = document.getElementById(`layer-controls-${escapedColumn}`);
+        const outputConvContainer = document.getElementById(`output-conv-container-${escapedColumn}`);
         
         // Mostrar/ocultar botón de preview de la capa
         const layerPreviewBtn = document.querySelector(`#layers-${escapedColumn} [data-layer-index="${layerIndex}"] .preview-layer-btn`);
@@ -2837,6 +3283,12 @@ def normalize(value, series=None):
             previewBtn.style.display = 'block';
             layerControls.style.display = 'block';
             
+            // Show output conversion container
+            if (outputConvContainer) {
+                outputConvContainer.style.display = 'block';
+                updateOutputConversionOptions(column);
+            }
+            
             // Mostrar checkbox para todas las funciones
             keepOriginalContainer.style.display = 'block';
             
@@ -2879,6 +3331,9 @@ def normalize(value, series=None):
                     delete normalizationConfig[column];
                     previewBtn.style.display = 'none';
                     layerControls.style.display = 'none';
+                    if (outputConvContainer) {
+                        outputConvContainer.style.display = 'none';
+                    }
                 }
             }
             keepOriginalContainer.style.display = 'none';
@@ -4278,6 +4733,23 @@ ${response.details}
         addProgressLog('💾 Guardando dataset normalizado...');
         updateChartStep(columns.length + 1, 100);
         
+        // Preparar la configuración para enviar al servidor
+        // Necesitamos manejar output_conversion que está guardado como propiedad del array
+        const preparedConfig = {};
+        for (const [column, config] of Object.entries(normalizationConfig)) {
+            if (Array.isArray(config)) {
+                // Para configuraciones de múltiples capas
+                preparedConfig[column] = {
+                    layers: config,
+                    output_conversion: config.output_conversion || null,
+                    output_conversion_params: config.output_conversion_params || null
+                };
+            } else {
+                // Para configuraciones simples (compatibilidad hacia atrás)
+                preparedConfig[column] = config;
+            }
+        }
+        
         // Hacer la llamada real al servidor
         const response = await fetch(`/api/datasets/${datasetId}/normalization/`, {
             method: 'POST',
@@ -4286,7 +4758,7 @@ ${response.details}
                 'X-CSRFToken': getCookie('csrftoken')
             },
             body: JSON.stringify({
-                normalization_config: normalizationConfig,
+                normalization_config: preparedConfig,
                 create_copy: true,
                 copy_name: datasetName,
                 copy_short_description: shortDescription,

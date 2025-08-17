@@ -74,6 +74,14 @@ TYPE_CONVERSIONS = {
             'description': 'Convierte cualquier valor a texto',
             'input': 'text',
             'output': 'text'
+        },
+        {
+            'value': 'TRUNCATE',
+            'label': 'Truncar texto',
+            'description': 'Limita el texto a N caracteres',
+            'input': 'text',
+            'output': 'text',
+            'requires_params': True
         }
     ]
 }

@@ -342,12 +342,23 @@ class DatasetNormalizationView(APIView):
             if column not in df.columns:
                 continue
             
+            # Extract output conversion if present
+            output_conversion = None
+            output_conversion_params = None
+            actual_config = method_config
+            
+            # Check if the config has the new structure with layers and output_conversion
+            if isinstance(method_config, dict) and 'layers' in method_config:
+                actual_config = method_config['layers']
+                output_conversion = method_config.get('output_conversion', None)
+                output_conversion_params = method_config.get('output_conversion_params', None)
+            
             # Handle both old format (string) and new format (dict/list)
-            if isinstance(method_config, list):
+            if isinstance(actual_config, list):
                 # New format: list of normalization steps (chained normalization)
                 
                 # Extract method names for validation
-                method_names = [step.get('method', '') for step in method_config]
+                method_names = [step.get('method', '') for step in actual_config]
                 
                 # Detect initial column type
                 initial_type = detect_column_data_type(df[column])
@@ -363,7 +374,7 @@ class DatasetNormalizationView(APIView):
                 # Track what happens at each step for column management
                 step_info = []
                 
-                for step_index, step in enumerate(method_config):
+                for step_index, step in enumerate(actual_config):
                     method = step.get('method', '')
                     keep_original = step.get('keep_original', False)
                     
@@ -381,7 +392,7 @@ class DatasetNormalizationView(APIView):
                     
                     # IMPORTANT: Apply conversion from PREVIOUS step before processing current step
                     if step_index > 0:
-                        prev_step = method_config[step_index - 1]
+                        prev_step = actual_config[step_index - 1]
                         prev_conversion = prev_step.get('conversion', None)
                         
                         if prev_conversion:
@@ -516,8 +527,8 @@ class DatasetNormalizationView(APIView):
                     print(f"Step {step_index + 1} complete: input='{step_input}', outputs={step_outputs}, keep_original={keep_original}")
                 
                 # Apply conversion from the LAST step if it exists
-                if len(method_config) > 0:
-                    last_step = method_config[-1]
+                if len(actual_config) > 0:
+                    last_step = actual_config[-1]
                     last_conversion = last_step.get('conversion', None)
                     if last_conversion:
                         # Determine which column to apply the final conversion to
@@ -561,7 +572,7 @@ class DatasetNormalizationView(APIView):
                                 raise ValueError(error_msg)
                 
                 # After all layers, manage column retention using the step_info we collected
-                if isinstance(method_config, list) and len(method_config) > 0 and step_info:
+                if isinstance(actual_config, list) and len(actual_config) > 0 and step_info:
                     print(f"\n=== Column retention management for '{column}' ===")
                     print("Step information collected:")
                     for info in step_info:
@@ -575,7 +586,7 @@ class DatasetNormalizationView(APIView):
                     if step_info:
                         last_step = step_info[-1]
                         # If the last step has a specific input_column in its config, that might be the final output
-                        if step_index < len(method_config) and 'input_column' in method_config[-1]:
+                        if step_index < len(actual_config) and 'input_column' in actual_config[-1]:
                             # The last step processed a specific column
                             final_input = method_config[-1]['input_column']
                             # Find any outputs from the last step
@@ -656,20 +667,104 @@ class DatasetNormalizationView(APIView):
                         normalized_df = normalized_df.drop(columns=[col])
                     
                     print(f"\nFinal columns: {sorted(normalized_df.columns)}")
-            elif isinstance(method_config, dict):
+            elif isinstance(actual_config, dict):
                 # Single normalization (backward compatibility)
-                method = method_config.get('method', '')
-                keep_original = method_config.get('keep_original', False)
+                method = actual_config.get('method', '')
+                keep_original = actual_config.get('keep_original', False)
                 normalized_df = self._apply_single_normalization(
                     normalized_df, column, method, keep_original
                 )
             else:
                 # Backward compatibility: if it's just a string, treat as method
-                method = method_config
+                method = actual_config
                 keep_original = False  # Default for old format
                 normalized_df = self._apply_single_normalization(
                     normalized_df, column, method, keep_original
                 )
+            
+            # Apply output conversion if specified (already extracted above)
+            if output_conversion:
+                # Find all columns that were created/modified by this normalization
+                output_columns = []
+                
+                # Check for columns with step suffixes
+                for col in normalized_df.columns:
+                    if col.startswith(column) and ('_step' in col or '_normalized' in col):
+                        output_columns.append(col)
+                
+                # If no step columns found, check if the original column still exists
+                if not output_columns and column in normalized_df.columns:
+                    output_columns = [column]
+                
+                # Apply conversion to all output columns
+                from ..conversion_functions import apply_conversion, get_conversion_warnings
+                for output_col in output_columns:
+                    try:
+                        print(f"Applying output conversion '{output_conversion}' to column '{output_col}'")
+                        
+                        # Check data type to determine if it's numeric or text
+                        is_numeric = pd.api.types.is_numeric_dtype(normalized_df[output_col])
+                        
+                        # Apply conversion
+                        normalized_df[output_col] = apply_conversion(
+                            normalized_df[output_col],
+                            output_conversion,
+                            params=output_conversion_params
+                        )
+                        
+                        # Add warning if any
+                        warning_msg = get_conversion_warnings(
+                            normalized_df[output_col].dtype, output_conversion
+                        )
+                        if hasattr(self, 'conversion_warnings') and warning_msg:
+                            self.conversion_warnings.append({
+                                'column': output_col,
+                                'method': output_conversion,
+                                'warning': f"Conversión de salida aplicada en columna '{output_col}': {output_conversion} - ⚠️ {warning_msg}"
+                            })
+                    except Exception as e:
+                        print(f"Error applying output conversion {output_conversion} to column {output_col}: {str(e)}")
+                    # Find all columns that were created/modified by this normalization
+                    output_columns = []
+                    
+                    # Check for columns with step suffixes
+                    for col in normalized_df.columns:
+                        if col.startswith(column) and ('_step' in col or '_normalized' in col):
+                            output_columns.append(col)
+                    
+                    # If no step columns found, check if the original column still exists
+                    if not output_columns and column in normalized_df.columns:
+                        output_columns = [column]
+                    
+                    # Apply conversion to all output columns
+                    from ..conversion_functions import apply_conversion, get_conversion_warnings
+                    for output_col in output_columns:
+                        try:
+                            print(f"Applying output conversion '{output_conversion}' to column '{output_col}'")
+                            
+                            # Check data type to determine if it's numeric or text
+                            is_numeric = pd.api.types.is_numeric_dtype(normalized_df[output_col])
+                            
+                            # Apply conversion
+                            normalized_df[output_col] = apply_conversion(
+                                normalized_df[output_col],
+                                output_conversion,
+                                params=output_conversion_params
+                            )
+                            
+                            # Add warning if any
+                            warning_msg = get_conversion_warnings(
+                                normalized_df[output_col].dtype, output_conversion
+                            )
+                            if hasattr(self, 'conversion_warnings') and warning_msg:
+                                self.conversion_warnings.append({
+                                    'column': output_col,
+                                    'method': output_conversion,
+                                    'warning': f"Conversión de salida aplicada en columna '{output_col}': {output_conversion} - ⚠️ {warning_msg}"
+                                })
+                        except Exception as e:
+                            print(f"Error applying output conversion {output_conversion} to column {output_col}: {str(e)}")
+                            # Continue with other columns
         
         return normalized_df
     

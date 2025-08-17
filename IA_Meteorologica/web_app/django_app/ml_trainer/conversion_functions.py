@@ -46,27 +46,33 @@ def to_numeric_conversion(series: pd.Series) -> pd.Series:
     """Convert to numeric (non-numeric values become NaN)"""
     return pd.to_numeric(series, errors='coerce')
 
-def truncate_conversion(series: pd.Series, decimals: int = 2) -> pd.Series:
-    """Truncate numeric values to N decimal places (without rounding)"""
-    if not pd.api.types.is_numeric_dtype(series):
-        # Provide more helpful error message
-        dtype_str = str(series.dtype)
-        sample_values = series.dropna().head(3).tolist()
-        sample_str = ', '.join(str(v) for v in sample_values) if sample_values else 'no values'
-        # Try to get the series name for better error message
-        column_name = series.name if hasattr(series, 'name') and series.name else 'columna desconocida'
-        raise ValueError(
-            f"La conversión de truncamiento requiere datos numéricos. "
-            f"La columna '{column_name}' tiene tipo '{dtype_str}' con valores como: {sample_str}"
-        )
+def truncate_conversion(series: pd.Series, decimals: int = 2, chars: int = None) -> pd.Series:
+    """
+    Truncate values - numeric to N decimal places or text to N characters
     
-    # Handle negative decimals (truncate before decimal point)
-    if decimals < 0:
-        factor = 10 ** (-decimals)
-        return (series // factor) * factor
+    Args:
+        series: Input series
+        decimals: For numeric data, number of decimal places (default: 2)
+        chars: For text data, number of characters to keep (default: None, uses decimals)
+    """
+    if pd.api.types.is_numeric_dtype(series):
+        # Numeric truncation
+        # Handle negative decimals (truncate before decimal point)
+        if decimals < 0:
+            factor = 10 ** (-decimals)
+            return (series // factor) * factor
+        else:
+            factor = 10 ** decimals
+            return np.trunc(series * factor) / factor
     else:
-        factor = 10 ** decimals
-        return np.trunc(series * factor) / factor
+        # Text truncation
+        # Use chars parameter if provided, otherwise use decimals as character count
+        char_limit = chars if chars is not None else decimals
+        if char_limit <= 0:
+            raise ValueError(f"El límite de caracteres debe ser positivo, recibido: {char_limit}")
+        
+        # Convert to string and truncate
+        return series.astype(str).str[:char_limit]
 
 # Dispatch table
 CONVERSION_FUNCTIONS = {
@@ -100,7 +106,8 @@ def apply_conversion(series: pd.Series, conversion_method: str, params: dict = N
     # Handle parameterized conversions
     if conversion_method == 'TRUNCATE' and params:
         decimals = params.get('decimals', 2)
-        return func(series, decimals=decimals)
+        chars = params.get('chars', None)
+        return func(series, decimals=decimals, chars=chars)
     else:
         return func(series)
 
