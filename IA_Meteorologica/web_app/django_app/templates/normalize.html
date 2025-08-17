@@ -2358,7 +2358,7 @@ def normalize(value, series=None):
         console.log('Updated config with conversion:', normalizationConfig[column]);
     }
     
-    function showTruncateParamsDialog(column, layerIndex) {
+    async function showTruncateParamsDialog(column, layerIndex) {
         const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         
         // Determine if the output of previous layer is text or numeric
@@ -2370,11 +2370,34 @@ def normalize(value, series=None):
             // Check if there's an input_column specified for current layer
             const currentInputColumn = normalizationConfig[column][layerIndex]?.input_column;
             
-            // Try to determine the type
+            // First check the output type indicator data
             const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex - 1}`);
-            if (outputIndicator && outputIndicator.textContent) {
+            
+            // Check if we have stored type information
+            if (outputIndicator && outputIndicator.dataset.outputType) {
+                outputType = outputIndicator.dataset.outputType;
+                console.log(`Using stored output type for layer ${layerIndex - 1}: ${outputType}`);
+            } else if (outputIndicator && outputIndicator.textContent) {
+                // Fallback to text content checking
                 if (outputIndicator.textContent.includes('Texto')) {
                     outputType = 'text';
+                }
+            }
+            
+            // For methods that produce multiple outputs, check the specific column type
+            if (prevMethod === 'date_extraction' || prevMethod.startsWith('CUSTOM_')) {
+                // Try to get the actual column that will be used as input
+                if (currentInputColumn && outputIndicator && outputIndicator.dataset.columnTypesInfo) {
+                    try {
+                        const columnTypesInfo = JSON.parse(outputIndicator.dataset.columnTypesInfo);
+                        const colInfo = columnTypesInfo.find(col => col.name === currentInputColumn);
+                        if (colInfo) {
+                            outputType = (colInfo.type === 'integer' || colInfo.type === 'float' || colInfo.type === 'numeric') ? 'numeric' : 'text';
+                            console.log(`Found type for ${currentInputColumn}: ${colInfo.type} → ${outputType}`);
+                        }
+                    } catch (e) {
+                        console.error('Error parsing column types info:', e);
+                    }
                 }
             }
             
@@ -3205,13 +3228,32 @@ def normalize(value, series=None):
         }
     }
     
-    function showMultiOutputTruncateDialog(column, convIndex) {
+    async function showMultiOutputTruncateDialog(column, convIndex) {
         const conv = normalizationConfig[column].output_conversions[convIndex];
         const columnName = conv.column;
         
         // Determine actual output type for the column
         let outputType = getOutputColumnType(column, columnName);
-        console.log(`Truncate dialog for ${columnName}: detected type = ${outputType}`);
+        console.log(`Initial type detection for ${columnName}: ${outputType}`);
+        
+        // If type is not clearly determined or we don't have cached info, fetch it
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
+        const lastLayerIndex = Array.isArray(normalizationConfig[column]) ? normalizationConfig[column].length - 1 : 0;
+        const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${lastLayerIndex}`);
+        
+        if (!outputIndicator || !outputIndicator.dataset.columnTypesInfo) {
+            console.log('No cached type info, fetching column types...');
+            // Fetch the column types to ensure accuracy
+            const outputColumns = outputIndicator && outputIndicator.dataset.realColumns ? 
+                JSON.parse(outputIndicator.dataset.realColumns) : [columnName];
+            await fetchColumnTypesForOutput(column, outputColumns);
+            
+            // Try to get the type again after fetching
+            outputType = getOutputColumnType(column, columnName);
+            console.log(`Type after fetching: ${outputType}`);
+        }
+        
+        console.log(`Final truncate dialog for ${columnName}: type = ${outputType}`);
         
         // Get current params
         const currentParams = conv.params || {};
@@ -3354,55 +3396,72 @@ def normalize(value, series=None):
         console.log('Updated output conversion:', normalizationConfig[column]);
     }
     
-    function showOutputTruncateDialog(column) {
+    async function showOutputTruncateDialog(column) {
         const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         
-        // Determine output type by tracing through all layers (same logic as updateOutputConversionOptions)
-        let outputType = datasetInfo.normalization_info[column].type; // Start with original column type
+        // For single-column outputs, use the accurate type detection
+        console.log(`Fetching output type for single column: ${column}`);
+        let outputType = await fetchSingleColumnOutputType(column);
+        console.log(`Single column output type for ${column}: ${outputType}`);
         
-        if (Array.isArray(normalizationConfig[column])) {
-            // For chained normalization, trace through each layer
-            for (let i = 0; i < normalizationConfig[column].length; i++) {
-                const layer = normalizationConfig[column][i];
-                if (!layer || !layer.method) continue;
-                
-                // Get method info
+        // If we still couldn't determine the type, fall back to method-based detection
+        if (!outputType || outputType === 'text') {
+            // Double-check with method info as fallback
+            const originalType = datasetInfo.normalization_info[column].type;
+            let methodBasedType = originalType;
+            
+            if (Array.isArray(normalizationConfig[column])) {
+                // For chained normalization, trace through each layer
+                for (let i = 0; i < normalizationConfig[column].length; i++) {
+                    const layer = normalizationConfig[column][i];
+                    if (!layer || !layer.method) continue;
+                    
+                    // Get method info
+                    const info = datasetInfo.normalization_info[column];
+                    const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === layer.method);
+                    
+                    if (methodInfo) {
+                        methodBasedType = methodInfo.output_type || methodBasedType;
+                    }
+                    
+                    // Check if this layer has a conversion that changes the type
+                    if (layer.conversion) {
+                        if (['TO_STRING'].includes(layer.conversion)) {
+                            methodBasedType = 'text';
+                        } else if (['TO_NUMERIC', 'TO_FLOAT64', 'TO_FLOAT32', 'TO_INT64', 'TO_INT32', 'TO_INT16'].includes(layer.conversion)) {
+                            methodBasedType = 'numeric';
+                        }
+                        // TRUNCATE maintains the current type
+                    }
+                }
+            } else if (typeof normalizationConfig[column] === 'object' && normalizationConfig[column].method) {
+                // Single normalization
+                const layer = normalizationConfig[column];
                 const info = datasetInfo.normalization_info[column];
                 const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === layer.method);
                 
                 if (methodInfo) {
-                    outputType = methodInfo.output_type || outputType;
+                    methodBasedType = methodInfo.output_type || methodBasedType;
                 }
                 
-                // Check if this layer has a conversion that changes the type
+                // Check if there's a conversion
                 if (layer.conversion) {
                     if (['TO_STRING'].includes(layer.conversion)) {
-                        outputType = 'text';
+                        methodBasedType = 'text';
                     } else if (['TO_NUMERIC', 'TO_FLOAT64', 'TO_FLOAT32', 'TO_INT64', 'TO_INT32', 'TO_INT16'].includes(layer.conversion)) {
-                        outputType = 'numeric';
+                        methodBasedType = 'numeric';
                     }
-                    // TRUNCATE maintains the current type
                 }
             }
-        } else if (typeof normalizationConfig[column] === 'object' && normalizationConfig[column].method) {
-            // Single normalization
-            const layer = normalizationConfig[column];
-            const info = datasetInfo.normalization_info[column];
-            const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === layer.method);
             
-            if (methodInfo) {
-                outputType = methodInfo.output_type || outputType;
-            }
-            
-            // Check if there's a conversion
-            if (layer.conversion) {
-                if (['TO_STRING'].includes(layer.conversion)) {
-                    outputType = 'text';
-                } else if (['TO_NUMERIC', 'TO_FLOAT64', 'TO_FLOAT32', 'TO_INT64', 'TO_INT32', 'TO_INT16'].includes(layer.conversion)) {
-                    outputType = 'numeric';
-                }
+            // Only override if we have strong evidence from methods
+            if (methodBasedType === 'numeric' && originalType === 'text') {
+                console.log(`Overriding type based on method: ${outputType} → ${methodBasedType}`);
+                outputType = methodBasedType;
             }
         }
+        
+        console.log(`Final output truncate dialog type for ${column}: ${outputType}`);
         
         // Get current params
         const currentParams = normalizationConfig[column].output_conversion_params || {};
@@ -4118,23 +4177,60 @@ def normalize(value, series=None):
         } else {
             // Remove this layer
             if (Array.isArray(normalizationConfig[column])) {
-                normalizationConfig[column].splice(layerIndex, 1);
-                if (normalizationConfig[column].length === 0) {
+                if (layerIndex === 0 && normalizationConfig[column].length === 1) {
+                    // If this is the only layer, remove the entire column config
                     delete normalizationConfig[column];
                     previewBtn.style.display = 'none';
                     layerControls.style.display = 'none';
                     if (outputConvContainer) {
                         outputConvContainer.style.display = 'none';
                     }
+                } else if (layerIndex < normalizationConfig[column].length) {
+                    // Remove the specific layer
+                    normalizationConfig[column][layerIndex] = null;
+                    
+                    // Clean up null entries and reindex
+                    normalizationConfig[column] = normalizationConfig[column].filter(layer => layer !== null);
+                    
+                    // If no layers left, delete the column config
+                    if (normalizationConfig[column].length === 0) {
+                        delete normalizationConfig[column];
+                        previewBtn.style.display = 'none';
+                        layerControls.style.display = 'none';
+                        if (outputConvContainer) {
+                            outputConvContainer.style.display = 'none';
+                        }
+                    }
+                }
+            } else if (normalizationConfig[column]) {
+                // Single layer config
+                delete normalizationConfig[column];
+                previewBtn.style.display = 'none';
+                layerControls.style.display = 'none';
+                if (outputConvContainer) {
+                    outputConvContainer.style.display = 'none';
                 }
             }
-            keepOriginalContainer.style.display = 'none';
+            
+            if (keepOriginalContainer) {
+                keepOriginalContainer.style.display = 'none';
+            }
             
             // Hide output type indicator when no method is selected
             const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex}`);
             if (outputIndicator) {
                 outputIndicator.style.display = 'none';
             }
+            
+            // Clear all cached type information for this column
+            const allIndicators = document.querySelectorAll(`[id^="output-type-${escapedColumn}-"]`);
+            allIndicators.forEach(indicator => {
+                delete indicator.dataset.columnTypes;
+                delete indicator.dataset.columnTypesInfo;
+                delete indicator.dataset.outputType;
+                delete indicator.dataset.realColumns;
+                delete indicator.dataset.expectedColumns;
+            });
         }
         
         updateSelectedCount();
