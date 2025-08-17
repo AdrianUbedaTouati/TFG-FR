@@ -42,6 +42,23 @@ class TimeoutException(Exception):
     pass
 
 
+def map_type_for_frontend(detailed_type):
+    """Map detailed types to frontend expected types"""
+    numeric_types = {'integer', 'float', 'numeric', 'int', 'double', 'decimal'}
+    text_types = {'text', 'string', 'str', 'varchar', 'char'}
+    
+    if detailed_type.lower() in numeric_types:
+        return 'numeric'
+    elif detailed_type.lower() in text_types:
+        return 'text'
+    elif detailed_type.lower() in {'boolean', 'bool'}:
+        return 'numeric'  # Booleans are treated as numeric (0/1)
+    elif detailed_type.lower() in {'datetime', 'date', 'time', 'timestamp'}:
+        return 'text'  # Dates are treated as text for compatibility
+    else:
+        return 'text'  # Default to text for unknown types
+
+
 @contextmanager
 def time_limit(seconds):
     """Context manager to limit execution time"""
@@ -99,7 +116,8 @@ class DatasetNormalizationView(APIView):
                     'label': f'{func.name} 🔧',
                     'description': func.description or f'Función personalizada: {func.name}',
                     'is_custom': True,
-                    'output_type': func.function_type  # Custom functions output the same type as their input
+                    'output_type': 'mixed' if func.new_columns else func.function_type,  # Multi-output functions have mixed types
+                    'is_multi_output': bool(func.new_columns)
                 }
                 
                 if func.function_type == 'numeric':
@@ -119,7 +137,10 @@ class DatasetNormalizationView(APIView):
             for col in df.columns:
                 col_type = str(df[col].dtype)
                 
-                if df[col].dtype in ['int64', 'float64']:
+                # Use the more sophisticated type detection
+                detected_data_type = detect_column_data_type(df[col])
+                
+                if detected_data_type == 'numeric' or df[col].dtype in ['int64', 'float64']:
                     # Columna numérica
                     col_dtype = str(df[col].dtype)
                     normalization_info[col] = {
@@ -145,7 +166,7 @@ class DatasetNormalizationView(APIView):
                             'max': float(df[col].max()) if not df[col].isna().all() else None
                         }
                     }
-                elif df[col].dtype == 'object':
+                elif detected_data_type == 'text' or df[col].dtype == 'object':
                     # Columna de texto o objeto
                     unique_values = df[col].nunique()
                     sample_values = df[col].dropna().head(20).tolist()
@@ -414,14 +435,47 @@ class DatasetNormalizationView(APIView):
                     if new_cols_created:
                         # New columns were created
                         step_outputs = list(new_cols_created)
-                        # The primary output for next step
+                        
+                        # Sort outputs to ensure consistent ordering
+                        step_outputs.sort()
+                        
+                        # For single-layer normalization or when column was replaced
                         if current_column not in normalized_df.columns and step_outputs:
-                            # Column was replaced
-                            primary_output = step_outputs[0]
+                            # Column was replaced - find the most appropriate output
+                            # Look for a column with the expected suffix pattern
+                            expected_suffix = f"_step{step_index + 1}"
+                            primary_output = None
+                            
+                            # First try to find column with expected suffix
+                            for output in step_outputs:
+                                if output.endswith(expected_suffix):
+                                    primary_output = output
+                                    break
+                            
+                            # If not found, use the first output
+                            if not primary_output:
+                                primary_output = step_outputs[0]
+                            
                             current_column = primary_output
                         elif step_outputs:
                             # New columns created alongside original
-                            primary_output = step_outputs[0]
+                            # For multi-output functions, use the column that follows the naming pattern
+                            expected_suffix = f"_step{step_index + 1}"
+                            primary_output = None
+                            
+                            # Look for the main output column (usually has the step suffix)
+                            for output in step_outputs:
+                                if output.endswith(expected_suffix) and not any(
+                                    output.endswith(f"_{suffix}") for suffix in 
+                                    ['year', 'month', 'day', 'hour', 'minute', 'second', 'dayofweek', 'dayofyear', 'weekofyear']
+                                ):
+                                    primary_output = output
+                                    break
+                            
+                            # If not found, use the first output
+                            if not primary_output:
+                                primary_output = step_outputs[0]
+                            
                             if not keep_original:
                                 current_column = primary_output
                     else:
@@ -916,8 +970,20 @@ class DatasetNormalizationView(APIView):
                             # Detect the actual data type of the created column
                             col_series = pd.Series(results_dict[new_col_name])
                             
+                            # Initialize default values
+                            detected_type = 'text'
+                            detected_dtype = 'string'
+                            
                             # Try to infer the best dtype with more specific types
-                            if col_series.notna().any():  # If there's at least one non-null value
+                            # First check if it's already a numeric dtype
+                            if pd.api.types.is_numeric_dtype(col_series):
+                                if pd.api.types.is_integer_dtype(col_series):
+                                    detected_type = 'integer'
+                                    detected_dtype = str(col_series.dtype)
+                                else:
+                                    detected_type = 'float'
+                                    detected_dtype = str(col_series.dtype)
+                            elif col_series.notna().any():  # If there's at least one non-null value
                                 # Get non-null values for analysis
                                 non_null_values = col_series.dropna()
                                 
@@ -1357,6 +1423,15 @@ class DatasetNormalizationPreviewView(APIView):
                             
                             after_values = current_df[transformed_col].tolist() if transformed_col in current_df.columns else []
                             
+                            # Detect output type for this step
+                            output_type = 'text'
+                            if transformed_col in current_df.columns:
+                                col_series = current_df[transformed_col]
+                                if pd.api.types.is_numeric_dtype(col_series):
+                                    output_type = 'numeric'
+                                elif detect_column_data_type(col_series) == 'numeric':
+                                    output_type = 'numeric'
+                            
                             steps_preview.append({
                                 'step': step_index + 1,
                                 'method': method,
@@ -1364,7 +1439,8 @@ class DatasetNormalizationPreviewView(APIView):
                                 'keep_original': keep_original,
                                 'before': before_values,
                                 'after': after_values,
-                                'column_name': transformed_col
+                                'column_name': transformed_col,
+                                'output_type': output_type
                             })
                             
                             # Update column for next step if not keeping original
@@ -1383,7 +1459,15 @@ class DatasetNormalizationPreviewView(APIView):
                 detected_type = 'text'
                 detected_dtype = 'string'
                 
-                if col_series.notna().any():
+                # First check if it's already a numeric dtype
+                if pd.api.types.is_numeric_dtype(col_series):
+                    if pd.api.types.is_integer_dtype(col_series):
+                        detected_type = 'integer'
+                        detected_dtype = str(col_series.dtype)
+                    else:
+                        detected_type = 'numeric'
+                        detected_dtype = str(col_series.dtype)
+                elif col_series.notna().any():
                     non_null_values = col_series.dropna()
                     
                     # Check if all values are boolean
@@ -1489,7 +1573,15 @@ class DatasetNormalizationPreviewView(APIView):
                                         detected_type = 'text'
                                         detected_dtype = 'string'
                                         
-                                        if col_series.notna().any():
+                                        # First check if it's already a numeric dtype
+                                        if pd.api.types.is_numeric_dtype(col_series):
+                                            if pd.api.types.is_integer_dtype(col_series):
+                                                detected_type = 'integer'
+                                                detected_dtype = str(col_series.dtype)
+                                            else:
+                                                detected_type = 'float'
+                                                detected_dtype = str(col_series.dtype)
+                                        elif col_series.notna().any():
                                             non_null_values = col_series.dropna()
                                             
                                             # Check if all values are boolean
@@ -1529,7 +1621,7 @@ class DatasetNormalizationPreviewView(APIView):
                                         
                                         column_types_info.append({
                                             'name': new_col,
-                                            'type': detected_type,
+                                            'type': map_type_for_frontend(detected_type),
                                             'dtype': detected_dtype
                                         })
                                         
@@ -1551,7 +1643,7 @@ class DatasetNormalizationPreviewView(APIView):
                                     for col_name, type_info in stored_types.items():
                                         updated_types_info.append({
                                             'name': col_name,
-                                            'type': type_info['type'],
+                                            'type': map_type_for_frontend(type_info['type']),
                                             'dtype': type_info['dtype']
                                         })
                                     comparison[column]['column_types_info'] = updated_types_info

@@ -2675,60 +2675,68 @@ def normalize(value, series=None):
                 previousOutputDType = getOutputDataType(column, newLayerIndex - 1);
             }
             
-            // Check if previous method generates multiple columns
-            if (prevMethod.startsWith('CUSTOM_')) {
-                // Get info about the custom function
-                const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${newLayerIndex - 1}`);
-                if (outputIndicator) {
-                    try {
-                        // First try to use real columns if available
-                        if (outputIndicator.dataset.realColumns) {
-                            previousOutputColumns = JSON.parse(outputIndicator.dataset.realColumns);
-                        } else if (outputIndicator.dataset.expectedColumns) {
-                            previousOutputColumns = JSON.parse(outputIndicator.dataset.expectedColumns);
-                        }
-                        
-                        console.log('Previous layer outputs columns:', previousOutputColumns);
-                        
-                        // Create column selector for input
-                        if (previousOutputColumns && previousOutputColumns.length > 1) {
-                            inputColumnSelectorHtml = `
-                                <div class="input-column-selector" style="margin: 10px 0; padding: 10px; background: rgba(0, 212, 255, 0.05); border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 8px;">
-                                    <div style="display: flex; align-items: center; gap: 10px;">
-                                        <i class="bi bi-columns-gap" style="color: var(--primary-color);"></i>
-                                        <span style="color: rgba(240, 249, 255, 0.8); font-weight: 500;">Columna de entrada:</span>
-                                        <select class="input-column-select" id="input-col-${escapedColumn}-${newLayerIndex}" 
-                                                onchange="onInputColumnChange('${column.replace(/'/g, "\\'")}', ${newLayerIndex})"
-                                                style="flex: 1; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color); padding: 5px 10px; border-radius: 5px;">
-                                            ${previousOutputColumns.map((col, idx) => 
-                                                `<option value="${col}" ${idx === 0 ? 'selected' : ''}>${col}</option>`
-                                            ).join('')}
-                                        </select>
-                                    </div>
-                                    <div style="margin-top: 5px; font-size: 0.85rem; color: rgba(240, 249, 255, 0.6);">
-                                        <i class="bi bi-info-circle"></i> La capa anterior genera múltiples columnas. Selecciona sobre cuál aplicar la normalización.
-                                    </div>
-                                </div>
-                            `;
-                            
-                            // Initialize the config with the selected input column
-                            if (!normalizationConfig[column][newLayerIndex]) {
-                                normalizationConfig[column][newLayerIndex] = {};
+            // Check if previous method generates new columns
+            // In multi-layer normalizations, most methods create new columns
+            if (newLayerIndex > 0) {
+                // For multi-layer chains, we need to track the actual output column
+                // Check if the previous layer kept the original column
+                const prevKeepOriginal = normalizationConfig[column][newLayerIndex - 1]?.keep_original || false;
+                
+                if (!prevKeepOriginal || prevMethod.startsWith('CUSTOM_')) {
+                    // The column was transformed, so we need to find the new column name
+                    if (prevMethod.startsWith('CUSTOM_')) {
+                        // Custom functions might generate multiple columns
+                        const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${newLayerIndex - 1}`);
+                        if (outputIndicator) {
+                            try {
+                                // First try to use real columns if available
+                                if (outputIndicator.dataset.realColumns) {
+                                    previousOutputColumns = JSON.parse(outputIndicator.dataset.realColumns);
+                                } else if (outputIndicator.dataset.expectedColumns) {
+                                    previousOutputColumns = JSON.parse(outputIndicator.dataset.expectedColumns);
+                                }
+                                
+                                console.log('Previous layer outputs columns:', previousOutputColumns);
+                            } catch (e) {
+                                console.error('Error parsing columns:', e);
                             }
-                            normalizationConfig[column][newLayerIndex].input_column = previousOutputColumns[0];
-                            
-                            // Try to get real column names if not already available
-                            if (!outputIndicator.dataset.realColumns) {
-                                // Trigger async update to get real names
-                                setTimeout(() => updateNextLayerInputSelector(column, newLayerIndex - 1), 100);
-                            }
-                            
-                            // Also trigger update of input type based on selected column
-                            setTimeout(() => updateLayerInputTypeFromSelectedColumn(column, newLayerIndex), 200);
                         }
-                    } catch (e) {
-                        console.error('Error parsing columns:', e);
+                    } else {
+                        // Regular methods create a single output column with _stepN suffix
+                        previousOutputColumns = [`${column}_step${newLayerIndex}`];  // This is correct - it's the step number of the previous layer's output
+                        console.log('Previous layer output column:', previousOutputColumns);
                     }
+                }
+                
+                // Create column selector for input
+                if (previousOutputColumns && previousOutputColumns.length > 1) {
+                    inputColumnSelectorHtml = `
+                        <div class="input-column-selector" style="margin: 10px 0; padding: 10px; background: rgba(0, 212, 255, 0.05); border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 8px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <i class="bi bi-columns-gap" style="color: var(--primary-color);"></i>
+                                <span style="color: rgba(240, 249, 255, 0.8); font-weight: 500;">Columna de entrada:</span>
+                                <select class="input-column-select" id="input-col-${escapedColumn}-${newLayerIndex}" 
+                                        onchange="onInputColumnChange('${column.replace(/'/g, "\\'")}', ${newLayerIndex})"
+                                        style="flex: 1; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color); padding: 5px 10px; border-radius: 5px;">
+                                    ${previousOutputColumns.map((col, idx) => 
+                                        `<option value="${col}" ${idx === 0 ? 'selected' : ''}>${col}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            <div style="margin-top: 5px; font-size: 0.85rem; color: rgba(240, 249, 255, 0.6);">
+                                <i class="bi bi-info-circle"></i> La capa anterior genera múltiples columnas. Selecciona sobre cuál aplicar la normalización.
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Initialize the config with the selected input column
+                    if (!normalizationConfig[column][newLayerIndex]) {
+                        normalizationConfig[column][newLayerIndex] = {};
+                    }
+                    normalizationConfig[column][newLayerIndex].input_column = previousOutputColumns[0];
+                    
+                    // Also trigger update of input type based on selected column
+                    setTimeout(() => updateLayerInputTypeFromSelectedColumn(column, newLayerIndex), 200);
                 }
             }
         }
@@ -2776,6 +2784,18 @@ def normalize(value, series=None):
         
         // Set initial input type based on previous layer
         let initialInputType = previousOutputType || 'numeric';
+        
+        // Determine the input column name for this layer
+        let inputColumnName = column; // Default to original column
+        if (newLayerIndex > 0) {
+            if (previousOutputColumns && previousOutputColumns.length > 0) {
+                // If there are multiple outputs, use the first one or the selected one
+                inputColumnName = previousOutputColumns[0];
+            } else {
+                // Use expected column name pattern
+                inputColumnName = `${column}_step${newLayerIndex}`;
+            }
+        }
         
         newLayer.innerHTML = inputColumnSelectorHtml + conversionHtml + `
             <div style="display: flex; align-items: center; gap: 10px;">
@@ -2864,7 +2884,7 @@ def normalize(value, series=None):
                            id="keep-original-checkbox-${escapedColumn}-${newLayerIndex}" 
                            onchange="onKeepOriginalChangeForLayer('${column.replace(/'/g, "\\'")}', ${newLayerIndex})"
                            style="margin: 0;">
-                    <span style="font-size: 0.9rem;">Mantener columna de entrada: <strong id="input-column-name-${escapedColumn}-${newLayerIndex}">${newLayerIndex === 0 ? column : (previousOutputColumns && previousOutputColumns.length === 1 ? previousOutputColumns[0] : (previousOutputColumns && previousOutputColumns.length > 1 ? previousOutputColumns[0] : column + '_step' + (newLayerIndex)))}</strong></span>
+                    <span style="font-size: 0.9rem;">Mantener columna de entrada: <strong id="input-column-name-${escapedColumn}-${newLayerIndex}">${inputColumnName}</strong></span>
                 </label>
             </div>
         `;
@@ -3166,10 +3186,13 @@ ${response.details}
                                 if (!lastStep) {
                                     return '<div style="color: #ff6b6b;">No se encontró información para esta capa</div>';
                                 }
-                                const lastMethodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
-                                                        ...datasetInfo.normalization_info[column].secondary_methods]
-                                                        .find(m => m.value === lastStep.method);
-                                const outputType = lastMethodInfo ? lastMethodInfo.output_type : 'unknown';
+                                // Use output_type from step if available, otherwise fallback to method info
+                                const outputType = lastStep.output_type || (() => {
+                                    const lastMethodInfo = [...datasetInfo.normalization_info[column].primary_methods, 
+                                                            ...datasetInfo.normalization_info[column].secondary_methods]
+                                                            .find(m => m.value === lastStep.method);
+                                    return lastMethodInfo ? lastMethodInfo.output_type : 'unknown';
+                                })();
                                 
                                 return `
                                     <div class="compatibility-indicator ${outputType}" style="font-size: 1.2rem; margin-bottom: 10px;">
