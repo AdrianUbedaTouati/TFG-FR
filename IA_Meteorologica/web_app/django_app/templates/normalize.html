@@ -2323,6 +2323,9 @@ def normalize(value, series=None):
                 
                 // Update the input type indicator of the current layer
                 updateLayerInputTypeAfterConversion(column, layerIndex, convSelect.value);
+                
+                // Update output conversion options since the type might have changed
+                updateOutputConversionOptions(column);
             }
         }
         
@@ -2515,50 +2518,72 @@ def normalize(value, series=None):
             return;
         }
         
-        // Handle both single normalization (object) and chained normalization (array)
-        let lastLayer = null;
-        let outputType = 'mixed';
-        let outputDType = 'unknown';
+        // Get the actual output type by tracing through all layers
+        let outputType = datasetInfo.normalization_info[column].type; // Start with original column type
+        let outputDType = datasetInfo.normalization_info[column].dtype || 'unknown';
         
         if (Array.isArray(normalizationConfig[column])) {
-            // Chained normalization
-            const lastLayerIndex = normalizationConfig[column].length - 1;
-            lastLayer = normalizationConfig[column][lastLayerIndex];
-        } else if (typeof normalizationConfig[column] === 'object') {
+            // For chained normalization, trace through each layer
+            for (let i = 0; i < normalizationConfig[column].length; i++) {
+                const layer = normalizationConfig[column][i];
+                if (!layer || !layer.method) continue;
+                
+                // Get method info
+                const info = datasetInfo.normalization_info[column];
+                const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === layer.method);
+                
+                if (methodInfo) {
+                    outputType = methodInfo.output_type || outputType;
+                    outputDType = methodInfo.output_dtype || outputDType;
+                }
+                
+                // Check if this layer has a conversion that changes the type
+                if (layer.conversion) {
+                    const conversions = {
+                        'TO_STRING': { type: 'text', dtype: 'object' },
+                        'TO_NUMERIC': { type: 'numeric', dtype: 'float64' },
+                        'TO_FLOAT64': { type: 'numeric', dtype: 'float64' },
+                        'TO_FLOAT32': { type: 'numeric', dtype: 'float32' },
+                        'TO_INT64': { type: 'numeric', dtype: 'int64' },
+                        'TO_INT32': { type: 'numeric', dtype: 'int32' },
+                        'TO_INT16': { type: 'numeric', dtype: 'int16' },
+                        'TRUNCATE': { type: outputType, dtype: outputDType }  // Maintains current type
+                    };
+                    
+                    if (conversions[layer.conversion]) {
+                        outputType = conversions[layer.conversion].type;
+                        outputDType = conversions[layer.conversion].dtype;
+                    }
+                }
+            }
+        } else if (typeof normalizationConfig[column] === 'object' && normalizationConfig[column].method) {
             // Single normalization
-            lastLayer = normalizationConfig[column];
-        }
-        
-        if (!lastLayer || !lastLayer.method) {
-            convSelect.innerHTML = '<option value="">Sin conversión</option>';
-            return;
-        }
-        
-        // Get method info
-        const info = datasetInfo.normalization_info[column];
-        const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === lastLayer.method);
-        
-        if (methodInfo) {
-            outputType = methodInfo.output_type || 'mixed';
-            outputDType = methodInfo.output_dtype || 'unknown';
-        }
-        
-        // Check if there's already a conversion that changes the type
-        if (lastLayer.conversion) {
-            const conversions = {
-                'TO_STRING': { type: 'text', dtype: 'object' },
-                'TO_NUMERIC': { type: 'numeric', dtype: 'float64' },
-                'TO_FLOAT64': { type: 'numeric', dtype: 'float64' },
-                'TO_FLOAT32': { type: 'numeric', dtype: 'float32' },
-                'TO_INT64': { type: 'numeric', dtype: 'int64' },
-                'TO_INT32': { type: 'numeric', dtype: 'int32' },
-                'TO_INT16': { type: 'numeric', dtype: 'int16' },
-                'TRUNCATE': { type: outputType, dtype: outputDType }  // Maintains type
-            };
+            const layer = normalizationConfig[column];
+            const info = datasetInfo.normalization_info[column];
+            const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === layer.method);
             
-            if (conversions[lastLayer.conversion]) {
-                outputType = conversions[lastLayer.conversion].type;
-                outputDType = conversions[lastLayer.conversion].dtype;
+            if (methodInfo) {
+                outputType = methodInfo.output_type || outputType;
+                outputDType = methodInfo.output_dtype || outputDType;
+            }
+            
+            // Check if there's a conversion
+            if (layer.conversion) {
+                const conversions = {
+                    'TO_STRING': { type: 'text', dtype: 'object' },
+                    'TO_NUMERIC': { type: 'numeric', dtype: 'float64' },
+                    'TO_FLOAT64': { type: 'numeric', dtype: 'float64' },
+                    'TO_FLOAT32': { type: 'numeric', dtype: 'float32' },
+                    'TO_INT64': { type: 'numeric', dtype: 'int64' },
+                    'TO_INT32': { type: 'numeric', dtype: 'int32' },
+                    'TO_INT16': { type: 'numeric', dtype: 'int16' },
+                    'TRUNCATE': { type: outputType, dtype: outputDType }  // Maintains current type
+                };
+                
+                if (conversions[layer.conversion]) {
+                    outputType = conversions[layer.conversion].type;
+                    outputDType = conversions[layer.conversion].dtype;
+                }
             }
         }
         
@@ -2574,6 +2599,9 @@ def normalize(value, series=None):
                 console.error('Error parsing columns:', e);
             }
         }
+        
+        // Log the final output type for debugging
+        console.log(`Output conversion for column '${column}': Final outputType = ${outputType} (dtype: ${outputDType})`);
         
         // Use the same getConversionOptions function as layer conversions
         console.log(`Output conversion: getting options for outputType = ${outputType}`);
@@ -2642,21 +2670,50 @@ def normalize(value, series=None):
     function showOutputTruncateDialog(column) {
         const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         
-        // Determine output type of last layer
-        let outputType = 'numeric';
-        let lastLayer = null;
+        // Determine output type by tracing through all layers (same logic as updateOutputConversionOptions)
+        let outputType = datasetInfo.normalization_info[column].type; // Start with original column type
         
         if (Array.isArray(normalizationConfig[column])) {
-            lastLayer = normalizationConfig[column][normalizationConfig[column].length - 1];
-        } else if (typeof normalizationConfig[column] === 'object') {
-            lastLayer = normalizationConfig[column];
-        }
-        
-        if (lastLayer && lastLayer.method) {
+            // For chained normalization, trace through each layer
+            for (let i = 0; i < normalizationConfig[column].length; i++) {
+                const layer = normalizationConfig[column][i];
+                if (!layer || !layer.method) continue;
+                
+                // Get method info
+                const info = datasetInfo.normalization_info[column];
+                const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === layer.method);
+                
+                if (methodInfo) {
+                    outputType = methodInfo.output_type || outputType;
+                }
+                
+                // Check if this layer has a conversion that changes the type
+                if (layer.conversion) {
+                    if (['TO_STRING'].includes(layer.conversion)) {
+                        outputType = 'text';
+                    } else if (['TO_NUMERIC', 'TO_FLOAT64', 'TO_FLOAT32', 'TO_INT64', 'TO_INT32', 'TO_INT16'].includes(layer.conversion)) {
+                        outputType = 'numeric';
+                    }
+                    // TRUNCATE maintains the current type
+                }
+            }
+        } else if (typeof normalizationConfig[column] === 'object' && normalizationConfig[column].method) {
+            // Single normalization
+            const layer = normalizationConfig[column];
             const info = datasetInfo.normalization_info[column];
-            const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === lastLayer.method);
-            if (methodInfo && methodInfo.output_type === 'text') {
-                outputType = 'text';
+            const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === layer.method);
+            
+            if (methodInfo) {
+                outputType = methodInfo.output_type || outputType;
+            }
+            
+            // Check if there's a conversion
+            if (layer.conversion) {
+                if (['TO_STRING'].includes(layer.conversion)) {
+                    outputType = 'text';
+                } else if (['TO_NUMERIC', 'TO_FLOAT64', 'TO_FLOAT32', 'TO_INT64', 'TO_INT32', 'TO_INT16'].includes(layer.conversion)) {
+                    outputType = 'numeric';
+                }
             }
         }
         
@@ -3304,6 +3361,9 @@ def normalize(value, series=None):
             if (layerIndex < normalizationConfig[column].length - 1) {
                 updateConversionOptionsForLayer(column, layerIndex + 1);
             }
+            
+            // Always update output conversion options when any layer changes
+            updateOutputConversionOptions(column);
         } else {
             // Remove this layer
             if (Array.isArray(normalizationConfig[column])) {
