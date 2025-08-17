@@ -3519,8 +3519,9 @@ ${response.details}
             if (isCategorical && uniqueMapping.length > 0) {
                 // Show unique value mapping for categorical data
                 const totalUniqueCount = original.all_unique_count || uniqueMapping.length;
+                const isSample = original.mapping_sample_size && original.mapping_sample_size < totalUniqueCount;
                 bodyHtml = `
-                    <h4>Mapeo de valores únicos (${totalUniqueCount} valores únicos totales):</h4>
+                    <h4>Mapeo de valores únicos (${totalUniqueCount} valores únicos totales)${isSample ? ` - Mostrando muestra de ${original.mapping_sample_size} valores` : ''}:</h4>
                     <div class="preview-table-container" style="max-height: 600px; overflow-y: auto;">
                         <table class="preview-table">
                             <thead style="position: sticky; top: 0; background-color: rgba(0, 20, 40, 0.95); z-index: 10;">
