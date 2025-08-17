@@ -2613,13 +2613,8 @@ def normalize(value, series=None):
                     }
                 });
             } else {
-                // Fetch column types via preview if not already available
-                if (!outputIndicator || !outputIndicator.dataset.columnTypes) {
-                    fetchColumnTypesForOutput(column, outputColumns);
-                }
-                
-                // Update existing conversions
-                updateMultiOutputConversions(column, outputColumns);
+                // Always fetch column types to ensure accuracy (same as showColumnDetails)
+                fetchColumnTypesForOutput(column, outputColumns);
             }
         } else {
             // Single column output mode
@@ -2859,14 +2854,14 @@ def normalize(value, series=None):
             }
         }
         
-        // Fetch column types if not already available
-        if (outputColumns.length > 0 && (!outputIndicator || !outputIndicator.dataset.columnTypes)) {
-            console.log('Column types not available, fetching...');
+        // Always fetch column types to ensure we have the most accurate information
+        if (outputColumns.length > 0) {
+            console.log('Fetching column types for accuracy...');
             fetchColumnTypesForOutput(column, outputColumns);
+        } else {
+            // Update display immediately
+            updateMultiOutputConversions(column, outputColumns);
         }
-        
-        // Update display
-        updateMultiOutputConversions(column, outputColumns);
     }
     
     function removeMultiOutputConversion(column, index) {
@@ -2960,7 +2955,7 @@ def normalize(value, series=None):
     }
     
     async function fetchColumnTypesForOutput(column, outputColumns) {
-        // Fetch column types via preview API
+        // Fetch column types via preview API (same approach as showColumnDetails)
         const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
         const lastLayerIndex = Array.isArray(normalizationConfig[column]) ? normalizationConfig[column].length - 1 : 0;
         const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${lastLayerIndex}`);
@@ -2968,11 +2963,11 @@ def normalize(value, series=None):
         console.log(`Fetching column types for ${column}, output columns:`, outputColumns);
         
         try {
-            // Prepare config with output_conversions (even if empty) to ensure we get all columns
-            const config = Array.isArray(normalizationConfig[column]) ? {
-                layers: normalizationConfig[column],
-                output_conversions: normalizationConfig[column].output_conversions || []
-            } : normalizationConfig[column];
+            // Use the exact same approach as showColumnDetails
+            const currentConfig = {};
+            if (normalizationConfig[column] && normalizationConfig[column][lastLayerIndex]) {
+                currentConfig[column] = [normalizationConfig[column][lastLayerIndex]];
+            }
             
             const response = await fetch(`/api/datasets/${datasetId}/normalization/preview/`, {
                 method: 'POST',
@@ -2981,17 +2976,42 @@ def normalize(value, series=None):
                     'X-CSRFToken': getCookie('csrftoken')
                 },
                 body: JSON.stringify({
-                    normalization: { [column]: config },
-                    sample_size: 5  // Small sample just to get column types
+                    normalization: currentConfig,
+                    sample_size: 10  // Same as showColumnDetails
                 })
             });
             
             if (response.ok) {
                 const data = await response.json();
                 
-                // Extract column types from all_column_types
-                if (data.all_column_types) {
-                    console.log('All column types from preview:', data.all_column_types);
+                // Use column_types_info if available (same as showColumnDetails)
+                if (data.preview && data.preview[column] && data.preview[column].column_types_info) {
+                    const columnTypesInfo = data.preview[column].column_types_info;
+                    console.log('Column types info from preview:', columnTypesInfo);
+                    
+                    const types = {};
+                    columnTypesInfo.forEach(colInfo => {
+                        // Map to 'numeric' or 'text' for the conversion system
+                        if (colInfo.type === 'integer' || colInfo.type === 'float' || colInfo.type === 'numeric') {
+                            types[colInfo.name] = 'numeric';
+                        } else {
+                            types[colInfo.name] = 'text';
+                        }
+                        console.log(`Column ${colInfo.name}: type=${colInfo.type}, dtype=${colInfo.dtype} → ${types[colInfo.name]}`);
+                    });
+                    
+                    console.log('Stored column types:', types);
+                    if (outputIndicator) {
+                        outputIndicator.dataset.columnTypes = JSON.stringify(types);
+                        outputIndicator.dataset.columnTypesInfo = JSON.stringify(columnTypesInfo);
+                    }
+                    
+                    // Update multi-output conversions to refresh type-specific options
+                    updateMultiOutputConversions(column, outputColumns);
+                }
+                // Fallback to all_column_types if column_types_info not available
+                else if (data.all_column_types) {
+                    console.log('Using all_column_types as fallback:', data.all_column_types);
                     const types = {};
                     for (const colName of outputColumns) {
                         if (data.all_column_types[colName]) {
@@ -3000,12 +3020,10 @@ def normalize(value, series=None):
                         }
                     }
                     
-                    console.log('Stored column types:', types);
                     if (outputIndicator) {
                         outputIndicator.dataset.columnTypes = JSON.stringify(types);
                     }
                     
-                    // Update multi-output conversions to refresh type-specific options
                     updateMultiOutputConversions(column, outputColumns);
                 }
             }
@@ -3020,6 +3038,26 @@ def normalize(value, series=None):
         const escapedColumn = originalColumn.replace(/[^a-zA-Z0-9]/g, '_');
         const lastLayerIndex = Array.isArray(normalizationConfig[originalColumn]) ? normalizationConfig[originalColumn].length - 1 : 0;
         const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${lastLayerIndex}`);
+        
+        // First check if we have detailed column types info (from showColumnDetails approach)
+        if (outputIndicator && outputIndicator.dataset.columnTypesInfo) {
+            try {
+                const columnTypesInfo = JSON.parse(outputIndicator.dataset.columnTypesInfo);
+                const colInfo = columnTypesInfo.find(col => col.name === outputColumnName);
+                if (colInfo) {
+                    // Map specific types to 'numeric' or 'text'
+                    if (colInfo.type === 'integer' || colInfo.type === 'float' || colInfo.type === 'numeric') {
+                        console.log(`Found detailed type for ${outputColumnName}: ${colInfo.type} (${colInfo.dtype}) → numeric`);
+                        return 'numeric';
+                    } else {
+                        console.log(`Found detailed type for ${outputColumnName}: ${colInfo.type} (${colInfo.dtype}) → text`);
+                        return 'text';
+                    }
+                }
+            } catch (e) {
+                console.error('Error parsing column types info:', e);
+            }
+        }
         
         // Check if we have column type info stored
         if (outputIndicator && outputIndicator.dataset.columnTypes) {
