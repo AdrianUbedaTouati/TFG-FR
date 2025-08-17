@@ -2569,77 +2569,27 @@ def normalize(value, series=None):
             }
         }
         
-        // Get conversion options based on output type
-        let options = [];
+        // Use the same getConversionOptions function as layer conversions
+        console.log(`Output conversion: getting options for outputType = ${outputType}`);
+        const options = getConversionOptions(outputType);
+        console.log(`Output conversion: Available conversions:`, options.map(c => c.value));
         
-        // For multi-output or mixed type, allow all conversions
-        if (isMultiOutput || outputType === 'mixed') {
-            options = [
-                { value: 'TO_FLOAT64', label: 'Convertir a Float64', group: 'numeric' },
-                { value: 'TO_FLOAT32', label: 'Convertir a Float32', group: 'numeric' },
-                { value: 'TO_INT64', label: 'Convertir a Int64', group: 'numeric' },
-                { value: 'TO_INT32', label: 'Convertir a Int32', group: 'numeric' },
-                { value: 'TO_INT16', label: 'Convertir a Int16', group: 'numeric' },
-                { value: 'TRUNCATE', label: 'Truncar valores', group: 'both', requiresParams: true },
-                { value: 'TO_STRING', label: 'Convertir a Texto', group: 'text' },
-                { value: 'TO_NUMERIC', label: 'Convertir a Numérico', group: 'numeric' }
-            ];
-        } else if (outputType === 'numeric') {
-            options = [
-                { value: 'TO_FLOAT64', label: 'Convertir a Float64' },
-                { value: 'TO_FLOAT32', label: 'Convertir a Float32' },
-                { value: 'TO_INT64', label: 'Convertir a Int64' },
-                { value: 'TO_INT32', label: 'Convertir a Int32' },
-                { value: 'TO_INT16', label: 'Convertir a Int16' },
-                { value: 'TRUNCATE', label: 'Truncar decimales', requiresParams: true },
-                { value: 'TO_STRING', label: 'Convertir a Texto' }
-            ];
-        } else if (outputType === 'text') {
-            options = [
-                { value: 'TO_STRING', label: 'Asegurar tipo Texto' },
-                { value: 'TRUNCATE', label: 'Truncar texto', requiresParams: true },
-                { value: 'TO_NUMERIC', label: 'Convertir a Numérico' }
-            ];
-        }
-        
-        // Build select options
+        // Build select options - same format as layer conversions
         let html = '<option value="">Sin conversión</option>';
         
-        if (isMultiOutput || outputType === 'mixed') {
-            // Group by type for multi-output
-            const numericOptions = options.filter(o => o.group === 'numeric');
-            const textOptions = options.filter(o => o.group === 'text');
-            const bothOptions = options.filter(o => o.group === 'both');
-            
-            if (numericOptions.length > 0) {
-                html += '<optgroup label="Conversiones numéricas">';
-                numericOptions.forEach(opt => {
-                    html += `<option value="${opt.value}">${opt.label}</option>`;
-                });
-                html += '</optgroup>';
+        options.forEach(conv => {
+            let label = conv.label;
+            // If it's TRUNCATE and we have params, show them
+            if (conv.value === 'TRUNCATE' && normalizationConfig[column].output_conversion_params) {
+                const params = normalizationConfig[column].output_conversion_params;
+                if (params.chars !== undefined) {
+                    label = `Truncar texto (${params.chars} chars)`;
+                } else if (params.decimals !== undefined) {
+                    label = `Truncar decimales (${params.decimals})`;
+                }
             }
-            
-            if (textOptions.length > 0) {
-                html += '<optgroup label="Conversiones de texto">';
-                textOptions.forEach(opt => {
-                    html += `<option value="${opt.value}">${opt.label}</option>`;
-                });
-                html += '</optgroup>';
-            }
-            
-            if (bothOptions.length > 0) {
-                html += '<optgroup label="Conversiones generales">';
-                bothOptions.forEach(opt => {
-                    html += `<option value="${opt.value}">${opt.label}</option>`;
-                });
-                html += '</optgroup>';
-            }
-        } else {
-            // Simple list for single output
-            options.forEach(opt => {
-                html += `<option value="${opt.value}">${opt.label}</option>`;
-            });
-        }
+            html += `<option value="${conv.value}" title="${conv.description || ''}">${label}</option>`;
+        });
         
         convSelect.innerHTML = html;
         
