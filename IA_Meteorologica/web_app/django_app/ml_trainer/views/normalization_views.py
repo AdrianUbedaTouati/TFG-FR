@@ -394,58 +394,85 @@ class DatasetNormalizationView(APIView):
                     # Store the input column for this step
                     step_input = current_column
                     
+                    # Track columns BEFORE normalization
+                    cols_before_this_step = set(normalized_df.columns)
+                    
                     # Apply single normalization step
                     normalized_df = self._apply_single_normalization(
                         normalized_df, current_column, method, keep_original, 
                         step_index=step_index, total_steps=len(method_config)
                     )
                     
-                    # Determine what happened after normalization
-                    step_output = current_column  # Default to same column (in-place transformation)
+                    # Get columns AFTER normalization
+                    cols_after_this_step = set(normalized_df.columns)
+                    new_cols_created = cols_after_this_step - cols_before_this_step
                     
-                    # Update current_column if it was replaced
-                    if not keep_original:
-                        # Find the new column name (might have suffix)
-                        if current_column not in normalized_df.columns:
-                            # Column was replaced, look for new one with suffix
-                            new_cols = [col for col in normalized_df.columns if col.startswith(current_column) and col != current_column and len(col) > len(current_column)]
-                            if new_cols:
-                                current_column = new_cols[-1]  # Use the latest created column
-                                step_output = current_column
-                        # If column still exists (e.g., ONE_HOT replaces in place), keep using it
+                    # Determine outputs
+                    step_outputs = []
+                    primary_output = current_column  # Default
+                    
+                    if new_cols_created:
+                        # New columns were created
+                        step_outputs = list(new_cols_created)
+                        # The primary output for next step
+                        if current_column not in normalized_df.columns and step_outputs:
+                            # Column was replaced
+                            primary_output = step_outputs[0]
+                            current_column = primary_output
+                        elif step_outputs:
+                            # New columns created alongside original
+                            primary_output = step_outputs[0]
+                            if not keep_original:
+                                current_column = primary_output
                     else:
-                        # If keep_original is true, look for the new column created
-                        new_cols = [col for col in normalized_df.columns if col.startswith(step_input) and col != step_input]
-                        if new_cols:
-                            step_output = new_cols[-1]
-                            current_column = step_output
+                        # In-place transformation or no new columns
+                        step_outputs = [current_column]
+                        primary_output = current_column
                     
-                    # Save step information
+                    # Save step information with ALL outputs
                     step_info.append({
                         'index': step_index,
                         'method': method,
                         'keep_original': keep_original,
                         'input': step_input,
-                        'output': step_output
+                        'primary_output': primary_output,
+                        'all_outputs': step_outputs
                     })
                     
-                    print(f"Step {step_index + 1} complete: input='{step_input}', output='{step_output}', keep_original={keep_original}")
+                    print(f"Step {step_index + 1} complete: input='{step_input}', outputs={step_outputs}, keep_original={keep_original}")
                 
                 # After all layers, manage column retention using the step_info we collected
                 if isinstance(method_config, list) and len(method_config) > 0 and step_info:
                     print(f"\n=== Column retention management for '{column}' ===")
                     print("Step information collected:")
                     for info in step_info:
-                        print(f"  Step {info['index'] + 1}: {info['input']} -> {info['output']} (keep_original={info['keep_original']})")
+                        outputs_str = ', '.join(info['all_outputs']) if info['all_outputs'] else 'none'
+                        print(f"  Step {info['index'] + 1}: {info['input']} -> [{outputs_str}] (keep_original={info['keep_original']})")
                     
                     # Determine which columns to keep
                     columns_to_keep = set()
                     
-                    # Always keep the final output
+                    # For the final step, determine what is the actual final output
                     if step_info:
-                        final_output = step_info[-1]['output']
-                        columns_to_keep.add(final_output)
-                        print(f"\nKeeping final output: {final_output}")
+                        last_step = step_info[-1]
+                        # If the last step has a specific input_column in its config, that might be the final output
+                        if step_index < len(method_config) and 'input_column' in method_config[-1]:
+                            # The last step processed a specific column
+                            final_input = method_config[-1]['input_column']
+                            # Find any outputs from the last step
+                            for output in last_step['all_outputs']:
+                                if output.startswith(final_input):
+                                    columns_to_keep.add(output)
+                                    print(f"\nKeeping final output from specific input: {output}")
+                                    break
+                            else:
+                                # Fallback to primary output
+                                columns_to_keep.add(last_step['primary_output'])
+                                print(f"\nKeeping final primary output: {last_step['primary_output']}")
+                        else:
+                            # Keep the primary output of the last step
+                            columns_to_keep.add(last_step['primary_output'])
+                            print(f"\nKeeping final output: {last_step['primary_output']}")
                     
                     # Check each step's keep_original preference
                     for info in step_info:
@@ -453,17 +480,55 @@ class DatasetNormalizationView(APIView):
                             columns_to_keep.add(info['input'])
                             print(f"Step {info['index'] + 1} wants to keep its input: {info['input']}")
                     
-                    # Now determine what to remove
-                    all_columns_involved = set()
-                    for info in step_info:
-                        all_columns_involved.add(info['input'])
-                        all_columns_involved.add(info['output'])
+                    # Determine what to remove
+                    # Only consider for removal:
+                    # 1. Input columns that were used by layers (and not marked to keep)
+                    # 2. The original column if not marked to keep
                     
                     columns_to_remove = []
-                    for col in all_columns_involved:
-                        if col in normalized_df.columns and col not in columns_to_keep:
-                            columns_to_remove.append(col)
-                            print(f"Will remove: {col}")
+                    
+                    # Check each step's input column
+                    for info in step_info:
+                        input_col = info['input']
+                        if input_col in normalized_df.columns and input_col not in columns_to_keep:
+                            # This input column is not marked to keep
+                            # Only remove it if it's not a final output of any step
+                            is_someones_output = False
+                            for other_info in step_info:
+                                if input_col in other_info['all_outputs']:
+                                    # It's an output of some step
+                                    # Check if it's used as input by another step or is the final output
+                                    is_used_later = False
+                                    for later_info in step_info[other_info['index'] + 1:]:
+                                        if later_info['input'] == input_col:
+                                            is_used_later = True
+                                            break
+                                    
+                                    # If it's an output that's used later, we can remove it (unless keep_original)
+                                    # If it's an output that's NOT used later, keep it
+                                    if is_used_later:
+                                        is_someones_output = True
+                                    break
+                            
+                            # Only remove if it's an intermediate result that was used
+                            if input_col == column or is_someones_output:
+                                columns_to_remove.append(input_col)
+                                print(f"Will remove: {input_col}")
+                    
+                    # Special check: outputs that are not used anywhere should be kept
+                    all_outputs = set()
+                    for info in step_info:
+                        all_outputs.update(info['all_outputs'])
+                    
+                    # Remove any outputs from removal list if they're not used as inputs
+                    for output in all_outputs:
+                        if output in columns_to_remove:
+                            # Check if this output is used as input somewhere
+                            used_as_input = any(info['input'] == output for info in step_info)
+                            if not used_as_input and output != column:
+                                # This output is not used, keep it
+                                columns_to_remove.remove(output)
+                                print(f"Keeping unused output: {output}")
                     
                     # Remove the columns
                     print(f"\nRemoving {len(columns_to_remove)} columns...")
