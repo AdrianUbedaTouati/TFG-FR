@@ -3070,6 +3070,9 @@ def normalize(value, series=None):
         const typeLabel = info.type === 'numeric' ? 'Numérico' : 
                          info.type === 'text' ? 'Texto' : 'Desconocido';
         
+        // Debug log
+        console.log(`Creating card for column '${column}' of type '${info.type}'`);
+        
         // Crear contenido de estadísticas
         let statsHtml = '';
         if (info.type === 'numeric' && info.stats) {
@@ -3143,8 +3146,8 @@ def normalize(value, series=None):
                     </div>
                 </div>
             </div>
-            <div class="layer-controls" style="display: none;" id="layer-controls-${escapedColumn}" data-column="${column}">
-                <button type="button" class="add-layer-btn" onclick="event.preventDefault(); addNormalizationLayer('${column.replace(/'/g, "\\'")}')" title="Añadir capa de normalización">
+            <div class="layer-controls" style="display: none; margin-top: 10px; text-align: center; position: relative; z-index: 10;" id="layer-controls-${escapedColumn}" data-column="${column}">
+                <button type="button" class="add-layer-btn" onclick="event.preventDefault(); addNormalizationLayer('${column.replace(/'/g, "\\'")}')" title="Añadir capa de normalización" style="background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--primary-color); padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 0.9rem; position: relative; z-index: 100; display: inline-block; pointer-events: auto;">
                     <i class="bi bi-plus-circle"></i> Añadir capa
                 </button>
             </div>
@@ -3231,12 +3234,33 @@ def normalize(value, series=None):
             };
             
             previewBtn.style.display = 'block';
-            layerControls.style.display = 'block';
+            if (layerControls) {
+                layerControls.style.display = 'block';
+                layerControls.style.visibility = 'visible';
+                layerControls.style.opacity = '1';
+                // Force the button to be visible too
+                const addLayerBtn = layerControls.querySelector('.add-layer-btn');
+                if (addLayerBtn) {
+                    addLayerBtn.style.display = 'inline-block';
+                    addLayerBtn.style.visibility = 'visible';
+                    addLayerBtn.style.opacity = '1';
+                }
+                console.log(`Layer controls should be visible for column: ${column}`);
+                console.log(`Layer controls element:`, layerControls);
+                console.log(`Layer controls display style:`, layerControls.style.display);
+            } else {
+                console.error(`Layer controls not found for column: ${column}`);
+            }
             
-            // Show output conversion container
+            // Show output conversion container for all column types
             if (outputConvContainer) {
                 outputConvContainer.style.display = 'block';
+                outputConvContainer.style.visibility = 'visible';
+                outputConvContainer.style.opacity = '1';
+                console.log(`Output conversion container should be visible for column: ${column}`);
                 updateOutputConversionOptions(column);
+            } else {
+                console.error(`Output conversion container not found for column: ${column}`);
             }
             
             // Mostrar checkbox para todas las funciones

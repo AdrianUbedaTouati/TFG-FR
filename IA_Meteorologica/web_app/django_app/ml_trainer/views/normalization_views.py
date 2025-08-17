@@ -280,6 +280,12 @@ class DatasetNormalizationView(APIView):
             # Apply normalization
             normalized_df = self._apply_normalization(df, normalization_config)
             
+            # Check if normalized_df is valid
+            if not isinstance(normalized_df, pd.DataFrame):
+                error_msg = f"_apply_normalization returned invalid type: {type(normalized_df)}, value: {normalized_df}"
+                print(error_msg)
+                raise ValueError(error_msg)
+            
             print(f"Normalization complete. DataFrame shape: {normalized_df.shape}")  # Debug
             print(f"DataFrame columns: {list(normalized_df.columns)}")
             
@@ -331,15 +337,38 @@ class DatasetNormalizationView(APIView):
                 'details': str(e)  # Ya incluye el formato tipo terminal
             }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return error_response(ERROR_NORMALIZATION_FAILED.format(str(e)))
+            import traceback
+            error_msg = str(e)
+            
+            # Check if the error message is just "-1" and provide more context
+            if error_msg == "-1":
+                error_msg = "Unknown error occurred during normalization process"
+                print("DEBUG: Exception with message '-1' caught")
+                print(f"Exception type: {type(e).__name__}")
+                print(f"Exception args: {e.args}")
+                print(f"Full traceback:\n{traceback.format_exc()}")
+            
+            error_details = {
+                'error': error_msg,
+                'type': type(e).__name__,
+                'traceback': traceback.format_exc()
+            }
+            print(f"Normalization error details: {error_details}")
+            return error_response(ERROR_NORMALIZATION_FAILED.format(error_msg))
     
     def _apply_normalization(self, df: pd.DataFrame, config: dict) -> pd.DataFrame:
         """Apply normalization based on configuration"""
+        print(f"\n=== _apply_normalization started ===")
+        print(f"Input DataFrame shape: {df.shape}")
+        print(f"Config keys: {list(config.keys())}")
+        
         normalized_df = df.copy()
         self.conversion_warnings = []  # Store warnings for type conversions
         
         for column, method_config in config.items():
+            print(f"\nProcessing column: {column}")
             if column not in df.columns:
+                print(f"WARNING: Column '{column}' not found in DataFrame. Available columns: {list(df.columns)[:10]}...")
                 continue
             
             # Extract output conversion if present
@@ -386,7 +415,13 @@ class DatasetNormalizationView(APIView):
                             current_column = step['input_column']
                             print(f"Step {step_index + 1}: Using input column '{current_column}'")
                         else:
-                            print(f"WARNING: input_column '{step['input_column']}' not found in dataframe!")
+                            error_msg = f"Input column '{step['input_column']}' not found in dataframe for step {step_index + 1}"
+                            print(f"ERROR: {error_msg}")
+                            print(f"Available columns: {list(normalized_df.columns)}")
+                            # This might be causing the -1 error
+                            if step['input_column'] == 'trend':
+                                print("DEBUG: This appears to be the source of the -1 error - 'trend' column not found")
+                            raise ValueError(error_msg)
                     else:
                         print(f"Step {step_index + 1}: No input_column specified, using '{current_column}'")
                     
@@ -450,10 +485,17 @@ class DatasetNormalizationView(APIView):
                     cols_before_this_step = set(normalized_df.columns)
                     
                     # Apply single normalization step
-                    normalized_df = self._apply_single_normalization(
-                        normalized_df, current_column, method, keep_original, 
-                        step_index=step_index, total_steps=len(method_config)
-                    )
+                    try:
+                        normalized_df = self._apply_single_normalization(
+                            normalized_df, current_column, method, keep_original, 
+                            step_index=step_index, total_steps=len(actual_config)
+                        )
+                    except Exception as e:
+                        error_msg = f"Error in step {step_index + 1} for column '{current_column}' with method '{method}': {str(e)}"
+                        print(error_msg)
+                        import traceback
+                        print("Traceback:", traceback.format_exc())
+                        raise ValueError(error_msg)
                     
                     # Get columns AFTER normalization
                     cols_after_this_step = set(normalized_df.columns)
@@ -525,6 +567,13 @@ class DatasetNormalizationView(APIView):
                     })
                     
                     print(f"Step {step_index + 1} complete: input='{step_input}', outputs={step_outputs}, keep_original={keep_original}")
+                    print(f"Columns available after step {step_index + 1}: {list(normalized_df.columns)[:30]}...")
+                    
+                    # Check if 'trend' column exists after this step
+                    if 'trend' in normalized_df.columns:
+                        print(f"DEBUG: 'trend' column found after step {step_index + 1}")
+                    else:
+                        print(f"DEBUG: 'trend' column NOT found after step {step_index + 1}")
                 
                 # Apply conversion from the LAST step if it exists
                 if len(actual_config) > 0:
@@ -572,12 +621,14 @@ class DatasetNormalizationView(APIView):
                                 raise ValueError(error_msg)
                 
                 # After all layers, manage column retention using the step_info we collected
-                if isinstance(actual_config, list) and len(actual_config) > 0 and step_info:
-                    print(f"\n=== Column retention management for '{column}' ===")
-                    print("Step information collected:")
-                    for info in step_info:
-                        outputs_str = ', '.join(info['all_outputs']) if info['all_outputs'] else 'none'
-                        print(f"  Step {info['index'] + 1}: {info['input']} -> [{outputs_str}] (keep_original={info['keep_original']})")
+                # IMPORTANT: This happens AFTER all steps have been processed
+                try:
+                    if isinstance(actual_config, list) and len(actual_config) > 0 and step_info:
+                        print(f"\n=== Column retention management for '{column}' ===")
+                        print("Step information collected:")
+                        for info in step_info:
+                            outputs_str = ', '.join(info['all_outputs']) if info['all_outputs'] else 'none'
+                            print(f"  Step {info['index'] + 1}: {info['input']} -> [{outputs_str}] (keep_original={info['keep_original']})")
                     
                     # Determine which columns to keep
                     columns_to_keep = set()
@@ -586,9 +637,10 @@ class DatasetNormalizationView(APIView):
                     if step_info:
                         last_step = step_info[-1]
                         # If the last step has a specific input_column in its config, that might be the final output
-                        if step_index < len(actual_config) and 'input_column' in actual_config[-1]:
+                        # Fix: step_index is from outer loop, use len(step_info) - 1 instead
+                        if len(actual_config) > 0 and 'input_column' in actual_config[-1]:
                             # The last step processed a specific column
-                            final_input = method_config[-1]['input_column']
+                            final_input = actual_config[-1]['input_column']
                             # Find any outputs from the last step
                             for output in last_step['all_outputs']:
                                 if output.startswith(final_input):
@@ -663,10 +715,33 @@ class DatasetNormalizationView(APIView):
                     # Remove the columns
                     print(f"\nRemoving {len(columns_to_remove)} columns...")
                     for col in columns_to_remove:
-                        print(f"Removing: {col}")
-                        normalized_df = normalized_df.drop(columns=[col])
+                        if col in normalized_df.columns:
+                            print(f"Removing: {col}")
+                            try:
+                                normalized_df = normalized_df.drop(columns=[col])
+                            except Exception as e:
+                                print(f"Warning: Could not remove column {col}: {e}")
+                                # Check if this is causing the -1 error
+                                if str(e) == "-1":
+                                    print(f"DEBUG: -1 error occurred while dropping column {col}")
+                                    print(f"DataFrame shape before drop: {normalized_df.shape}")
+                                    print(f"Columns before drop: {list(normalized_df.columns)}")
+                                    raise ValueError(f"Failed to remove column '{col}' - pandas returned error code -1")
+                        else:
+                            print(f"Warning: Column {col} not found in dataframe")
                     
                     print(f"\nFinal columns: {sorted(normalized_df.columns)}")
+                    print(f"Final DataFrame shape: {normalized_df.shape}")
+                except Exception as e:
+                    print(f"ERROR in column retention management: {str(e)}")
+                    print(f"Exception type: {type(e).__name__}")
+                    if str(e) == "-1":
+                        print("DEBUG: -1 error occurred in column retention management")
+                        import traceback
+                        print(f"Traceback:\n{traceback.format_exc()}")
+                        raise ValueError("Column retention failed with error code -1")
+                    else:
+                        raise
             elif isinstance(actual_config, dict):
                 # Single normalization (backward compatibility)
                 method = actual_config.get('method', '')
@@ -724,48 +799,16 @@ class DatasetNormalizationView(APIView):
                             })
                     except Exception as e:
                         print(f"Error applying output conversion {output_conversion} to column {output_col}: {str(e)}")
-                    # Find all columns that were created/modified by this normalization
-                    output_columns = []
-                    
-                    # Check for columns with step suffixes
-                    for col in normalized_df.columns:
-                        if col.startswith(column) and ('_step' in col or '_normalized' in col):
-                            output_columns.append(col)
-                    
-                    # If no step columns found, check if the original column still exists
-                    if not output_columns and column in normalized_df.columns:
-                        output_columns = [column]
-                    
-                    # Apply conversion to all output columns
-                    from ..conversion_functions import apply_conversion, get_conversion_warnings
-                    for output_col in output_columns:
-                        try:
-                            print(f"Applying output conversion '{output_conversion}' to column '{output_col}'")
-                            
-                            # Check data type to determine if it's numeric or text
-                            is_numeric = pd.api.types.is_numeric_dtype(normalized_df[output_col])
-                            
-                            # Apply conversion
-                            normalized_df[output_col] = apply_conversion(
-                                normalized_df[output_col],
-                                output_conversion,
-                                params=output_conversion_params
-                            )
-                            
-                            # Add warning if any
-                            warning_msg = get_conversion_warnings(
-                                normalized_df[output_col].dtype, output_conversion
-                            )
-                            if hasattr(self, 'conversion_warnings') and warning_msg:
-                                self.conversion_warnings.append({
-                                    'column': output_col,
-                                    'method': output_conversion,
-                                    'warning': f"Conversión de salida aplicada en columna '{output_col}': {output_conversion} - ⚠️ {warning_msg}"
-                                })
-                        except Exception as e:
-                            print(f"Error applying output conversion {output_conversion} to column {output_col}: {str(e)}")
-                            # Continue with other columns
+                        # Continue with other columns
         
+        # Final validation before returning
+        if not isinstance(normalized_df, pd.DataFrame):
+            raise ValueError(f"Normalization process failed - expected DataFrame but got {type(normalized_df)}")
+        
+        if normalized_df.empty:
+            raise ValueError("Normalization process resulted in empty DataFrame")
+            
+        print(f"_apply_normalization returning DataFrame with shape: {normalized_df.shape}")
         return normalized_df
     
     def _apply_single_normalization(self, df: pd.DataFrame, column: str, method: str, 
@@ -777,11 +820,15 @@ class DatasetNormalizationView(APIView):
         print(f"Step: {step_index + 1}/{total_steps}")
         print(f"Available columns: {list(df.columns)[:10]}...")  # Show first 10 columns
         
-        if column not in df.columns:
-            print(f"WARNING: Column '{column}' not found in dataframe!")
-            return df
-        
         normalized_df = df.copy()
+        
+        if column not in normalized_df.columns:
+            print(f"ERROR: Column '{column}' not found in dataframe!")
+            print(f"Available columns: {list(normalized_df.columns)}")
+            # Check if this might be the -1 error source
+            if column == 'trend' or column == '-1':
+                print(f"DEBUG: Potential -1 error source - column '{column}' not found")
+            raise ValueError(f"Column '{column}' not found in dataframe")
         
         # Generate suffix for the new column
         if total_steps > 1:
@@ -1225,6 +1272,10 @@ class DatasetNormalizationView(APIView):
                         if total_steps == 1 and not keep_original:
                             normalized_df = normalized_df.drop(columns=[column])
                             print(f"Removed original column: {column}")
+                        
+                        # Debug: Show all columns after custom function
+                        print(f"Columns after custom function execution: {list(normalized_df.columns)}")
+                        print(f"New columns created: {list(results_dict.keys())}")
                     else:
                         # Traditional single column output
                         print(f"Applying traditional single-column normalization")
@@ -1384,6 +1435,10 @@ class DatasetNormalizationView(APIView):
             error_msg = f"Error aplicando {method} a columna {column}: {str(e)}"
             print(error_msg)
             raise ValueError(error_msg)
+        
+        # Final check before returning
+        if not isinstance(normalized_df, pd.DataFrame):
+            raise ValueError(f"Expected DataFrame but got {type(normalized_df)}: {normalized_df}")
         
         return normalized_df
     
