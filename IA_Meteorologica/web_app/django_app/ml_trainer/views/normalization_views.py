@@ -1018,12 +1018,12 @@ class DatasetNormalizationView(APIView):
                                 safe_globals['series_stats'] = series_stats
                                 
                                 # Apply function without passing series
-                                normalized_df[new_column_name] = df[column].apply(
+                                normalized_df[new_column_name] = df[column].copy().apply(
                                     lambda x: normalize_func(x, series=None)
                                 )
                             else:
                                 # For text functions, just provide the value
-                                normalized_df[new_column_name] = df[column].apply(normalize_func)
+                                normalized_df[new_column_name] = df[column].copy().apply(normalize_func)
                         else:
                             # Single normalization - respect keep_original setting
                             if keep_original:
@@ -1037,11 +1037,11 @@ class DatasetNormalizationView(APIView):
                                         'std': df[column].std()
                                     }
                                     safe_globals['series_stats'] = series_stats
-                                    normalized_df[new_column_name] = df[column].apply(
+                                    normalized_df[new_column_name] = df[column].copy().apply(
                                         lambda x: normalize_func(x, series=None)
                                     )
                                 else:
-                                    normalized_df[new_column_name] = df[column].apply(normalize_func)
+                                    normalized_df[new_column_name] = df[column].copy().apply(normalize_func)
                             else:
                                 # Replace in place
                                 if custom_func.function_type == 'numeric':
@@ -1124,12 +1124,12 @@ class DatasetNormalizationView(APIView):
                     # The original will be removed at the end if no layer has keep_original=True
                     if total_steps > 1:
                         new_column_name = f"{column}{suffix}"
-                        normalized_df[new_column_name] = func(normalized_df[column])
+                        normalized_df[new_column_name] = func(normalized_df[column].copy())
                     else:
                         # Single normalization - use the original keep_original logic
                         if keep_original:
                             new_column_name = f"{column}{suffix}"
-                            normalized_df[new_column_name] = func(normalized_df[column])
+                            normalized_df[new_column_name] = func(normalized_df[column].copy())
                         else:
                             normalized_df[column] = func(normalized_df[column])
             
@@ -1142,12 +1142,12 @@ class DatasetNormalizationView(APIView):
                     # The original will be removed at the end if no layer has keep_original=True
                     if total_steps > 1:
                         new_column_name = f"{column}{suffix}"
-                        normalized_df[new_column_name] = func(normalized_df[column])
+                        normalized_df[new_column_name] = func(normalized_df[column].copy())
                     else:
                         # Single normalization - use the original keep_original logic
                         if keep_original:
                             new_column_name = f"{column}{suffix}"
-                            normalized_df[new_column_name] = func(normalized_df[column])
+                            normalized_df[new_column_name] = func(normalized_df[column].copy())
                         else:
                             normalized_df[column] = func(normalized_df[column])
             
