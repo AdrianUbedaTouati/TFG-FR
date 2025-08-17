@@ -1972,6 +1972,57 @@ def normalize(value, series=None):
         
         // Update compatibility of this layer's methods
         updateLayerMethodsCompatibility(column, layerIndex);
+        
+        // Update the checkbox label to show the selected input column
+        const inputColumnNameSpan = document.getElementById(`input-column-name-${escapedColumn}-${layerIndex}`);
+        if (inputColumnNameSpan) {
+            inputColumnNameSpan.textContent = inputColSelect.value;
+        }
+    }
+    
+    function updateLayerInputColumnNames(column) {
+        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
+        
+        if (!Array.isArray(normalizationConfig[column])) {
+            return;
+        }
+        
+        // For each layer, determine its input column
+        for (let i = 0; i < normalizationConfig[column].length; i++) {
+            let inputColumnName = column; // Default to original column
+            
+            if (i === 0) {
+                // First layer always uses original column
+                inputColumnName = column;
+            } else {
+                // Later layers use output of previous layer
+                const prevLayerIndex = i - 1;
+                
+                // Check if previous layer has specific output columns
+                const prevOutputIndicator = document.getElementById(`output-type-${escapedColumn}-${prevLayerIndex}`);
+                if (prevOutputIndicator && prevOutputIndicator.dataset.realColumns) {
+                    try {
+                        const prevOutputColumns = JSON.parse(prevOutputIndicator.dataset.realColumns);
+                        if (prevOutputColumns.length > 0) {
+                            // Use the selected input column or first output column
+                            inputColumnName = normalizationConfig[column][i].input_column || prevOutputColumns[0];
+                        }
+                    } catch (e) {
+                        // Fallback to expected column name
+                        inputColumnName = `${column}_step${prevLayerIndex + 1}`;
+                    }
+                } else {
+                    // Fallback to expected column name
+                    inputColumnName = `${column}_step${prevLayerIndex + 1}`;
+                }
+            }
+            
+            // Update the checkbox label
+            const inputColumnSpan = document.getElementById(`input-column-name-${escapedColumn}-${i}`);
+            if (inputColumnSpan) {
+                inputColumnSpan.textContent = inputColumnName;
+            }
+        }
     }
     
     function onConversionChange(column, layerIndex) {
@@ -2291,7 +2342,7 @@ def normalize(value, series=None):
                                    id="keep-original-checkbox-${escapedColumn}-0" 
                                    onchange="onKeepOriginalChangeForLayer('${column.replace(/'/g, "\\'")}', 0)"
                                    style="margin: 0;">
-                            <span style="font-size: 0.9rem;">Mantener columna original</span>
+                            <span style="font-size: 0.9rem;">Mantener columna de entrada: <strong>${column}</strong></span>
                         </label>
                     </div>
                 </div>
@@ -2300,16 +2351,6 @@ def normalize(value, series=None):
                 <button type="button" class="add-layer-btn" onclick="event.preventDefault(); addNormalizationLayer('${column.replace(/'/g, "\\'")}')" title="Añadir capa de normalización">
                     <i class="bi bi-plus-circle"></i> Añadir capa
                 </button>
-            </div>
-            
-            <!-- Checkbox global para mantener columna original en todas las capas -->
-            <div class="keep-original-container" id="keep-original-${escapedColumn}" style="display: none; margin-top: 10px; padding: 10px; background: rgba(0, 212, 255, 0.05); border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.2);">
-                <label class="keep-original-label" style="display: flex; align-items: center; gap: 10px;">
-                    <input type="checkbox" class="keep-original-checkbox" id="keep-original-checkbox-${escapedColumn}" 
-                           onchange="onKeepOriginalChange('${column.replace(/'/g, "\\'")}')">
-                    <span style="font-weight: 600;">Mantener columna original (aplicar a todas las capas)</span>
-                    <i class="bi bi-info-circle" title="Si se activa, mantendrá la columna original en todas las capas de normalización"></i>
-                </label>
             </div>
             
             <!-- Botón de previsualización general -->
@@ -2380,27 +2421,17 @@ def normalize(value, series=None):
             previewBtn.style.display = 'block';
             layerControls.style.display = 'block';
             
-            // Mostrar el checkbox global de la columna
-            const globalKeepOriginalContainer = document.getElementById(`keep-original-${escapedColumn}`);
-            if (globalKeepOriginalContainer) {
-                globalKeepOriginalContainer.style.display = 'block';
+            // Mostrar checkbox para todas las funciones
+            keepOriginalContainer.style.display = 'block';
+            
+            // Initialize checkbox state based on config (reuse existing checkbox variable)
+            if (checkbox && normalizationConfig[column][layerIndex]) {
+                checkbox.checked = normalizationConfig[column][layerIndex].keep_original || false;
             }
             
-            // Mostrar checkbox solo para funciones por defecto
-            if (defaultFunctions.includes(select.value)) {
-                keepOriginalContainer.style.display = 'block';
-                
-                // Initialize checkbox state based on config
-                const checkbox = document.getElementById(`keep-original-checkbox-${escapedColumn}-${layerIndex}`);
-                if (checkbox && normalizationConfig[column][layerIndex]) {
-                    checkbox.checked = normalizationConfig[column][layerIndex].keep_original;
-                }
-            } else {
-                keepOriginalContainer.style.display = 'none';
-                // Para funciones personalizadas, usar el valor por defecto (false)
-                if (!normalizationConfig[column][layerIndex].hasOwnProperty('keep_original')) {
-                    normalizationConfig[column][layerIndex].keep_original = false;
-                }
+            // Para cualquier función, usar el valor por defecto (false) si no existe
+            if (!normalizationConfig[column][layerIndex].hasOwnProperty('keep_original')) {
+                normalizationConfig[column][layerIndex].keep_original = false;
             }
             
             // Update output type indicator
@@ -2410,6 +2441,9 @@ def normalize(value, series=None):
             if (layerIndex === 0 && normalizationConfig[column][0].conversion) {
                 updateLayerOutputTypeIndicatorWithConversion(column, 0, select.value, normalizationConfig[column][0].conversion);
             }
+            
+            // Update input column names for all layers of this column
+            updateLayerInputColumnNames(column);
             
             // Update input column selector for next layer if it exists
             updateNextLayerInputSelector(column, layerIndex);
@@ -2427,12 +2461,6 @@ def normalize(value, series=None):
                 }
             }
             keepOriginalContainer.style.display = 'none';
-            
-            // Ocultar checkbox global si no hay normalizaciones
-            const globalKeepOriginalContainer = document.getElementById(`keep-original-${escapedColumn}`);
-            if (globalKeepOriginalContainer) {
-                globalKeepOriginalContainer.style.display = 'none';
-            }
             
             // Hide output type indicator when no method is selected
             const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${layerIndex}`);
@@ -2491,26 +2519,6 @@ def normalize(value, series=None):
         }
     }
 
-    function onKeepOriginalChange(column) {
-        const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
-        const checkbox = document.getElementById(`keep-original-checkbox-${escapedColumn}`);
-        
-        // Update all layers in the config to use the same keep_original value
-        if (Array.isArray(normalizationConfig[column])) {
-            normalizationConfig[column].forEach((layer, index) => {
-                if (layer) {
-                    layer.keep_original = checkbox.checked;
-                    
-                    // Also update the per-layer checkbox if it exists
-                    const layerCheckbox = document.getElementById(`keep-original-checkbox-${escapedColumn}-${index}`);
-                    if (layerCheckbox) {
-                        layerCheckbox.checked = checkbox.checked;
-                    }
-                }
-            });
-        }
-    }
-    
     function onKeepOriginalChangeForLayer(column, layerIndex) {
         const escapedColumn = column.replace(/['"\\]/g, '\\$&').replace(/\s/g, '_');
         const checkbox = document.getElementById(`keep-original-checkbox-${escapedColumn}-${layerIndex}`);
@@ -2519,18 +2527,6 @@ def normalize(value, series=None):
         if (Array.isArray(normalizationConfig[column]) && normalizationConfig[column][layerIndex]) {
             normalizationConfig[column][layerIndex].keep_original = checkbox.checked;
             console.log(`Updated keep_original for layer ${layerIndex + 1} of column '${column}' to:`, checkbox.checked);
-            
-            // Check if all layers have the same value to sync with global checkbox
-            const allLayersHaveSameValue = normalizationConfig[column].every(layer => 
-                layer && layer.keep_original === checkbox.checked
-            );
-            
-            if (allLayersHaveSameValue) {
-                const globalCheckbox = document.getElementById(`keep-original-checkbox-${escapedColumn}`);
-                if (globalCheckbox) {
-                    globalCheckbox.checked = checkbox.checked;
-                }
-            }
         }
     }
     
@@ -2868,7 +2864,7 @@ def normalize(value, series=None):
                            id="keep-original-checkbox-${escapedColumn}-${newLayerIndex}" 
                            onchange="onKeepOriginalChangeForLayer('${column.replace(/'/g, "\\'")}', ${newLayerIndex})"
                            style="margin: 0;">
-                    <span style="font-size: 0.9rem;">Mantener columna original</span>
+                    <span style="font-size: 0.9rem;">Mantener columna de entrada: <strong id="input-column-name-${escapedColumn}-${newLayerIndex}">${newLayerIndex === 0 ? column : (previousOutputColumns && previousOutputColumns.length === 1 ? previousOutputColumns[0] : (previousOutputColumns && previousOutputColumns.length > 1 ? previousOutputColumns[0] : column + '_step' + (newLayerIndex)))}</strong></span>
                 </label>
             </div>
         `;

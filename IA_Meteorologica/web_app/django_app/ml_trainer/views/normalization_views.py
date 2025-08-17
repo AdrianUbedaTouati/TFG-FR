@@ -404,20 +404,68 @@ class DatasetNormalizationView(APIView):
                                 current_column = new_cols[-1]  # Use the latest created column
                         # If column still exists (e.g., ONE_HOT replaces in place), keep using it
                 
-                # After all layers, check if we need to remove the original column
-                # Only remove if NONE of the layers wanted to keep the original
+                # After all layers, manage column retention based on each layer's keep_original
                 if isinstance(method_config, list) and len(method_config) > 0:
-                    # Check if any layer has keep_original = True
-                    any_keep_original = any(step.get('keep_original', False) for step in method_config)
+                    columns_to_remove = []
                     
-                    if not any_keep_original and column in normalized_df.columns:
-                        # Check if there are new columns created (with suffix)
-                        new_cols = [col for col in normalized_df.columns if col.startswith(column) and col != column and len(col) > len(column)]
-                        if new_cols:
-                            # There are new columns, so we can safely remove the original
-                            print(f"Removing original column '{column}' as no layer requested to keep it")
-                            normalized_df = normalized_df.drop(columns=[column])
-                        # If no new columns, the original was transformed in place, so don't drop it
+                    # Track the flow of columns through the layers
+                    layer_inputs = []
+                    layer_outputs = []
+                    
+                    # First layer always uses the original column as input
+                    current_col = column
+                    
+                    for step_idx, step in enumerate(method_config):
+                        # Record this layer's input
+                        if 'input_column' in step and step['input_column'] in normalized_df.columns:
+                            layer_inputs.append(step['input_column'])
+                            current_col = step['input_column']
+                        else:
+                            layer_inputs.append(current_col)
+                        
+                        # Determine this layer's output column
+                        if step_idx < len(method_config) - 1:  # Not the last step
+                            output_col = f"{column}_step{step_idx + 1}"
+                            if output_col in normalized_df.columns:
+                                layer_outputs.append(output_col)
+                                current_col = output_col
+                            else:
+                                # Column was transformed in place
+                                layer_outputs.append(current_col)
+                        else:
+                            # Last step - check what was created
+                            possible_output = f"{column}_step{step_idx + 1}"
+                            if possible_output in normalized_df.columns:
+                                layer_outputs.append(possible_output)
+                            else:
+                                layer_outputs.append(current_col)
+                    
+                    # Now check each layer's keep_original decision
+                    for step_idx, step in enumerate(method_config):
+                        input_col = layer_inputs[step_idx]
+                        keep_input = step.get('keep_original', False)
+                        
+                        if not keep_input and input_col in normalized_df.columns:
+                            # Check if this column is used as input by any later layer
+                            used_later = False
+                            for later_idx in range(step_idx + 1, len(layer_inputs)):
+                                if layer_inputs[later_idx] == input_col:
+                                    used_later = True
+                                    break
+                            
+                            # Check if it's the final output
+                            is_final_output = (step_idx == len(method_config) - 1 and 
+                                             layer_outputs[step_idx] == input_col)
+                            
+                            if not used_later and not is_final_output and input_col not in columns_to_remove:
+                                columns_to_remove.append(input_col)
+                                print(f"Layer {step_idx + 1} marked column '{input_col}' for removal (keep_original=False)")
+                    
+                    # Remove marked columns
+                    for col in columns_to_remove:
+                        if col in normalized_df.columns:
+                            print(f"Removing column '{col}'")
+                            normalized_df = normalized_df.drop(columns=[col])
             elif isinstance(method_config, dict):
                 # Single normalization (backward compatibility)
                 method = method_config.get('method', '')
@@ -450,8 +498,12 @@ class DatasetNormalizationView(APIView):
         
         normalized_df = df.copy()
         
-        # Generate suffix for chained normalizations
-        suffix = f"_step{step_index + 1}" if total_steps > 1 else "_normalized"
+        # Generate suffix for the new column
+        if total_steps > 1:
+            # For multi-layer, always use step number for consistency
+            suffix = f"_step{step_index + 1}"
+        else:
+            suffix = "_normalized"
         
         # Check if it's a custom function
         if method.startswith('CUSTOM_'):
