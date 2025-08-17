@@ -1805,10 +1805,13 @@ def normalize(value, series=None):
                         
                         // After setting up the indicator, try to get real column names
                         if (func.new_columns && func.new_columns.length > 0) {
-                            // Asynchronously fetch real column names
-                            getRealColumnNames(column, layerIndex).then(realNames => {
-                                if (realNames && realNames.length > 0) {
-                                    outputIndicator.dataset.realColumns = JSON.stringify(realNames);
+                            // Asynchronously fetch real column names and types
+                            getRealColumnNames(column, layerIndex).then(result => {
+                                if (result && result.names && result.names.length > 0) {
+                                    outputIndicator.dataset.realColumns = JSON.stringify(result.names);
+                                    if (result.types) {
+                                        outputIndicator.dataset.columnTypes = JSON.stringify(result.types);
+                                    }
                                     // Update any existing next layer input selector
                                     updateNextLayerInputSelector(column, layerIndex);
                                 }
@@ -1875,14 +1878,37 @@ def normalize(value, series=None):
             if (response.ok) {
                 const data = await response.json();
                 
-                // Extract real column names from the preview
+                // Extract real column names and types from the preview
                 if (data.preview && data.preview[column]) {
                     const colData = data.preview[column];
                     
                     if (colData.new_columns) {
-                        return colData.new_columns;
+                        // Also try to get types from column_types_info
+                        const types = {};
+                        if (colData.column_types_info) {
+                            colData.column_types_info.forEach(info => {
+                                // Determine if numeric or text based on dtype
+                                const dtype = info.dtype || '';
+                                let type = 'numeric';
+                                if (dtype.includes('object') || dtype.includes('str')) {
+                                    type = 'text';
+                                }
+                                types[info.name] = type;
+                            });
+                        }
+                        return { names: colData.new_columns, types: types };
                     } else if (colData.column_types_info) {
-                        return colData.column_types_info.map(info => info.name);
+                        const names = colData.column_types_info.map(info => info.name);
+                        const types = {};
+                        colData.column_types_info.forEach(info => {
+                            const dtype = info.dtype || '';
+                            let type = 'numeric';
+                            if (dtype.includes('object') || dtype.includes('str')) {
+                                type = 'text';
+                            }
+                            types[info.name] = type;
+                        });
+                        return { names: names, types: types };
                     }
                 }
             }
@@ -2512,23 +2538,140 @@ def normalize(value, series=None):
     
     function updateOutputConversionOptions(column) {
         const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
-        const convSelect = document.getElementById(`output-conv-${escapedColumn}`);
+        const singleConvDiv = document.getElementById(`single-output-conv-${escapedColumn}`);
+        const multiConvDiv = document.getElementById(`multi-output-conversions-${escapedColumn}`);
+        const addConvBtn = document.getElementById(`add-output-conv-btn-${escapedColumn}`);
         
-        if (!convSelect) {
+        if (!normalizationConfig[column]) {
             return;
         }
         
-        // Get the actual output type by tracing through all layers
-        let outputType = datasetInfo.normalization_info[column].type; // Start with original column type
-        let outputDType = datasetInfo.normalization_info[column].dtype || 'unknown';
+        // Check if it's a multi-output function
+        const lastLayerIndex = Array.isArray(normalizationConfig[column]) ? normalizationConfig[column].length - 1 : 0;
+        const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${lastLayerIndex}`);
+        let outputColumns = [];
+        let isMultiOutput = false;
         
-        if (Array.isArray(normalizationConfig[column])) {
-            // For chained normalization, trace through each layer
+        // First check the output indicator for expected/real columns
+        if (outputIndicator && (outputIndicator.dataset.expectedColumns || outputIndicator.dataset.realColumns)) {
+            try {
+                outputColumns = JSON.parse(outputIndicator.dataset.realColumns || outputIndicator.dataset.expectedColumns);
+                isMultiOutput = outputColumns.length > 1;
+            } catch (e) {
+                console.error('Error parsing columns:', e);
+            }
+        }
+        
+        // If not found in output indicator, check if any layer generates multiple columns
+        if (!isMultiOutput && Array.isArray(normalizationConfig[column])) {
             for (let i = 0; i < normalizationConfig[column].length; i++) {
                 const layer = normalizationConfig[column][i];
-                if (!layer || !layer.method) continue;
+                if (layer && layer.method) {
+                    // Check if it's a custom function or date_extraction that generates multiple columns
+                    if (layer.method.startsWith('CUSTOM_') || layer.method === 'date_extraction') {
+                        // For now, assume these generate multiple columns
+                        // We'll fetch the actual columns below
+                        isMultiOutput = true;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // If we detected multi-output but don't have the column list, try to get it
+        if (isMultiOutput && outputColumns.length === 0) {
+            // Try to get columns from a preview
+            console.log(`Multi-output detected for ${column} but no columns list available, fetching...`);
+            // We'll fetch this asynchronously below
+        }
+        
+        if (isMultiOutput) {
+            // Multi-column output mode
+            if (singleConvDiv) singleConvDiv.style.display = 'none';
+            if (multiConvDiv) multiConvDiv.style.display = 'block';
+            if (addConvBtn) addConvBtn.style.display = 'inline-block';
+            
+            // Initialize output_conversions array if not exists
+            if (!normalizationConfig[column].output_conversions) {
+                normalizationConfig[column].output_conversions = [];
+            }
+            
+            // If we don't have columns yet, fetch them
+            if (outputColumns.length === 0) {
+                fetchOutputColumnsAndTypes(column).then(result => {
+                    if (result && result.columns && result.columns.length > 0) {
+                        outputColumns = result.columns;
+                        // Store the columns for future use
+                        if (outputIndicator) {
+                            outputIndicator.dataset.realColumns = JSON.stringify(outputColumns);
+                            if (result.types) {
+                                outputIndicator.dataset.columnTypes = JSON.stringify(result.types);
+                            }
+                        }
+                        // Update the UI with the fetched columns
+                        updateMultiOutputConversions(column, outputColumns);
+                    }
+                });
+            } else {
+                // Fetch column types via preview if not already available
+                if (!outputIndicator || !outputIndicator.dataset.columnTypes) {
+                    fetchColumnTypesForOutput(column, outputColumns);
+                }
                 
-                // Get method info
+                // Update existing conversions
+                updateMultiOutputConversions(column, outputColumns);
+            }
+        } else {
+            // Single column output mode
+            if (singleConvDiv) singleConvDiv.style.display = 'block';
+            if (multiConvDiv) multiConvDiv.style.display = 'none';
+            if (addConvBtn) addConvBtn.style.display = 'none';
+            
+            // Update single conversion select
+            const convSelect = document.getElementById(`output-conv-${escapedColumn}`);
+            if (!convSelect) return;
+            
+            // Get the actual output type by tracing through all layers
+            let outputType = datasetInfo.normalization_info[column].type; // Start with original column type
+            let outputDType = datasetInfo.normalization_info[column].dtype || 'unknown';
+            
+            if (Array.isArray(normalizationConfig[column])) {
+                // For chained normalization, trace through each layer
+                for (let i = 0; i < normalizationConfig[column].length; i++) {
+                    const layer = normalizationConfig[column][i];
+                    if (!layer || !layer.method) continue;
+                    
+                    // Get method info
+                    const info = datasetInfo.normalization_info[column];
+                    const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === layer.method);
+                    
+                    if (methodInfo) {
+                        outputType = methodInfo.output_type || outputType;
+                        outputDType = methodInfo.output_dtype || outputDType;
+                    }
+                    
+                    // Check if this layer has a conversion that changes the type
+                    if (layer.conversion) {
+                        const conversions = {
+                            'TO_STRING': { type: 'text', dtype: 'object' },
+                            'TO_NUMERIC': { type: 'numeric', dtype: 'float64' },
+                            'TO_FLOAT64': { type: 'numeric', dtype: 'float64' },
+                            'TO_FLOAT32': { type: 'numeric', dtype: 'float32' },
+                            'TO_INT64': { type: 'numeric', dtype: 'int64' },
+                            'TO_INT32': { type: 'numeric', dtype: 'int32' },
+                            'TO_INT16': { type: 'numeric', dtype: 'int16' },
+                            'TRUNCATE': { type: outputType, dtype: outputDType }  // Maintains current type
+                        };
+                        
+                        if (conversions[layer.conversion]) {
+                            outputType = conversions[layer.conversion].type;
+                            outputDType = conversions[layer.conversion].dtype;
+                        }
+                    }
+                }
+            } else if (typeof normalizationConfig[column] === 'object' && normalizationConfig[column].method) {
+                // Single normalization
+                const layer = normalizationConfig[column];
                 const info = datasetInfo.normalization_info[column];
                 const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === layer.method);
                 
@@ -2537,7 +2680,7 @@ def normalize(value, series=None):
                     outputDType = methodInfo.output_dtype || outputDType;
                 }
                 
-                // Check if this layer has a conversion that changes the type
+                // Check if there's a conversion
                 if (layer.conversion) {
                     const conversions = {
                         'TO_STRING': { type: 'text', dtype: 'object' },
@@ -2556,87 +2699,527 @@ def normalize(value, series=None):
                     }
                 }
             }
-        } else if (typeof normalizationConfig[column] === 'object' && normalizationConfig[column].method) {
-            // Single normalization
-            const layer = normalizationConfig[column];
-            const info = datasetInfo.normalization_info[column];
-            const methodInfo = [...info.primary_methods, ...info.secondary_methods].find(m => m.value === layer.method);
             
-            if (methodInfo) {
-                outputType = methodInfo.output_type || outputType;
-                outputDType = methodInfo.output_dtype || outputDType;
-            }
+            // Log the final output type for debugging
+            console.log(`Output conversion for column '${column}': Final outputType = ${outputType} (dtype: ${outputDType})`);
             
-            // Check if there's a conversion
-            if (layer.conversion) {
-                const conversions = {
-                    'TO_STRING': { type: 'text', dtype: 'object' },
-                    'TO_NUMERIC': { type: 'numeric', dtype: 'float64' },
-                    'TO_FLOAT64': { type: 'numeric', dtype: 'float64' },
-                    'TO_FLOAT32': { type: 'numeric', dtype: 'float32' },
-                    'TO_INT64': { type: 'numeric', dtype: 'int64' },
-                    'TO_INT32': { type: 'numeric', dtype: 'int32' },
-                    'TO_INT16': { type: 'numeric', dtype: 'int16' },
-                    'TRUNCATE': { type: outputType, dtype: outputDType }  // Maintains current type
-                };
-                
-                if (conversions[layer.conversion]) {
-                    outputType = conversions[layer.conversion].type;
-                    outputDType = conversions[layer.conversion].dtype;
+            // Use the same getConversionOptions function as layer conversions
+            console.log(`Output conversion: getting options for outputType = ${outputType}`);
+            const options = getConversionOptions(outputType);
+            console.log(`Output conversion: Available conversions:`, options.map(c => c.value));
+            
+            // Build select options - same format as layer conversions
+            let html = '<option value="">Sin conversión</option>';
+            
+            options.forEach(conv => {
+                let label = conv.label;
+                // If it's TRUNCATE and we have params, show them
+                if (conv.value === 'TRUNCATE' && normalizationConfig[column].output_conversion_params) {
+                    const params = normalizationConfig[column].output_conversion_params;
+                    if (params.chars !== undefined) {
+                        label = `Truncar texto (${params.chars} chars)`;
+                    } else if (params.decimals !== undefined) {
+                        label = `Truncar decimales (${params.decimals})`;
+                    }
                 }
+                html += `<option value="${conv.value}" title="${conv.description || ''}">${label}</option>`;
+            });
+            
+            convSelect.innerHTML = html;
+            
+            // Set current value if exists
+            // For arrays, output_conversion is stored as a property of the array
+            // For objects, it's a direct property
+            const currentConversion = Array.isArray(normalizationConfig[column]) 
+                ? normalizationConfig[column].output_conversion 
+                : normalizationConfig[column].output_conversion;
+                
+            if (currentConversion) {
+                convSelect.value = currentConversion;
             }
         }
+    }
+    
+    function updateMultiOutputConversions(column, outputColumns) {
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
+        const container = document.getElementById(`multi-output-conversions-${escapedColumn}`);
         
-        // Check if it's a multi-output function
+        if (!container) return;
+        
+        // Clear existing conversions display
+        container.innerHTML = '';
+        
+        // Get current conversions
+        const conversions = normalizationConfig[column].output_conversions || [];
+        
+        // Render existing conversions
+        conversions.forEach((conv, index) => {
+            const convDiv = createOutputConversionRow(column, outputColumns, conv, index);
+            container.appendChild(convDiv);
+        });
+        
+        // Update add button state
+        const addBtn = document.getElementById(`add-output-conv-btn-${escapedColumn}`);
+        if (addBtn) {
+            // Disable if we have as many conversions as columns
+            addBtn.disabled = conversions.length >= outputColumns.length;
+            if (addBtn.disabled) {
+                addBtn.title = "Ya has añadido conversiones para todas las columnas generadas";
+            } else {
+                addBtn.title = "Añadir conversión para otra columna";
+            }
+        }
+    }
+    
+    function createOutputConversionRow(column, outputColumns, conversion, index) {
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
+        const div = document.createElement('div');
+        div.className = 'output-conversion-row';
+        div.style.cssText = 'margin-bottom: 10px; padding: 10px; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 5px;';
+        
+        // Get already selected columns
+        const conversions = normalizationConfig[column].output_conversions || [];
+        const selectedColumns = conversions.map(c => c.column).filter((c, i) => i !== index);
+        
+        // Determine output type for the selected column
+        let outputType = 'numeric'; // Default
+        if (conversion.column) {
+            // Try to get actual type from column info stored in dataset
+            outputType = getOutputColumnType(column, conversion.column);
+        }
+        
+        const conversionOptions = getConversionOptions(outputType);
+        
+        div.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <select class="column-select" onchange="onMultiOutputColumnChange('${column.replace(/'/g, "\\'")}', ${index})"
+                        style="flex: 1; min-width: 150px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color); padding: 5px 10px; border-radius: 5px;">
+                    <option value="">Seleccionar columna...</option>
+                    ${outputColumns.map(col => 
+                        `<option value="${col}" ${conversion.column === col ? 'selected' : ''} 
+                                ${selectedColumns.includes(col) ? 'disabled' : ''}>
+                            ${col}${selectedColumns.includes(col) ? ' (ya seleccionada)' : ''}
+                        </option>`
+                    ).join('')}
+                </select>
+                
+                <i class="bi bi-arrow-right" style="color: var(--primary-color);"></i>
+                
+                <select class="conversion-select" onchange="onMultiOutputConversionChange('${column.replace(/'/g, "\\'")}', ${index})"
+                        style="flex: 1; min-width: 150px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color); padding: 5px 10px; border-radius: 5px;">
+                    <option value="">Sin conversión</option>
+                    ${conversionOptions.map(opt => {
+                        let label = opt.label;
+                        if (opt.value === 'TRUNCATE' && conversion.params) {
+                            if (conversion.params.chars !== undefined) {
+                                label = `Truncar texto (${conversion.params.chars} chars)`;
+                            } else if (conversion.params.decimals !== undefined) {
+                                label = `Truncar decimales (${conversion.params.decimals})`;
+                            }
+                        }
+                        return `<option value="${opt.value}" ${conversion.conversion === opt.value ? 'selected' : ''}>${label}</option>`;
+                    }).join('')}
+                </select>
+                
+                <button type="button" class="btn btn-sm btn-outline-danger" 
+                        onclick="removeMultiOutputConversion('${column.replace(/'/g, "\\'")}', ${index})"
+                        title="Eliminar conversión">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        `;
+        
+        return div;
+    }
+    
+    function addOutputConversion(column) {
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
+        
+        if (!normalizationConfig[column].output_conversions) {
+            normalizationConfig[column].output_conversions = [];
+        }
+        
+        // Add new empty conversion
+        normalizationConfig[column].output_conversions.push({
+            column: '',
+            conversion: '',
+            params: null
+        });
+        
+        // Get output columns
         const lastLayerIndex = Array.isArray(normalizationConfig[column]) ? normalizationConfig[column].length - 1 : 0;
         const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${lastLayerIndex}`);
-        let isMultiOutput = false;
+        let outputColumns = [];
+        
         if (outputIndicator && (outputIndicator.dataset.expectedColumns || outputIndicator.dataset.realColumns)) {
             try {
-                const columns = JSON.parse(outputIndicator.dataset.realColumns || outputIndicator.dataset.expectedColumns);
-                isMultiOutput = columns.length > 1;
+                outputColumns = JSON.parse(outputIndicator.dataset.realColumns || outputIndicator.dataset.expectedColumns);
             } catch (e) {
                 console.error('Error parsing columns:', e);
             }
         }
         
-        // Log the final output type for debugging
-        console.log(`Output conversion for column '${column}': Final outputType = ${outputType} (dtype: ${outputDType})`);
+        // Update display
+        updateMultiOutputConversions(column, outputColumns);
+    }
+    
+    function removeMultiOutputConversion(column, index) {
+        if (!normalizationConfig[column].output_conversions) return;
         
-        // Use the same getConversionOptions function as layer conversions
-        console.log(`Output conversion: getting options for outputType = ${outputType}`);
-        const options = getConversionOptions(outputType);
-        console.log(`Output conversion: Available conversions:`, options.map(c => c.value));
+        normalizationConfig[column].output_conversions.splice(index, 1);
         
-        // Build select options - same format as layer conversions
-        let html = '<option value="">Sin conversión</option>';
+        // Get output columns
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
+        const lastLayerIndex = Array.isArray(normalizationConfig[column]) ? normalizationConfig[column].length - 1 : 0;
+        const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${lastLayerIndex}`);
+        let outputColumns = [];
         
-        options.forEach(conv => {
-            let label = conv.label;
-            // If it's TRUNCATE and we have params, show them
-            if (conv.value === 'TRUNCATE' && normalizationConfig[column].output_conversion_params) {
-                const params = normalizationConfig[column].output_conversion_params;
-                if (params.chars !== undefined) {
-                    label = `Truncar texto (${params.chars} chars)`;
-                } else if (params.decimals !== undefined) {
-                    label = `Truncar decimales (${params.decimals})`;
+        if (outputIndicator && (outputIndicator.dataset.expectedColumns || outputIndicator.dataset.realColumns)) {
+            try {
+                outputColumns = JSON.parse(outputIndicator.dataset.realColumns || outputIndicator.dataset.expectedColumns);
+            } catch (e) {
+                console.error('Error parsing columns:', e);
+            }
+        }
+        
+        // Update display
+        updateMultiOutputConversions(column, outputColumns);
+    }
+    
+    async function fetchOutputColumnsAndTypes(column) {
+        // Fetch output columns and their types via preview API
+        try {
+            const response = await fetch(`/api/datasets/${datasetId}/normalization/preview/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    normalization: { [column]: normalizationConfig[column] },
+                    sample_size: 5  // Small sample just to get column info
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Get the original columns before normalization
+                const originalColumns = new Set(Object.keys(datasetInfo.normalization_info));
+                
+                // Find new columns created by the normalization
+                const allColumns = data.all_column_types ? Object.keys(data.all_column_types) : [];
+                const newColumns = allColumns.filter(col => !originalColumns.has(col));
+                
+                // Also check if the preview data contains specific column info
+                if (data.preview && data.preview[column]) {
+                    const columnData = data.preview[column];
+                    if (columnData.new_columns && columnData.new_columns.length > 0) {
+                        // Use the explicit new_columns list if available
+                        const types = {};
+                        if (data.all_column_types) {
+                            columnData.new_columns.forEach(colName => {
+                                if (data.all_column_types[colName]) {
+                                    types[colName] = data.all_column_types[colName].type;
+                                }
+                            });
+                        }
+                        return { columns: columnData.new_columns, types: types };
+                    }
+                }
+                
+                // If we found new columns, return them with their types
+                if (newColumns.length > 0) {
+                    const types = {};
+                    newColumns.forEach(colName => {
+                        if (data.all_column_types[colName]) {
+                            types[colName] = data.all_column_types[colName].type;
+                        }
+                    });
+                    return { columns: newColumns, types: types };
+                }
+                
+                // As a fallback, if the original column still exists, it might have been transformed in place
+                if (allColumns.includes(column)) {
+                    const types = {};
+                    types[column] = data.all_column_types[column]?.type || 'numeric';
+                    return { columns: [column], types: types };
                 }
             }
-            html += `<option value="${conv.value}" title="${conv.description || ''}">${label}</option>`;
-        });
-        
-        convSelect.innerHTML = html;
-        
-        // Set current value if exists
-        // For arrays, output_conversion is stored as a property of the array
-        // For objects, it's a direct property
-        const currentConversion = Array.isArray(normalizationConfig[column]) 
-            ? normalizationConfig[column].output_conversion 
-            : normalizationConfig[column].output_conversion;
-            
-        if (currentConversion) {
-            convSelect.value = currentConversion;
+        } catch (error) {
+            console.error('Error fetching output columns and types:', error);
         }
+        
+        return null;
+    }
+    
+    async function fetchColumnTypesForOutput(column, outputColumns) {
+        // Fetch column types via preview API
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
+        const lastLayerIndex = Array.isArray(normalizationConfig[column]) ? normalizationConfig[column].length - 1 : 0;
+        const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${lastLayerIndex}`);
+        
+        try {
+            const response = await fetch(`/api/datasets/${datasetId}/normalization/preview/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    normalization: { [column]: normalizationConfig[column] },
+                    sample_size: 5  // Small sample just to get column types
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Extract column types from all_column_types
+                if (data.all_column_types) {
+                    const types = {};
+                    for (const colName of outputColumns) {
+                        if (data.all_column_types[colName]) {
+                            types[colName] = data.all_column_types[colName].type;
+                        }
+                    }
+                    
+                    if (outputIndicator) {
+                        outputIndicator.dataset.columnTypes = JSON.stringify(types);
+                    }
+                    
+                    // Update multi-output conversions to refresh type-specific options
+                    updateMultiOutputConversions(column, outputColumns);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching column types:', error);
+        }
+    }
+    
+    function getOutputColumnType(originalColumn, outputColumnName) {
+        // Try to determine the type of an output column
+        // First check if we have preview data with type info
+        const escapedColumn = originalColumn.replace(/[^a-zA-Z0-9]/g, '_');
+        const lastLayerIndex = Array.isArray(normalizationConfig[originalColumn]) ? normalizationConfig[originalColumn].length - 1 : 0;
+        const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${lastLayerIndex}`);
+        
+        // Check if we have column type info stored
+        if (outputIndicator && outputIndicator.dataset.columnTypes) {
+            try {
+                const columnTypes = JSON.parse(outputIndicator.dataset.columnTypes);
+                if (columnTypes[outputColumnName]) {
+                    return columnTypes[outputColumnName];
+                }
+            } catch (e) {
+                console.error('Error parsing column types:', e);
+            }
+        }
+        
+        // Try to infer from column name patterns
+        if (outputColumnName.includes('_numeric') || outputColumnName.includes('_normalized')) {
+            return 'numeric';
+        }
+        if (outputColumnName.includes('_text') || outputColumnName.includes('_str')) {
+            return 'text';
+        }
+        
+        // Default based on original column type
+        return datasetInfo.normalization_info[originalColumn]?.type || 'numeric';
+    }
+    
+    function onMultiOutputColumnChange(column, index) {
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
+        const container = document.getElementById(`multi-output-conversions-${escapedColumn}`);
+        const row = container.children[index];
+        const columnSelect = row.querySelector('.column-select');
+        const conversionSelect = row.querySelector('.conversion-select');
+        
+        if (!normalizationConfig[column].output_conversions[index]) {
+            normalizationConfig[column].output_conversions[index] = {};
+        }
+        
+        normalizationConfig[column].output_conversions[index].column = columnSelect.value;
+        
+        // Update conversion options based on column type
+        if (columnSelect.value) {
+            const outputType = getOutputColumnType(column, columnSelect.value);
+            const conversionOptions = getConversionOptions(outputType);
+            
+            // Update conversion select options
+            let html = '<option value="">Sin conversión</option>';
+            conversionOptions.forEach(opt => {
+                let label = opt.label;
+                const currentConv = normalizationConfig[column].output_conversions[index];
+                if (opt.value === 'TRUNCATE' && currentConv.params) {
+                    if (currentConv.params.chars !== undefined) {
+                        label = `Truncar texto (${currentConv.params.chars} chars)`;
+                    } else if (currentConv.params.decimals !== undefined) {
+                        label = `Truncar decimales (${currentConv.params.decimals})`;
+                    }
+                }
+                html += `<option value="${opt.value}" ${currentConv.conversion === opt.value ? 'selected' : ''}>${label}</option>`;
+            });
+            
+            conversionSelect.innerHTML = html;
+        }
+        
+        // Get output columns to refresh the display
+        const lastLayerIndex = Array.isArray(normalizationConfig[column]) ? normalizationConfig[column].length - 1 : 0;
+        const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${lastLayerIndex}`);
+        let outputColumns = [];
+        
+        if (outputIndicator && (outputIndicator.dataset.expectedColumns || outputIndicator.dataset.realColumns)) {
+            try {
+                outputColumns = JSON.parse(outputIndicator.dataset.realColumns || outputIndicator.dataset.expectedColumns);
+            } catch (e) {
+                console.error('Error parsing columns:', e);
+            }
+        }
+        
+        // Update display to refresh disabled states
+        updateMultiOutputConversions(column, outputColumns);
+    }
+    
+    function onMultiOutputConversionChange(column, index) {
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
+        const container = document.getElementById(`multi-output-conversions-${escapedColumn}`);
+        const row = container.children[index];
+        const conversionSelect = row.querySelector('.conversion-select');
+        
+        if (!normalizationConfig[column].output_conversions[index]) {
+            normalizationConfig[column].output_conversions[index] = {};
+        }
+        
+        const conversion = conversionSelect.value;
+        normalizationConfig[column].output_conversions[index].conversion = conversion;
+        
+        // Check if it's TRUNCATE and needs parameters
+        if (conversion === 'TRUNCATE') {
+            showMultiOutputTruncateDialog(column, index);
+        } else {
+            // Clear params if not TRUNCATE
+            delete normalizationConfig[column].output_conversions[index].params;
+        }
+    }
+    
+    function showMultiOutputTruncateDialog(column, convIndex) {
+        const conv = normalizationConfig[column].output_conversions[convIndex];
+        const columnName = conv.column;
+        
+        // Determine actual output type for the column
+        let outputType = getOutputColumnType(column, columnName);
+        
+        // Get current params
+        const currentParams = conv.params || {};
+        const currentDecimals = currentParams.decimals || 2;
+        const currentChars = currentParams.chars || 50;
+        
+        // Create modal HTML
+        const modalHtml = `
+            <div class="modal fade" id="multiOutputTruncateModal" tabindex="-1" style="display: none;">
+                <div class="modal-dialog modal-sm">
+                    <div class="modal-content" style="background: var(--dark-color); border: 1px solid var(--primary-color);">
+                        <div class="modal-header" style="border-bottom: 1px solid rgba(0, 212, 255, 0.3);">
+                            <h5 class="modal-title" style="color: var(--primary-color);">
+                                <i class="bi bi-scissors"></i> Truncamiento - ${columnName}
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            ${outputType === 'numeric' ? `
+                                <div class="mb-3">
+                                    <label class="form-label" style="color: var(--light-color);">
+                                        Número de decimales:
+                                    </label>
+                                    <input type="number" 
+                                           id="multiOutputTruncateDecimals" 
+                                           class="form-control" 
+                                           value="${currentDecimals}"
+                                           min="-10" 
+                                           max="10" 
+                                           step="1"
+                                           style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
+                                    <small class="form-text text-muted">
+                                        Positivo: decimales a mantener<br>
+                                        Negativo: redondear a potencias de 10
+                                    </small>
+                                </div>
+                            ` : `
+                                <div class="mb-3">
+                                    <label class="form-label" style="color: var(--light-color);">
+                                        Número de caracteres:
+                                    </label>
+                                    <input type="number" 
+                                           id="multiOutputTruncateChars" 
+                                           class="form-control" 
+                                           value="${currentChars}"
+                                           min="1" 
+                                           max="1000" 
+                                           step="1"
+                                           style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
+                                    <small class="form-text text-muted">
+                                        Máximo número de caracteres a mantener
+                                    </small>
+                                </div>
+                            `}
+                        </div>
+                        <div class="modal-footer" style="border-top: 1px solid rgba(0, 212, 255, 0.3);">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary" onclick="applyMultiOutputTruncateParams('${column.replace(/'/g, "\\'")}', ${convIndex}, '${outputType}')">
+                                Aplicar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('multiOutputTruncateModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('multiOutputTruncateModal'));
+        modal.show();
+    }
+    
+    function applyMultiOutputTruncateParams(column, convIndex, outputType) {
+        const conv = normalizationConfig[column].output_conversions[convIndex];
+        
+        if (outputType === 'numeric') {
+            const decimals = parseInt(document.getElementById('multiOutputTruncateDecimals').value);
+            conv.params = { decimals: decimals };
+        } else {
+            const chars = parseInt(document.getElementById('multiOutputTruncateChars').value);
+            conv.params = { chars: chars };
+        }
+        
+        // Close modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('multiOutputTruncateModal'));
+        modal.hide();
+        
+        // Get output columns and update display
+        const escapedColumn = column.replace(/[^a-zA-Z0-9]/g, '_');
+        const lastLayerIndex = Array.isArray(normalizationConfig[column]) ? normalizationConfig[column].length - 1 : 0;
+        const outputIndicator = document.getElementById(`output-type-${escapedColumn}-${lastLayerIndex}`);
+        let outputColumns = [];
+        
+        if (outputIndicator && (outputIndicator.dataset.expectedColumns || outputIndicator.dataset.realColumns)) {
+            try {
+                outputColumns = JSON.parse(outputIndicator.dataset.realColumns || outputIndicator.dataset.expectedColumns);
+            } catch (e) {
+                console.error('Error parsing columns:', e);
+            }
+        }
+        
+        // Update display
+        updateMultiOutputConversions(column, outputColumns);
     }
     
     function onOutputConversionChange(column) {
@@ -3014,8 +3597,34 @@ def normalize(value, series=None):
                         
                         if (colData.new_columns) {
                             realColumnNames = colData.new_columns;
+                            
+                            // Store column types if available
+                            if (colData.column_types_info) {
+                                const types = {};
+                                colData.column_types_info.forEach(info => {
+                                    const dtype = info.dtype || '';
+                                    let type = 'numeric';
+                                    if (dtype.includes('object') || dtype.includes('str')) {
+                                        type = 'text';
+                                    }
+                                    types[info.name] = type;
+                                });
+                                outputIndicator.dataset.columnTypes = JSON.stringify(types);
+                            }
                         } else if (colData.column_types_info) {
                             realColumnNames = colData.column_types_info.map(info => info.name);
+                            
+                            // Store column types
+                            const types = {};
+                            colData.column_types_info.forEach(info => {
+                                const dtype = info.dtype || '';
+                                let type = 'numeric';
+                                if (dtype.includes('object') || dtype.includes('str')) {
+                                    type = 'text';
+                                }
+                                types[info.name] = type;
+                            });
+                            outputIndicator.dataset.columnTypes = JSON.stringify(types);
                         }
                     }
                 }
@@ -3219,15 +3828,31 @@ def normalize(value, series=None):
             <!-- Output conversion selector -->
             <div class="output-conversion-container" id="output-conv-container-${escapedColumn}" style="display: none; margin-top: 15px; padding: 12px; background: rgba(147, 51, 234, 0.08); border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 8px; position: relative; z-index: 1;">
                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <i class="bi bi-arrow-right-square" style="color: var(--secondary-color); font-size: 0.9rem;"></i>
-                        <span style="color: rgba(240, 249, 255, 0.8); font-weight: 500; font-size: 0.9rem;">Conversión de salida final:</span>
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="bi bi-arrow-right-square" style="color: var(--secondary-color); font-size: 0.9rem;"></i>
+                            <span style="color: rgba(240, 249, 255, 0.8); font-weight: 500; font-size: 0.9rem;">Conversión de salida final:</span>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" 
+                                id="add-output-conv-btn-${escapedColumn}"
+                                onclick="addOutputConversion('${column.replace(/'/g, "\\'")}')"
+                                style="display: none; font-size: 0.8rem;">
+                            <i class="bi bi-plus-circle"></i> Añadir conversión
+                        </button>
                     </div>
-                    <select class="output-conversion-select" id="output-conv-${escapedColumn}" 
-                            onchange="onOutputConversionChange('${column.replace(/'/g, "\\'")}')"
-                            style="width: 100%; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color); padding: 6px 10px; border-radius: 5px; font-size: 0.85rem;">
-                        <option value="">Sin conversión</option>
-                    </select>
+                    <div id="output-conversions-list-${escapedColumn}">
+                        <!-- Single conversion for regular columns -->
+                        <div class="single-output-conversion" id="single-output-conv-${escapedColumn}">
+                            <select class="output-conversion-select" id="output-conv-${escapedColumn}" 
+                                    onchange="onOutputConversionChange('${column.replace(/'/g, "\\'")}')"
+                                    style="width: 100%; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color); padding: 6px 10px; border-radius: 5px; font-size: 0.85rem;">
+                                <option value="">Sin conversión</option>
+                            </select>
+                        </div>
+                        <!-- Multi-column conversions will be added here -->
+                        <div id="multi-output-conversions-${escapedColumn}" style="display: none;">
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -3364,6 +3989,18 @@ def normalize(value, series=None):
             
             // Always update output conversion options when any layer changes
             updateOutputConversionOptions(column);
+            
+            // For multi-output functions, ensure the UI is properly updated
+            const info = datasetInfo.normalization_info[column];
+            const allMethods = [...info.primary_methods, ...info.secondary_methods];
+            const selectedMethod = allMethods.find(m => m.value === select.value);
+            
+            if (selectedMethod && (select.value === 'date_extraction' || select.value.startsWith('CUSTOM_'))) {
+                // Force a refresh of output conversions after a short delay to allow DOM updates
+                setTimeout(() => {
+                    updateOutputConversionOptions(column);
+                }, 100);
+            }
         } else {
             // Remove this layer
             if (Array.isArray(normalizationConfig[column])) {

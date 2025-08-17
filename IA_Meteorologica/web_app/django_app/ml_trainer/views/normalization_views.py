@@ -374,6 +374,7 @@ class DatasetNormalizationView(APIView):
             # Extract output conversion if present
             output_conversion = None
             output_conversion_params = None
+            output_conversions = None  # For multi-column outputs
             actual_config = method_config
             
             # Check if the config has the new structure with layers and output_conversion
@@ -381,6 +382,16 @@ class DatasetNormalizationView(APIView):
                 actual_config = method_config['layers']
                 output_conversion = method_config.get('output_conversion', None)
                 output_conversion_params = method_config.get('output_conversion_params', None)
+                output_conversions = method_config.get('output_conversions', None)  # Multi-column conversions
+            elif isinstance(method_config, list):
+                # Config is directly an array - check for attached properties
+                actual_config = method_config
+                # In JavaScript, arrays can have properties, but in Python they come as separate keys
+                # Check parent config for these properties
+                if isinstance(config.get(column), dict):
+                    output_conversion = config[column].get('output_conversion', None)
+                    output_conversion_params = config[column].get('output_conversion_params', None) 
+                    output_conversions = config[column].get('output_conversions', None)
             
             # Handle both old format (string) and new format (dict/list)
             if isinstance(actual_config, list):
@@ -758,7 +769,49 @@ class DatasetNormalizationView(APIView):
                 )
             
             # Apply output conversion if specified (already extracted above)
-            if output_conversion:
+            if output_conversions:
+                # Multi-column output conversions
+                from ..conversion_functions import apply_conversion, get_conversion_warnings
+                
+                print(f"Applying multi-column output conversions: {output_conversions}")
+                
+                for conv in output_conversions:
+                    target_column = conv.get('column', '')
+                    conversion_method = conv.get('conversion', '')
+                    conversion_params = conv.get('params', None)
+                    
+                    if not target_column or not conversion_method:
+                        continue
+                    
+                    if target_column in normalized_df.columns:
+                        try:
+                            print(f"Applying output conversion '{conversion_method}' to column '{target_column}'")
+                            
+                            # Apply conversion
+                            normalized_df[target_column] = apply_conversion(
+                                normalized_df[target_column],
+                                conversion_method,
+                                params=conversion_params
+                            )
+                            
+                            # Add warning if any
+                            warning_msg = get_conversion_warnings(
+                                normalized_df[target_column].dtype, conversion_method
+                            )
+                            if hasattr(self, 'conversion_warnings') and warning_msg:
+                                self.conversion_warnings.append({
+                                    'column': target_column,
+                                    'method': conversion_method,
+                                    'warning': f"Conversión de salida aplicada en columna '{target_column}': {conversion_method} - ⚠️ {warning_msg}"
+                                })
+                        except Exception as e:
+                            print(f"Error applying output conversion to {target_column}: {str(e)}")
+                            raise ValueError(f"Error aplicando conversión de salida a columna '{target_column}': {str(e)}")
+                    else:
+                        print(f"Warning: Target column '{target_column}' not found for output conversion")
+                        
+            elif output_conversion:
+                # Single output conversion (backward compatibility)
                 # Find all columns that were created/modified by this normalization
                 output_columns = []
                 
