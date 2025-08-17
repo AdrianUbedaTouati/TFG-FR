@@ -774,18 +774,24 @@ class DatasetNormalizationView(APIView):
                 from ..conversion_functions import apply_conversion, get_conversion_warnings
                 
                 print(f"Applying multi-column output conversions: {output_conversions}")
+                print(f"Available columns for conversion: {list(normalized_df.columns)}")
                 
                 for conv in output_conversions:
                     target_column = conv.get('column', '')
                     conversion_method = conv.get('conversion', '')
                     conversion_params = conv.get('params', None)
                     
+                    print(f"Processing conversion: column='{target_column}', method='{conversion_method}', params={conversion_params}")
+                    
                     if not target_column or not conversion_method:
+                        print(f"Skipping conversion due to missing column or method")
                         continue
                     
                     if target_column in normalized_df.columns:
                         try:
                             print(f"Applying output conversion '{conversion_method}' to column '{target_column}'")
+                            print(f"Column dtype before conversion: {normalized_df[target_column].dtype}")
+                            print(f"Sample values before conversion: {normalized_df[target_column].head()}")
                             
                             # Apply conversion
                             normalized_df[target_column] = apply_conversion(
@@ -793,6 +799,9 @@ class DatasetNormalizationView(APIView):
                                 conversion_method,
                                 params=conversion_params
                             )
+                            
+                            print(f"Column dtype after conversion: {normalized_df[target_column].dtype}")
+                            print(f"Sample values after conversion: {normalized_df[target_column].head()}")
                             
                             # Add warning if any
                             warning_msg = get_conversion_warnings(
@@ -806,9 +815,12 @@ class DatasetNormalizationView(APIView):
                                 })
                         except Exception as e:
                             print(f"Error applying output conversion to {target_column}: {str(e)}")
+                            import traceback
+                            print(f"Traceback: {traceback.format_exc()}")
                             raise ValueError(f"Error aplicando conversión de salida a columna '{target_column}': {str(e)}")
                     else:
                         print(f"Warning: Target column '{target_column}' not found for output conversion")
+                        print(f"Available columns: {list(normalized_df.columns)}")
                         
             elif output_conversion:
                 # Single output conversion (backward compatibility)
@@ -1581,6 +1593,20 @@ class DatasetNormalizationPreviewView(APIView):
         sample_size = min(request.data.get('sample_size', 100), 1000)
         show_steps = request.data.get('show_steps', False)  # New parameter to show transformation steps
         
+        # Debug: Print the normalization config as received
+        print(f"\n=== DatasetNormalizationPreviewView - Received config ===")
+        print(f"Config type: {type(normalization_config)}")
+        for column, config in normalization_config.items():
+            print(f"\nColumn: {column}")
+            print(f"Config type: {type(config)}")
+            if isinstance(config, dict):
+                print(f"Config keys: {list(config.keys())}")
+                if 'layers' in config:
+                    print(f"Layers: {config['layers']}")
+                if 'output_conversions' in config:
+                    print(f"Output conversions: {config['output_conversions']}")
+            print(f"Full config: {config}")
+        
         # Load dataset
         df = load_dataset(dataset.file.path)
         if df is None:
@@ -2016,6 +2042,54 @@ class DatasetNormalizationPreviewView(APIView):
                         if isinstance(last_step, dict) and 'input_column' in last_step:
                             target_column = last_step['input_column']
                             print(f"Preview: Using input_column '{target_column}' for comparison")
+                    
+                    # Check if this is a method that creates multiple columns and removes the original
+                    # Extract the actual configuration with layers
+                    actual_config = method_config
+                    if isinstance(method_config, dict) and 'layers' in method_config:
+                        actual_config = method_config['layers']
+                    
+                    # Check if this method creates multiple columns (like date_extraction)
+                    creates_multiple_columns = False
+                    if isinstance(actual_config, list):
+                        for step in actual_config:
+                            if isinstance(step, dict) and step.get('method') in ['date_extraction'] and not step.get('keep_original', False):
+                                creates_multiple_columns = True
+                                break
+                            elif isinstance(step, dict) and step.get('method', '').startswith('CUSTOM_') and not step.get('keep_original', False):
+                                # Custom functions might also create multiple columns
+                                creates_multiple_columns = True
+                                break
+                    
+                    if creates_multiple_columns:
+                        # For methods that create multiple columns and remove the original,
+                        # we should handle this differently
+                        print(f"Preview: Column '{column}' creates multiple columns and removes original")
+                        
+                        # Find all new columns created
+                        original_columns = set(sample_df.columns)
+                        normalized_columns = set(normalized_sample.columns)
+                        new_columns = list(normalized_columns - original_columns)
+                        
+                        if new_columns:
+                            # Create a comparison showing the new columns
+                            comparison[column] = {
+                                'multi_column_output': True,
+                                'new_columns': new_columns,
+                                'original_removed': True,
+                                'original_stats': detect_column_type(sample_df[column]),
+                                'original_unique_count': sample_df[column].nunique()
+                            }
+                            
+                            # Add preview for each new column
+                            for new_col in new_columns:
+                                if new_col in normalized_sample.columns:
+                                    comparison[column][new_col] = {
+                                        'sample': normalized_sample[new_col].dropna().head(50).tolist(),
+                                        'stats': detect_column_type(normalized_sample[new_col]),
+                                        'unique_count': normalized_sample[new_col].nunique()
+                                    }
+                        continue
                     
                     # Traditional single column comparison
                     # Get unique values for better comparison
