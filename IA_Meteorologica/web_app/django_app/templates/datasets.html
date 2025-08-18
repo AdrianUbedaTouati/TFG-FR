@@ -1273,7 +1273,7 @@
                         </div>
                         
                         <button class="btn btn-primary w-100" onclick="performAdvancedSearch()">
-                            <i class="bi bi-search"></i> Buscar
+                            <i class="bi bi-search"></i> Buscar (Opcional)
                         </button>
                     </div>
                     
@@ -8476,7 +8476,8 @@ function openAdvancedEditor() {
         charToFind: '',
         charToReplace: '',
         searchScope: 'first',
-        searchLimit: 100
+        searchLimit: 100,
+        applyToAll: false
     };
     
     // Destruir gráficos existentes si existen
@@ -8514,8 +8515,8 @@ function openAdvancedEditor() {
     document.getElementById('execRangeStart').value = '1';
     document.getElementById('execRangeEnd').value = '1000';
     
-    // Deshabilitar botones inicialmente
-    document.getElementById('previewReplaceBtn').disabled = true;
+    // Habilitar botón de vista previa (el de ejecutar se habilita después de la vista previa)
+    document.getElementById('previewReplaceBtn').disabled = false;
     document.getElementById('executeReplaceBtn').disabled = true;
     
     // Establecer alcance inicial
@@ -8774,11 +8775,11 @@ async function performAdvancedSearch() {
         // Mostrar resultados
         displayAdvancedSearchResults(matchedIndices, searchData.length);
         
-        // Habilitar botón de preview si hay coincidencias
+        // El botón de preview siempre está habilitado
         const previewBtn = document.getElementById('previewReplaceBtn');
         if (previewBtn) {
-            previewBtn.disabled = matchedIndices.length === 0;
-            console.log('Coincidencias encontradas:', matchedIndices.length, 'Botón preview habilitado:', !previewBtn.disabled);
+            previewBtn.disabled = false;
+            console.log('Coincidencias encontradas:', matchedIndices.length);
         }
         
         // Actualizar texto de alcance de búsqueda
@@ -8965,8 +8966,15 @@ function showPositionHelp() {
         `,
         icon: 'info',
         confirmButtonText: 'Entendido',
+        confirmButtonColor: '#10b981',
         background: '#0a0e27',
-        color: '#f0f9ff'
+        color: '#f0f9ff',
+        customClass: {
+            popup: 'swal-custom-popup',
+            title: 'swal-custom-title',
+            htmlContainer: 'swal-custom-text',
+            confirmButton: 'btn btn-success'
+        }
     });
 }
 
@@ -8974,14 +8982,48 @@ function showPositionHelp() {
 async function previewReplacement() {
     console.log('Ejecutando previewReplacement');
     
-    // Verificar que tenemos resultados de búsqueda
-    if (!advancedSearchData.searchResultsWithIndex || advancedSearchData.searchResultsWithIndex.length === 0) {
-        showNotification('Error', 'Primero debes realizar una búsqueda', 'error');
-        return;
-    }
-    
     const replaceValue = document.getElementById('advReplaceValue').value;
     const positions = document.getElementById('advReplacePositions').value;
+    
+    // Si no hay búsqueda previa, hacer una búsqueda implícita
+    if (!advancedSearchData.searchResultsWithIndex || advancedSearchData.searchResultsWithIndex.length === 0) {
+        // Si hay un valor de búsqueda, realizar la búsqueda
+        const searchValue = document.getElementById('advSearchValue').value;
+        if (searchValue) {
+            await performAdvancedSearch();
+            // Si después de la búsqueda no hay resultados, salir
+            if (!advancedSearchData.searchResultsWithIndex || advancedSearchData.searchResultsWithIndex.length === 0) {
+                showNotification('Info', 'No se encontraron coincidencias para reemplazar', 'info');
+                return;
+            }
+        } else {
+            // Si no hay valor de búsqueda, preguntar si quiere reemplazar en todo
+            const result = await Swal.fire({
+                title: 'Sin búsqueda previa',
+                text: '¿Deseas aplicar el reemplazo a todos los valores de la columna?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, aplicar a todos',
+                cancelButtonText: 'Cancelar',
+                background: '#0a0e27',
+                color: '#f0f9ff',
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#6b7280',
+                customClass: {
+                    popup: 'swal-custom-popup',
+                    title: 'swal-custom-title',
+                    htmlContainer: 'swal-custom-text'
+                }
+            });
+            
+            if (!result.isConfirmed) {
+                return;
+            }
+            
+            // Marcar que se aplicará a todos
+            advancedSearchData.applyToAll = true;
+        }
+    }
     
     // Validar reemplazo parcial si está activo
     if (advancedSearchData.partialReplaceMode && !validatePartialReplacement()) {
@@ -8992,7 +9034,33 @@ async function previewReplacement() {
     
     let indicesToReplace = [];
     
-    if (positions && positions.trim()) {
+    // Si se marcó aplicar a todos (sin búsqueda previa)
+    if (advancedSearchData.applyToAll) {
+        // Obtener una muestra para la vista previa
+        try {
+            const response = await fetch(`/api/datasets/${window.selectedDataset.id}/column-sample/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    column_name: advancedSearchData.columnName,
+                    count: 20  // Obtener 20 ejemplos para la vista previa
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                indicesToReplace = data.samples.map((value, index) => ({
+                    index: index,
+                    value: value
+                }));
+            }
+        } catch (error) {
+            console.error('Error al obtener muestra:', error);
+        }
+    } else if (positions && positions.trim()) {
         // Parsear posiciones específicas
         const parts = positions.split(',');
         const validIndices = new Set();
@@ -9014,7 +9082,7 @@ async function previewReplacement() {
         indicesToReplace = Array.from(validIndices).map(i => advancedSearchData.searchResultsWithIndex[i]);
     } else {
         // Si no hay posiciones específicas, reemplazar todas las coincidencias
-        indicesToReplace = advancedSearchData.searchResultsWithIndex;
+        indicesToReplace = advancedSearchData.searchResultsWithIndex || [];
     }
     
     // Mostrar preview
@@ -9152,7 +9220,16 @@ async function executeReplacement() {
         confirmButtonColor: '#ef4444',
         cancelButtonColor: '#6b7280',
         confirmButtonText: 'Sí, reemplazar',
-        cancelButtonText: 'Cancelar'
+        cancelButtonText: 'Cancelar',
+        background: '#0a0e27',
+        color: '#f0f9ff',
+        customClass: {
+            popup: 'swal-custom-popup',
+            title: 'swal-custom-title',
+            htmlContainer: 'swal-custom-text',
+            confirmButton: 'btn btn-danger',
+            cancelButton: 'btn btn-secondary'
+        }
     });
     
     if (result.isConfirmed) {
@@ -9193,7 +9270,8 @@ async function executeReplacement() {
                 char_replace: advancedSearchData.charReplaceMode,
                 char_to_find: advancedSearchData.charToFind,
                 char_to_replace: advancedSearchData.charToReplace,
-                execution_scope: executionScope
+                execution_scope: executionScope,
+                apply_to_all: advancedSearchData.applyToAll || false
             };
             
             // Añadir parámetros específicos según el alcance
@@ -9237,14 +9315,9 @@ async function executeReplacement() {
 
 // Función para actualizar el estado de los botones de reemplazo
 function updateReplaceButtons() {
-    if (!advancedSearchData.searchResultsWithIndex || advancedSearchData.searchResultsWithIndex.length === 0) {
-        return;
-    }
-    
-    const positions = document.getElementById('advReplacePositions').value;
     const previewBtn = document.getElementById('previewReplaceBtn');
     
-    // El botón siempre está habilitado si hay resultados de búsqueda
+    // El botón de vista previa siempre está habilitado
     if (previewBtn) {
         previewBtn.disabled = false;
     }
@@ -9283,23 +9356,48 @@ function updatePartialMode() {
 }
 
 // Función para actualizar el ejemplo de reemplazo parcial
-function updatePartialExample() {
-    if (!advancedSearchData.searchResultsWithIndex || advancedSearchData.searchResultsWithIndex.length === 0) {
-        document.getElementById('partialCharacters').innerHTML = '<span class="text-muted">Realiza una búsqueda primero</span>';
-        return;
-    }
-    
-    const exampleIndex = parseInt(document.getElementById('partialExampleIndex').value) - 1;
-    const maxIndex = advancedSearchData.searchResultsWithIndex.length - 1;
-    
-    if (exampleIndex > maxIndex) {
-        document.getElementById('partialExampleIndex').value = maxIndex + 1;
-        updatePartialExample();
-        return;
-    }
-    
-    const exampleValue = String(advancedSearchData.searchResultsWithIndex[exampleIndex].value);
+async function updatePartialExample() {
+    const exampleIndex = parseInt(document.getElementById('partialExampleIndex').value) || 1;
     const charsDiv = document.getElementById('partialCharacters');
+    
+    let exampleValue = '';
+    
+    // Si hay resultados de búsqueda, usar esos
+    if (advancedSearchData.searchResultsWithIndex && advancedSearchData.searchResultsWithIndex.length > 0) {
+        const maxIndex = advancedSearchData.searchResultsWithIndex.length;
+        if (exampleIndex > maxIndex) {
+            document.getElementById('partialExampleIndex').value = maxIndex;
+            updatePartialExample();
+            return;
+        }
+        exampleValue = String(advancedSearchData.searchResultsWithIndex[exampleIndex - 1].value);
+    } else {
+        // Si no hay búsqueda, obtener un ejemplo del dataset
+        try {
+            const response = await fetch(`/api/datasets/${window.selectedDataset.id}/column-sample/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    column_name: advancedSearchData.columnName,
+                    index: exampleIndex - 1
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                exampleValue = String(data.value || '');
+            } else {
+                charsDiv.innerHTML = '<span class="text-muted">No se pudo obtener el ejemplo</span>';
+                return;
+            }
+        } catch (error) {
+            charsDiv.innerHTML = '<span class="text-muted">Error al obtener el ejemplo</span>';
+            return;
+        }
+    }
     
     // Crear caracteres clickeables
     let html = '';

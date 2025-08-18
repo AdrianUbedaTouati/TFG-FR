@@ -14,6 +14,7 @@ from .constants import (
     DATE_FORMATS, MIN_SAMPLE_SIZE, MAX_CATEGORICAL_VALUES,
     CACHE_TIMEOUT, ERROR_PARSING_FAILED, OUTLIER_THRESHOLD
 )
+from .utils_helpers import safe_to_list, safe_float, safe_dict_values
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ def detect_column_type(series: pd.Series) -> Dict[str, Any]:
         'null_count': null_count,
         'null_percentage': (null_count / total_count * 100) if total_count > 0 else 0,
         'unique_count': int(series.nunique()),
-        'sample_values': series.dropna().head(5).tolist()
+        'sample_values': safe_to_list(series.dropna().head(5))
     }
     
     # Skip if too many nulls
@@ -100,8 +101,8 @@ def detect_column_type(series: pd.Series) -> Dict[str, Any]:
             value_counts = series.value_counts().head(10)
             result['categories'] = value_counts.to_dict()
             result['top_values'] = {
-                'values': value_counts.index.tolist(),
-                'counts': value_counts.values.tolist()
+                'values': safe_to_list(value_counts.index),
+                'counts': safe_to_list(value_counts.values)
             }
         else:
             result['type'] = 'text'
@@ -109,56 +110,84 @@ def detect_column_type(series: pd.Series) -> Dict[str, Any]:
             value_counts = series.value_counts().head(10)
             if len(value_counts) > 0:
                 result['top_values'] = {
-                    'values': value_counts.index.tolist(),
-                    'counts': value_counts.values.tolist()
+                    'values': safe_to_list(value_counts.index),
+                    'counts': safe_to_list(value_counts.values)
                 }
     
     elif pd.api.types.is_numeric_dtype(series):
         result['type'] = 'numeric'
-        result['mean'] = float(series.mean())
-        result['std'] = float(series.std())
-        result['min'] = float(series.min())
-        result['max'] = float(series.max())
-        result['q25'] = float(series.quantile(0.25))
-        result['q50'] = float(series.quantile(0.50))
-        result['q75'] = float(series.quantile(0.75))
+        
+        # Calculate statistics, handling NaN values
+        mean_val = series.mean()
+        result['mean'] = float(mean_val) if pd.notna(mean_val) else None
+        
+        std_val = series.std()
+        result['std'] = float(std_val) if pd.notna(std_val) else None
+        
+        min_val = series.min()
+        result['min'] = float(min_val) if pd.notna(min_val) else None
+        
+        max_val = series.max()
+        result['max'] = float(max_val) if pd.notna(max_val) else None
+        
+        q25_val = series.quantile(0.25)
+        result['q25'] = float(q25_val) if pd.notna(q25_val) else None
+        
+        q50_val = series.quantile(0.50)
+        result['q50'] = float(q50_val) if pd.notna(q50_val) else None
+        
+        q75_val = series.quantile(0.75)
+        result['q75'] = float(q75_val) if pd.notna(q75_val) else None
         
         # Generate histogram data
         valid_data = series.dropna()
         if len(valid_data) > 0:
             hist, bins = np.histogram(valid_data, bins=20)
             result['histogram'] = {
-                'bins': bins.tolist(),
-                'counts': hist.tolist()
+                'bins': safe_to_list(bins),
+                'counts': safe_to_list(hist)
             }
             
             # Detect outliers
             Q1 = result['q25']
             Q3 = result['q75']
-            IQR = Q3 - Q1
-            lower_bound = Q1 - 1.5 * IQR
-            upper_bound = Q3 + 1.5 * IQR
             
-            outliers = valid_data[(valid_data < lower_bound) | (valid_data > upper_bound)]
-            outlier_count = len(outliers)
-            
-            result['histogram']['outliers_info'] = {
-                'outlier_count': outlier_count,
-                'outlier_percentage': (outlier_count / len(valid_data)) * 100,
-                'lower_bound': lower_bound,
-                'upper_bound': upper_bound,
-                'q1': Q1,
-                'q3': Q3,
-                'iqr': IQR
-            }
+            # Only calculate outliers if we have valid quartile values
+            if Q1 is not None and Q3 is not None:
+                IQR = Q3 - Q1
+                lower_bound = Q1 - 1.5 * IQR
+                upper_bound = Q3 + 1.5 * IQR
+                
+                outliers = valid_data[(valid_data < lower_bound) | (valid_data > upper_bound)]
+                outlier_count = len(outliers)
+                
+                result['histogram']['outliers_info'] = {
+                    'outlier_count': outlier_count,
+                    'outlier_percentage': (outlier_count / len(valid_data)) * 100,
+                    'lower_bound': float(lower_bound) if pd.notna(lower_bound) else None,
+                    'upper_bound': float(upper_bound) if pd.notna(upper_bound) else None,
+                    'q1': float(Q1) if pd.notna(Q1) else None,
+                    'q3': float(Q3) if pd.notna(Q3) else None,
+                    'iqr': float(IQR) if pd.notna(IQR) else None
+                }
+            else:
+                result['histogram']['outliers_info'] = {
+                    'outlier_count': 0,
+                    'outlier_percentage': 0,
+                    'lower_bound': None,
+                    'upper_bound': None,
+                    'q1': None,
+                    'q3': None,
+                    'iqr': None
+                }
             
             # Generate histogram without outliers if there are any
-            if outlier_count > 0:
+            if Q1 is not None and Q3 is not None and outlier_count > 0:
                 data_no_outliers = valid_data[(valid_data >= lower_bound) & (valid_data <= upper_bound)]
                 if len(data_no_outliers) > 0:
                     hist_no_outliers, bins_no_outliers = np.histogram(data_no_outliers, bins=20)
-                    result['histogram']['bins_no_outliers'] = bins_no_outliers.tolist()
-                    result['histogram']['counts_no_outliers'] = hist_no_outliers.tolist()
+                    result['histogram']['bins_no_outliers'] = safe_to_list(bins_no_outliers)
+                    result['histogram']['counts_no_outliers'] = safe_to_list(hist_no_outliers)
         
         result['outlier_count'] = len(detect_outliers(series))
         

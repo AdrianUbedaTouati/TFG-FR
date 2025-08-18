@@ -28,6 +28,7 @@ from ..utils import (
     error_response, success_response, validate_dataframe,
     get_memory_usage
 )
+from ..utils_helpers import safe_to_list, safe_float, safe_dict_values
 from ..constants import (
     HISTOGRAM_BINS, DEFAULT_FIGURE_SIZE, HEATMAP_FIGURE_SIZE,
     ERROR_DATASET_NOT_FOUND, ERROR_PARSING_FAILED,
@@ -94,7 +95,9 @@ class DatasetColumnsView(APIView):
         # Generate preview data (first 10 rows)
         preview = {}
         for col in columns:
-            preview[col] = df[col].head(10).tolist()
+            # Convert NaN values to None for JSON serialization
+            col_data = df[col].head(10)
+            preview[col] = safe_to_list(col_data)
         
         # Calculate total null count
         total_null_count = df.isnull().sum().sum()
@@ -264,7 +267,11 @@ class DatasetVariableAnalysisView(APIView):
         ax.grid(True, alpha=0.3)
         
         # Add statistics
-        stats_text = f'Mean: {data.mean():.2f}\nStd: {data.std():.2f}\nCount: {len(data)}'
+        mean_val = data.mean()
+        std_val = data.std()
+        mean_str = f'{mean_val:.2f}' if pd.notna(mean_val) else 'N/A'
+        std_str = f'{std_val:.2f}' if pd.notna(std_val) else 'N/A'
+        stats_text = f'Mean: {mean_str}\nStd: {std_str}\nCount: {len(data)}'
         ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
                 verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
         
@@ -273,13 +280,13 @@ class DatasetVariableAnalysisView(APIView):
         
         return {
             'plot': plot_base64,
-            'bins': bins.tolist(),
-            'counts': counts.tolist(),
+            'bins': safe_to_list(bins),
+            'counts': safe_to_list(counts),
             'statistics': {
-                'mean': float(data.mean()),
-                'std': float(data.std()),
-                'min': float(data.min()),
-                'max': float(data.max()),
+                'mean': safe_float(data.mean()),
+                'std': safe_float(data.std()),
+                'min': safe_float(data.min()),
+                'max': safe_float(data.max()),
                 'count': int(len(data))
             }
         }
@@ -300,7 +307,12 @@ class DatasetVariableAnalysisView(APIView):
         Q3 = data.quantile(0.75)
         IQR = Q3 - Q1
         
-        stats_text = f'Median: {data.median():.2f}\nQ1: {Q1:.2f}\nQ3: {Q3:.2f}\nIQR: {IQR:.2f}'
+        median_val = data.median()
+        median_str = f'{median_val:.2f}' if pd.notna(median_val) else 'N/A'
+        q1_str = f'{Q1:.2f}' if pd.notna(Q1) else 'N/A'
+        q3_str = f'{Q3:.2f}' if pd.notna(Q3) else 'N/A'
+        iqr_str = f'{IQR:.2f}' if pd.notna(IQR) else 'N/A'
+        stats_text = f'Median: {median_str}\nQ1: {q1_str}\nQ3: {q3_str}\nIQR: {iqr_str}'
         ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
                 verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
         
@@ -309,13 +321,13 @@ class DatasetVariableAnalysisView(APIView):
         return {
             'plot': plot_base64,
             'statistics': {
-                'median': float(data.median()),
-                'q1': float(Q1),
-                'q3': float(Q3),
-                'iqr': float(IQR),
-                'min': float(data.min()),
-                'max': float(data.max()),
-                'outlier_count': int(((data < Q1 - 1.5 * IQR) | (data > Q3 + 1.5 * IQR)).sum())
+                'median': safe_float(data.median()),
+                'q1': safe_float(Q1),
+                'q3': safe_float(Q3),
+                'iqr': safe_float(IQR),
+                'min': safe_float(data.min()),
+                'max': safe_float(data.max()),
+                'outlier_count': int(((data < Q1 - 1.5 * IQR) | (data > Q3 + 1.5 * IQR)).sum()) if pd.notna(Q1) and pd.notna(Q3) else 0
             }
         }
     
@@ -361,10 +373,10 @@ class DatasetVariableAnalysisView(APIView):
             'plot': plot_base64,
             'outlier_info': {
                 'total_outliers': int(len(outliers)),
-                'outlier_percentage': float((len(outliers) / len(data)) * 100),
-                'lower_bound': float(lower_bound),
-                'upper_bound': float(upper_bound),
-                'outlier_values': outliers.head(20).tolist()  # First 20 outliers
+                'outlier_percentage': safe_float((len(outliers) / len(data)) * 100),
+                'lower_bound': safe_float(lower_bound),
+                'upper_bound': safe_float(upper_bound),
+                'outlier_values': safe_to_list(outliers.head(20))  # First 20 outliers
             }
         }
     
@@ -474,7 +486,7 @@ class DatasetAnalysisView(APIView):
                     high_corr.append({
                         'var1': corr_matrix.columns[i],
                         'var2': corr_matrix.columns[j],
-                        'correlation': float(corr_val)
+                        'correlation': safe_float(corr_val)
                     })
         
         return {
@@ -1160,6 +1172,12 @@ class DatasetReplaceValuesView(APIView):
         column_name = request.data.get('column_name')
         indices = request.data.get('indices', [])
         new_value = request.data.get('new_value', '')
+        char_replace = request.data.get('char_replace', False)
+        char_to_find = request.data.get('char_to_find', '')
+        char_to_replace = request.data.get('char_to_replace', '')
+        partial_replace = request.data.get('partial_replace', False)
+        partial_pattern = request.data.get('partial_pattern', [])
+        partial_type = request.data.get('partial_type', 'complete')
         
         if not column_name:
             return error_response("Column name is required")
@@ -1176,6 +1194,10 @@ class DatasetReplaceValuesView(APIView):
         if column_name not in df.columns:
             return error_response(f"Column '{column_name}' not found in dataset")
         
+        # Get column type for validation
+        column_dtype = df[column_name].dtype
+        is_numeric = pd.api.types.is_numeric_dtype(column_dtype)
+        
         # Replace values at specified indices
         try:
             # Convert indices to int and validate
@@ -1191,8 +1213,131 @@ class DatasetReplaceValuesView(APIView):
             if not valid_indices:
                 return error_response("No valid indices provided")
             
-            # Replace values
-            df.loc[valid_indices, column_name] = new_value
+            # Process replacements based on mode
+            if char_replace and char_to_find:
+                # Character/substring replacement mode
+                for idx in valid_indices:
+                    current_value = df.loc[idx, column_name]
+                    if pd.notna(current_value):
+                        # Convert to string for replacement
+                        str_value = str(current_value)
+                        # Replace all occurrences of char_to_find with char_to_replace
+                        new_str_value = str_value.replace(char_to_find, char_to_replace)
+                        
+                        # For numeric columns, try to convert back to numeric
+                        if is_numeric:
+                            try:
+                                # Try to convert to float first
+                                numeric_value = float(new_str_value)
+                                # If original column was integer and value has no decimal part, convert to int
+                                if pd.api.types.is_integer_dtype(column_dtype) and numeric_value.is_integer():
+                                    df.loc[idx, column_name] = int(numeric_value)
+                                else:
+                                    df.loc[idx, column_name] = numeric_value
+                            except (ValueError, TypeError):
+                                # If conversion fails, keep the string value
+                                # This might cause issues with numeric columns, so we'll warn
+                                print(f"Warning: Could not convert '{new_str_value}' to numeric for row {idx}")
+                                df.loc[idx, column_name] = new_str_value
+                        else:
+                            # For non-numeric columns, just use the string value
+                            df.loc[idx, column_name] = new_str_value
+            
+            elif partial_replace and partial_pattern:
+                # Partial replacement mode - replace specific characters at given indices
+                for idx in valid_indices:
+                    current_value = df.loc[idx, column_name]
+                    if pd.notna(current_value):
+                        # Convert to string for character manipulation
+                        str_value = str(current_value)
+                        
+                        if partial_type == 'charByChar':
+                            # Character by character replacement
+                            # partial_pattern contains indices of characters to replace
+                            # new_value contains the replacement string (char by char)
+                            char_list = list(str_value)
+                            replacement_chars = list(new_value) if new_value else []
+                            
+                            # Replace characters at specified indices
+                            for i, char_idx in enumerate(partial_pattern):
+                                if isinstance(char_idx, int) and 0 <= char_idx < len(char_list):
+                                    # Use corresponding replacement character if available
+                                    if i < len(replacement_chars):
+                                        char_list[char_idx] = replacement_chars[i]
+                                    else:
+                                        # If not enough replacement chars, use empty string
+                                        char_list[char_idx] = ''
+                            
+                            new_str_value = ''.join(char_list)
+                        
+                        else:  # partial_type == 'complete'
+                            # Complete replacement at specific indices
+                            # partial_pattern contains indices of characters to replace
+                            # new_value is the complete replacement string
+                            char_list = list(str_value)
+                            
+                            # Remove characters at specified indices (in reverse order to maintain indices)
+                            for char_idx in sorted(partial_pattern, reverse=True):
+                                if isinstance(char_idx, int) and 0 <= char_idx < len(char_list):
+                                    char_list.pop(char_idx)
+                            
+                            # Insert the new value at the first index position
+                            if partial_pattern and new_value:
+                                insert_pos = min(partial_pattern)
+                                # Insert each character of new_value starting at insert_pos
+                                for i, char in enumerate(new_value):
+                                    if insert_pos + i <= len(char_list):
+                                        char_list.insert(insert_pos + i, char)
+                            
+                            new_str_value = ''.join(char_list)
+                        
+                        # For numeric columns, try to convert back to numeric
+                        if is_numeric:
+                            try:
+                                # Try to convert to float first
+                                numeric_value = float(new_str_value)
+                                # If original column was integer and value has no decimal part, convert to int
+                                if pd.api.types.is_integer_dtype(column_dtype) and numeric_value.is_integer():
+                                    df.loc[idx, column_name] = int(numeric_value)
+                                else:
+                                    df.loc[idx, column_name] = numeric_value
+                            except (ValueError, TypeError):
+                                # If conversion fails, keep the string value
+                                # This might cause issues with numeric columns, so we'll warn
+                                print(f"Warning: Could not convert '{new_str_value}' to numeric for row {idx}")
+                                df.loc[idx, column_name] = new_str_value
+                        else:
+                            # For non-numeric columns, just use the string value
+                            df.loc[idx, column_name] = new_str_value
+            
+            else:
+                # Direct value replacement
+                # For numeric columns, validate the new value
+                if is_numeric and new_value != '':
+                    try:
+                        # Try to convert new_value to numeric
+                        numeric_value = float(new_value)
+                        # If original column was integer and value has no decimal part, convert to int
+                        if pd.api.types.is_integer_dtype(column_dtype) and numeric_value.is_integer():
+                            processed_value = int(numeric_value)
+                        else:
+                            processed_value = numeric_value
+                    except (ValueError, TypeError):
+                        return error_response(f"Invalid numeric value: '{new_value}' for numeric column '{column_name}'")
+                else:
+                    # For non-numeric columns or empty values
+                    processed_value = new_value if new_value != '' else np.nan
+                
+                # Apply the replacement
+                df.loc[valid_indices, column_name] = processed_value
+            
+            # Verify no inadvertent NaN generation for critical operations
+            if is_numeric and not char_replace:
+                # Check if we introduced any NaN values where there weren't any before
+                original_nan_count = df[column_name].iloc[valid_indices].isna().sum()
+                new_nan_count = df.loc[valid_indices, column_name].isna().sum()
+                if new_nan_count > original_nan_count and new_value != '':
+                    print(f"Warning: Introduced {new_nan_count - original_nan_count} new NaN values")
             
             # Save the modified dataset
             from io import StringIO
@@ -1222,11 +1367,37 @@ class DatasetReplaceValuesView(APIView):
             # Invalidar el caché del nuevo archivo
             cache.delete(f'dataset_{dataset.file.path}')
             
+            # Prepare response message
+            if char_replace:
+                message = f"Successfully replaced '{char_to_find}' with '{char_to_replace}' in {len(valid_indices)} values"
+            elif partial_replace:
+                if partial_type == 'charByChar':
+                    message = f"Successfully replaced characters at positions {partial_pattern} in {len(valid_indices)} values"
+                else:
+                    message = f"Successfully replaced content at positions {partial_pattern} with '{new_value}' in {len(valid_indices)} values"
+            else:
+                message = f"Successfully replaced {len(valid_indices)} values"
+            
+            # Determine the mode for response
+            if char_replace:
+                mode = 'char_replace'
+            elif partial_replace:
+                mode = f'partial_{partial_type}'
+            else:
+                mode = 'direct'
+            
             return success_response({
-                'message': f"Successfully replaced {len(valid_indices)} values",
-                'replaced_count': len(valid_indices)
+                'message': message,
+                'replaced_count': len(valid_indices),
+                'mode': mode,
+                'partial_info': {
+                    'type': partial_type,
+                    'pattern': partial_pattern
+                } if partial_replace else None
             })
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return error_response(f"Error replacing values: {str(e)}")
 
 
@@ -1450,20 +1621,37 @@ class DatasetNumericTransformPreviewView(APIView):
             for value in sample_data:
                 transformed = self._apply_numeric_operation(value, operation, params)
                 preview.append({
-                    'original': float(value),
-                    'transformed': float(transformed)
+                    'original': safe_float(value),
+                    'transformed': safe_float(transformed)
                 })
                 transformed_sample.append(transformed)
             
             # Calculate stats for preview
             if transformed_sample:
-                stats = {
-                    'mean': np.mean(transformed_sample),
-                    'median': np.median(transformed_sample),
-                    'std': np.std(transformed_sample),
-                    'min': np.min(transformed_sample),
-                    'max': np.max(transformed_sample)
-                }
+                # Filter out None values for statistics calculation
+                valid_transformed = [v for v in transformed_sample if pd.notna(v)]
+                if valid_transformed:
+                    mean_val = np.mean(valid_transformed)
+                    median_val = np.median(valid_transformed)
+                    std_val = np.std(valid_transformed)
+                    min_val = np.min(valid_transformed)
+                    max_val = np.max(valid_transformed)
+                    
+                    stats = {
+                        'mean': safe_float(mean_val),
+                        'median': safe_float(median_val),
+                        'std': safe_float(std_val),
+                        'min': safe_float(min_val),
+                        'max': safe_float(max_val)
+                    }
+                else:
+                    stats = {
+                        'mean': None,
+                        'median': None,
+                        'std': None,
+                        'min': None,
+                        'max': None
+                    }
             else:
                 stats = None
             

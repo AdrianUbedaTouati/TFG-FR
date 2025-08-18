@@ -162,14 +162,22 @@ class DatasetReportView(APIView):
             
             if col_analysis['type'] == 'numeric':
                 # Calculate statistics
+                mean_val = df[col].mean()
+                std_val = df[col].std()
+                min_val = df[col].min()
+                max_val = df[col].max()
+                q1_val = df[col].quantile(0.25)
+                median_val = df[col].quantile(0.5)
+                q3_val = df[col].quantile(0.75)
+                
                 col_analysis['stats'] = {
-                    'mean': float(df[col].mean()),
-                    'std': float(df[col].std()),
-                    'min': float(df[col].min()),
-                    'max': float(df[col].max()),
-                    'q1': float(df[col].quantile(0.25)),
-                    'median': float(df[col].quantile(0.5)),
-                    'q3': float(df[col].quantile(0.75))
+                    'mean': float(mean_val) if pd.notna(mean_val) else None,
+                    'std': float(std_val) if pd.notna(std_val) else None,
+                    'min': float(min_val) if pd.notna(min_val) else None,
+                    'max': float(max_val) if pd.notna(max_val) else None,
+                    'q1': float(q1_val) if pd.notna(q1_val) else None,
+                    'median': float(median_val) if pd.notna(median_val) else None,
+                    'q3': float(q3_val) if pd.notna(q3_val) else None
                 }
                 
                 # Calculate outliers
@@ -527,14 +535,22 @@ class DatasetReportView(APIView):
             # For numeric columns, add statistics and outliers
             if col_data['type'] == 'numeric':
                 # Statistics
+                mean_val = df[col].mean()
+                std_val = df[col].std()
+                min_val = df[col].min()
+                max_val = df[col].max()
+                q1_val = df[col].quantile(0.25)
+                median_val = df[col].quantile(0.5)
+                q3_val = df[col].quantile(0.75)
+                
                 col_data['stats'] = {
-                    'mean': float(df[col].mean()),
-                    'std': float(df[col].std()),
-                    'min': float(df[col].min()),
-                    'max': float(df[col].max()),
-                    'q1': float(df[col].quantile(0.25)),
-                    'median': float(df[col].quantile(0.5)),
-                    'q3': float(df[col].quantile(0.75))
+                    'mean': float(mean_val) if pd.notna(mean_val) else None,
+                    'std': float(std_val) if pd.notna(std_val) else None,
+                    'min': float(min_val) if pd.notna(min_val) else None,
+                    'max': float(max_val) if pd.notna(max_val) else None,
+                    'q1': float(q1_val) if pd.notna(q1_val) else None,
+                    'median': float(median_val) if pd.notna(median_val) else None,
+                    'q3': float(q3_val) if pd.notna(q3_val) else None
                 }
                 
                 # Outliers

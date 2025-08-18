@@ -28,6 +28,7 @@ from ..utils import (
     load_dataset, error_response, success_response,
     validate_dataframe, detect_column_type
 )
+from ..utils_helpers import safe_to_list, safe_float, safe_dict_values
 from ..constants import (
     ERROR_PARSING_FAILED, ERROR_NORMALIZATION_FAILED,
     SUCCESS_NORMALIZATION_COMPLETE
@@ -169,7 +170,7 @@ class DatasetNormalizationView(APIView):
                 elif detected_data_type == 'text' or df[col].dtype == 'object':
                     # Columna de texto o objeto
                     unique_values = df[col].nunique()
-                    sample_values = df[col].dropna().head(20).tolist()
+                    sample_values = safe_to_list(df[col].dropna().head(20))
                     
                     normalization_info[col] = {
                         'type': 'text',
@@ -211,7 +212,7 @@ class DatasetNormalizationView(APIView):
                         'secondary_methods': [],
                         'stats': {
                             'dtype': col_type,
-                            'sample_values': df[col].dropna().head(20).astype(str).tolist()
+                            'sample_values': safe_to_list(df[col].dropna().head(20).astype(str))
                         }
                     }
             
@@ -1679,7 +1680,7 @@ class DatasetNormalizationPreviewView(APIView):
                                         try:
                                             print(f"Preview - Step {step_index + 1}: Applying conversion '{prev_conversion}' from previous step to column '{conversion_target}'")
                                             print(f"Column dtype before conversion: {current_df[conversion_target].dtype}")
-                                            print(f"Sample values before conversion: {current_df[conversion_target].head(3).tolist()}")
+                                            print(f"Sample values before conversion: {safe_to_list(current_df[conversion_target].head(3))}")
                                             
                                             # Apply the conversion with parameters if available
                                             conversion_params = prev_step.get('conversion_params', None)
@@ -1690,7 +1691,7 @@ class DatasetNormalizationPreviewView(APIView):
                                             )
                                             
                                             print(f"Column dtype after conversion: {current_df[conversion_target].dtype}")
-                                            print(f"Sample values after conversion: {current_df[conversion_target].head(3).tolist()}")
+                                            print(f"Sample values after conversion: {safe_to_list(current_df[conversion_target].head(3))}")
                                             
                                         except Exception as e:
                                             error_msg = f"Error aplicando {prev_conversion} a columna {conversion_target}: {str(e)}"
@@ -1708,7 +1709,7 @@ class DatasetNormalizationPreviewView(APIView):
                                 print(f"Preview - Step {step_index + 1}: No input_column or not found, using '{current_column}'")
                             
                             # Get sample values before transformation
-                            before_values = current_df[current_column].tolist() if current_column in current_df.columns else []
+                            before_values = safe_to_list(current_df[current_column]) if current_column in current_df.columns else []
                             
                             # Apply single step
                             current_df = view._apply_single_normalization(
@@ -1736,7 +1737,7 @@ class DatasetNormalizationPreviewView(APIView):
                                 elif 'input_column' in step:
                                     transformed_col = current_column  # Keep using the input column
                             
-                            after_values = current_df[transformed_col].tolist() if transformed_col in current_df.columns else []
+                            after_values = safe_to_list(current_df[transformed_col]) if transformed_col in current_df.columns else []
                             
                             # Note: Conversion is now applied BEFORE the transformation (see above)
                             # This ensures conversions happen between layers, not after
@@ -1976,7 +1977,7 @@ class DatasetNormalizationPreviewView(APIView):
                                         })
                                         
                                         comparison[column][new_col] = {
-                                            'sample': new_values.head(50).tolist(),
+                                            'sample': safe_to_list(new_values.head(50)),
                                             'stats': detect_column_type(normalized_sample[new_col]),
                                             'unique_count': normalized_sample[new_col].nunique(),
                                             'detected_type': detected_type,
@@ -2085,7 +2086,7 @@ class DatasetNormalizationPreviewView(APIView):
                             for new_col in new_columns:
                                 if new_col in normalized_sample.columns:
                                     comparison[column][new_col] = {
-                                        'sample': normalized_sample[new_col].dropna().head(50).tolist(),
+                                        'sample': safe_to_list(normalized_sample[new_col].dropna().head(50)),
                                         'stats': detect_column_type(normalized_sample[new_col]),
                                         'unique_count': normalized_sample[new_col].nunique()
                                     }
@@ -2330,13 +2331,13 @@ class DatasetNormalizationPreviewView(APIView):
                         
                         comparison[column] = {
                             'original': {
-                                'sample': original_values.head(50).tolist(),
+                                'sample': safe_to_list(original_values.head(50)),
                                 'stats': detect_column_type(df[column]),  # Use full dataset for stats
                                 'all_unique_count': actual_unique_count,  # Show actual count
                                 'mapping_sample_size': len(unique_mapping) if len(unique_mapping) < actual_unique_count else None  # Indicate if we're showing a sample
                             },
                             'normalized': {
-                                'sample': normalized_values.head(50).tolist(),
+                                'sample': safe_to_list(normalized_values.head(50)),
                                 'stats': detect_column_type(normalized_values)  # Use the actual normalized values
                             },
                             'unique_mapping': unique_mapping,
@@ -2346,11 +2347,11 @@ class DatasetNormalizationPreviewView(APIView):
                         # For numeric columns, show more samples
                         comparison[column] = {
                             'original': {
-                                'sample': original_values.head(50).tolist(),
+                                'sample': safe_to_list(original_values.head(50)),
                                 'stats': detect_column_type(df[column])  # Use full dataset for stats
                             },
                             'normalized': {
-                                'sample': normalized_values.head(50).tolist(),
+                                'sample': safe_to_list(normalized_values.head(50)),
                                 'stats': detect_column_type(normalized_values)  # Use the actual normalized values
                             },
                             'is_categorical': False
