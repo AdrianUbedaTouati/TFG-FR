@@ -21,6 +21,11 @@ urlpatterns = [
     path('datasets/<int:pk>/remove-nulls/', views.DatasetRemoveNullsView.as_view(), name='dataset-remove-nulls'),
     path('datasets/<int:pk>/remove-all-null-rows/', views.DatasetRemoveAllNullRowsView.as_view(), name='dataset-remove-all-null-rows'),
     path('datasets/<int:pk>/fill-nulls/', views.DatasetFillNullsView.as_view(), name='dataset-fill-nulls'),
+    path('datasets/<int:pk>/replace-values/', views.DatasetReplaceValuesView.as_view(), name='dataset-replace-values'),
+    path('datasets/<int:pk>/text-manipulation-preview/', views.DatasetTextManipulationPreviewView.as_view(), name='dataset-text-manipulation-preview'),
+    path('datasets/<int:pk>/text-manipulation/', views.DatasetTextManipulationView.as_view(), name='dataset-text-manipulation'),
+    path('datasets/<int:pk>/numeric-transform-preview/', views.DatasetNumericTransformPreviewView.as_view(), name='dataset-numeric-transform-preview'),
+    path('datasets/<int:pk>/numeric-transform/', views.DatasetNumericTransformView.as_view(), name='dataset-numeric-transform'),
     
     # Custom normalization function endpoints
     path('custom-normalization-functions/', views.CustomNormalizationFunctionView.as_view(), name='custom-normalization-functions'),

@@ -781,8 +781,39 @@ class DatasetFilterValuesView(APIView):
         # Count rows before filtering
         rows_before = len(df)
         
+        # Convert values to the appropriate type based on the column dtype
+        column_dtype = df[column_name].dtype
+        converted_values = []
+        
+        for value in values_to_remove:
+            if value == 'null' or value is None:
+                # Handle null values separately
+                continue
+            try:
+                # Try to convert to the column's dtype
+                if pd.api.types.is_numeric_dtype(column_dtype):
+                    # Try to convert to numeric
+                    if pd.api.types.is_integer_dtype(column_dtype):
+                        converted_values.append(int(float(value)))
+                    else:
+                        converted_values.append(float(value))
+                elif pd.api.types.is_datetime64_any_dtype(column_dtype):
+                    converted_values.append(pd.to_datetime(value))
+                else:
+                    # Keep as string for other types
+                    converted_values.append(str(value))
+            except (ValueError, TypeError):
+                # If conversion fails, try keeping original value
+                converted_values.append(value)
+        
         # Filter out rows with specified values
-        df_filtered = df[~df[column_name].isin(values_to_remove)]
+        mask = df[column_name].isin(converted_values)
+        
+        # Also check for null values if 'null' was in the values to remove
+        if 'null' in values_to_remove or None in values_to_remove:
+            mask = mask | df[column_name].isnull()
+        
+        df_filtered = df[~mask]
         
         # Count rows removed
         rows_removed = rows_before - len(df_filtered)
@@ -1112,3 +1143,459 @@ class DatasetFillNullsView(APIView):
             })
         except Exception as e:
             return error_response(f"Error filling null values: {str(e)}")
+
+
+class DatasetReplaceValuesView(APIView):
+    """Replace values at specific indices in a dataset column"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
+        # Get parameters
+        column_name = request.data.get('column_name')
+        indices = request.data.get('indices', [])
+        new_value = request.data.get('new_value', '')
+        
+        if not column_name:
+            return error_response("Column name is required")
+        
+        if not indices:
+            return error_response("Indices are required")
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Check if column exists
+        if column_name not in df.columns:
+            return error_response(f"Column '{column_name}' not found in dataset")
+        
+        # Replace values at specified indices
+        try:
+            # Convert indices to int and validate
+            valid_indices = []
+            for idx in indices:
+                try:
+                    idx_int = int(idx)
+                    if 0 <= idx_int < len(df):
+                        valid_indices.append(idx_int)
+                except ValueError:
+                    continue
+            
+            if not valid_indices:
+                return error_response("No valid indices provided")
+            
+            # Replace values
+            df.loc[valid_indices, column_name] = new_value
+            
+            # Save the modified dataset
+            from io import StringIO
+            csv_buffer = StringIO()
+            df.to_csv(csv_buffer, index=False)
+            csv_content = csv_buffer.getvalue()
+            
+            # Get the original file name
+            original_name = os.path.basename(dataset.file.name)
+            
+            # Invalidar caché
+            old_path = dataset.file.path
+            cache.delete(f'dataset_{old_path}')
+            
+            # Delete the old file
+            dataset.file.delete(save=False)
+            
+            # Save the new content
+            dataset.file.save(
+                original_name,
+                ContentFile(csv_content.encode('utf-8')),
+                save=False
+            )
+            
+            dataset.save()
+            
+            # Invalidar el caché del nuevo archivo
+            cache.delete(f'dataset_{dataset.file.path}')
+            
+            return success_response({
+                'message': f"Successfully replaced {len(valid_indices)} values",
+                'replaced_count': len(valid_indices)
+            })
+        except Exception as e:
+            return error_response(f"Error replacing values: {str(e)}")
+
+
+class DatasetTextManipulationPreviewView(APIView):
+    """Preview text manipulation operations"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
+        # Get parameters
+        column_name = request.data.get('column_name')
+        operation = request.data.get('operation')
+        params = request.data.get('params', {})
+        
+        if not column_name or not operation:
+            return error_response("Column name and operation are required")
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Check if column exists
+        if column_name not in df.columns:
+            return error_response(f"Column '{column_name}' not found in dataset")
+        
+        # Get sample data
+        sample_data = df[column_name].dropna().head(20)
+        preview = []
+        
+        try:
+            for value in sample_data:
+                str_value = str(value)
+                transformed = self._apply_text_operation(str_value, operation, params)
+                preview.append({
+                    'original': str_value,
+                    'transformed': transformed
+                })
+            
+            return success_response({
+                'preview': preview
+            })
+        except Exception as e:
+            return error_response(f"Error generating preview: {str(e)}")
+    
+    def _apply_text_operation(self, value, operation, params):
+        """Apply text operation to a single value"""
+        if operation == 'truncate':
+            length = params.get('length', 50)
+            ellipsis = params.get('ellipsis', False)
+            if len(value) > length:
+                return value[:length] + ('...' if ellipsis else '')
+            return value
+            
+        elif operation == 'extract':
+            start = params.get('start', 0)
+            length = params.get('length', 10)
+            return value[start:start+length]
+            
+        elif operation == 'remove_chars':
+            chars = params.get('chars', '')
+            for char in chars:
+                value = value.replace(char, '')
+            return value
+            
+        elif operation == 'case':
+            case_type = params.get('type', 'upper')
+            if case_type == 'upper':
+                return value.upper()
+            elif case_type == 'lower':
+                return value.lower()
+            elif case_type == 'title':
+                return value.title()
+            elif case_type == 'capitalize':
+                return value.capitalize()
+            
+        elif operation == 'trim':
+            trim_type = params.get('type', 'both')
+            if trim_type == 'both':
+                return value.strip()
+            elif trim_type == 'left':
+                return value.lstrip()
+            elif trim_type == 'right':
+                return value.rstrip()
+            
+        elif operation == 'split':
+            separator = params.get('separator', ',')
+            part = params.get('part', 0)
+            parts = value.split(separator)
+            if part < 0:
+                part = len(parts) + part
+            if 0 <= part < len(parts):
+                return parts[part].strip()
+            return ''
+            
+        elif operation == 'pad':
+            length = params.get('length', 10)
+            char = params.get('char', '0')
+            direction = params.get('direction', 'left')
+            if direction == 'left':
+                return value.rjust(length, char)
+            else:
+                return value.ljust(length, char)
+        
+        return value
+
+
+class DatasetTextManipulationView(APIView):
+    """Apply text manipulation operations to a dataset column"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
+        # Get parameters
+        column_name = request.data.get('column_name')
+        operation = request.data.get('operation')
+        params = request.data.get('params', {})
+        
+        if not column_name or not operation:
+            return error_response("Column name and operation are required")
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Check if column exists
+        if column_name not in df.columns:
+            return error_response(f"Column '{column_name}' not found in dataset")
+        
+        # Apply operation
+        try:
+            preview_view = DatasetTextManipulationPreviewView()
+            df[column_name] = df[column_name].apply(
+                lambda x: preview_view._apply_text_operation(str(x) if pd.notna(x) else '', operation, params)
+            )
+            
+            # Save the modified dataset
+            from io import StringIO
+            csv_buffer = StringIO()
+            df.to_csv(csv_buffer, index=False)
+            csv_content = csv_buffer.getvalue()
+            
+            # Get the original file name
+            original_name = os.path.basename(dataset.file.name)
+            
+            # Invalidar caché
+            old_path = dataset.file.path
+            cache.delete(f'dataset_{old_path}')
+            
+            # Delete the old file
+            dataset.file.delete(save=False)
+            
+            # Save the new content
+            dataset.file.save(
+                original_name,
+                ContentFile(csv_content.encode('utf-8')),
+                save=False
+            )
+            
+            dataset.save()
+            
+            # Invalidar el caché del nuevo archivo
+            cache.delete(f'dataset_{dataset.file.path}')
+            
+            return success_response({
+                'message': f"Successfully applied {operation} to column '{column_name}'"
+            })
+        except Exception as e:
+            return error_response(f"Error applying text manipulation: {str(e)}")
+
+
+class DatasetNumericTransformPreviewView(APIView):
+    """Preview numeric transformation operations"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
+        # Get parameters
+        column_name = request.data.get('column_name')
+        operation = request.data.get('operation')
+        params = request.data.get('params', {})
+        
+        if not column_name or not operation:
+            return error_response("Column name and operation are required")
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Check if column exists and is numeric
+        if column_name not in df.columns:
+            return error_response(f"Column '{column_name}' not found in dataset")
+        
+        if not pd.api.types.is_numeric_dtype(df[column_name]):
+            return error_response(f"Column '{column_name}' is not numeric")
+        
+        # Get sample data
+        sample_data = df[column_name].dropna().head(20)
+        preview = []
+        
+        try:
+            # Apply transformation to sample
+            transformed_sample = []
+            for value in sample_data:
+                transformed = self._apply_numeric_operation(value, operation, params)
+                preview.append({
+                    'original': float(value),
+                    'transformed': float(transformed)
+                })
+                transformed_sample.append(transformed)
+            
+            # Calculate stats for preview
+            if transformed_sample:
+                stats = {
+                    'mean': np.mean(transformed_sample),
+                    'median': np.median(transformed_sample),
+                    'std': np.std(transformed_sample),
+                    'min': np.min(transformed_sample),
+                    'max': np.max(transformed_sample)
+                }
+            else:
+                stats = None
+            
+            return success_response({
+                'preview': preview,
+                'stats': stats
+            })
+        except Exception as e:
+            return error_response(f"Error generating preview: {str(e)}")
+    
+    def _apply_numeric_operation(self, value, operation, params):
+        """Apply numeric operation to a single value"""
+        if pd.isna(value):
+            return value
+            
+        if operation == 'round':
+            decimals = params.get('decimals', 2)
+            return round(value, decimals)
+            
+        elif operation == 'floor':
+            return np.floor(value)
+            
+        elif operation == 'ceil':
+            return np.ceil(value)
+            
+        elif operation == 'scale':
+            factor = params.get('factor', 1)
+            return value * factor
+            
+        elif operation == 'clip':
+            min_val = params.get('min', -np.inf)
+            max_val = params.get('max', np.inf)
+            return np.clip(value, min_val, max_val)
+            
+        elif operation == 'arithmetic':
+            op = params.get('operation', 'add')
+            op_value = params.get('value', 0)
+            if op == 'add':
+                return value + op_value
+            elif op == 'subtract':
+                return value - op_value
+            elif op == 'multiply':
+                return value * op_value
+            elif op == 'divide':
+                return value / op_value if op_value != 0 else np.nan
+            
+        elif operation == 'log':
+            base = params.get('base', 'natural')
+            if value <= 0:
+                return np.nan
+            if base == 'natural':
+                return np.log(value)
+            elif base == '10':
+                return np.log10(value)
+            elif base == '2':
+                return np.log2(value)
+            
+        elif operation == 'power':
+            exponent = params.get('exponent', 2)
+            return np.power(value, exponent)
+        
+        return value
+
+
+class DatasetNumericTransformView(APIView):
+    """Apply numeric transformation operations to a dataset column"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
+        # Get parameters
+        column_name = request.data.get('column_name')
+        operation = request.data.get('operation')
+        params = request.data.get('params', {})
+        
+        if not column_name or not operation:
+            return error_response("Column name and operation are required")
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Check if column exists and is numeric
+        if column_name not in df.columns:
+            return error_response(f"Column '{column_name}' not found in dataset")
+        
+        if not pd.api.types.is_numeric_dtype(df[column_name]):
+            return error_response(f"Column '{column_name}' is not numeric")
+        
+        # Apply operation
+        try:
+            preview_view = DatasetNumericTransformPreviewView()
+            df[column_name] = df[column_name].apply(
+                lambda x: preview_view._apply_numeric_operation(x, operation, params)
+            )
+            
+            # Save the modified dataset
+            from io import StringIO
+            csv_buffer = StringIO()
+            df.to_csv(csv_buffer, index=False)
+            csv_content = csv_buffer.getvalue()
+            
+            # Get the original file name
+            original_name = os.path.basename(dataset.file.name)
+            
+            # Invalidar caché
+            old_path = dataset.file.path
+            cache.delete(f'dataset_{old_path}')
+            
+            # Delete the old file
+            dataset.file.delete(save=False)
+            
+            # Save the new content
+            dataset.file.save(
+                original_name,
+                ContentFile(csv_content.encode('utf-8')),
+                save=False
+            )
+            
+            dataset.save()
+            
+            # Invalidar el caché del nuevo archivo
+            cache.delete(f'dataset_{dataset.file.path}')
+            
+            return success_response({
+                'message': f"Successfully applied {operation} to column '{column_name}'"
+            })
+        except Exception as e:
+            return error_response(f"Error applying numeric transformation: {str(e)}")

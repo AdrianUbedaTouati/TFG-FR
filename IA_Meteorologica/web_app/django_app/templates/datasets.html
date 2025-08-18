@@ -930,7 +930,7 @@
                                     <h6 class="card-title text-info">
                                         <i class="bi bi-tools"></i> Acciones
                                     </h6>
-                                    <div class="d-flex gap-2 flex-wrap">
+                                    <div class="d-flex gap-2 flex-wrap mb-3">
                                         <button class="btn btn-sm btn-info" onclick="renameColumnFromEditor()">
                                             <i class="bi bi-pencil"></i> Renombrar Columna
                                         </button>
@@ -945,6 +945,21 @@
                                         </button>
                                         <button class="btn btn-sm btn-success" onclick="fillNullValues()">
                                             <i class="bi bi-plus-circle"></i> Rellenar Valores Nulos
+                                        </button>
+                                    </div>
+                                    
+                                    <h6 class="card-title text-warning mt-3">
+                                        <i class="bi bi-magic"></i> Edición Avanzada
+                                    </h6>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button class="btn btn-sm btn-primary" onclick="openAdvancedEditor()">
+                                            <i class="bi bi-search"></i> Buscar y Reemplazar
+                                        </button>
+                                        <button class="btn btn-sm btn-secondary" onclick="openTextManipulation()">
+                                            <i class="bi bi-scissors"></i> Manipular Texto
+                                        </button>
+                                        <button class="btn btn-sm btn-info" onclick="openNumericTransform()">
+                                            <i class="bi bi-calculator"></i> Transformaciones Numéricas
                                         </button>
                                     </div>
                                 </div>
@@ -1156,6 +1171,319 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-sm btn-primary" onclick="applyCustomLimit()">Aplicar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Búsqueda y Reemplazo Avanzado -->
+<div class="modal fade" id="advancedSearchReplaceModal" tabindex="-1" aria-labelledby="advancedSearchReplaceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header border-bottom border-secondary">
+                <h5 class="modal-title text-info" id="advancedSearchReplaceModalLabel">
+                    <i class="bi bi-search"></i> Búsqueda y Reemplazo Avanzado - <span id="advancedColumnName"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="background-color: #1a1e3a;">
+                <div class="row">
+                    <!-- Panel de búsqueda -->
+                    <div class="col-md-6">
+                        <h6 class="text-warning mb-3">
+                            <i class="bi bi-search"></i> Búsqueda
+                        </h6>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Tipo de búsqueda</label>
+                            <select class="form-select bg-dark text-light border-secondary" id="advSearchType" onchange="updateAdvancedSearchInterface()">
+                                <option value="contains">Contiene</option>
+                                <option value="startsWith">Empieza por</option>
+                                <option value="endsWith">Termina por</option>
+                                <option value="equals">Es igual a</option>
+                                <option value="regex">Expresión Regular</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Valor a buscar</label>
+                            <input type="text" class="form-control bg-dark text-light border-secondary" id="advSearchValue" placeholder="Introduzca el valor a buscar">
+                            <small class="text-muted" id="advSearchHint">Buscar valores que contengan este texto</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex align-items-center">
+                                <button type="button" class="btn btn-outline-info btn-sm" onclick="toggleAdvPatternMode()">
+                                    <i class="bi bi-grid-3x3-gap"></i> <span id="advPatternToggleText">Activar patrón personalizado</span>
+                                </button>
+                                <small class="text-muted ms-2">
+                                    <i class="bi bi-info-circle"></i> Agrupa resultados por caracteres seleccionados
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <small class="text-muted me-2">
+                                <i class="bi bi-search"></i> Alcance de búsqueda:
+                            </small>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-primary" onclick="setAdvSearchScope('first')" id="advSearchFirstBtn">
+                                    <i class="bi bi-funnel"></i> Primeros <span id="advLimitValue">100</span>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="setAdvSearchScope('range')" id="advSearchRangeBtn">
+                                    <i class="bi bi-arrows-expand"></i> Rango
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="showAdvLimitModal()" title="Configurar">
+                                    <i class="bi bi-gear"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="setAdvSearchScope('all')" id="advSearchAllBtn">
+                                    <i class="bi bi-database"></i> Todo
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Selector de rango -->
+                        <div id="advRangeSelector" class="mb-3" style="display: none;">
+                            <div class="d-flex align-items-center">
+                                <small class="text-muted me-2">Desde índice:</small>
+                                <input type="number" id="advRangeStart" class="form-control form-control-sm bg-dark text-light border-secondary" value="1" min="1" style="width: 80px;">
+                                <small class="text-muted mx-2">hasta:</small>
+                                <input type="number" id="advRangeEnd" class="form-control form-control-sm bg-dark text-light border-secondary" value="100" min="1" style="width: 80px;">
+                            </div>
+                        </div>
+                        
+                        <!-- Selector de patrón -->
+                        <div id="advPatternSelectorRow" class="mb-3" style="display: none;">
+                            <div class="border rounded p-3" style="background-color: rgba(0, 123, 255, 0.1);">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Ejemplo #</label>
+                                        <input type="number" id="advPatternExampleIndex" class="form-control bg-dark text-light border-secondary" value="1" min="1" onchange="updateAdvPatternExample()">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">Clickea los caracteres para seleccionar el patrón:</label>
+                                        <div id="advPatternCharacters" class="p-2 border rounded bg-dark" style="font-family: monospace; font-size: 1.1em; letter-spacing: 0.1em;">
+                                            <!-- Los caracteres clickeables aparecerán aquí -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-primary w-100" onclick="performAdvancedSearch()">
+                            <i class="bi bi-search"></i> Buscar
+                        </button>
+                    </div>
+                    
+                    <!-- Panel de reemplazo -->
+                    <div class="col-md-6">
+                        <h6 class="text-warning mb-3">
+                            <i class="bi bi-arrow-repeat"></i> Reemplazo
+                        </h6>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Valor de reemplazo</label>
+                            <input type="text" class="form-control bg-dark text-light border-secondary" id="advReplaceValue" placeholder="Nuevo valor">
+                            <small class="text-muted">Deja vacío para eliminar el texto encontrado</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Opciones de reemplazo</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="advReplaceAll" checked>
+                                <label class="form-check-label" for="advReplaceAll">
+                                    Reemplazar todas las coincidencias
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="advCaseSensitive">
+                                <label class="form-check-label" for="advCaseSensitive">
+                                    Distinguir mayúsculas/minúsculas
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Reemplazar en posiciones específicas</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control bg-dark text-light border-secondary" id="advReplacePositions" placeholder="Ej: 1,3,5-10,15">
+                                <button class="btn btn-outline-secondary" type="button" onclick="showPositionHelp()">
+                                    <i class="bi bi-question-circle"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted">Especifica los índices de las coincidencias a reemplazar</small>
+                        </div>
+                        
+                        <button class="btn btn-warning w-100" onclick="previewReplacement()" disabled id="previewReplaceBtn">
+                            <i class="bi bi-eye"></i> Vista Previa de Reemplazo
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Resultados de búsqueda -->
+                <div id="advSearchResults" class="mt-4" style="display: none;">
+                    <hr class="border-secondary">
+                    <h6 class="text-info">Resultados de búsqueda</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="alert alert-info">
+                                <strong>Coincidencias encontradas:</strong> <span id="advMatchCount">0</span> de <span id="advTotalCount">0</span> valores
+                                (<span id="advMatchPercentage">0</span>%)
+                            </div>
+                            <div id="advMatchedValuesList" style="max-height: 300px; overflow-y: auto;" class="border rounded p-2 bg-dark">
+                                <!-- Lista de valores coincidentes -->
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <canvas id="advSearchResultChart" style="max-height: 200px;"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Vista previa de reemplazo -->
+                <div id="advReplacePreview" class="mt-4" style="display: none;">
+                    <hr class="border-secondary">
+                    <h6 class="text-warning">Vista Previa de Reemplazo</h6>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> 
+                        <span id="advReplaceCount">0</span> valores serán reemplazados
+                    </div>
+                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                        <table class="table table-sm table-dark table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Índice</th>
+                                    <th>Valor Original</th>
+                                    <th>Valor Nuevo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="advReplacePreviewTable">
+                                <!-- Preview rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top border-secondary" style="background-color: #0d1225;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-danger" onclick="executeReplacement()" disabled id="executeReplaceBtn">
+                    <i class="bi bi-arrow-repeat"></i> Ejecutar Reemplazo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Manipulación de Texto -->
+<div class="modal fade" id="textManipulationModal" tabindex="-1" aria-labelledby="textManipulationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header border-bottom border-secondary">
+                <h5 class="modal-title text-info" id="textManipulationModalLabel">
+                    <i class="bi bi-scissors"></i> Manipulación de Texto - <span id="textManipColumnName"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="background-color: #1a1e3a;">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-warning mb-3">Operaciones de Texto</h6>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Tipo de operación</label>
+                            <select class="form-select bg-dark text-light border-secondary" id="textOperation" onchange="updateTextOperationOptions()">
+                                <option value="truncate">Truncar texto</option>
+                                <option value="extract">Extraer substring</option>
+                                <option value="remove_chars">Eliminar caracteres</option>
+                                <option value="case">Cambiar mayúsculas/minúsculas</option>
+                                <option value="trim">Eliminar espacios</option>
+                                <option value="split">Dividir texto</option>
+                                <option value="pad">Rellenar texto</option>
+                            </select>
+                        </div>
+                        
+                        <div id="textOperationOptions">
+                            <!-- Las opciones específicas aparecerán aquí -->
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6 class="text-warning mb-3">Vista Previa</h6>
+                        <div id="textManipPreview" class="border rounded p-3 bg-dark" style="max-height: 400px; overflow-y: auto;">
+                            <p class="text-muted text-center">Selecciona una operación para ver la vista previa</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top border-secondary" style="background-color: #0d1225;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="previewTextManipulation()">
+                    <i class="bi bi-eye"></i> Vista Previa
+                </button>
+                <button type="button" class="btn btn-danger" onclick="executeTextManipulation()" disabled id="executeTextManipBtn">
+                    <i class="bi bi-scissors"></i> Aplicar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Transformaciones Numéricas -->
+<div class="modal fade" id="numericTransformModal" tabindex="-1" aria-labelledby="numericTransformModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header border-bottom border-secondary">
+                <h5 class="modal-title text-info" id="numericTransformModalLabel">
+                    <i class="bi bi-calculator"></i> Transformaciones Numéricas - <span id="numericColumnName"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="background-color: #1a1e3a;">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-warning mb-3">Operaciones Numéricas</h6>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Tipo de transformación</label>
+                            <select class="form-select bg-dark text-light border-secondary" id="numericOperation" onchange="updateNumericOperationOptions()">
+                                <option value="round">Redondear</option>
+                                <option value="floor">Redondear hacia abajo</option>
+                                <option value="ceil">Redondear hacia arriba</option>
+                                <option value="scale">Escalar valores</option>
+                                <option value="clip">Limitar rango</option>
+                                <option value="arithmetic">Operación aritmética</option>
+                                <option value="log">Transformación logarítmica</option>
+                                <option value="power">Elevar a potencia</option>
+                            </select>
+                        </div>
+                        
+                        <div id="numericOperationOptions">
+                            <!-- Las opciones específicas aparecerán aquí -->
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6 class="text-warning mb-3">Vista Previa</h6>
+                        <div id="numericTransformPreview" class="border rounded p-3 bg-dark" style="max-height: 400px; overflow-y: auto;">
+                            <p class="text-muted text-center">Selecciona una operación para ver la vista previa</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top border-secondary" style="background-color: #0d1225;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="previewNumericTransform()">
+                    <i class="bi bi-eye"></i> Vista Previa
+                </button>
+                <button type="button" class="btn btn-danger" onclick="executeNumericTransform()" disabled id="executeNumericBtn">
+                    <i class="bi bi-calculator"></i> Aplicar Transformación
+                </button>
             </div>
         </div>
     </div>
@@ -7983,6 +8311,832 @@ function removeSpecificValue(value) {
             await filterDatasetByValues(selectedEditorColumn, [value]);
         }
     });
+}
+
+// Variables globales para búsqueda avanzada
+let advancedSearchData = {
+    columnName: null,
+    searchResults: [],
+    searchResultsWithIndex: [],
+    patternMode: false,
+    selectedPattern: [],
+    searchScope: 'first',
+    searchLimit: 100
+};
+
+// Función para abrir el editor avanzado
+function openAdvancedEditor() {
+    if (!selectedEditorColumn) {
+        showNotification('Error', 'Selecciona una columna primero', 'error');
+        return;
+    }
+    
+    // Cerrar el editor principal
+    editorModal.hide();
+    
+    // Configurar el modal avanzado
+    advancedSearchData.columnName = selectedEditorColumn;
+    document.getElementById('advancedColumnName').textContent = selectedEditorColumn;
+    
+    // Abrir el modal avanzado
+    const advModal = new bootstrap.Modal(document.getElementById('advancedSearchReplaceModal'));
+    advModal.show();
+}
+
+// Función para búsqueda avanzada
+async function performAdvancedSearch() {
+    const searchType = document.getElementById('advSearchType').value;
+    const searchValue = document.getElementById('advSearchValue').value;
+    
+    if (!searchValue && searchType !== 'equals') {
+        showNotification('Error', 'Ingresa un valor a buscar', 'error');
+        return;
+    }
+    
+    showLoading('Buscando...', 'Analizando columna');
+    
+    try {
+        // Primero obtener todos los datos de la columna
+        const response = await fetch(`/api/datasets/${window.selectedDataset.id}/column-data/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                column_name: advancedSearchData.columnName
+            })
+        });
+        
+        const data = await response.json();
+        const columnData = data.values || [];
+        
+        // Aplicar búsqueda según el alcance
+        let searchData = columnData;
+        if (advancedSearchData.searchScope === 'first') {
+            searchData = columnData.slice(0, advancedSearchData.searchLimit);
+        } else if (advancedSearchData.searchScope === 'range') {
+            const start = parseInt(document.getElementById('advRangeStart').value) - 1;
+            const end = parseInt(document.getElementById('advRangeEnd').value);
+            searchData = columnData.slice(start, end);
+        }
+        
+        // Aplicar filtro según tipo
+        const matchedIndices = [];
+        searchData.forEach((value, index) => {
+            const strValue = String(value || '');
+            const strSearch = String(searchValue);
+            const caseSensitive = document.getElementById('advCaseSensitive').checked;
+            
+            let matches = false;
+            const compareValue = caseSensitive ? strValue : strValue.toLowerCase();
+            const compareSearch = caseSensitive ? strSearch : strSearch.toLowerCase();
+            
+            switch(searchType) {
+                case 'contains':
+                    matches = compareValue.includes(compareSearch);
+                    break;
+                case 'startsWith':
+                    matches = compareValue.startsWith(compareSearch);
+                    break;
+                case 'endsWith':
+                    matches = compareValue.endsWith(compareSearch);
+                    break;
+                case 'equals':
+                    matches = compareValue === compareSearch;
+                    break;
+                case 'regex':
+                    try {
+                        const regex = new RegExp(searchValue, caseSensitive ? 'g' : 'gi');
+                        matches = regex.test(strValue);
+                    } catch(e) {
+                        showNotification('Error', 'Expresión regular inválida', 'error');
+                        hideLoading();
+                        return;
+                    }
+                    break;
+            }
+            
+            if (matches) {
+                matchedIndices.push({
+                    index: index + (advancedSearchData.searchScope === 'range' ? parseInt(document.getElementById('advRangeStart').value) - 1 : 0),
+                    value: value
+                });
+            }
+        });
+        
+        advancedSearchData.searchResults = matchedIndices.map(item => item.value);
+        advancedSearchData.searchResultsWithIndex = matchedIndices;
+        
+        // Mostrar resultados
+        displayAdvancedSearchResults(matchedIndices, searchData.length);
+        
+        // Habilitar botón de preview
+        document.getElementById('previewReplaceBtn').disabled = matchedIndices.length === 0;
+        
+        hideLoading();
+        
+    } catch (error) {
+        hideLoading();
+        console.error('Error:', error);
+        showNotification('Error', 'Error al realizar la búsqueda', 'error');
+    }
+}
+
+// Mostrar resultados de búsqueda avanzada
+function displayAdvancedSearchResults(matches, totalSearched) {
+    document.getElementById('advSearchResults').style.display = 'block';
+    document.getElementById('advMatchCount').textContent = matches.length;
+    document.getElementById('advTotalCount').textContent = totalSearched;
+    document.getElementById('advMatchPercentage').textContent = ((matches.length / totalSearched) * 100).toFixed(2);
+    
+    // Mostrar lista de coincidencias
+    const listDiv = document.getElementById('advMatchedValuesList');
+    const uniqueValues = {};
+    
+    matches.forEach(item => {
+        const key = String(item.value);
+        if (!uniqueValues[key]) {
+            uniqueValues[key] = { value: item.value, count: 0, indices: [] };
+        }
+        uniqueValues[key].count++;
+        uniqueValues[key].indices.push(item.index);
+    });
+    
+    let html = '<div class="text-info mb-2">Valores únicos encontrados: ' + Object.keys(uniqueValues).length + '</div>';
+    Object.values(uniqueValues).forEach(item => {
+        const indices = item.indices.slice(0, 5).join(', ') + (item.indices.length > 5 ? '...' : '');
+        html += `
+            <div class="border-bottom py-1">
+                <div class="d-flex justify-content-between">
+                    <code class="text-white">${item.value}</code>
+                    <span class="text-muted">(${item.count})</span>
+                </div>
+                <small class="text-muted">Índices: ${indices}</small>
+            </div>
+        `;
+    });
+    
+    listDiv.innerHTML = html;
+}
+
+// Vista previa de reemplazo
+async function previewReplacement() {
+    const replaceValue = document.getElementById('advReplaceValue').value;
+    const replaceAll = document.getElementById('advReplaceAll').checked;
+    const positions = document.getElementById('advReplacePositions').value;
+    
+    let indicesToReplace = [];
+    
+    if (positions && positions.trim()) {
+        // Parsear posiciones específicas
+        const parts = positions.split(',');
+        const validIndices = new Set();
+        
+        parts.forEach(part => {
+            if (part.includes('-')) {
+                const [start, end] = part.split('-').map(n => parseInt(n.trim()) - 1);
+                for (let i = start; i <= end && i < advancedSearchData.searchResultsWithIndex.length; i++) {
+                    validIndices.add(i);
+                }
+            } else {
+                const idx = parseInt(part.trim()) - 1;
+                if (idx >= 0 && idx < advancedSearchData.searchResultsWithIndex.length) {
+                    validIndices.add(idx);
+                }
+            }
+        });
+        
+        indicesToReplace = Array.from(validIndices).map(i => advancedSearchData.searchResultsWithIndex[i]);
+    } else if (replaceAll) {
+        indicesToReplace = advancedSearchData.searchResultsWithIndex;
+    }
+    
+    // Mostrar preview
+    document.getElementById('advReplacePreview').style.display = 'block';
+    document.getElementById('advReplaceCount').textContent = indicesToReplace.length;
+    
+    const tbody = document.getElementById('advReplacePreviewTable');
+    tbody.innerHTML = '';
+    
+    indicesToReplace.slice(0, 20).forEach(item => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${item.index + 1}</td>
+                <td><code>${item.value}</code></td>
+                <td><code class="text-warning">${replaceValue || '(vacío)'}</code></td>
+            </tr>
+        `;
+    });
+    
+    if (indicesToReplace.length > 20) {
+        tbody.innerHTML += `
+            <tr>
+                <td colspan="3" class="text-center text-muted">... y ${indicesToReplace.length - 20} más</td>
+            </tr>
+        `;
+    }
+    
+    // Habilitar botón de ejecución
+    document.getElementById('executeReplaceBtn').disabled = indicesToReplace.length === 0;
+}
+
+// Ejecutar reemplazo
+async function executeReplacement() {
+    const replaceValue = document.getElementById('advReplaceValue').value;
+    const result = await Swal.fire({
+        title: '¿Confirmar reemplazo?',
+        text: `Se reemplazarán ${document.getElementById('advReplaceCount').textContent} valores`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sí, reemplazar',
+        cancelButtonText: 'Cancelar'
+    });
+    
+    if (result.isConfirmed) {
+        showLoading('Aplicando cambios...', 'Esto puede tomar un momento');
+        
+        try {
+            const positions = document.getElementById('advReplacePositions').value;
+            let indices = [];
+            
+            if (positions && positions.trim()) {
+                // Usar posiciones específicas
+                const parts = positions.split(',');
+                parts.forEach(part => {
+                    if (part.includes('-')) {
+                        const [start, end] = part.split('-').map(n => parseInt(n.trim()) - 1);
+                        for (let i = start; i <= end && i < advancedSearchData.searchResultsWithIndex.length; i++) {
+                            indices.push(advancedSearchData.searchResultsWithIndex[i].index);
+                        }
+                    } else {
+                        const idx = parseInt(part.trim()) - 1;
+                        if (idx >= 0 && idx < advancedSearchData.searchResultsWithIndex.length) {
+                            indices.push(advancedSearchData.searchResultsWithIndex[idx].index);
+                        }
+                    }
+                });
+            } else {
+                indices = advancedSearchData.searchResultsWithIndex.map(item => item.index);
+            }
+            
+            const response = await fetch(`/api/datasets/${window.selectedDataset.id}/replace-values/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    column_name: advancedSearchData.columnName,
+                    indices: indices,
+                    new_value: replaceValue
+                })
+            });
+            
+            hideLoading();
+            
+            if (response.ok) {
+                showNotification('¡Éxito!', 'Valores reemplazados correctamente', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showNotification('Error', 'Error al reemplazar valores', 'error');
+            }
+        } catch (error) {
+            hideLoading();
+            console.error('Error:', error);
+            showNotification('Error', 'Error de conexión', 'error');
+        }
+    }
+}
+
+// Función para manipulación de texto
+function openTextManipulation() {
+    if (!selectedEditorColumn) {
+        showNotification('Error', 'Selecciona una columna primero', 'error');
+        return;
+    }
+    
+    editorModal.hide();
+    document.getElementById('textManipColumnName').textContent = selectedEditorColumn;
+    
+    const textModal = new bootstrap.Modal(document.getElementById('textManipulationModal'));
+    textModal.show();
+    
+    updateTextOperationOptions();
+}
+
+// Actualizar opciones según operación de texto
+function updateTextOperationOptions() {
+    const operation = document.getElementById('textOperation').value;
+    const optionsDiv = document.getElementById('textOperationOptions');
+    
+    let html = '';
+    
+    switch(operation) {
+        case 'truncate':
+            html = `
+                <div class="mb-3">
+                    <label class="form-label">Longitud máxima</label>
+                    <input type="number" class="form-control bg-dark text-light border-secondary" id="truncateLength" value="50" min="1">
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="truncateEllipsis" checked>
+                    <label class="form-check-label" for="truncateEllipsis">
+                        Agregar "..." al final
+                    </label>
+                </div>
+            `;
+            break;
+            
+        case 'extract':
+            html = `
+                <div class="mb-3">
+                    <label class="form-label">Posición inicial</label>
+                    <input type="number" class="form-control bg-dark text-light border-secondary" id="extractStart" value="1" min="1">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Longitud</label>
+                    <input type="number" class="form-control bg-dark text-light border-secondary" id="extractLength" value="10" min="1">
+                </div>
+            `;
+            break;
+            
+        case 'remove_chars':
+            html = `
+                <div class="mb-3">
+                    <label class="form-label">Caracteres a eliminar</label>
+                    <input type="text" class="form-control bg-dark text-light border-secondary" id="removeChars" placeholder="Ej: .,;:">
+                </div>
+            `;
+            break;
+            
+        case 'case':
+            html = `
+                <div class="mb-3">
+                    <label class="form-label">Tipo de conversión</label>
+                    <select class="form-select bg-dark text-light border-secondary" id="caseType">
+                        <option value="upper">MAYÚSCULAS</option>
+                        <option value="lower">minúsculas</option>
+                        <option value="title">Tipo Título</option>
+                        <option value="capitalize">Primera letra mayúscula</option>
+                    </select>
+                </div>
+            `;
+            break;
+            
+        case 'trim':
+            html = `
+                <div class="mb-3">
+                    <label class="form-label">Tipo de eliminación</label>
+                    <select class="form-select bg-dark text-light border-secondary" id="trimType">
+                        <option value="both">Ambos lados</option>
+                        <option value="left">Solo izquierda</option>
+                        <option value="right">Solo derecha</option>
+                    </select>
+                </div>
+            `;
+            break;
+            
+        case 'split':
+            html = `
+                <div class="mb-3">
+                    <label class="form-label">Separador</label>
+                    <input type="text" class="form-control bg-dark text-light border-secondary" id="splitSeparator" value=",">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Mantener parte</label>
+                    <select class="form-select bg-dark text-light border-secondary" id="splitPart">
+                        <option value="0">Primera</option>
+                        <option value="1">Segunda</option>
+                        <option value="-1">Última</option>
+                    </select>
+                </div>
+            `;
+            break;
+            
+        case 'pad':
+            html = `
+                <div class="mb-3">
+                    <label class="form-label">Longitud total</label>
+                    <input type="number" class="form-control bg-dark text-light border-secondary" id="padLength" value="10" min="1">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Carácter de relleno</label>
+                    <input type="text" class="form-control bg-dark text-light border-secondary" id="padChar" value="0" maxlength="1">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Dirección</label>
+                    <select class="form-select bg-dark text-light border-secondary" id="padDirection">
+                        <option value="left">Izquierda</option>
+                        <option value="right">Derecha</option>
+                    </select>
+                </div>
+            `;
+            break;
+    }
+    
+    optionsDiv.innerHTML = html;
+}
+
+// Vista previa de manipulación de texto
+async function previewTextManipulation() {
+    showLoading('Generando vista previa...', 'Por favor espera');
+    
+    try {
+        const operation = document.getElementById('textOperation').value;
+        const response = await fetch(`/api/datasets/${window.selectedDataset.id}/text-manipulation-preview/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                column_name: selectedEditorColumn,
+                operation: operation,
+                params: getTextOperationParams()
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.preview) {
+            displayTextManipulationPreview(data.preview);
+            document.getElementById('executeTextManipBtn').disabled = false;
+        } else {
+            showNotification('Error', data.error || 'Error al generar vista previa', 'error');
+        }
+        
+        hideLoading();
+    } catch (error) {
+        hideLoading();
+        console.error('Error:', error);
+        showNotification('Error', 'Error de conexión', 'error');
+    }
+}
+
+// Obtener parámetros de operación de texto
+function getTextOperationParams() {
+    const operation = document.getElementById('textOperation').value;
+    const params = {};
+    
+    switch(operation) {
+        case 'truncate':
+            params.length = parseInt(document.getElementById('truncateLength').value);
+            params.ellipsis = document.getElementById('truncateEllipsis').checked;
+            break;
+        case 'extract':
+            params.start = parseInt(document.getElementById('extractStart').value) - 1;
+            params.length = parseInt(document.getElementById('extractLength').value);
+            break;
+        case 'remove_chars':
+            params.chars = document.getElementById('removeChars').value;
+            break;
+        case 'case':
+            params.type = document.getElementById('caseType').value;
+            break;
+        case 'trim':
+            params.type = document.getElementById('trimType').value;
+            break;
+        case 'split':
+            params.separator = document.getElementById('splitSeparator').value;
+            params.part = parseInt(document.getElementById('splitPart').value);
+            break;
+        case 'pad':
+            params.length = parseInt(document.getElementById('padLength').value);
+            params.char = document.getElementById('padChar').value;
+            params.direction = document.getElementById('padDirection').value;
+            break;
+    }
+    
+    return params;
+}
+
+// Mostrar vista previa de manipulación de texto
+function displayTextManipulationPreview(preview) {
+    const previewDiv = document.getElementById('textManipPreview');
+    
+    let html = '<table class="table table-sm table-dark">';
+    html += '<thead><tr><th>Original</th><th>Transformado</th></tr></thead><tbody>';
+    
+    preview.forEach(item => {
+        html += `
+            <tr>
+                <td><code>${item.original}</code></td>
+                <td><code class="text-warning">${item.transformed}</code></td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    previewDiv.innerHTML = html;
+}
+
+// Ejecutar manipulación de texto
+async function executeTextManipulation() {
+    const result = await Swal.fire({
+        title: '¿Aplicar transformación?',
+        text: 'Se modificarán todos los valores de la columna',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, aplicar',
+        cancelButtonText: 'Cancelar'
+    });
+    
+    if (result.isConfirmed) {
+        showLoading('Aplicando transformación...', 'Esto puede tomar un momento');
+        
+        try {
+            const operation = document.getElementById('textOperation').value;
+            const response = await fetch(`/api/datasets/${window.selectedDataset.id}/text-manipulation/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    column_name: selectedEditorColumn,
+                    operation: operation,
+                    params: getTextOperationParams()
+                })
+            });
+            
+            hideLoading();
+            
+            if (response.ok) {
+                showNotification('¡Éxito!', 'Transformación aplicada correctamente', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                const data = await response.json();
+                showNotification('Error', data.error || 'Error al aplicar transformación', 'error');
+            }
+        } catch (error) {
+            hideLoading();
+            console.error('Error:', error);
+            showNotification('Error', 'Error de conexión', 'error');
+        }
+    }
+}
+
+// Función para transformaciones numéricas
+function openNumericTransform() {
+    if (!selectedEditorColumn) {
+        showNotification('Error', 'Selecciona una columna primero', 'error');
+        return;
+    }
+    
+    // Verificar que la columna sea numérica
+    const colStats = window.currentDatasetData.stats[selectedEditorColumn];
+    if (!colStats || colStats.mean === undefined) {
+        showNotification('Error', 'Esta función solo está disponible para columnas numéricas', 'error');
+        return;
+    }
+    
+    editorModal.hide();
+    document.getElementById('numericColumnName').textContent = selectedEditorColumn;
+    
+    const numericModal = new bootstrap.Modal(document.getElementById('numericTransformModal'));
+    numericModal.show();
+    
+    updateNumericOperationOptions();
+}
+
+// Actualizar opciones según operación numérica
+function updateNumericOperationOptions() {
+    const operation = document.getElementById('numericOperation').value;
+    const optionsDiv = document.getElementById('numericOperationOptions');
+    
+    let html = '';
+    
+    switch(operation) {
+        case 'round':
+            html = `
+                <div class="mb-3">
+                    <label class="form-label">Decimales</label>
+                    <input type="number" class="form-control bg-dark text-light border-secondary" id="roundDecimals" value="2" min="0">
+                </div>
+            `;
+            break;
+            
+        case 'scale':
+            html = `
+                <div class="mb-3">
+                    <label class="form-label">Factor de escala</label>
+                    <input type="number" class="form-control bg-dark text-light border-secondary" id="scaleFactor" value="1" step="0.1">
+                </div>
+            `;
+            break;
+            
+        case 'clip':
+            html = `
+                <div class="mb-3">
+                    <label class="form-label">Valor mínimo</label>
+                    <input type="number" class="form-control bg-dark text-light border-secondary" id="clipMin" step="any">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Valor máximo</label>
+                    <input type="number" class="form-control bg-dark text-light border-secondary" id="clipMax" step="any">
+                </div>
+            `;
+            break;
+            
+        case 'arithmetic':
+            html = `
+                <div class="mb-3">
+                    <label class="form-label">Operación</label>
+                    <select class="form-select bg-dark text-light border-secondary" id="arithmeticOp">
+                        <option value="add">Sumar</option>
+                        <option value="subtract">Restar</option>
+                        <option value="multiply">Multiplicar</option>
+                        <option value="divide">Dividir</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Valor</label>
+                    <input type="number" class="form-control bg-dark text-light border-secondary" id="arithmeticValue" value="1" step="any">
+                </div>
+            `;
+            break;
+            
+        case 'log':
+            html = `
+                <div class="mb-3">
+                    <label class="form-label">Base del logaritmo</label>
+                    <select class="form-select bg-dark text-light border-secondary" id="logBase">
+                        <option value="natural">Natural (ln)</option>
+                        <option value="10">Base 10</option>
+                        <option value="2">Base 2</option>
+                    </select>
+                </div>
+            `;
+            break;
+            
+        case 'power':
+            html = `
+                <div class="mb-3">
+                    <label class="form-label">Exponente</label>
+                    <input type="number" class="form-control bg-dark text-light border-secondary" id="powerExponent" value="2" step="any">
+                </div>
+            `;
+            break;
+    }
+    
+    optionsDiv.innerHTML = html;
+}
+
+// Vista previa de transformación numérica
+async function previewNumericTransform() {
+    showLoading('Generando vista previa...', 'Por favor espera');
+    
+    try {
+        const operation = document.getElementById('numericOperation').value;
+        const response = await fetch(`/api/datasets/${window.selectedDataset.id}/numeric-transform-preview/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                column_name: selectedEditorColumn,
+                operation: operation,
+                params: getNumericOperationParams()
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.preview) {
+            displayNumericTransformPreview(data.preview, data.stats);
+            document.getElementById('executeNumericBtn').disabled = false;
+        } else {
+            showNotification('Error', data.error || 'Error al generar vista previa', 'error');
+        }
+        
+        hideLoading();
+    } catch (error) {
+        hideLoading();
+        console.error('Error:', error);
+        showNotification('Error', 'Error de conexión', 'error');
+    }
+}
+
+// Obtener parámetros de operación numérica
+function getNumericOperationParams() {
+    const operation = document.getElementById('numericOperation').value;
+    const params = {};
+    
+    switch(operation) {
+        case 'round':
+            params.decimals = parseInt(document.getElementById('roundDecimals').value);
+            break;
+        case 'scale':
+            params.factor = parseFloat(document.getElementById('scaleFactor').value);
+            break;
+        case 'clip':
+            params.min = parseFloat(document.getElementById('clipMin').value);
+            params.max = parseFloat(document.getElementById('clipMax').value);
+            break;
+        case 'arithmetic':
+            params.operation = document.getElementById('arithmeticOp').value;
+            params.value = parseFloat(document.getElementById('arithmeticValue').value);
+            break;
+        case 'log':
+            params.base = document.getElementById('logBase').value;
+            break;
+        case 'power':
+            params.exponent = parseFloat(document.getElementById('powerExponent').value);
+            break;
+    }
+    
+    return params;
+}
+
+// Mostrar vista previa de transformación numérica
+function displayNumericTransformPreview(preview, stats) {
+    const previewDiv = document.getElementById('numericTransformPreview');
+    
+    let html = '';
+    
+    if (stats) {
+        html += `
+            <div class="mb-3 p-2 bg-secondary rounded">
+                <h6 class="text-info">Estadísticas después de transformación:</h6>
+                <small>
+                    Media: ${stats.mean.toFixed(4)} | 
+                    Mediana: ${stats.median.toFixed(4)} | 
+                    Desv. Est.: ${stats.std.toFixed(4)} |
+                    Mín: ${stats.min.toFixed(4)} | 
+                    Máx: ${stats.max.toFixed(4)}
+                </small>
+            </div>
+        `;
+    }
+    
+    html += '<table class="table table-sm table-dark">';
+    html += '<thead><tr><th>Original</th><th>Transformado</th><th>Cambio</th></tr></thead><tbody>';
+    
+    preview.forEach(item => {
+        const change = item.transformed - item.original;
+        const changeColor = change > 0 ? 'text-success' : change < 0 ? 'text-danger' : 'text-muted';
+        
+        html += `
+            <tr>
+                <td>${item.original.toFixed(4)}</td>
+                <td class="text-warning">${item.transformed.toFixed(4)}</td>
+                <td class="${changeColor}">${change > 0 ? '+' : ''}${change.toFixed(4)}</td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    previewDiv.innerHTML = html;
+}
+
+// Ejecutar transformación numérica
+async function executeNumericTransform() {
+    const result = await Swal.fire({
+        title: '¿Aplicar transformación?',
+        text: 'Se modificarán todos los valores numéricos de la columna',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, aplicar',
+        cancelButtonText: 'Cancelar'
+    });
+    
+    if (result.isConfirmed) {
+        showLoading('Aplicando transformación...', 'Esto puede tomar un momento');
+        
+        try {
+            const operation = document.getElementById('numericOperation').value;
+            const response = await fetch(`/api/datasets/${window.selectedDataset.id}/numeric-transform/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    column_name: selectedEditorColumn,
+                    operation: operation,
+                    params: getNumericOperationParams()
+                })
+            });
+            
+            hideLoading();
+            
+            if (response.ok) {
+                showNotification('¡Éxito!', 'Transformación aplicada correctamente', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                const data = await response.json();
+                showNotification('Error', data.error || 'Error al aplicar transformación', 'error');
+            }
+        } catch (error) {
+            hideLoading();
+            console.error('Error:', error);
+            showNotification('Error', 'Error de conexión', 'error');
+        }
+    }
 }
 
 // Event listener para limpiar cuando se cierra el modal de búsqueda
