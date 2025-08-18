@@ -746,3 +746,369 @@ class DatasetColumnDataView(APIView):
             'unique_count': column_data.nunique(),
             'null_count': column_data.isnull().sum()
         })
+
+
+class DatasetFilterValuesView(APIView):
+    """Filter dataset by removing rows with specific values in a column"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
+        # Get parameters
+        column_name = request.data.get('column_name')
+        values_to_remove = request.data.get('values_to_remove', [])
+        
+        if not column_name:
+            return error_response("Column name is required")
+        
+        if not values_to_remove:
+            return error_response("Values to remove are required")
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Check if column exists
+        if column_name not in df.columns:
+            return error_response(f"Column '{column_name}' not found in dataset")
+        
+        # Count rows before filtering
+        rows_before = len(df)
+        
+        # Filter out rows with specified values
+        df_filtered = df[~df[column_name].isin(values_to_remove)]
+        
+        # Count rows removed
+        rows_removed = rows_before - len(df_filtered)
+        
+        if rows_removed == 0:
+            return error_response("No rows were removed. The specified values might not exist in the column.")
+        
+        # Save the modified dataset
+        try:
+            from io import StringIO
+            csv_buffer = StringIO()
+            df_filtered.to_csv(csv_buffer, index=False)
+            csv_content = csv_buffer.getvalue()
+            
+            # Get the original file name
+            original_name = os.path.basename(dataset.file.name)
+            
+            # Invalidar caché
+            old_path = dataset.file.path
+            cache.delete(f'dataset_{old_path}')
+            
+            # Delete the old file
+            dataset.file.delete(save=False)
+            
+            # Save the new content
+            dataset.file.save(
+                original_name,
+                ContentFile(csv_content.encode('utf-8')),
+                save=False
+            )
+            
+            # Update metadata
+            if hasattr(dataset, 'row_count'):
+                dataset.row_count = len(df_filtered)
+            
+            dataset.save()
+            
+            # Invalidar el caché del nuevo archivo
+            cache.delete(f'dataset_{dataset.file.path}')
+            
+            return success_response({
+                'message': f"Successfully removed {rows_removed} rows",
+                'rows_removed': rows_removed,
+                'rows_remaining': len(df_filtered),
+                'values_removed': len(values_to_remove)
+            })
+        except Exception as e:
+            return error_response(f"Error saving dataset: {str(e)}")
+
+
+class DatasetRemoveNullsView(APIView):
+    """Remove rows with null values in a specific column"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
+        # Get column name
+        column_name = request.data.get('column_name')
+        
+        if not column_name:
+            return error_response("Column name is required")
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Check if column exists
+        if column_name not in df.columns:
+            return error_response(f"Column '{column_name}' not found in dataset")
+        
+        # Count nulls before
+        nulls_before = df[column_name].isnull().sum()
+        rows_before = len(df)
+        
+        if nulls_before == 0:
+            return error_response(f"Column '{column_name}' has no null values")
+        
+        # Remove rows with nulls in the specified column
+        df_filtered = df[df[column_name].notna()]
+        
+        rows_removed = rows_before - len(df_filtered)
+        
+        # Save the modified dataset
+        try:
+            from io import StringIO
+            csv_buffer = StringIO()
+            df_filtered.to_csv(csv_buffer, index=False)
+            csv_content = csv_buffer.getvalue()
+            
+            # Get the original file name
+            original_name = os.path.basename(dataset.file.name)
+            
+            # Invalidar caché
+            old_path = dataset.file.path
+            cache.delete(f'dataset_{old_path}')
+            
+            # Delete the old file
+            dataset.file.delete(save=False)
+            
+            # Save the new content
+            dataset.file.save(
+                original_name,
+                ContentFile(csv_content.encode('utf-8')),
+                save=False
+            )
+            
+            # Update metadata
+            if hasattr(dataset, 'row_count'):
+                dataset.row_count = len(df_filtered)
+            
+            dataset.save()
+            
+            # Invalidar el caché del nuevo archivo
+            cache.delete(f'dataset_{dataset.file.path}')
+            
+            return success_response({
+                'message': f"Successfully removed {rows_removed} rows with null values",
+                'rows_removed': rows_removed,
+                'rows_remaining': len(df_filtered)
+            })
+        except Exception as e:
+            return error_response(f"Error saving dataset: {str(e)}")
+
+
+class DatasetRemoveAllNullRowsView(APIView):
+    """Remove all rows that contain any null value in any column"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Count rows before
+        rows_before = len(df)
+        
+        # Remove rows with any null value
+        df_filtered = df.dropna(how='any')
+        
+        rows_removed = rows_before - len(df_filtered)
+        
+        if rows_removed == 0:
+            return error_response("No se encontraron filas con valores nulos")
+        
+        # Save the modified dataset
+        try:
+            from io import StringIO
+            csv_buffer = StringIO()
+            df_filtered.to_csv(csv_buffer, index=False)
+            csv_content = csv_buffer.getvalue()
+            
+            # Get the original file name
+            original_name = os.path.basename(dataset.file.name)
+            
+            # Invalidar caché
+            old_path = dataset.file.path
+            cache.delete(f'dataset_{old_path}')
+            
+            # Delete the old file
+            dataset.file.delete(save=False)
+            
+            # Save the new content
+            dataset.file.save(
+                original_name,
+                ContentFile(csv_content.encode('utf-8')),
+                save=False
+            )
+            
+            # Update metadata
+            if hasattr(dataset, 'row_count'):
+                dataset.row_count = len(df_filtered)
+            
+            dataset.save()
+            
+            # Invalidar el caché del nuevo archivo
+            cache.delete(f'dataset_{dataset.file.path}')
+            
+            return success_response({
+                'message': f"Successfully removed {rows_removed} rows with null values",
+                'rows_removed': rows_removed,
+                'rows_remaining': len(df_filtered)
+            })
+        except Exception as e:
+            return error_response(f"Error saving dataset: {str(e)}")
+
+
+class DatasetFillNullsView(APIView):
+    """Fill null values in a specific column"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
+        # Get parameters
+        column_name = request.data.get('column_name')
+        method = request.data.get('method')
+        custom_value = request.data.get('custom_value')
+        
+        if not column_name:
+            return error_response("Column name is required")
+        
+        if not method:
+            return error_response("Fill method is required")
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Check if column exists
+        if column_name not in df.columns:
+            return error_response(f"Column '{column_name}' not found in dataset")
+        
+        # Count nulls before
+        nulls_before = df[column_name].isnull().sum()
+        
+        if nulls_before == 0:
+            return error_response(f"Column '{column_name}' has no null values to fill")
+        
+        # Fill nulls based on method
+        try:
+            if method == 'mean':
+                if not pd.api.types.is_numeric_dtype(df[column_name]):
+                    return error_response("Mean can only be used for numeric columns")
+                fill_value = df[column_name].mean()
+                df[column_name] = df[column_name].fillna(fill_value)
+            elif method == 'median':
+                if not pd.api.types.is_numeric_dtype(df[column_name]):
+                    return error_response("Median can only be used for numeric columns")
+                fill_value = df[column_name].median()
+                df[column_name] = df[column_name].fillna(fill_value)
+            elif method == 'mode':
+                mode_values = df[column_name].mode()
+                if len(mode_values) == 0:
+                    return error_response("No mode value found for this column")
+                fill_value = mode_values[0]
+                df[column_name] = df[column_name].fillna(fill_value)
+            elif method == 'zero':
+                fill_value = 0
+                df[column_name] = df[column_name].fillna(fill_value)
+            elif method == 'empty':
+                fill_value = ''
+                df[column_name] = df[column_name].fillna(fill_value)
+            elif method == 'unknown':
+                fill_value = 'Unknown'
+                df[column_name] = df[column_name].fillna(fill_value)
+            elif method == 'ffill':
+                df[column_name] = df[column_name].fillna(method='ffill')
+                fill_value = 'forward fill'
+            elif method == 'bfill':
+                df[column_name] = df[column_name].fillna(method='bfill')
+                fill_value = 'backward fill'
+            elif method == 'interpolate':
+                if not pd.api.types.is_numeric_dtype(df[column_name]):
+                    return error_response("Interpolation can only be used for numeric columns")
+                df[column_name] = df[column_name].interpolate(method='linear')
+                fill_value = 'interpolated values'
+            elif method == 'custom':
+                if custom_value is None:
+                    return error_response("Custom value is required when using custom method")
+                # Convert custom value to appropriate type
+                if pd.api.types.is_numeric_dtype(df[column_name]):
+                    try:
+                        fill_value = float(custom_value)
+                    except ValueError:
+                        return error_response(f"Invalid numeric value: {custom_value}")
+                else:
+                    fill_value = str(custom_value)
+                df[column_name] = df[column_name].fillna(fill_value)
+            else:
+                return error_response(f"Invalid fill method: {method}")
+            
+            # Verify nulls were filled
+            nulls_after = df[column_name].isnull().sum()
+            nulls_filled = nulls_before - nulls_after
+            
+            # Save the modified dataset
+            from io import StringIO
+            csv_buffer = StringIO()
+            df.to_csv(csv_buffer, index=False)
+            csv_content = csv_buffer.getvalue()
+            
+            # Get the original file name
+            original_name = os.path.basename(dataset.file.name)
+            
+            # Invalidar caché
+            old_path = dataset.file.path
+            cache.delete(f'dataset_{old_path}')
+            
+            # Delete the old file
+            dataset.file.delete(save=False)
+            
+            # Save the new content
+            dataset.file.save(
+                original_name,
+                ContentFile(csv_content.encode('utf-8')),
+                save=False
+            )
+            
+            dataset.save()
+            
+            # Invalidar el caché del nuevo archivo
+            cache.delete(f'dataset_{dataset.file.path}')
+            
+            return success_response({
+                'message': f"Successfully filled {nulls_filled} null values with {fill_value}",
+                'nulls_filled': nulls_filled,
+                'fill_value': str(fill_value),
+                'method': method
+            })
+        except Exception as e:
+            return error_response(f"Error filling null values: {str(e)}")

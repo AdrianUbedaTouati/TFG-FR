@@ -212,6 +212,12 @@
         border-color: #00d4ff;
     }
     
+    .quick-actions button[data-action="analyze"]:hover {
+        background: rgba(255, 193, 7, 0.8);
+        border-color: #ffc107;
+        box-shadow: 0 0 20px rgba(255, 193, 7, 0.8);
+    }
+    
     .quick-actions button[data-action="download"]:hover {
         background: rgba(16, 185, 129, 0.8);
         border-color: #10b981;
@@ -559,6 +565,85 @@
         margin-bottom: 0.5rem !important;
         display: block !important;
     }
+    
+    /* Estilos para el modal de edición de dataset */
+    #datasetEditorModal .modal-content {
+        background-color: #0a0e27;
+        color: #f0f9ff;
+    }
+    
+    #datasetEditorModal .list-group-item {
+        background-color: #1a1e3a;
+        border: 1px solid #2d3561;
+        color: #f0f9ff;
+        transition: all 0.3s ease;
+    }
+    
+    #datasetEditorModal .list-group-item:hover {
+        background-color: #2d3561;
+        border-color: #00d4ff;
+        transform: translateX(5px);
+    }
+    
+    #datasetEditorModal .list-group-item.active {
+        background-color: #00d4ff;
+        border-color: #00d4ff;
+        color: #0a0e27;
+    }
+    
+    #datasetEditorModal .form-control {
+        background-color: #1a1e3a !important;
+        border-color: #2d3561 !important;
+        color: #f0f9ff !important;
+    }
+    
+    #datasetEditorModal .form-control:focus {
+        background-color: #1a1e3a !important;
+        border-color: #00d4ff !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 212, 255, 0.25) !important;
+        color: #f0f9ff !important;
+    }
+    
+    #datasetEditorModal .table {
+        color: #f0f9ff;
+    }
+    
+    #datasetEditorModal .table-dark {
+        background-color: #0d1225;
+    }
+    
+    #datasetEditorModal .table-hover tbody tr:hover {
+        background-color: rgba(0, 212, 255, 0.1);
+        color: #f0f9ff;
+    }
+    
+    #datasetEditorModal .progress {
+        background-color: #1a1e3a;
+        border: 1px solid #2d3561;
+    }
+    
+    #datasetEditorModal .progress-bar {
+        font-weight: bold;
+        font-size: 0.875rem;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    }
+    
+    #datasetEditorModal .badge {
+        font-size: 0.875rem;
+    }
+    
+    /* Asegurar que el texto sea visible */
+    #datasetEditorModal p,
+    #datasetEditorModal span,
+    #datasetEditorModal div,
+    #datasetEditorModal td,
+    #datasetEditorModal th {
+        color: #f0f9ff !important;
+    }
+    
+    #datasetEditorModal .text-muted {
+        color: #8b92a9 !important;
+    }
 </style>
 {% endblock %}
 
@@ -686,6 +771,9 @@
                 <button type="button" class="btn btn-danger" onclick="deleteDataset()">
                     <i class="bi bi-trash"></i> Supprimer
                 </button>
+                <button type="button" class="btn btn-warning" onclick="openDatasetEditorFromModal()">
+                    <i class="bi bi-pencil-square"></i> Editar Dataset
+                </button>
                 <button type="button" class="btn btn-success" onclick="downloadDataset()">
                     <i class="bi bi-file-earmark-csv"></i> Télécharger Dataset
                 </button>
@@ -763,6 +851,116 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="forceCloseUploadModal()">
                     <i class="bi bi-x-circle"></i> Annuler
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Edición de Dataset -->
+<div class="modal fade" id="datasetEditorModal" tabindex="-1" aria-labelledby="datasetEditorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header border-bottom border-secondary">
+                <h5 class="modal-title text-info" id="datasetEditorModalLabel">
+                    <i class="bi bi-pencil-square"></i> Editor de Dataset
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="background-color: #1a1e3a;">
+                <div class="row">
+                    <!-- Panel de selección de columna -->
+                    <div class="col-md-4">
+                        <h6 class="text-info mb-3">
+                            <i class="bi bi-list-columns"></i> Seleccionar Columna
+                        </h6>
+                        <div class="list-group" id="columnListEditor" style="max-height: 500px; overflow-y: auto;">
+                            <!-- Se llenará dinámicamente -->
+                        </div>
+                    </div>
+                    
+                    <!-- Panel de información y acciones -->
+                    <div class="col-md-8">
+                        <div id="columnEditPanel" style="display: none;">
+                            <h6 class="text-warning mb-3">
+                                <i class="bi bi-info-circle"></i> Información de la Columna: 
+                                <span id="selectedColumnName" class="text-white"></span>
+                            </h6>
+                            
+                            <!-- Estadísticas básicas -->
+                            <div class="card mb-3" style="background-color: #0d1225; border: 1px solid #2d3561;">
+                                <div class="card-body">
+                                    <h6 class="card-title text-info">
+                                        <i class="bi bi-graph-up"></i> Estadísticas
+                                    </h6>
+                                    <div id="columnStatistics" class="text-light">
+                                        <!-- Se llenará dinámicamente -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Valores únicos y frecuencias -->
+                            <div class="card mb-3" style="background-color: #0d1225; border: 1px solid #2d3561;">
+                                <div class="card-body">
+                                    <h6 class="card-title text-info">
+                                        <i class="bi bi-list-ul"></i> Valores Únicos y Frecuencias
+                                    </h6>
+                                    <div class="mb-3">
+                                        <label class="form-label text-warning">Filtrar por porcentaje mínimo:</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control bg-dark text-light border-secondary" 
+                                                   id="percentageThreshold" 
+                                                   min="0" max="100" step="0.1" value="0.1">
+                                            <span class="input-group-text bg-secondary text-light">%</span>
+                                            <button class="btn btn-primary" onclick="applyPercentageFilter()">
+                                                <i class="bi bi-funnel"></i> Aplicar Filtro
+                                            </button>
+                                        </div>
+                                        <small class="text-muted">Eliminará todas las filas con valores que aparezcan menos del porcentaje especificado</small>
+                                    </div>
+                                    <div id="uniqueValuesTable" style="max-height: 300px; overflow-y: auto;" class="bg-dark">
+                                        <!-- Se llenará dinámicamente -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Acciones adicionales -->
+                            <div class="card" style="background-color: #0d1225; border: 1px solid #2d3561;">
+                                <div class="card-body">
+                                    <h6 class="card-title text-info">
+                                        <i class="bi bi-tools"></i> Acciones
+                                    </h6>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button class="btn btn-sm btn-info" onclick="renameColumnFromEditor()">
+                                            <i class="bi bi-pencil"></i> Renombrar Columna
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteColumnFromEditor()">
+                                            <i class="bi bi-trash"></i> Eliminar Columna
+                                        </button>
+                                        <button class="btn btn-sm btn-warning" onclick="removeNullValues()">
+                                            <i class="bi bi-x-circle"></i> Eliminar Filas con Nulos (Esta columna)
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="removeAllNullRows()">
+                                            <i class="bi bi-x-square"></i> Eliminar Filas con Cualquier Nulo
+                                        </button>
+                                        <button class="btn btn-sm btn-success" onclick="fillNullValues()">
+                                            <i class="bi bi-plus-circle"></i> Rellenar Valores Nulos
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="noColumnSelected" class="text-center text-muted">
+                            <i class="bi bi-arrow-left" style="font-size: 3rem; color: #6b7280;"></i>
+                            <p class="text-light">Selecciona una columna para ver su información y opciones de edición</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top border-secondary" style="background-color: #0d1225;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cerrar
                 </button>
             </div>
         </div>
@@ -1192,6 +1390,11 @@ function normalizeDataset(datasetId) {
     window.location.href = `/datasets/${datasetId}/normalize/`;
 }
 
+// Analizar dataset
+function analyzeDataset(datasetId) {
+    window.location.href = `/datasets/${datasetId}/analyze/`;
+}
+
 // Charger les datasets
 function loadDatasets() {
     showLoading('Chargement des datasets...', 'Récupération de vos fichiers de données');
@@ -1531,6 +1734,15 @@ function createDatasetCard(dataset, type = 'original') {
     btnNormalize.title = 'Normalizar';
     btnNormalize.innerHTML = '<i class="bi bi-sliders"></i>';
     
+    // Botón Analizar
+    const btnAnalyze = document.createElement('button');
+    btnAnalyze.type = 'button';
+    btnAnalyze.className = 'action-btn';
+    btnAnalyze.setAttribute('data-action', 'analyze');
+    btnAnalyze.setAttribute('data-dataset-id', dataset.id);
+    btnAnalyze.title = 'Analizar';
+    btnAnalyze.innerHTML = '<i class="bi bi-bar-chart"></i>';
+    
     // Botón Descargar
     const btnDownload = document.createElement('button');
     btnDownload.type = 'button';
@@ -1550,6 +1762,7 @@ function createDatasetCard(dataset, type = 'original') {
     btnDelete.innerHTML = '<i class="bi bi-trash"></i>';
     
     quickActions.appendChild(btnNormalize);
+    quickActions.appendChild(btnAnalyze);
     quickActions.appendChild(btnDownload);
     quickActions.appendChild(btnDelete);
     
@@ -1626,6 +1839,11 @@ function createDatasetCard(dataset, type = 'original') {
     btnNormalize.addEventListener('click', function(e) {
         e.stopPropagation();
         normalizeDataset(dataset.id);
+    });
+    
+    btnAnalyze.addEventListener('click', function(e) {
+        e.stopPropagation();
+        analyzeDataset(dataset.id);
     });
     
     btnDownload.addEventListener('click', function(e) {
@@ -7210,6 +7428,561 @@ function generateRadarChart() {
             }
         });
     }, 100);
+}
+
+// Variables del editor de dataset
+let editorModal = null;
+let selectedEditorColumn = null;
+let columnFrequencyData = {};
+
+// Función para abrir el editor desde el modal de detalles
+function openDatasetEditorFromModal() {
+    if (!window.currentDatasetData || !window.selectedDataset) {
+        showNotification('Error', 'Primero debes cargar el análisis del dataset', 'error');
+        return;
+    }
+    
+    // Cerrar el modal de detalles
+    const detailModal = bootstrap.Modal.getInstance(document.getElementById('datasetDetailModal'));
+    if (detailModal) {
+        detailModal.hide();
+    }
+    
+    // Esperar un momento y abrir el editor
+    setTimeout(() => {
+        openDatasetEditor();
+    }, 300);
+}
+
+// Función para abrir el editor de dataset
+function openDatasetEditor() {
+    if (!window.currentDatasetData) {
+        showNotification('Error', 'Primero debes cargar el análisis del dataset', 'error');
+        return;
+    }
+    
+    // Inicializar el modal si no existe
+    if (!editorModal) {
+        editorModal = new bootstrap.Modal(document.getElementById('datasetEditorModal'));
+    }
+    
+    // Limpiar selección previa
+    selectedEditorColumn = null;
+    document.getElementById('columnEditPanel').style.display = 'none';
+    document.getElementById('noColumnSelected').style.display = 'block';
+    
+    // Llenar la lista de columnas
+    populateColumnList();
+    
+    // Mostrar el modal
+    editorModal.show();
+}
+
+// Función para llenar la lista de columnas
+function populateColumnList() {
+    const columnList = document.getElementById('columnListEditor');
+    const columns = window.currentDatasetData.columns || [];
+    const stats = window.currentDatasetData.stats || {};
+    
+    let html = '';
+    columns.forEach(col => {
+        const colStats = stats[col] || {};
+        const nullPercentage = colStats.null_percentage || 0;
+        const uniqueCount = colStats.unique_count || 0;
+        const isNumeric = colStats.is_numeric;
+        
+        html += `
+            <a href="#" class="list-group-item list-group-item-action" 
+               onclick="selectColumnForEdit('${col}')" data-column="${col}">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1 text-white">${col}</h6>
+                    <small>
+                        <span class="badge bg-${isNumeric ? 'success' : 'info'}">
+                            ${colStats.python_type || 'unknown'}
+                        </span>
+                    </small>
+                </div>
+                <small class="text-info">
+                    ${uniqueCount} valores únicos | ${nullPercentage.toFixed(1)}% nulos
+                </small>
+            </a>
+        `;
+    });
+    
+    columnList.innerHTML = html;
+}
+
+// Función para seleccionar una columna para editar
+function selectColumnForEdit(columnName) {
+    selectedEditorColumn = columnName;
+    
+    // Actualizar UI
+    document.querySelectorAll('#columnListEditor .list-group-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    document.querySelector(`#columnListEditor [data-column="${columnName}"]`).classList.add('active');
+    
+    // Mostrar panel de edición
+    document.getElementById('columnEditPanel').style.display = 'block';
+    document.getElementById('noColumnSelected').style.display = 'none';
+    document.getElementById('selectedColumnName').textContent = columnName;
+    
+    // Cargar estadísticas
+    loadColumnStatistics(columnName);
+    
+    // Cargar valores únicos y frecuencias
+    loadColumnFrequencies(columnName);
+}
+
+// Función para cargar estadísticas de la columna
+function loadColumnStatistics(columnName) {
+    const stats = window.currentDatasetData.stats[columnName] || {};
+    const statsDiv = document.getElementById('columnStatistics');
+    
+    let html = '<div class="row">';
+    
+    if (stats.is_numeric) {
+        html += `
+            <div class="col-md-6">
+                <p><strong class="text-warning">Media:</strong> <span class="text-white">${stats.mean?.toFixed(4) || 'N/A'}</span></p>
+                <p><strong class="text-warning">Desviación estándar:</strong> <span class="text-white">${stats.std?.toFixed(4) || 'N/A'}</span></p>
+                <p><strong class="text-warning">Mínimo:</strong> <span class="text-white">${stats.min || 'N/A'}</span></p>
+            </div>
+            <div class="col-md-6">
+                <p><strong class="text-warning">Máximo:</strong> <span class="text-white">${stats.max || 'N/A'}</span></p>
+                <p><strong class="text-warning">Valores únicos:</strong> <span class="text-white">${stats.unique_count || 0}</span></p>
+                <p><strong class="text-warning">Valores nulos:</strong> <span class="text-white">${stats.null_count || 0} (${stats.null_percentage?.toFixed(2) || 0}%)</span></p>
+            </div>
+        `;
+    } else {
+        html += `
+            <div class="col-md-6">
+                <p><strong class="text-warning">Tipo:</strong> <span class="text-white">${stats.python_type || 'unknown'}</span></p>
+                <p><strong class="text-warning">Valores únicos:</strong> <span class="text-white">${stats.unique_count || 0}</span></p>
+            </div>
+            <div class="col-md-6">
+                <p><strong class="text-warning">Valores nulos:</strong> <span class="text-white">${stats.null_count || 0} (${stats.null_percentage?.toFixed(2) || 0}%)</span></p>
+                <p><strong class="text-warning">Filas totales:</strong> <span class="text-white">${window.currentDatasetData.row_count || 0}</span></p>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    statsDiv.innerHTML = html;
+}
+
+// Función para cargar frecuencias de valores
+async function loadColumnFrequencies(columnName) {
+    showLoading('Cargando valores únicos...', 'Por favor espera');
+    
+    try {
+        const response = await fetch(`/api/datasets/${window.selectedDataset.id}/columns/${encodeURIComponent(columnName)}/`);
+        const data = await response.json();
+        
+        hideLoading();
+        
+        if (response.ok && data.frequency_data) {
+            columnFrequencyData[columnName] = data.frequency_data;
+            displayFrequencyTable(data.frequency_data);
+        } else {
+            showNotification('Error', 'No se pudieron cargar los valores únicos', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error:', error);
+        showNotification('Error', 'Error al cargar los valores únicos', 'error');
+    }
+}
+
+// Función para mostrar la tabla de frecuencias
+function displayFrequencyTable(frequencyData) {
+    const tableDiv = document.getElementById('uniqueValuesTable');
+    
+    if (!frequencyData || frequencyData.length === 0) {
+        tableDiv.innerHTML = '<p class="text-muted">No hay datos de frecuencia disponibles</p>';
+        return;
+    }
+    
+    let html = `
+        <table class="table table-sm table-dark table-hover">
+            <thead>
+                <tr>
+                    <th class="text-info">Valor</th>
+                    <th class="text-info">Frecuencia</th>
+                    <th class="text-info">Porcentaje</th>
+                    <th class="text-info">Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    frequencyData.forEach(item => {
+        const percentage = item.percentage || 0;
+        const barColor = percentage < 1 ? 'bg-danger' : percentage < 5 ? 'bg-warning' : 'bg-info';
+        
+        html += `
+            <tr data-value="${item.value}" data-percentage="${percentage}">
+                <td><code class="text-white">${item.value}</code></td>
+                <td class="text-white">${item.count.toLocaleString()}</td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="progress flex-grow-1" style="height: 25px; min-width: 150px;">
+                            <div class="progress-bar ${barColor}" role="progressbar" 
+                                 style="width: ${Math.max(percentage, 10)}%">
+                                ${percentage.toFixed(2)}%
+                            </div>
+                        </div>
+                        <span class="ms-2 text-white" style="min-width: 60px; text-align: right;">
+                            <strong>${percentage.toFixed(2)}%</strong>
+                        </span>
+                    </div>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-danger" 
+                            onclick="removeSpecificValue('${item.value}')"
+                            title="Eliminar todas las filas con este valor">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    
+    if (frequencyData.length > 50) {
+        html += `<p class="text-muted text-center">Mostrando los primeros 50 valores de ${frequencyData.length} totales</p>`;
+    }
+    
+    tableDiv.innerHTML = html;
+}
+
+// Función para aplicar filtro por porcentaje
+async function applyPercentageFilter() {
+    const threshold = parseFloat(document.getElementById('percentageThreshold').value);
+    
+    if (isNaN(threshold) || threshold < 0 || threshold > 100) {
+        showNotification('Error', 'Por favor ingresa un porcentaje válido entre 0 y 100', 'error');
+        return;
+    }
+    
+    if (!selectedEditorColumn || !columnFrequencyData[selectedEditorColumn]) {
+        showNotification('Error', 'Primero selecciona una columna', 'error');
+        return;
+    }
+    
+    const valuesToRemove = columnFrequencyData[selectedEditorColumn]
+        .filter(item => item.percentage < threshold)
+        .map(item => item.value);
+    
+    if (valuesToRemove.length === 0) {
+        showNotification('Info', `No hay valores con menos del ${threshold}% de frecuencia`, 'info');
+        return;
+    }
+    
+    const result = await Swal.fire({
+        title: '¿Confirmar filtrado?',
+        html: `Se eliminarán todas las filas donde "${selectedEditorColumn}" tenga uno de estos ${valuesToRemove.length} valores:<br>
+               <small class="text-muted">${valuesToRemove.slice(0, 10).join(', ')}${valuesToRemove.length > 10 ? '...' : ''}</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sí, filtrar',
+        cancelButtonText: 'Cancelar',
+        background: '#0a0e27',
+        color: '#f0f9ff'
+    });
+    
+    if (result.isConfirmed) {
+        await filterDatasetByValues(selectedEditorColumn, valuesToRemove);
+    }
+}
+
+// Función para filtrar el dataset
+async function filterDatasetByValues(columnName, valuesToRemove) {
+    showLoading('Filtrando dataset...', 'Esto puede tomar un momento');
+    
+    try {
+        const response = await fetch(`/api/datasets/${window.selectedDataset.id}/filter-values/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                column_name: columnName,
+                values_to_remove: valuesToRemove
+            })
+        });
+        
+        hideLoading();
+        
+        if (response.ok) {
+            const data = await response.json();
+            showNotification('¡Éxito!', `Se eliminaron ${data.rows_removed || 0} filas del dataset`, 'success');
+            
+            // Cerrar el modal y recargar
+            editorModal.hide();
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            const errorData = await response.json();
+            showNotification('Error', errorData.error || 'Error al filtrar el dataset', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error:', error);
+        showNotification('Error', 'Error de conexión al filtrar el dataset', 'error');
+    }
+}
+
+// Funciones auxiliares para el editor
+function renameColumnFromEditor() {
+    if (selectedEditorColumn) {
+        editorModal.hide();
+        setTimeout(() => renameColumn(selectedEditorColumn), 300);
+    }
+}
+
+function deleteColumnFromEditor() {
+    if (selectedEditorColumn) {
+        editorModal.hide();
+        setTimeout(() => deleteColumn(selectedEditorColumn), 300);
+    }
+}
+
+function removeNullValues() {
+    if (!selectedEditorColumn) return;
+    
+    Swal.fire({
+        title: '¿Eliminar valores nulos?',
+        text: `Se eliminarán todas las filas donde "${selectedEditorColumn}" tenga valores nulos`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+        background: '#0a0e27',
+        color: '#f0f9ff'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            await removeNullsFromColumn(selectedEditorColumn);
+        }
+    });
+}
+
+async function removeNullsFromColumn(columnName) {
+    showLoading('Eliminando valores nulos...', 'Por favor espera');
+    
+    try {
+        const response = await fetch(`/api/datasets/${window.selectedDataset.id}/remove-nulls/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                column_name: columnName
+            })
+        });
+        
+        hideLoading();
+        
+        if (response.ok) {
+            const data = await response.json();
+            showNotification('¡Éxito!', `Se eliminaron ${data.rows_removed || 0} filas con valores nulos`, 'success');
+            
+            editorModal.hide();
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            const errorData = await response.json();
+            showNotification('Error', errorData.error || 'Error al eliminar valores nulos', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error:', error);
+        showNotification('Error', 'Error de conexión', 'error');
+    }
+}
+
+function removeAllNullRows() {
+    Swal.fire({
+        title: '¿Eliminar filas con cualquier valor nulo?',
+        html: `<p>Se eliminarán todas las filas que contengan al menos un valor nulo en cualquier columna.</p>
+               <p class="text-warning"><strong>¡Advertencia!</strong> Esta acción puede eliminar muchas filas del dataset.</p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sí, eliminar todas',
+        cancelButtonText: 'Cancelar',
+        background: '#0a0e27',
+        color: '#f0f9ff'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            await removeAllNullRowsFromDataset();
+        }
+    });
+}
+
+async function removeAllNullRowsFromDataset() {
+    showLoading('Eliminando filas con valores nulos...', 'Por favor espera');
+    
+    try {
+        const response = await fetch(`/api/datasets/${window.selectedDataset.id}/remove-all-null-rows/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        hideLoading();
+        
+        if (response.ok) {
+            const data = await response.json();
+            showNotification('¡Éxito!', `Se eliminaron ${data.rows_removed || 0} filas que contenían valores nulos`, 'success');
+            
+            editorModal.hide();
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            const errorData = await response.json();
+            showNotification('Error', errorData.error || 'Error al eliminar filas con valores nulos', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error:', error);
+        showNotification('Error', 'Error de conexión', 'error');
+    }
+}
+
+function fillNullValues() {
+    if (!selectedEditorColumn) return;
+    
+    const stats = window.currentDatasetData.stats[selectedEditorColumn];
+    const isNumeric = stats?.is_numeric;
+    
+    Swal.fire({
+        title: 'Rellenar valores nulos',
+        html: `
+            <div class="text-start">
+                <p>¿Cómo deseas rellenar los valores nulos de <strong>"${selectedEditorColumn}"</strong>?</p>
+                <label class="form-label">Método de relleno:</label>
+                <select class="form-select mb-3" id="fillMethod">
+                    ${isNumeric ? `
+                        <option value="mean">Media de los valores existentes</option>
+                        <option value="median">Mediana de los valores existentes</option>
+                        <option value="mode">Moda (valor más frecuente)</option>
+                        <option value="zero">Cero (0)</option>
+                        <option value="ffill">Valor anterior (forward fill)</option>
+                        <option value="bfill">Valor siguiente (backward fill)</option>
+                        <option value="interpolate">Interpolación lineal</option>
+                    ` : `
+                        <option value="mode">Moda (valor más frecuente)</option>
+                        <option value="empty">Cadena vacía ("")</option>
+                        <option value="unknown">Texto "Unknown"</option>
+                        <option value="ffill">Valor anterior (forward fill)</option>
+                        <option value="bfill">Valor siguiente (backward fill)</option>
+                    `}
+                    <option value="custom">Valor personalizado</option>
+                </select>
+                
+                <div id="customValueContainer" style="display: none;">
+                    <label class="form-label">Valor personalizado:</label>
+                    <input type="text" class="form-control" id="customValue" 
+                           placeholder="${isNumeric ? 'Ej: 0, -1, 999' : 'Ej: N/A, Sin datos, etc.'}">
+                    ${isNumeric ? '<small class="text-muted">Ingresa un valor numérico</small>' : ''}
+                </div>
+                
+                <div class="alert alert-info mt-3" style="font-size: 0.875rem;">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Nota:</strong> ${stats.null_count || 0} valores nulos serán reemplazados en esta columna.
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Rellenar',
+        cancelButtonText: 'Cancelar',
+        background: '#0a0e27',
+        color: '#f0f9ff',
+        didOpen: () => {
+            document.getElementById('fillMethod').addEventListener('change', (e) => {
+                document.getElementById('customValueContainer').style.display = 
+                    e.target.value === 'custom' ? 'block' : 'none';
+            });
+        },
+        preConfirm: () => {
+            const method = document.getElementById('fillMethod').value;
+            const customValue = document.getElementById('customValue').value;
+            
+            if (method === 'custom' && !customValue) {
+                Swal.showValidationMessage('Por favor ingresa un valor personalizado');
+                return false;
+            }
+            
+            return { method, customValue };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            await fillNullsInColumn(selectedEditorColumn, result.value.method, result.value.customValue);
+        }
+    });
+}
+
+async function fillNullsInColumn(columnName, method, customValue) {
+    showLoading('Rellenando valores nulos...', 'Por favor espera');
+    
+    try {
+        const response = await fetch(`/api/datasets/${window.selectedDataset.id}/fill-nulls/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                column_name: columnName,
+                method: method,
+                custom_value: customValue
+            })
+        });
+        
+        hideLoading();
+        
+        if (response.ok) {
+            const data = await response.json();
+            showNotification('¡Éxito!', `Se rellenaron ${data.nulls_filled || 0} valores nulos`, 'success');
+            
+            editorModal.hide();
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            const errorData = await response.json();
+            showNotification('Error', errorData.error || 'Error al rellenar valores nulos', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error:', error);
+        showNotification('Error', 'Error de conexión', 'error');
+    }
+}
+
+function removeSpecificValue(value) {
+    Swal.fire({
+        title: '¿Eliminar filas con este valor?',
+        text: `Se eliminarán todas las filas donde "${selectedEditorColumn}" = "${value}"`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+        background: '#0a0e27',
+        color: '#f0f9ff'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            await filterDatasetByValues(selectedEditorColumn, [value]);
+        }
+    });
 }
 
 // Event listener para limpiar cuando se cierra el modal de búsqueda

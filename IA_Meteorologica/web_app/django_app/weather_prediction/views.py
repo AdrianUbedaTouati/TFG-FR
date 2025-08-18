@@ -49,3 +49,28 @@ def training_progress(request, session_id):
         'session': session,
         'session_id': session_id
     })
+
+@login_required
+def dataset_analyze(request, dataset_id):
+    dataset = get_object_or_404(Dataset, id=dataset_id)
+    
+    # Verificar que el usuario tenga acceso al dataset
+    if dataset.user != request.user and not request.user.is_staff:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("No tienes permiso para acceder a este dataset.")
+    
+    # Calcular el tamaño del archivo en MB
+    try:
+        file_size = dataset.file.size / (1024 * 1024)  # Convert to MB
+    except:
+        file_size = 0
+    
+    context = {
+        'dataset': dataset,
+        'dataset_id': dataset_id,
+        'dataset_name': dataset.name,
+        'file_size': file_size,
+        'is_normalized': dataset.is_normalized if hasattr(dataset, 'is_normalized') else False
+    }
+    
+    return render(request, 'dataset_analyze.html', context)
