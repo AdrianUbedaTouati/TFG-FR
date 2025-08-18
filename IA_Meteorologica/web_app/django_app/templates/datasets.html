@@ -1290,6 +1290,36 @@
                         </div>
                         
                         <div class="mb-3">
+                            <div class="d-flex align-items-center">
+                                <button type="button" class="btn btn-outline-warning btn-sm" onclick="togglePartialReplace()">
+                                    <i class="bi bi-crop"></i> <span id="partialReplaceToggleText">Activar reemplazo parcial</span>
+                                </button>
+                                <small class="text-muted ms-2">
+                                    <i class="bi bi-info-circle"></i> Reemplaza solo parte del texto encontrado
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <!-- Selector de reemplazo parcial -->
+                        <div id="partialReplaceSelector" class="mb-3" style="display: none;">
+                            <div class="border rounded p-3" style="background-color: rgba(255, 193, 7, 0.1);">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Ejemplo #</label>
+                                        <input type="number" id="partialExampleIndex" class="form-control bg-dark text-light border-secondary" value="1" min="1" onchange="updatePartialExample()">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">Selecciona los caracteres a reemplazar:</label>
+                                        <div id="partialCharacters" class="p-2 border rounded bg-dark" style="font-family: monospace; font-size: 1.1em; letter-spacing: 0.1em;">
+                                            <!-- Los caracteres clickeables aparecerán aquí -->
+                                        </div>
+                                        <small class="text-muted mt-1">Click en los caracteres para seleccionar qué parte reemplazar</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
                             <label class="form-label">Opciones de reemplazo</label>
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="advReplaceAll" checked onchange="updateReplaceButtons()">
@@ -1306,7 +1336,7 @@
                         </div>
                         
                         <div class="mb-3">
-                            <label class="form-label">Reemplazar en posiciones específicas</label>
+                            <label class="form-label">Reemplazar en índices específicos</label>
                             <div class="input-group">
                                 <input type="text" class="form-control bg-dark text-light border-secondary" id="advReplacePositions" placeholder="Ej: 1,3,5-10,15" onchange="updateReplaceButtons()" oninput="updateReplaceButtons()">
                                 <button class="btn btn-outline-secondary" type="button" onclick="showPositionHelp()">
@@ -8353,6 +8383,8 @@ function openAdvancedEditor() {
         indicesToReplace: [],
         patternMode: false,
         selectedPattern: [],
+        partialReplaceMode: false,
+        partialReplacePattern: [],
         searchScope: 'first',
         searchLimit: 100
     };
@@ -8379,6 +8411,8 @@ function openAdvancedEditor() {
     // Ocultar resultados y preview
     document.getElementById('advSearchResults').style.display = 'none';
     document.getElementById('advReplacePreview').style.display = 'none';
+    document.getElementById('partialReplaceSelector').style.display = 'none';
+    document.getElementById('partialReplaceToggleText').textContent = 'Activar reemplazo parcial';
     
     // Deshabilitar botones inicialmente
     document.getElementById('previewReplaceBtn').disabled = true;
@@ -8795,10 +8829,10 @@ function displayAdvancedSearchResults(matches, totalSearched) {
     });
 }
 
-// Mostrar ayuda de posiciones
+// Mostrar ayuda de índices
 function showPositionHelp() {
     Swal.fire({
-        title: 'Ayuda: Posiciones de Reemplazo',
+        title: 'Ayuda: Índices de Reemplazo',
         html: `
             <div class="text-start">
                 <p>Puedes especificar qué coincidencias reemplazar usando los siguientes formatos:</p>
@@ -8870,11 +8904,27 @@ async function previewReplacement() {
     tbody.innerHTML = '';
     
     indicesToReplace.slice(0, 20).forEach(item => {
+        let newValue = replaceValue || '(vacío)';
+        
+        // Si está activo el reemplazo parcial, mostrar el resultado
+        if (advancedSearchData.partialReplaceMode && advancedSearchData.partialReplacePattern.length > 0) {
+            const originalValue = String(item.value);
+            let partialValue = '';
+            for (let i = 0; i < originalValue.length; i++) {
+                if (advancedSearchData.partialReplacePattern.includes(i)) {
+                    partialValue += replaceValue;
+                } else {
+                    partialValue += originalValue[i];
+                }
+            }
+            newValue = partialValue;
+        }
+        
         tbody.innerHTML += `
             <tr>
                 <td>${item.index + 1}</td>
                 <td><code>${item.value}</code></td>
-                <td><code class="text-warning">${replaceValue || '(vacío)'}</code></td>
+                <td><code class="text-warning">${newValue}</code></td>
             </tr>
         `;
     });
@@ -8948,7 +8998,9 @@ async function executeReplacement() {
                 body: JSON.stringify({
                     column_name: advancedSearchData.columnName,
                     indices: indices,
-                    new_value: replaceValue
+                    new_value: replaceValue,
+                    partial_replace: advancedSearchData.partialReplaceMode,
+                    partial_pattern: advancedSearchData.partialReplacePattern
                 })
             });
             
@@ -8982,6 +9034,77 @@ function updateReplaceButtons() {
     if (previewBtn) {
         previewBtn.disabled = !replaceAll && (!positions || positions.trim() === '');
     }
+}
+
+// Función para alternar el modo de reemplazo parcial
+function togglePartialReplace() {
+    advancedSearchData.partialReplaceMode = !advancedSearchData.partialReplaceMode;
+    const selector = document.getElementById('partialReplaceSelector');
+    const toggleBtn = document.getElementById('partialReplaceToggleText');
+    
+    if (advancedSearchData.partialReplaceMode) {
+        selector.style.display = 'block';
+        toggleBtn.textContent = 'Desactivar reemplazo parcial';
+        updatePartialExample();
+    } else {
+        selector.style.display = 'none';
+        toggleBtn.textContent = 'Activar reemplazo parcial';
+        advancedSearchData.partialReplacePattern = [];
+    }
+}
+
+// Función para actualizar el ejemplo de reemplazo parcial
+function updatePartialExample() {
+    if (!advancedSearchData.searchResultsWithIndex || advancedSearchData.searchResultsWithIndex.length === 0) {
+        document.getElementById('partialCharacters').innerHTML = '<span class="text-muted">Realiza una búsqueda primero</span>';
+        return;
+    }
+    
+    const exampleIndex = parseInt(document.getElementById('partialExampleIndex').value) - 1;
+    const maxIndex = advancedSearchData.searchResultsWithIndex.length - 1;
+    
+    if (exampleIndex > maxIndex) {
+        document.getElementById('partialExampleIndex').value = maxIndex + 1;
+        updatePartialExample();
+        return;
+    }
+    
+    const exampleValue = String(advancedSearchData.searchResultsWithIndex[exampleIndex].value);
+    const charsDiv = document.getElementById('partialCharacters');
+    
+    // Crear caracteres clickeables
+    let html = '';
+    for (let i = 0; i < exampleValue.length; i++) {
+        const isSelected = advancedSearchData.partialReplacePattern.includes(i);
+        html += `<span 
+            class="character-selector ${isSelected ? 'selected' : ''}"
+            onclick="togglePartialCharacter(${i})"
+            style="cursor: pointer; padding: 2px 4px; margin: 1px; 
+                   background-color: ${isSelected ? 'rgba(255, 193, 7, 0.3)' : 'transparent'};
+                   border: 1px solid ${isSelected ? '#ffc107' : 'rgba(255, 255, 255, 0.2)'};
+                   border-radius: 3px;">
+            ${exampleValue[i] === ' ' ? '␣' : exampleValue[i]}
+        </span>`;
+    }
+    
+    charsDiv.innerHTML = html;
+}
+
+// Función para alternar la selección de un carácter
+function togglePartialCharacter(index) {
+    const pattern = advancedSearchData.partialReplacePattern;
+    const pos = pattern.indexOf(index);
+    
+    if (pos === -1) {
+        pattern.push(index);
+    } else {
+        pattern.splice(pos, 1);
+    }
+    
+    // Ordenar el patrón
+    pattern.sort((a, b) => a - b);
+    
+    updatePartialExample();
 }
 
 // Función para manipulación de texto
