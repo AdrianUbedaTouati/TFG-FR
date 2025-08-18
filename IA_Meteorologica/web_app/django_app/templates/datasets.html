@@ -20,6 +20,11 @@
         z-index: 1060;
     }
     
+    /* Asegurar que el modal de búsqueda avanzada esté al frente */
+    #advancedSearchReplaceModal .modal-dialog {
+        z-index: 1070;
+    }
+    
     /* Estilos mejorados para datasets */
     .dataset-card {
         background: rgba(10, 14, 39, 0.8);
@@ -1233,9 +1238,6 @@
                                 <button type="button" class="btn btn-outline-secondary" onclick="setAdvSearchScope('range')" id="advSearchRangeBtn">
                                     <i class="bi bi-arrows-expand"></i> Rango
                                 </button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="showAdvLimitModal()" title="Configurar">
-                                    <i class="bi bi-gear"></i>
-                                </button>
                                 <button type="button" class="btn btn-outline-secondary" onclick="setAdvSearchScope('all')" id="advSearchAllBtn">
                                     <i class="bi bi-database"></i> Todo
                                 </button>
@@ -1290,7 +1292,7 @@
                         <div class="mb-3">
                             <label class="form-label">Opciones de reemplazo</label>
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="advReplaceAll" checked>
+                                <input class="form-check-input" type="checkbox" id="advReplaceAll" checked onchange="updateReplaceButtons()">
                                 <label class="form-check-label" for="advReplaceAll">
                                     Reemplazar todas las coincidencias
                                 </label>
@@ -1306,7 +1308,7 @@
                         <div class="mb-3">
                             <label class="form-label">Reemplazar en posiciones específicas</label>
                             <div class="input-group">
-                                <input type="text" class="form-control bg-dark text-light border-secondary" id="advReplacePositions" placeholder="Ej: 1,3,5-10,15">
+                                <input type="text" class="form-control bg-dark text-light border-secondary" id="advReplacePositions" placeholder="Ej: 1,3,5-10,15" onchange="updateReplaceButtons()" oninput="updateReplaceButtons()">
                                 <button class="btn btn-outline-secondary" type="button" onclick="showPositionHelp()">
                                     <i class="bi bi-question-circle"></i>
                                 </button>
@@ -8343,11 +8345,47 @@ function openAdvancedEditor() {
     // Cerrar el editor principal
     editorModal.hide();
     
-    // Configurar el modal avanzado
-    advancedSearchData.columnName = selectedEditorColumn;
-    advancedSearchData.searchScope = 'first';
-    advancedSearchData.searchLimit = 100;
+    // Resetear el estado del modal avanzado
+    advancedSearchData = {
+        columnName: selectedEditorColumn,
+        searchResults: [],
+        searchResultsWithIndex: [],
+        indicesToReplace: [],
+        patternMode: false,
+        selectedPattern: [],
+        searchScope: 'first',
+        searchLimit: 100
+    };
+    
+    // Destruir gráficos existentes si existen
+    if (window.advSearchResultChart && typeof window.advSearchResultChart.destroy === 'function') {
+        window.advSearchResultChart.destroy();
+        window.advSearchResultChart = null;
+    }
+    if (window.advUniqueValuesChart && typeof window.advUniqueValuesChart.destroy === 'function') {
+        window.advUniqueValuesChart.destroy();
+        window.advUniqueValuesChart = null;
+    }
+    
+    // Resetear campos del formulario
     document.getElementById('advancedColumnName').textContent = selectedEditorColumn;
+    document.getElementById('advSearchType').value = 'contains';
+    document.getElementById('advSearchValue').value = '';
+    document.getElementById('advReplaceValue').value = '';
+    document.getElementById('advReplaceAll').checked = false;
+    document.getElementById('advCaseSensitive').checked = false;
+    document.getElementById('advReplacePositions').value = '';
+    
+    // Ocultar resultados y preview
+    document.getElementById('advSearchResults').style.display = 'none';
+    document.getElementById('advReplacePreview').style.display = 'none';
+    
+    // Deshabilitar botones inicialmente
+    document.getElementById('previewReplaceBtn').disabled = true;
+    document.getElementById('executeReplaceBtn').disabled = true;
+    
+    // Establecer alcance inicial
+    setAdvSearchScope('first');
     
     // Abrir el modal avanzado
     const advModal = new bootstrap.Modal(document.getElementById('advancedSearchReplaceModal'));
@@ -8602,8 +8640,12 @@ async function performAdvancedSearch() {
         // Mostrar resultados
         displayAdvancedSearchResults(matchedIndices, searchData.length);
         
-        // Habilitar botón de preview
-        document.getElementById('previewReplaceBtn').disabled = matchedIndices.length === 0;
+        // Habilitar botón de preview si hay coincidencias
+        const previewBtn = document.getElementById('previewReplaceBtn');
+        if (previewBtn) {
+            previewBtn.disabled = matchedIndices.length === 0;
+            console.log('Coincidencias encontradas:', matchedIndices.length, 'Botón preview habilitado:', !previewBtn.disabled);
+        }
         
         hideLoading();
         
@@ -8651,9 +8693,16 @@ function displayAdvancedSearchResults(matches, totalSearched) {
     listDiv.innerHTML = html;
     
     // Crear gráfico de pastel para coincidencias
-    const ctx = document.getElementById('advSearchResultChart').getContext('2d');
-    if (window.advSearchResultChart) {
+    const canvas = document.getElementById('advSearchResultChart');
+    if (!canvas) {
+        console.error('Canvas advSearchResultChart no encontrado');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    if (window.advSearchResultChart && typeof window.advSearchResultChart.destroy === 'function') {
         window.advSearchResultChart.destroy();
+        window.advSearchResultChart = null;
     }
     
     window.advSearchResultChart = new Chart(ctx, {
@@ -8688,9 +8737,16 @@ function displayAdvancedSearchResults(matches, totalSearched) {
     });
     
     // Crear gráfico de barras para valores únicos
-    const uniqueCtx = document.getElementById('advUniqueValuesChart').getContext('2d');
-    if (window.advUniqueValuesChart) {
+    const uniqueCanvas = document.getElementById('advUniqueValuesChart');
+    if (!uniqueCanvas) {
+        console.error('Canvas advUniqueValuesChart no encontrado');
+        return;
+    }
+    
+    const uniqueCtx = uniqueCanvas.getContext('2d');
+    if (window.advUniqueValuesChart && typeof window.advUniqueValuesChart.destroy === 'function') {
         window.advUniqueValuesChart.destroy();
+        window.advUniqueValuesChart = null;
     }
     
     // Ordenar valores únicos por frecuencia
@@ -8766,9 +8822,19 @@ function showPositionHelp() {
 
 // Vista previa de reemplazo
 async function previewReplacement() {
+    console.log('Ejecutando previewReplacement');
+    
+    // Verificar que tenemos resultados de búsqueda
+    if (!advancedSearchData.searchResultsWithIndex || advancedSearchData.searchResultsWithIndex.length === 0) {
+        showNotification('Error', 'Primero debes realizar una búsqueda', 'error');
+        return;
+    }
+    
     const replaceValue = document.getElementById('advReplaceValue').value;
     const replaceAll = document.getElementById('advReplaceAll').checked;
     const positions = document.getElementById('advReplacePositions').value;
+    
+    console.log('Datos de reemplazo:', { replaceValue, replaceAll, positions });
     
     let indicesToReplace = [];
     
@@ -8822,7 +8888,14 @@ async function previewReplacement() {
     }
     
     // Habilitar botón de ejecución
-    document.getElementById('executeReplaceBtn').disabled = indicesToReplace.length === 0;
+    const executeBtn = document.getElementById('executeReplaceBtn');
+    if (executeBtn) {
+        executeBtn.disabled = indicesToReplace.length === 0;
+        console.log('Índices a reemplazar:', indicesToReplace.length, 'Botón ejecutar habilitado:', !executeBtn.disabled);
+    }
+    
+    // Guardar los índices para la ejecución
+    advancedSearchData.indicesToReplace = indicesToReplace;
 }
 
 // Ejecutar reemplazo
@@ -8892,6 +8965,22 @@ async function executeReplacement() {
             console.error('Error:', error);
             showNotification('Error', 'Error de conexión', 'error');
         }
+    }
+}
+
+// Función para actualizar el estado de los botones de reemplazo
+function updateReplaceButtons() {
+    if (!advancedSearchData.searchResultsWithIndex || advancedSearchData.searchResultsWithIndex.length === 0) {
+        return;
+    }
+    
+    const replaceAll = document.getElementById('advReplaceAll').checked;
+    const positions = document.getElementById('advReplacePositions').value;
+    const previewBtn = document.getElementById('previewReplaceBtn');
+    
+    // Habilitar el botón de vista previa si hay algo que reemplazar
+    if (previewBtn) {
+        previewBtn.disabled = !replaceAll && (!positions || positions.trim() === '');
     }
 }
 
