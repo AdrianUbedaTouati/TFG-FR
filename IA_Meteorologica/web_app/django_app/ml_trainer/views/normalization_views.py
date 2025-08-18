@@ -141,9 +141,38 @@ class DatasetNormalizationView(APIView):
                 # Use the more sophisticated type detection
                 detected_data_type = detect_column_data_type(df[col])
                 
-                if detected_data_type == 'numeric' or df[col].dtype in ['int64', 'float64']:
+                # Also check if it's a numeric string that should be treated as numeric
+                is_numeric_string = False
+                if detected_data_type == 'text' and df[col].dtype == 'object':
+                    try:
+                        # Try to convert to numeric
+                        numeric_test = pd.to_numeric(df[col], errors='coerce')
+                        # If more than 80% can be converted, treat as numeric
+                        if numeric_test.notna().sum() / len(df[col]) > 0.8:
+                            is_numeric_string = True
+                    except:
+                        pass
+                
+                if detected_data_type == 'numeric' or df[col].dtype in ['int64', 'float64'] or is_numeric_string:
                     # Columna numérica
                     col_dtype = str(df[col].dtype)
+                    
+                    # Calculate stats only for numeric data
+                    try:
+                        # Ensure the column is actually numeric before calculating stats
+                        numeric_col = pd.to_numeric(df[col], errors='coerce')
+                        stats = {}
+                        if not numeric_col.isna().all():
+                            stats['mean'] = float(numeric_col.mean())
+                            stats['std'] = float(numeric_col.std())
+                            stats['min'] = float(numeric_col.min())
+                            stats['max'] = float(numeric_col.max())
+                        else:
+                            stats = {'mean': None, 'std': None, 'min': None, 'max': None}
+                    except Exception as e:
+                        logger.warning(f"Error calculating stats for column {col}: {str(e)}")
+                        stats = {'mean': None, 'std': None, 'min': None, 'max': None}
+                    
                     normalization_info[col] = {
                         'type': 'numeric',
                         'dtype': col_dtype,  # Add specific dtype
@@ -160,12 +189,7 @@ class DatasetNormalizationView(APIView):
                             {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final', 'output_type': 'text', 'output_dtype': 'object'},
                             {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos (0, 1, 2...)', 'output_type': 'numeric', 'output_dtype': 'Int64'}
                         ] + custom_text_functions,  # Agregar funciones personalizadas de texto
-                        'stats': {
-                            'mean': float(df[col].mean()) if not df[col].isna().all() else None,
-                            'std': float(df[col].std()) if not df[col].isna().all() else None,
-                            'min': float(df[col].min()) if not df[col].isna().all() else None,
-                            'max': float(df[col].max()) if not df[col].isna().all() else None
-                        }
+                        'stats': stats
                     }
                 elif detected_data_type == 'text' or df[col].dtype == 'object':
                     # Columna de texto o objeto

@@ -7973,7 +7973,17 @@ function populateColumnList() {
         const colStats = stats[col] || {};
         const nullPercentage = colStats.null_percentage || 0;
         const uniqueCount = colStats.unique_count || 0;
-        const isNumeric = colStats.is_numeric;
+        const colType = colStats.type || 'unknown';
+        const isNumeric = colType === 'numeric' || colType === 'numeric_string';
+        
+        // Determine display type
+        let displayType = colType;
+        if (colType === 'numeric') displayType = 'numérico';
+        else if (colType === 'numeric_string') displayType = 'numérico (texto)';
+        else if (colType === 'text') displayType = 'texto';
+        else if (colType === 'categorical') displayType = 'categórico';
+        else if (colType === 'datetime') displayType = 'fecha/hora';
+        else if (colType === 'insufficient_data') displayType = 'insuficiente';
         
         html += `
             <a href="#" class="list-group-item list-group-item-action" 
@@ -7981,8 +7991,8 @@ function populateColumnList() {
                 <div class="d-flex w-100 justify-content-between">
                     <h6 class="mb-1 text-white">${col}</h6>
                     <small>
-                        <span class="badge bg-${isNumeric ? 'success' : 'info'}">
-                            ${colStats.python_type || 'unknown'}
+                        <span class="badge bg-${isNumeric ? 'success' : colType === 'categorical' ? 'warning' : 'info'}">
+                            ${displayType}
                         </span>
                     </small>
                 </div>
