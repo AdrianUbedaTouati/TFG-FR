@@ -13,6 +13,8 @@ import pandas as pd
 import numpy as np
 import os
 import shutil
+import tempfile
+import time
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -1416,6 +1418,7 @@ class DatasetTextManipulationPreviewView(APIView):
         column_name = request.data.get('column_name')
         operation = request.data.get('operation')
         params = request.data.get('params', {})
+        scope = request.data.get('scope', 'all')
         
         if not column_name or not operation:
             return error_response("Column name and operation are required")
@@ -1429,21 +1432,55 @@ class DatasetTextManipulationPreviewView(APIView):
         if column_name not in df.columns:
             return error_response(f"Column '{column_name}' not found in dataset")
         
-        # Get sample data
-        sample_data = df[column_name].dropna().head(20)
+        # Get sample data based on scope
+        if scope == 'range':
+            # Get range parameters
+            range_start = params.get('range_start', 0)
+            range_end = params.get('range_end', len(df) - 1)
+            
+            # Validate range
+            try:
+                range_start = int(range_start)
+                range_end = int(range_end)
+            except (ValueError, TypeError):
+                range_start = 0
+                range_end = min(19, len(df) - 1)  # Default to first 20 rows
+            
+            # Ensure range is valid
+            if range_start < 0:
+                range_start = 0
+            if range_end >= len(df):
+                range_end = len(df) - 1
+            if range_start > range_end:
+                range_start, range_end = 0, min(19, len(df) - 1)
+            
+            # Get up to 20 samples from the range
+            sample_size = min(20, range_end - range_start + 1)
+            sample_indices = list(range(range_start, min(range_start + sample_size, range_end + 1)))
+            sample_data = df.loc[sample_indices, column_name].dropna()
+        else:
+            # Get sample data from entire column
+            sample_data = df[column_name].dropna().head(20)
+        
         preview = []
         
         try:
-            for value in sample_data:
+            for idx, value in sample_data.items():
                 str_value = str(value)
                 transformed = self._apply_text_operation(str_value, operation, params)
                 preview.append({
+                    'index': int(idx),
                     'original': str_value,
                     'transformed': transformed
                 })
             
             return success_response({
-                'preview': preview
+                'preview': preview,
+                'scope': scope,
+                'range_info': {
+                    'start': range_start,
+                    'end': range_end
+                } if scope == 'range' else None
             })
         except Exception as e:
             return error_response(f"Error generating preview: {str(e)}")
@@ -1525,12 +1562,19 @@ class DatasetTextManipulationView(APIView):
         column_name = request.data.get('column_name')
         operation = request.data.get('operation')
         params = request.data.get('params', {})
+        scope = request.data.get('scope', 'all')  # Default to 'all' for backward compatibility
         
         if not column_name or not operation:
             return error_response("Column name and operation are required")
         
-        # Load dataset
-        df = load_dataset(dataset.file.path)
+        # Limpiar caché antes de cargar el dataset
+        old_path = dataset.file.path
+        cache_key = f'dataset_{old_path}'
+        cache.delete(cache_key)
+        print(f"Cache cleared for key: {cache_key}")
+        
+        # Load dataset with no cache
+        df = load_dataset(dataset.file.path, use_cache=False)
         if df is None:
             return error_response(ERROR_PARSING_FAILED)
         
@@ -1539,44 +1583,156 @@ class DatasetTextManipulationView(APIView):
             return error_response(f"Column '{column_name}' not found in dataset")
         
         # Apply operation
+        import tempfile
+        temp_file = None
+        
         try:
             preview_view = DatasetTextManipulationPreviewView()
-            df[column_name] = df[column_name].apply(
-                lambda x: preview_view._apply_text_operation(str(x) if pd.notna(x) else '', operation, params)
-            )
             
-            # Save the modified dataset
+            # Handle scope-based application
+            if scope == 'range':
+                # Get range parameters
+                range_start = params.get('range_start', 0)
+                range_end = params.get('range_end', len(df) - 1)
+                
+                # Validate range
+                try:
+                    range_start = int(range_start)
+                    range_end = int(range_end)
+                except (ValueError, TypeError):
+                    return error_response("Invalid range values. range_start and range_end must be integers")
+                
+                # Ensure range is valid
+                if range_start < 0:
+                    range_start = 0
+                if range_end >= len(df):
+                    range_end = len(df) - 1
+                if range_start > range_end:
+                    return error_response("Invalid range: range_start must be less than or equal to range_end")
+                
+                # Apply operation only to the specified range
+                # Create a copy of the column to modify
+                modified_column = df[column_name].copy()
+                
+                # Apply the operation only to rows in the range (inclusive)
+                for idx in range(range_start, range_end + 1):
+                    if idx < len(df):
+                        current_value = df.loc[idx, column_name]
+                        modified_column.loc[idx] = preview_view._apply_text_operation(
+                            str(current_value) if pd.notna(current_value) else '', 
+                            operation, 
+                            params
+                        )
+                
+                # Replace the column with the modified version
+                df[column_name] = modified_column
+                
+                rows_affected = range_end - range_start + 1
+                message_suffix = f" to rows {range_start} to {range_end} ({rows_affected} rows)"
+            else:
+                # Apply to all rows (default behavior)
+                df[column_name] = df[column_name].apply(
+                    lambda x: preview_view._apply_text_operation(str(x) if pd.notna(x) else '', operation, params)
+                )
+                rows_affected = len(df)
+                message_suffix = " to all rows"
+            
+            # Save the modified dataset to a temporary file first
             from io import StringIO
             csv_buffer = StringIO()
             df.to_csv(csv_buffer, index=False)
             csv_content = csv_buffer.getvalue()
+            csv_buffer.close()  # Cerrar el buffer
+            
+            # Create a temporary file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as temp_file:
+                temp_file.write(csv_content)
+                temp_file_path = temp_file.name
             
             # Get the original file name
             original_name = os.path.basename(dataset.file.name)
             
-            # Invalidar caché
+            # Invalidar todas las cachés relacionadas
             old_path = dataset.file.path
             cache.delete(f'dataset_{old_path}')
+            cache.delete(f'dataset_preview_{pk}')
+            cache.delete(f'dataset_columns_{pk}')
             
-            # Delete the old file
-            dataset.file.delete(save=False)
+            # Ensure file handle is closed before deletion
+            if hasattr(dataset.file, 'close'):
+                dataset.file.close()
+            
+            # Small delay for Windows file system
+            import time
+            time.sleep(0.1)
+            
+            # Delete the old file with retry mechanism
+            max_retries = 3
+            for retry in range(max_retries):
+                try:
+                    dataset.file.delete(save=False)
+                    break
+                except Exception as e:
+                    if retry < max_retries - 1:
+                        time.sleep(0.2)
+                        continue
+                    else:
+                        # If deletion fails, try to proceed anyway
+                        print(f"Warning: Could not delete old file: {e}")
+            
+            # Read content from temporary file and save
+            with open(temp_file_path, 'rb') as f:
+                file_content = f.read()
             
             # Save the new content
             dataset.file.save(
                 original_name,
-                ContentFile(csv_content.encode('utf-8')),
+                ContentFile(file_content),
                 save=False
             )
             
             dataset.save()
             
+            # Clean up temporary file
+            try:
+                os.unlink(temp_file_path)
+            except Exception as e:
+                print(f"Warning: Could not delete temp file: {e}")
+            
             # Invalidar el caché del nuevo archivo
-            cache.delete(f'dataset_{dataset.file.path}')
+            new_cache_key = f'dataset_{dataset.file.path}'
+            cache.delete(new_cache_key)
+            
+            # Verificar que el archivo se guardó correctamente
+            if not os.path.exists(dataset.file.path):
+                return error_response("Error: File was not saved properly")
+            
+            # Verificar el contenido leyendo el archivo guardado
+            try:
+                df_verify = pd.read_csv(dataset.file.path)
+                print(f"Verification successful - rows: {len(df_verify)}, columns: {list(df_verify.columns)}")
+            except Exception as verify_error:
+                return error_response(f"Error verifying saved file: {str(verify_error)}")
             
             return success_response({
-                'message': f"Successfully applied {operation} to column '{column_name}'"
+                'message': f"Successfully applied {operation} to column '{column_name}'{message_suffix}",
+                'file_path': dataset.file.path,
+                'rows': len(df),
+                'columns': list(df.columns),
+                'rows_affected': rows_affected,
+                'scope': scope
             })
+            
         except Exception as e:
+            # Clean up temporary file if it exists
+            if temp_file and os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                except:
+                    pass
+            
+            import traceback
+            traceback.print_exc()
             return error_response(f"Error applying text manipulation: {str(e)}")
 
 
@@ -1595,6 +1751,7 @@ class DatasetNumericTransformPreviewView(APIView):
         column_name = request.data.get('column_name')
         operation = request.data.get('operation')
         params = request.data.get('params', {})
+        scope = request.data.get('scope', 'all')
         
         if not column_name or not operation:
             return error_response("Column name and operation are required")
@@ -1611,16 +1768,45 @@ class DatasetNumericTransformPreviewView(APIView):
         if not pd.api.types.is_numeric_dtype(df[column_name]):
             return error_response(f"Column '{column_name}' is not numeric")
         
-        # Get sample data
-        sample_data = df[column_name].dropna().head(20)
+        # Get sample data based on scope
+        if scope == 'range':
+            # Get range parameters
+            range_start = params.get('range_start', 0)
+            range_end = params.get('range_end', len(df) - 1)
+            
+            # Validate range
+            try:
+                range_start = int(range_start)
+                range_end = int(range_end)
+            except (ValueError, TypeError):
+                range_start = 0
+                range_end = min(19, len(df) - 1)  # Default to first 20 rows
+            
+            # Ensure range is valid
+            if range_start < 0:
+                range_start = 0
+            if range_end >= len(df):
+                range_end = len(df) - 1
+            if range_start > range_end:
+                range_start, range_end = 0, min(19, len(df) - 1)
+            
+            # Get up to 20 samples from the range
+            sample_size = min(20, range_end - range_start + 1)
+            sample_indices = list(range(range_start, min(range_start + sample_size, range_end + 1)))
+            sample_data = df.loc[sample_indices, column_name].dropna()
+        else:
+            # Get sample data from entire column
+            sample_data = df[column_name].dropna().head(20)
+        
         preview = []
         
         try:
             # Apply transformation to sample
             transformed_sample = []
-            for value in sample_data:
+            for idx, value in sample_data.items():
                 transformed = self._apply_numeric_operation(value, operation, params)
                 preview.append({
+                    'index': int(idx),
                     'original': safe_float(value),
                     'transformed': safe_float(transformed)
                 })
@@ -1657,7 +1843,12 @@ class DatasetNumericTransformPreviewView(APIView):
             
             return success_response({
                 'preview': preview,
-                'stats': stats
+                'stats': stats,
+                'scope': scope,
+                'range_info': {
+                    'start': range_start,
+                    'end': range_end
+                } if scope == 'range' else None
             })
         except Exception as e:
             return error_response(f"Error generating preview: {str(e)}")
@@ -1731,6 +1922,7 @@ class DatasetNumericTransformView(APIView):
         column_name = request.data.get('column_name')
         operation = request.data.get('operation')
         params = request.data.get('params', {})
+        scope = request.data.get('scope', 'all')  # Default to 'all' for backward compatibility
         
         if not column_name or not operation:
             return error_response("Column name and operation are required")
@@ -1750,9 +1942,54 @@ class DatasetNumericTransformView(APIView):
         # Apply operation
         try:
             preview_view = DatasetNumericTransformPreviewView()
-            df[column_name] = df[column_name].apply(
-                lambda x: preview_view._apply_numeric_operation(x, operation, params)
-            )
+            
+            # Handle scope-based application
+            if scope == 'range':
+                # Get range parameters
+                range_start = params.get('range_start', 0)
+                range_end = params.get('range_end', len(df) - 1)
+                
+                # Validate range
+                try:
+                    range_start = int(range_start)
+                    range_end = int(range_end)
+                except (ValueError, TypeError):
+                    return error_response("Invalid range values. range_start and range_end must be integers")
+                
+                # Ensure range is valid
+                if range_start < 0:
+                    range_start = 0
+                if range_end >= len(df):
+                    range_end = len(df) - 1
+                if range_start > range_end:
+                    return error_response("Invalid range: range_start must be less than or equal to range_end")
+                
+                # Apply operation only to the specified range
+                # Create a copy of the column to modify
+                modified_column = df[column_name].copy()
+                
+                # Apply the operation only to rows in the range (inclusive)
+                for idx in range(range_start, range_end + 1):
+                    if idx < len(df):
+                        current_value = df.loc[idx, column_name]
+                        modified_column.loc[idx] = preview_view._apply_numeric_operation(
+                            current_value, 
+                            operation, 
+                            params
+                        )
+                
+                # Replace the column with the modified version
+                df[column_name] = modified_column
+                
+                rows_affected = range_end - range_start + 1
+                message_suffix = f" to rows {range_start} to {range_end} ({rows_affected} rows)"
+            else:
+                # Apply to all rows (default behavior)
+                df[column_name] = df[column_name].apply(
+                    lambda x: preview_view._apply_numeric_operation(x, operation, params)
+                )
+                rows_affected = len(df)
+                message_suffix = " to all rows"
             
             # Save the modified dataset
             from io import StringIO
@@ -1783,7 +2020,9 @@ class DatasetNumericTransformView(APIView):
             cache.delete(f'dataset_{dataset.file.path}')
             
             return success_response({
-                'message': f"Successfully applied {operation} to column '{column_name}'"
+                'message': f"Successfully applied {operation} to column '{column_name}'{message_suffix}",
+                'rows_affected': rows_affected,
+                'scope': scope
             })
         except Exception as e:
             return error_response(f"Error applying numeric transformation: {str(e)}")
