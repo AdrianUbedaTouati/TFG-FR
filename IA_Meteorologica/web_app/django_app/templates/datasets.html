@@ -1290,12 +1290,20 @@
                         </div>
                         
                         <div class="mb-3">
-                            <div class="d-flex align-items-center">
+                            <div class="d-flex align-items-center mb-2">
                                 <button type="button" class="btn btn-outline-warning btn-sm" onclick="togglePartialReplace()">
                                     <i class="bi bi-crop"></i> <span id="partialReplaceToggleText">Activar reemplazo parcial</span>
                                 </button>
                                 <small class="text-muted ms-2">
                                     <i class="bi bi-info-circle"></i> Reemplaza solo parte del texto encontrado
+                                </small>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <button type="button" class="btn btn-outline-info btn-sm" onclick="toggleCharReplace()">
+                                    <i class="bi bi-alphabet"></i> <span id="charReplaceToggleText">Activar reemplazo de subcadena</span>
+                                </button>
+                                <small class="text-muted ms-2">
+                                    <i class="bi bi-info-circle"></i> Reemplaza una subcadena específica por otra
                                 </small>
                             </div>
                         </div>
@@ -1340,6 +1348,33 @@
                             </div>
                         </div>
                         
+                        <!-- Selector de reemplazo de subcadena -->
+                        <div id="charReplaceSelector" class="mb-3" style="display: none;">
+                            <div class="border rounded p-3" style="background-color: rgba(0, 123, 255, 0.1);">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Subcadena a buscar</label>
+                                        <input type="text" id="charToFind" class="form-control bg-dark text-light border-secondary" placeholder="Ej: _test_" onchange="validateCharReplace()" oninput="validateCharReplace()">
+                                        <small class="text-muted">Ingresa el texto a buscar</small>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Subcadena de reemplazo</label>
+                                        <input type="text" id="charToReplace" class="form-control bg-dark text-light border-secondary" placeholder="Ej: -prod-" onchange="validateCharReplace()" oninput="validateCharReplace()">
+                                        <small class="text-muted">Ingresa el texto de reemplazo</small>
+                                    </div>
+                                </div>
+                                <div class="alert alert-info mt-2">
+                                    <i class="bi bi-info-circle"></i>
+                                    <span id="charReplaceInfo">Este modo reemplazará todas las ocurrencias de la subcadena especificada dentro de las coincidencias encontradas</span>
+                                </div>
+                                <div class="mt-2" id="charReplaceExample" style="display: none;">
+                                    <small class="text-muted">
+                                        <strong>Ejemplo:</strong> <span id="charReplaceExampleText"></span>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div class="mb-3">
                             <label class="form-label">Opciones de búsqueda</label>
                             <div class="form-check">
@@ -1364,6 +1399,42 @@
                         <button class="btn btn-warning w-100" onclick="previewReplacement()" disabled id="previewReplaceBtn">
                             <i class="bi bi-eye"></i> Vista Previa de Reemplazo
                         </button>
+                        
+                        <div class="mt-3">
+                            <label class="form-label">Alcance de la ejecución</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="executionScope" id="execScopeSearch" value="search" checked>
+                                <label class="form-check-label" for="execScopeSearch">
+                                    Solo en el alcance de búsqueda actual
+                                </label>
+                                <small class="text-muted d-block ms-4" id="execScopeSearchHint">Se aplicará solo en los valores buscados</small>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="radio" name="executionScope" id="execScopeAll" value="all">
+                                <label class="form-check-label" for="execScopeAll">
+                                    En todo el dataset
+                                </label>
+                                <small class="text-muted d-block ms-4">Se aplicará a todas las filas del dataset</small>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="radio" name="executionScope" id="execScopeCustom" value="custom" onchange="toggleExecutionRange()">
+                                <label class="form-check-label" for="execScopeCustom">
+                                    Rango personalizado
+                                </label>
+                                <small class="text-muted d-block ms-4">Especifica un rango de filas personalizado</small>
+                            </div>
+                            
+                            <!-- Selector de rango personalizado -->
+                            <div id="executionRangeSelector" class="mt-2 ms-4" style="display: none;">
+                                <div class="d-flex align-items-center">
+                                    <small class="text-muted me-2">Desde fila:</small>
+                                    <input type="number" id="execRangeStart" class="form-control form-control-sm bg-dark text-light border-secondary" value="1" min="1" style="width: 100px;" onchange="updateExecutionRangeInfo()" oninput="updateExecutionRangeInfo()">
+                                    <small class="text-muted mx-2">hasta:</small>
+                                    <input type="number" id="execRangeEnd" class="form-control form-control-sm bg-dark text-light border-secondary" value="1000" min="1" style="width: 100px;" onchange="updateExecutionRangeInfo()" oninput="updateExecutionRangeInfo()">
+                                    <small class="text-muted ms-2" id="execRangeInfo"></small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -8401,6 +8472,9 @@ function openAdvancedEditor() {
         partialReplaceMode: false,
         partialReplacePattern: [],
         partialReplaceType: 'complete',
+        charReplaceMode: false,
+        charToFind: '',
+        charToReplace: '',
         searchScope: 'first',
         searchLimit: 100
     };
@@ -8428,6 +8502,17 @@ function openAdvancedEditor() {
     document.getElementById('advReplacePreview').style.display = 'none';
     document.getElementById('partialReplaceSelector').style.display = 'none';
     document.getElementById('partialReplaceToggleText').textContent = 'Activar reemplazo parcial';
+    document.getElementById('charReplaceSelector').style.display = 'none';
+    document.getElementById('charReplaceToggleText').textContent = 'Activar reemplazo de subcadena';
+    document.getElementById('charToFind').value = '';
+    document.getElementById('charToReplace').value = '';
+    document.getElementById('charReplaceExample').style.display = 'none';
+    
+    // Resetear opciones de alcance de ejecución
+    document.getElementById('execScopeSearch').checked = true;
+    document.getElementById('executionRangeSelector').style.display = 'none';
+    document.getElementById('execRangeStart').value = '1';
+    document.getElementById('execRangeEnd').value = '1000';
     
     // Deshabilitar botones inicialmente
     document.getElementById('previewReplaceBtn').disabled = true;
@@ -8696,6 +8781,22 @@ async function performAdvancedSearch() {
             console.log('Coincidencias encontradas:', matchedIndices.length, 'Botón preview habilitado:', !previewBtn.disabled);
         }
         
+        // Actualizar texto de alcance de búsqueda
+        const scopeHint = document.getElementById('execScopeSearchHint');
+        if (scopeHint) {
+            let scopeText = 'Se aplicará ';
+            if (advancedSearchData.searchScope === 'first') {
+                scopeText += `en los primeros ${advancedSearchData.searchLimit} valores`;
+            } else if (advancedSearchData.searchScope === 'range') {
+                const start = parseInt(document.getElementById('advRangeStart').value);
+                const end = parseInt(document.getElementById('advRangeEnd').value);
+                scopeText += `en el rango de filas ${start} a ${end}`;
+            } else {
+                scopeText += 'en todo el dataset';
+            }
+            scopeHint.textContent = scopeText;
+        }
+        
         hideLoading();
         
     } catch (error) {
@@ -8926,8 +9027,15 @@ async function previewReplacement() {
     indicesToReplace.slice(0, 20).forEach(item => {
         let newValue = replaceValue || '(vacío)';
         
+        // Si está activo el reemplazo de subcadena
+        if (advancedSearchData.charReplaceMode && advancedSearchData.charToFind) {
+            const originalValue = String(item.value);
+            // Si charToReplace está vacío, se eliminará la subcadena
+            const replacement = advancedSearchData.charToReplace || '';
+            newValue = originalValue.split(advancedSearchData.charToFind).join(replacement);
+        }
         // Si está activo el reemplazo parcial, mostrar el resultado
-        if (advancedSearchData.partialReplaceMode && advancedSearchData.partialReplacePattern.length > 0) {
+        else if (advancedSearchData.partialReplaceMode && advancedSearchData.partialReplacePattern.length > 0) {
             const originalValue = String(item.value);
             const pattern = advancedSearchData.partialReplacePattern;
             
@@ -9000,9 +9108,45 @@ async function previewReplacement() {
 // Ejecutar reemplazo
 async function executeReplacement() {
     const replaceValue = document.getElementById('advReplaceValue').value;
+    
+    // Obtener alcance de ejecución
+    const executionScope = document.querySelector('input[name="executionScope"]:checked').value;
+    let scopeText = '';
+    let scopeDetails = '';
+    
+    if (executionScope === 'search') {
+        scopeText = 'Solo en el alcance de búsqueda';
+        if (advancedSearchData.searchScope === 'first') {
+            scopeDetails = `Se buscarán coincidencias en los primeros ${advancedSearchData.searchLimit} valores`;
+        } else if (advancedSearchData.searchScope === 'range') {
+            const start = parseInt(document.getElementById('advRangeStart').value);
+            const end = parseInt(document.getElementById('advRangeEnd').value);
+            scopeDetails = `Se buscarán coincidencias en las filas ${start} a ${end}`;
+        } else {
+            scopeDetails = 'Se buscarán coincidencias en todo el dataset';
+        }
+    } else if (executionScope === 'all') {
+        scopeText = 'En todo el dataset';
+        scopeDetails = 'Se aplicará el reemplazo buscando en todas las filas';
+    } else if (executionScope === 'custom') {
+        const start = parseInt(document.getElementById('execRangeStart').value);
+        const end = parseInt(document.getElementById('execRangeEnd').value);
+        const total = end - start + 1;
+        scopeText = `En rango personalizado`;
+        scopeDetails = `Se aplicará en las filas ${start} a ${end} (${total} filas)`;
+    }
+    
+    const matchCount = document.getElementById('advReplaceCount').textContent;
+    
     const result = await Swal.fire({
         title: '¿Confirmar reemplazo?',
-        text: `Se reemplazarán ${document.getElementById('advReplaceCount').textContent} valores`,
+        html: `
+            <div class="text-start">
+                <p><strong>Coincidencias encontradas:</strong> ${matchCount}</p>
+                <p><strong>Alcance de ejecución:</strong> ${scopeText}</p>
+                <p class="text-muted small">${scopeDetails}</p>
+            </div>
+        `,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#ef4444',
@@ -9038,20 +9182,41 @@ async function executeReplacement() {
                 indices = advancedSearchData.searchResultsWithIndex.map(item => item.index);
             }
             
+            // Preparar parámetros según el alcance
+            let executionParams = {
+                column_name: advancedSearchData.columnName,
+                indices: indices,
+                new_value: replaceValue,
+                partial_replace: advancedSearchData.partialReplaceMode,
+                partial_pattern: advancedSearchData.partialReplacePattern,
+                partial_type: advancedSearchData.partialReplaceType,
+                char_replace: advancedSearchData.charReplaceMode,
+                char_to_find: advancedSearchData.charToFind,
+                char_to_replace: advancedSearchData.charToReplace,
+                execution_scope: executionScope
+            };
+            
+            // Añadir parámetros específicos según el alcance
+            if (executionScope === 'search') {
+                executionParams.search_scope = advancedSearchData.searchScope;
+                if (advancedSearchData.searchScope === 'first') {
+                    executionParams.search_limit = advancedSearchData.searchLimit;
+                } else if (advancedSearchData.searchScope === 'range') {
+                    executionParams.search_range_start = parseInt(document.getElementById('advRangeStart').value) - 1;
+                    executionParams.search_range_end = parseInt(document.getElementById('advRangeEnd').value);
+                }
+            } else if (executionScope === 'custom') {
+                executionParams.custom_range_start = parseInt(document.getElementById('execRangeStart').value) - 1;
+                executionParams.custom_range_end = parseInt(document.getElementById('execRangeEnd').value);
+            }
+            
             const response = await fetch(`/api/datasets/${window.selectedDataset.id}/replace-values/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': getCookie('csrftoken')
                 },
-                body: JSON.stringify({
-                    column_name: advancedSearchData.columnName,
-                    indices: indices,
-                    new_value: replaceValue,
-                    partial_replace: advancedSearchData.partialReplaceMode,
-                    partial_pattern: advancedSearchData.partialReplacePattern,
-                    partial_type: advancedSearchData.partialReplaceType
-                })
+                body: JSON.stringify(executionParams)
             });
             
             hideLoading();
@@ -9096,6 +9261,11 @@ function togglePartialReplace() {
         toggleBtn.textContent = 'Desactivar reemplazo parcial';
         updatePartialExample();
         updatePartialMode();
+        
+        // Si está activo el reemplazo de carácter, desactivarlo
+        if (advancedSearchData.charReplaceMode) {
+            toggleCharReplace();
+        }
     } else {
         selector.style.display = 'none';
         toggleBtn.textContent = 'Activar reemplazo parcial';
@@ -9184,6 +9354,91 @@ function validatePartialReplacement() {
     
     warning.style.display = 'none';
     return true;
+}
+
+// Función para alternar el modo de reemplazo de subcadena
+function toggleCharReplace() {
+    advancedSearchData.charReplaceMode = !advancedSearchData.charReplaceMode;
+    const selector = document.getElementById('charReplaceSelector');
+    const toggleBtn = document.getElementById('charReplaceToggleText');
+    
+    if (advancedSearchData.charReplaceMode) {
+        selector.style.display = 'block';
+        toggleBtn.textContent = 'Desactivar reemplazo de subcadena';
+        
+        // Si está activo el reemplazo parcial, desactivarlo
+        if (advancedSearchData.partialReplaceMode) {
+            togglePartialReplace();
+        }
+        
+        validateCharReplace();
+    } else {
+        selector.style.display = 'none';
+        toggleBtn.textContent = 'Activar reemplazo de subcadena';
+        advancedSearchData.charToFind = '';
+        advancedSearchData.charToReplace = '';
+        document.getElementById('charToFind').value = '';
+        document.getElementById('charToReplace').value = '';
+        document.getElementById('charReplaceExample').style.display = 'none';
+    }
+}
+
+// Función para validar el reemplazo de subcadena
+function validateCharReplace() {
+    const charToFind = document.getElementById('charToFind').value;
+    const charToReplace = document.getElementById('charToReplace').value;
+    
+    advancedSearchData.charToFind = charToFind;
+    advancedSearchData.charToReplace = charToReplace;
+    
+    // Mostrar ejemplo si hay resultados de búsqueda y valores ingresados
+    const exampleDiv = document.getElementById('charReplaceExample');
+    const exampleText = document.getElementById('charReplaceExampleText');
+    
+    if (charToFind && advancedSearchData.searchResultsWithIndex && advancedSearchData.searchResultsWithIndex.length > 0) {
+        const firstValue = String(advancedSearchData.searchResultsWithIndex[0].value);
+        if (firstValue.includes(charToFind)) {
+            const newValue = firstValue.split(charToFind).join(charToReplace || '(vacío)');
+            exampleDiv.style.display = 'block';
+            exampleText.innerHTML = `"${firstValue}" → "${newValue}"`;
+        } else {
+            exampleDiv.style.display = 'block';
+            exampleText.innerHTML = `La subcadena "${charToFind}" no se encuentra en el primer valor`;
+        }
+    } else {
+        exampleDiv.style.display = 'none';
+    }
+    
+    return charToFind.length > 0;
+}
+
+// Función para alternar el selector de rango de ejecución
+function toggleExecutionRange() {
+    const customRadio = document.getElementById('execScopeCustom');
+    const rangeSelector = document.getElementById('executionRangeSelector');
+    
+    if (customRadio.checked) {
+        rangeSelector.style.display = 'block';
+        updateExecutionRangeInfo();
+    } else {
+        rangeSelector.style.display = 'none';
+    }
+}
+
+// Función para actualizar la información del rango de ejecución
+function updateExecutionRangeInfo() {
+    const start = parseInt(document.getElementById('execRangeStart').value) || 1;
+    const end = parseInt(document.getElementById('execRangeEnd').value) || 1000;
+    const info = document.getElementById('execRangeInfo');
+    
+    if (start > end) {
+        info.textContent = '(Rango inválido)';
+        info.className = 'text-danger ms-2';
+    } else {
+        const total = end - start + 1;
+        info.textContent = `(${total} filas)`;
+        info.className = 'text-muted ms-2';
+    }
 }
 
 // Función para manipulación de texto
