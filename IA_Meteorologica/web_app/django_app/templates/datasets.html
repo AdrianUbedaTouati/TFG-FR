@@ -529,13 +529,35 @@
         border: 1px solid #ef4444 !important;
     }
     
-    /* Asegurar que el input sea interactivo */
-    #newColumnName {
-        pointer-events: auto !important;
-        user-select: text !important;
-        -webkit-user-select: text !important;
-        -moz-user-select: text !important;
-        -ms-user-select: text !important;
+    /* Estilos para el input nativo de SweetAlert2 */
+    .swal2-input {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border: 1px solid #2d3561 !important;
+        padding: 8px 12px !important;
+        font-size: 1rem !important;
+        width: 80% !important;
+    }
+    
+    .swal2-input:focus {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border-color: #00d4ff !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 212, 255, 0.25) !important;
+        outline: none !important;
+    }
+    
+    .swal2-input::placeholder {
+        color: #6b7280 !important;
+        opacity: 0.8;
+    }
+    
+    /* Label del input */
+    .swal2-input-label {
+        color: #00d4ff !important;
+        font-weight: 500 !important;
+        margin-bottom: 0.5rem !important;
+        display: block !important;
     }
 </style>
 {% endblock %}
@@ -4691,26 +4713,37 @@ function deleteDataset(datasetId) {
 function renameColumn(columnName) {
     if (!selectedDataset) return;
     
-    Swal.fire({
+    // Limpiar cualquier estado de modal anterior
+    document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
+        el.removeAttribute('aria-hidden');
+    });
+    
+    // Remover cualquier backdrop residual
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+    
+    // Asegurar que el body no tenga clases de modal
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    
+    // Cerrar cualquier modal de Bootstrap abierto
+    const openModals = document.querySelectorAll('.modal.show');
+    openModals.forEach(modal => {
+        const bsModal = bootstrap.Modal.getInstance(modal);
+        if (bsModal) {
+            bsModal.hide();
+        }
+    });
+    
+    // Pequeña demora para asegurar que todo se limpie
+    setTimeout(() => {
+        Swal.fire({
         title: 'Renombrar columna',
-        html: `
-            <div style="text-align: left;">
-                <label style="display: block; margin-bottom: 5px; color: #00d4ff; font-weight: 500;">Nombre actual:</label>
-                <input type="text" value="${columnName}" disabled
-                    style="width: 100%; padding: 8px 12px; margin-bottom: 15px; 
-                           background-color: #0d1225; color: #8b92a9; 
-                           border: 1px solid #1a1e3a; border-radius: 4px;
-                           opacity: 0.7; cursor: not-allowed;">
-                
-                <label style="display: block; margin-bottom: 5px; color: #00d4ff; font-weight: 500;">Nuevo nombre:</label>
-                <input type="text" id="newColumnName" 
-                    placeholder="Ingrese el nuevo nombre de la columna" 
-                    value="${columnName}"
-                    style="width: 100%; padding: 8px 12px; 
-                           background-color: #1a1e3a; color: #f0f9ff; 
-                           border: 1px solid #2d3561; border-radius: 4px;">
-            </div>
-        `,
+        text: `Nombre actual: ${columnName}`,
+        input: 'text',
+        inputLabel: 'Nuevo nombre:',
+        inputValue: columnName,
+        inputPlaceholder: 'Ingrese el nuevo nombre de la columna',
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#10b981',
@@ -4719,39 +4752,66 @@ function renameColumn(columnName) {
         cancelButtonText: 'Cancelar',
         background: '#0a0e27',
         color: '#f0f9ff',
-        allowHtml: true,
-        focusConfirm: false,
+        allowOutsideClick: false,
+        allowEscapeKey: true,
+        allowEnterKey: true,
+        stopKeydownPropagation: false,
         customClass: {
             popup: 'swal-custom-popup',
             title: 'swal-custom-title',
             htmlContainer: 'swal-custom-text',
             confirmButton: 'swal-custom-button',
-            cancelButton: 'btn btn-secondary'
+            cancelButton: 'btn btn-secondary',
+            input: 'swal2-input-custom'
         },
         didOpen: () => {
-            const input = document.getElementById('newColumnName');
-            if (input) {
-                input.focus();
-                input.select();
-            }
-        },
-        preConfirm: () => {
-            const input = document.getElementById('newColumnName');
-            if (!input) {
-                Swal.showValidationMessage('Error: No se pudo encontrar el campo de entrada');
-                return false;
+            // Asegurar que no haya conflictos de aria-hidden
+            const swalContainer = document.querySelector('.swal2-container');
+            if (swalContainer) {
+                swalContainer.removeAttribute('aria-hidden');
             }
             
-            const newName = input.value.trim();
-            if (!newName) {
-                Swal.showValidationMessage('Por favor ingrese un nombre válido');
-                return false;
+            const input = Swal.getInput();
+            if (input) {
+                // Aplicar estilos al input
+                input.style.backgroundColor = '#1a1e3a';
+                input.style.color = '#f0f9ff';
+                input.style.borderColor = '#2d3561';
+                input.style.padding = '8px 12px';
+                
+                // Asegurar que el input sea accesible
+                input.removeAttribute('aria-hidden');
+                input.removeAttribute('disabled');
+                input.removeAttribute('readonly');
+                
+                // Forzar el focus con múltiples intentos
+                const focusInput = () => {
+                    input.focus();
+                    input.select();
+                    
+                    // Verificar si el input tiene focus
+                    if (document.activeElement !== input) {
+                        console.log('Intentando enfocar nuevamente...');
+                        setTimeout(focusInput, 50);
+                    } else {
+                        console.log('Input enfocado correctamente');
+                    }
+                };
+                
+                // Iniciar el proceso de focus
+                setTimeout(focusInput, 100);
             }
-            if (newName === columnName) {
-                Swal.showValidationMessage('El nuevo nombre debe ser diferente al actual');
-                return false;
+        },
+        inputValidator: (value) => {
+            if (!value || !value.trim()) {
+                return 'Por favor ingrese un nombre válido';
             }
-            return newName;
+            if (value.trim() === columnName) {
+                return 'El nuevo nombre debe ser diferente al actual';
+            }
+        },
+        preConfirm: (newName) => {
+            return newName.trim();
         }
     }).then((result) => {
         if (result.isConfirmed) {
@@ -4810,6 +4870,7 @@ function renameColumn(columnName) {
             });
         }
     });
+    }, 100); // Fin del setTimeout
 }
 
 function deleteColumn(columnName) {
