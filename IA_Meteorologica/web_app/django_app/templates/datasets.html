@@ -486,6 +486,57 @@
         background-color: #218838;
         border-color: #1e7e34;
     }
+    
+    /* Estilos para SweetAlert2 inputs en tema oscuro */
+    .swal2-popup input.form-control:not(:disabled) {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border-color: #2d3561 !important;
+        cursor: text !important;
+    }
+    
+    .swal2-popup input.form-control:not(:disabled):focus {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border-color: #00d4ff !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 212, 255, 0.25) !important;
+        outline: none !important;
+    }
+    
+    .swal2-popup input.form-control:disabled {
+        background-color: #0d1225 !important;
+        color: #8b92a9 !important;
+        border-color: #1a1e3a !important;
+        opacity: 0.7;
+        cursor: not-allowed !important;
+    }
+    
+    .swal2-popup input.form-control::placeholder {
+        color: #6b7280 !important;
+        opacity: 0.8;
+    }
+    
+    .swal2-popup .form-label {
+        color: #00d4ff !important;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Estilos adicionales para mensajes de validación */
+    .swal2-validation-message {
+        background-color: #1a1e3a !important;
+        color: #ef4444 !important;
+        border: 1px solid #ef4444 !important;
+    }
+    
+    /* Asegurar que el input sea interactivo */
+    #newColumnName {
+        pointer-events: auto !important;
+        user-select: text !important;
+        -webkit-user-select: text !important;
+        -moz-user-select: text !important;
+        -ms-user-select: text !important;
+    }
 </style>
 {% endblock %}
 
@@ -2123,6 +2174,11 @@ function displayDatasetDetails(dataset, data) {
                                     <tr class="column-row" data-column="${col}" onclick="selectVariable('${col}', ${isNumeric})">
                                         <td>
                                             <strong>${col}</strong>
+                                            <button class="btn btn-sm btn-outline-secondary ms-2" 
+                                                onclick="event.stopPropagation(); renameColumn('${col}');" 
+                                                title="Renombrar columna">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
                                             <button class="btn btn-sm btn-outline-primary ms-2" 
                                                 onclick="event.stopPropagation(); openColumnSearchModal('${col}', ${dataset.id});" 
                                                 title="Buscar en esta columna">
@@ -4631,7 +4687,131 @@ function deleteDataset(datasetId) {
     });
 }
 
-// Eliminar una columna del dataset
+// Renombrar una columna del dataset
+function renameColumn(columnName) {
+    if (!selectedDataset) return;
+    
+    Swal.fire({
+        title: 'Renombrar columna',
+        html: `
+            <div style="text-align: left;">
+                <label style="display: block; margin-bottom: 5px; color: #00d4ff; font-weight: 500;">Nombre actual:</label>
+                <input type="text" value="${columnName}" disabled
+                    style="width: 100%; padding: 8px 12px; margin-bottom: 15px; 
+                           background-color: #0d1225; color: #8b92a9; 
+                           border: 1px solid #1a1e3a; border-radius: 4px;
+                           opacity: 0.7; cursor: not-allowed;">
+                
+                <label style="display: block; margin-bottom: 5px; color: #00d4ff; font-weight: 500;">Nuevo nombre:</label>
+                <input type="text" id="newColumnName" 
+                    placeholder="Ingrese el nuevo nombre de la columna" 
+                    value="${columnName}"
+                    style="width: 100%; padding: 8px 12px; 
+                           background-color: #1a1e3a; color: #f0f9ff; 
+                           border: 1px solid #2d3561; border-radius: 4px;">
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Renombrar',
+        cancelButtonText: 'Cancelar',
+        background: '#0a0e27',
+        color: '#f0f9ff',
+        allowHtml: true,
+        focusConfirm: false,
+        customClass: {
+            popup: 'swal-custom-popup',
+            title: 'swal-custom-title',
+            htmlContainer: 'swal-custom-text',
+            confirmButton: 'swal-custom-button',
+            cancelButton: 'btn btn-secondary'
+        },
+        didOpen: () => {
+            const input = document.getElementById('newColumnName');
+            if (input) {
+                input.focus();
+                input.select();
+            }
+        },
+        preConfirm: () => {
+            const input = document.getElementById('newColumnName');
+            if (!input) {
+                Swal.showValidationMessage('Error: No se pudo encontrar el campo de entrada');
+                return false;
+            }
+            
+            const newName = input.value.trim();
+            if (!newName) {
+                Swal.showValidationMessage('Por favor ingrese un nombre válido');
+                return false;
+            }
+            if (newName === columnName) {
+                Swal.showValidationMessage('El nuevo nombre debe ser diferente al actual');
+                return false;
+            }
+            return newName;
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const newName = result.value;
+            showLoading('Renombrando columna...', `Cambiando "${columnName}" a "${newName}"`);
+            
+            fetch(`/api/datasets/${selectedDataset.id}/rename-column/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    old_name: columnName,
+                    new_name: newName
+                })
+            })
+            .then(response => {
+                hideLoading();
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    return response.json().then(data => {
+                        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                    });
+                }
+            })
+            .then(data => {
+                hideLoading();
+                showNotification('¡Éxito!', `La columna "${columnName}" ha sido renombrada a "${newName}"`, 'success');
+                
+                // Limpiar datos almacenados en caché del cliente
+                window.currentDatasetData = null;
+                
+                // Cerrar el modal actual para evitar conflictos
+                const currentModal = bootstrap.Modal.getInstance(document.getElementById('datasetDetailModal'));
+                if (currentModal) {
+                    currentModal.hide();
+                }
+                
+                // Limpiar cualquier backdrop residual
+                document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.removeProperty('overflow');
+                document.body.style.removeProperty('padding-right');
+                
+                // Esperar un momento y luego recargar los detalles del dataset
+                setTimeout(() => {
+                    showDatasetDetails(selectedDataset.id);
+                }, 500);
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error al renombrar columna:', error);
+                showNotification('Error', 'Error al renombrar la columna: ' + error.message, 'error');
+            });
+        }
+    });
+}
+
 function deleteColumn(columnName) {
     if (!selectedDataset) return;
     
@@ -4643,7 +4823,16 @@ function deleteColumn(columnName) {
         confirmButtonColor: '#ef4444',
         cancelButtonColor: '#6b7280',
         confirmButtonText: 'Sí, eliminar',
-        cancelButtonText: 'Cancelar'
+        cancelButtonText: 'Cancelar',
+        background: '#0a0e27',
+        color: '#f0f9ff',
+        customClass: {
+            popup: 'swal-custom-popup',
+            title: 'swal-custom-title',
+            htmlContainer: 'swal-custom-text',
+            confirmButton: 'btn btn-danger',
+            cancelButton: 'btn btn-secondary'
+        }
     }).then((result) => {
         if (result.isConfirmed) {
             showLoading('Eliminando columna...', `Eliminando la columna "${columnName}" del dataset`);

@@ -609,6 +609,100 @@ class DatasetDeleteColumnView(APIView):
             return error_response(f"Error saving dataset: {str(e)}")
 
 
+class DatasetRenameColumnView(APIView):
+    """Rename a column in a dataset"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        # Verificar permisos
+        if request.user.is_staff:
+            dataset = get_object_or_404(Dataset, pk=pk)
+        else:
+            dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+        
+        # Get old and new column names from request
+        old_name = request.data.get('old_name')
+        new_name = request.data.get('new_name')
+        
+        if not old_name or not new_name:
+            return error_response("Both old_name and new_name are required")
+        
+        # Validate new name
+        new_name = new_name.strip()
+        if not new_name:
+            return error_response("New column name cannot be empty")
+        
+        if old_name == new_name:
+            return error_response("New name must be different from old name")
+        
+        # Load dataset
+        df = load_dataset(dataset.file.path)
+        if df is None:
+            return error_response(ERROR_PARSING_FAILED)
+        
+        # Check if old column exists
+        if old_name not in df.columns:
+            return error_response(f"Column '{old_name}' not found in dataset")
+        
+        # Check if new column name already exists
+        if new_name in df.columns:
+            return error_response(f"Column '{new_name}' already exists in dataset")
+        
+        # Rename the column
+        df = df.rename(columns={old_name: new_name})
+        
+        # Save the modified dataset
+        try:
+            # Convert DataFrame to CSV string
+            from io import StringIO
+            csv_buffer = StringIO()
+            df.to_csv(csv_buffer, index=False)
+            csv_content = csv_buffer.getvalue()
+            
+            # Get the original file name
+            original_name = os.path.basename(dataset.file.name)
+            
+            # Invalidar caché antes de eliminar el archivo antiguo
+            old_path = dataset.file.path
+            old_cache_key = f'dataset_{old_path}'
+            cache.delete(old_cache_key)
+            
+            # Delete the old file
+            dataset.file.delete(save=False)
+            
+            # Save the new content
+            dataset.file.save(
+                original_name,
+                ContentFile(csv_content.encode('utf-8')),
+                save=False
+            )
+            
+            # Force save to ensure database is updated
+            dataset.save()
+            
+            # Invalidar el caché del dataset
+            cache_key = f'dataset_{dataset.file.path}'
+            cache.delete(cache_key)
+            
+            # Verify the change was saved
+            df_verify = pd.read_csv(dataset.file.path)
+            
+            if old_name in df_verify.columns:
+                return error_response(f"Column '{old_name}' was not renamed properly")
+            
+            if new_name not in df_verify.columns:
+                return error_response(f"Column '{new_name}' was not created properly")
+            
+            return success_response({
+                'message': f"Column '{old_name}' renamed to '{new_name}' successfully",
+                'columns': list(df_verify.columns)
+            })
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return error_response(f"Error saving dataset: {str(e)}")
+
+
 class DatasetColumnDataView(APIView):
     """Get all data from a specific column for searching/filtering"""
     permission_classes = [IsAuthenticated]
