@@ -113,6 +113,26 @@
         width: 100%;
     }
     
+    /* Special styling for confusion matrix */
+    #confusion-matrix-section .chart-container {
+        max-height: 600px;
+        min-height: 500px;
+    }
+    
+    #confusion-matrix-section .chart-wrapper {
+        height: 500px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    #confusion-matrix-chart {
+        max-width: 600px;
+        max-height: 600px;
+        width: 100%;
+        height: 100%;
+    }
+    
     @media (max-width: 768px) {
         .chart-wrapper {
             height: 200px;
@@ -120,6 +140,21 @@
         
         .chart-container {
             max-height: 300px;
+        }
+        
+        /* Confusion matrix responsive adjustments */
+        #confusion-matrix-section .chart-container {
+            max-height: 450px;
+            min-height: 400px;
+        }
+        
+        #confusion-matrix-section .chart-wrapper {
+            height: 400px;
+        }
+        
+        #confusion-matrix-chart {
+            max-width: 400px;
+            max-height: 400px;
         }
     }
     
@@ -320,7 +355,7 @@
                 <div class="chart-container">
                     <h4 class="chart-title">Matrice de Confusion</h4>
                     <div class="chart-wrapper">
-                        <canvas id="confusion-matrix-chart"></canvas>
+                        <canvas id="confusion-matrix-chart" width="600" height="500"></canvas>
                     </div>
                 </div>
             </div>
@@ -1324,7 +1359,7 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
     console.log('Creating confusion matrix with data:', confusionMatrix);
     
     if (!confusionMatrix || !confusionMatrix.matrix) {
-        ctx.font = '14px Arial';
+        ctx.font = '18px Arial';
         ctx.fillStyle = '#94a3b8';
         ctx.textAlign = 'center';
         ctx.fillText('Matrice de confusion non disponible', ctx.canvas.width/2, ctx.canvas.height/2);
@@ -1339,10 +1374,22 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
     console.log('Labels:', labels);
     console.log('Is regression:', isRegression);
     
+    // Set canvas size for high DPI displays
+    const scale = window.devicePixelRatio || 1;
+    ctx.canvas.width = 600 * scale;
+    ctx.canvas.height = 500 * scale;
+    ctx.scale(scale, scale);
+    
     // Create heatmap using manual canvas drawing for better control
-    const cellSize = Math.min(ctx.canvas.width / labels.length, ctx.canvas.height / labels.length) * 0.8;
-    const startX = (ctx.canvas.width - cellSize * labels.length) / 2;
-    const startY = (ctx.canvas.height - cellSize * labels.length) / 2;
+    // Increased cell size and adjusted padding for larger display
+    const padding = 120; // Increased padding for labels
+    const availableWidth = 600 - (padding * 2);
+    const availableHeight = 500 - (padding * 2);
+    const cellSize = Math.min(availableWidth / labels.length, availableHeight / labels.length);
+    const totalWidth = cellSize * labels.length;
+    const totalHeight = cellSize * labels.length;
+    const startX = (600 - totalWidth) / 2;
+    const startY = (500 - totalHeight) / 2;
     
     // Clear canvas
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -1379,56 +1426,84 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
             ctx.lineWidth = 2;
             ctx.strokeRect(x, y, cellSize, cellSize);
             
-            // Draw value
+            // Draw value - larger font
             ctx.fillStyle = '#ffffff';
-            ctx.font = `${Math.min(cellSize / 4, 16)}px Arial`;
+            ctx.font = `bold ${Math.max(20, Math.min(cellSize / 3, 28))}px Arial`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(value.toString(), x + cellSize/2, y + cellSize/2);
+            
+            // Add percentage if significant
+            if (maxVal > 0) {
+                const percentage = ((value / maxVal) * 100).toFixed(0);
+                ctx.font = `${Math.max(12, Math.min(cellSize / 5, 16))}px Arial`;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.fillText(`${percentage}%`, x + cellSize/2, y + cellSize/2 + cellSize/5);
+            }
         }
     }
     
-    // Draw labels
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = `${Math.min(cellSize / 6, 12)}px Arial`;
+    // Draw labels - larger font
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${Math.max(14, Math.min(cellSize / 4, 18))}px Arial`;
     ctx.textAlign = 'center';
     
     // X-axis labels (predicted)
     for (let j = 0; j < labels.length; j++) {
         const x = startX + j * cellSize + cellSize/2;
-        const y = startY + labels.length * cellSize + 20;
+        const y = startY + labels.length * cellSize + 30;
         ctx.fillText(labels[j], x, y);
     }
     
     // Y-axis labels (actual)
     ctx.textAlign = 'right';
     for (let i = 0; i < labels.length; i++) {
-        const x = startX - 10;
+        const x = startX - 15;
         const y = startY + i * cellSize + cellSize/2;
         ctx.fillText(labels[i], x, y);
     }
     
     // Draw axis titles
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '14px Arial';
+    ctx.fillStyle = '#00d4ff';
+    ctx.font = 'bold 20px Arial';
     ctx.textAlign = 'center';
     
     // X-axis title
-    ctx.fillText('Valeurs Prédites', ctx.canvas.width/2, ctx.canvas.height - 10);
+    ctx.fillText('Valeurs Prédites', 300, 470);
     
     // Y-axis title (rotated)
     ctx.save();
-    ctx.translate(15, ctx.canvas.height/2);
+    ctx.translate(25, 250);
     ctx.rotate(-Math.PI/2);
     ctx.fillText('Valeurs Réelles', 0, 0);
     ctx.restore();
     
     // Add title
     ctx.fillStyle = '#00d4ff';
-    ctx.font = 'bold 16px Arial';
+    ctx.font = 'bold 24px Arial';
     ctx.textAlign = 'center';
     const title = isRegression ? 'Matrice de Confusion (Régression par Intervalles)' : 'Matrice de Confusion';
-    ctx.fillText(title, ctx.canvas.width/2, 20);
+    ctx.fillText(title, 300, 30);
+    
+    // Add performance metrics below matrix
+    if (matrix.length > 0) {
+        // Calculate accuracy for classification
+        let correct = 0;
+        let total = 0;
+        for (let i = 0; i < matrix.length; i++) {
+            for (let j = 0; j < matrix[i].length; j++) {
+                total += matrix[i][j];
+                if (i === j) correct += matrix[i][j];
+            }
+        }
+        
+        if (total > 0) {
+            const accuracy = (correct / total * 100).toFixed(1);
+            ctx.fillStyle = '#00ff88';
+            ctx.font = 'bold 18px Arial';
+            ctx.fillText(`Précision globale: ${accuracy}%`, 300, 460);
+        }
+    }
 }
 
 // Synthetic chart functions for when real data is not available
@@ -1648,92 +1723,17 @@ function createPlaceholderFeatureImportance(predictorColumns) {
 }
 
 function createSyntheticConfusionMatrix() {
-    const ctx = document.getElementById('confusion-matrix-chart').getContext('2d');
+    // Use the same function with synthetic data
+    const syntheticData = {
+        matrix: [
+            [85, 10, 5],
+            [8, 82, 10],
+            [3, 7, 90]
+        ],
+        labels: ['Classe A', 'Classe B', 'Classe C']
+    };
     
-    // Create a simple 3x3 confusion matrix
-    const matrix = [
-        [85, 10, 5],
-        [8, 82, 10],
-        [3, 7, 90]
-    ];
-    const labels = ['Classe A', 'Classe B', 'Classe C'];
-    
-    // Clear canvas
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    
-    const cellSize = Math.min(ctx.canvas.width / labels.length, ctx.canvas.height / labels.length) * 0.8;
-    const startX = (ctx.canvas.width - cellSize * labels.length) / 2;
-    const startY = (ctx.canvas.height - cellSize * labels.length) / 2;
-    
-    // Find max value for normalization
-    const maxVal = Math.max(...matrix.flat());
-    
-    // Draw cells
-    for (let i = 0; i < matrix.length; i++) {
-        for (let j = 0; j < matrix[i].length; j++) {
-            const value = matrix[i][j];
-            const intensity = value / maxVal;
-            
-            const x = startX + j * cellSize;
-            const y = startY + i * cellSize;
-            
-            // Color based on diagonal
-            let color;
-            if (i === j) {
-                color = `rgba(0, 255, 136, ${0.3 + intensity * 0.7})`;
-            } else {
-                color = `rgba(255, 107, 107, ${0.3 + intensity * 0.7})`;
-            }
-            
-            ctx.fillStyle = color;
-            ctx.fillRect(x, y, cellSize, cellSize);
-            
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(x, y, cellSize, cellSize);
-            
-            ctx.fillStyle = '#ffffff';
-            ctx.font = `${Math.min(cellSize / 4, 16)}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(value.toString(), x + cellSize/2, y + cellSize/2);
-        }
-    }
-    
-    // Draw labels
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = `${Math.min(cellSize / 6, 12)}px Arial`;
-    ctx.textAlign = 'center';
-    
-    for (let j = 0; j < labels.length; j++) {
-        const x = startX + j * cellSize + cellSize/2;
-        const y = startY + labels.length * cellSize + 20;
-        ctx.fillText(labels[j], x, y);
-    }
-    
-    ctx.textAlign = 'right';
-    for (let i = 0; i < labels.length; i++) {
-        const x = startX - 10;
-        const y = startY + i * cellSize + cellSize/2;
-        ctx.fillText(labels[i], x, y);
-    }
-    
-    // Titles
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '14px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('Valeurs Prédites', ctx.canvas.width/2, ctx.canvas.height - 10);
-    
-    ctx.save();
-    ctx.translate(15, ctx.canvas.height/2);
-    ctx.rotate(-Math.PI/2);
-    ctx.fillText('Valeurs Réelles', 0, 0);
-    ctx.restore();
-    
-    ctx.fillStyle = '#00d4ff';
-    ctx.font = 'bold 16px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('Matrice de Confusion (Exemple)', ctx.canvas.width/2, 20);
+    createConfusionMatrixChart(syntheticData, 'classification');
 }
 </script>
 {% endblock %}
