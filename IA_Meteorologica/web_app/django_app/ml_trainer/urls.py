@@ -27,6 +27,7 @@ urlpatterns = [
     path('datasets/<int:pk>/text-manipulation/', views.DatasetTextManipulationView.as_view(), name='dataset-text-manipulation'),
     path('datasets/<int:pk>/numeric-transform-preview/', views.DatasetNumericTransformPreviewView.as_view(), name='dataset-numeric-transform-preview'),
     path('datasets/<int:pk>/numeric-transform/', views.DatasetNumericTransformView.as_view(), name='dataset-numeric-transform'),
+    path('datasets/<int:dataset_id>/column-info/<str:column_name>/', views.DatasetColumnInfoView.as_view(), name='dataset-column-info'),
     
     # Custom normalization function endpoints
     path('custom-normalization-functions/', views.CustomNormalizationFunctionView.as_view(), name='custom-normalization-functions'),

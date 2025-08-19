@@ -1206,17 +1206,22 @@ def _generate_sklearn_header(model_def) -> List[str]:
         'Configuration:',
         f'- Target columns: {model_def.target_columns}',
         f'- Predictor columns: {len(model_def.predictor_columns)} features',
+        f'- Problem type: {hyperparams.get("problem_type", "auto-detect")}',
         '"""',
         '',
         'import numpy as np',
         'import pandas as pd',
         'import joblib',
         'import json',
+        'import warnings',
         'from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV',
-        'from sklearn.preprocessing import StandardScaler, LabelEncoder',
+        'from sklearn.model_selection import StratifiedKFold, KFold, TimeSeriesSplit',
+        'from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder',
         'from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score',
         'from sklearn.metrics import accuracy_score, classification_report, confusion_matrix',
-        ''
+        'from sklearn.metrics import precision_recall_curve, roc_auc_score, f1_score',
+        '',
+        'warnings.filterwarnings("ignore")'
     ]
     
     # Import model-specific libraries
@@ -1453,7 +1458,7 @@ def _generate_xgboost_params(hyperparams) -> List[str]:
 
 
 def _generate_random_forest_params(hyperparams) -> List[str]:
-    """Generate Random Forest parameter configuration"""
+    """Generate Random Forest parameter configuration with enhanced features"""
     problem_type = hyperparams.get('problem_type', 'regression')
     params_lines = ['    # Model parameters', '    params = {']
     
@@ -1467,23 +1472,31 @@ def _generate_random_forest_params(hyperparams) -> List[str]:
     else:
         params_lines.append('        "max_depth": None,')
     
-    # Handle max_features
-    max_features = hyperparams.get('max_features', 'sqrt')
-    if isinstance(max_features, str) and max_features != 'custom':
-        if max_features == '1.0':
-            params_lines.append('        "max_features": 1.0,')
+    # Handle max_features with auto-detection
+    max_features = hyperparams.get('max_features', 'auto')
+    if max_features == 'auto':
+        if problem_type == 'classification':
+            params_lines.append('        "max_features": "sqrt",  # Auto-selected for classification')
         else:
-            params_lines.append(f'        "max_features": "{max_features}",')
-    elif hyperparams.get('max_features_fraction'):
+            params_lines.append('        "max_features": 1.0,  # Auto-selected for regression')
+    elif isinstance(max_features, str) and max_features in ['sqrt', 'log2']:
+        params_lines.append(f'        "max_features": "{max_features}",')
+    elif max_features == 'custom' and hyperparams.get('max_features_fraction'):
         params_lines.append(f'        "max_features": {hyperparams["max_features_fraction"]},')
+    else:
+        try:
+            max_features_val = float(max_features)
+            params_lines.append(f'        "max_features": {max_features_val},')
+        except:
+            params_lines.append('        "max_features": "sqrt",  # Default fallback')
     
-    # Handle criterion
+    # Handle criterion with auto-detection
     criterion = hyperparams.get('criterion', 'auto')
     if criterion == 'auto':
         if problem_type == 'classification':
-            params_lines.append('        "criterion": "gini",')
+            params_lines.append('        "criterion": "gini",  # Auto-selected for classification')
         else:
-            params_lines.append('        "criterion": "squared_error",')
+            params_lines.append('        "criterion": "squared_error",  # Auto-selected for regression')
     else:
         params_lines.append(f'        "criterion": "{criterion}",')
     
@@ -1498,18 +1511,23 @@ def _generate_random_forest_params(hyperparams) -> List[str]:
         params_lines.append(f'        "min_impurity_decrease": {hyperparams["min_impurity_decrease"]},')
     
     # Sampling parameters
-    params_lines.append(f'        "bootstrap": {hyperparams.get("bootstrap", True)},')
-    if hyperparams.get('oob_score'):
-        params_lines.append(f'        "oob_score": {hyperparams["oob_score"]},')
+    bootstrap = hyperparams.get('bootstrap', True)
+    params_lines.append(f'        "bootstrap": {bootstrap},')
+    
+    # OOB score only if bootstrap is True
+    if bootstrap and hyperparams.get('oob_score', False):
+        params_lines.append('        "oob_score": True,')
     
     # Performance parameters
-    params_lines.append(f'        "n_jobs": {hyperparams.get("n_jobs", -1)},')
+    params_lines.append(f'        "n_jobs": {hyperparams.get("n_jobs", -1)},  # Use all CPU cores')
     if hyperparams.get('random_state') is not None:
         params_lines.append(f'        "random_state": {hyperparams["random_state"]},')
     
     # Class weight for classification
-    if problem_type == 'classification' and hyperparams.get('class_weight_balanced'):
-        params_lines.append('        "class_weight": "balanced",')
+    if problem_type == 'classification':
+        class_weight = hyperparams.get('class_weight', None)
+        if class_weight in ['balanced', 'balanced_subsample']:
+            params_lines.append(f'        "class_weight": "{class_weight}",')
     
     # Remove trailing comma from last line
     if params_lines[-1].endswith(','):
@@ -1517,6 +1535,16 @@ def _generate_random_forest_params(hyperparams) -> List[str]:
     
     params_lines.append('    }')
     params_lines.append('')
+    
+    # Add preset comment
+    preset = hyperparams.get('preset', 'balanceado')
+    preset_comments = {
+        'rapido': '# Preset: Rápido (menos árboles, más rápido)',
+        'balanceado': '# Preset: Balanceado (buen compromiso velocidad/precisión)',
+        'preciso': '# Preset: Preciso (más árboles, mejor calidad)'
+    }
+    if preset in preset_comments:
+        params_lines.append(f'    {preset_comments[preset]}')
     
     # Create model instance
     if problem_type == 'classification':
@@ -1541,12 +1569,16 @@ def _generate_model_creation_code(model_type, hyperparams) -> List[str]:
     return []
 
 
+
+
 def _generate_data_loading_function(model_def) -> List[str]:
     """Generate data loading and preprocessing function"""
     predictor_columns = [str(col) for col in model_def.predictor_columns]
     target_columns = [str(col) for col in model_def.target_columns]
+    hyperparams = model_def.hyperparameters or {}
+    model_type = model_def.model_type
     
-    return [
+    lines = [
         'def load_and_preprocess_data(file_path):',
         '    """',
         '    Load and preprocess the dataset',
@@ -1570,23 +1602,32 @@ def _generate_data_loading_function(model_def) -> List[str]:
         '        raise ValueError(f"Missing target columns: {missing_targets}")',
         '',
         '    # Extract features and target',
-        '    X = df[predictor_columns]',
+        '    X = df[predictor_columns].copy()',
         '    y = df[target_columns[0]] if len(target_columns) == 1 else df[target_columns]',
         '',
         '    # Handle missing values',
         '    print("\\nHandling missing values...")',
         '    print(f"Missing values in features: {X.isnull().sum().sum()}")',
         '    print(f"Missing values in target: {y.isnull().sum() if hasattr(y, \'isnull\') else 0}")',
-        '',
-        '    # Fill missing values',
+        ''
+    ]
+    
+    # Fill missing values
+    lines.extend([
+        '    # Fill missing values with mean',
         '    X = X.fillna(X.mean())',
         '    if hasattr(y, \'fillna\'):',
-        '        y = y.fillna(y.mean())',
-        '',
+        '        y = y.fillna(y.mean() if y.dtype in [np.float64, np.float32] else y.mode()[0])',
+        ''
+    ])
+    
+    lines.extend([
         '    return X, y, predictor_columns, target_columns',
         '',
         ''
-    ]
+    ])
+    
+    return lines
 
 
 def _generate_training_function() -> List[str]:
@@ -1625,15 +1666,21 @@ def _generate_training_function() -> List[str]:
 
 
 def _generate_evaluation_function(model_type, hyperparams) -> List[str]:
-    """Generate model evaluation function"""
+    """Generate model evaluation function with multi-output support"""
     problem_type = hyperparams.get('problem_type', 'regression')
     
     lines = [
-        'def evaluate_model(model, y_true, y_pred, dataset_name="Dataset"):',
+        'def evaluate_model(model, y_true, y_pred, dataset_name="Dataset", target_names=None):',
         '    """',
-        '    Evaluate model performance',
+        '    Evaluate model performance (supports multi-output)',
         '    """',
         '    print(f"\\n=== {dataset_name} Evaluation ===")',
+        '    ',
+        '    # Check if multi-output',
+        '    if len(y_true.shape) > 1 and y_true.shape[1] > 1:',
+        '        print(f"Multi-output evaluation: {y_true.shape[1]} targets")',
+        '        return evaluate_multi_output(y_true, y_pred, target_names)',
+        '    ',
         ''
     ]
     
@@ -1664,6 +1711,39 @@ def _generate_evaluation_function(model_type, hyperparams) -> List[str]:
             '    ',
             '    return {"mae": mae, "mse": mse, "rmse": rmse, "r2": r2}'
         ])
+    
+    lines.extend([
+        '',
+        '',
+        'def evaluate_multi_output(y_true, y_pred, target_names=None):',
+        '    """Evaluate multi-output predictions"""',
+        '    results = {}',
+        '    n_outputs = y_true.shape[1]',
+        '    ',
+        '    for i in range(n_outputs):',
+        '        target_name = target_names[i] if target_names and i < len(target_names) else f"Target_{i+1}"',
+        '        print(f"\\n--- Evaluation for {target_name} ---")',
+        '        ',
+        '        mae = mean_absolute_error(y_true[:, i], y_pred[:, i])',
+        '        mse = mean_squared_error(y_true[:, i], y_pred[:, i])',
+        '        rmse = np.sqrt(mse)',
+        '        r2 = r2_score(y_true[:, i], y_pred[:, i])',
+        '        ',
+        '        print(f"MAE: {mae:.4f}")',
+        '        print(f"MSE: {mse:.4f}")',
+        '        print(f"RMSE: {rmse:.4f}")',
+        '        print(f"R²: {r2:.4f}")',
+        '        ',
+        '        results[target_name] = {',
+        '            "mae": mae,',
+        '            "mse": mse,',
+        '            "rmse": rmse,',
+        '            "r2": r2',
+        '        }',
+        '    ',
+        '    return results',
+        ''
+    ])
     
     lines.extend(['', ''])
     return lines
@@ -1702,7 +1782,8 @@ def _generate_main_function(model_def, hyperparams) -> List[str]:
         '        ',
         '        # Step 4: Evaluate model',
         '        print("\\nSTEP 4: Evaluating model...")',
-        '        evaluate_model(model, X_train, X_test, y_train, y_test, y_pred_train, y_pred_test)',
+        '        train_metrics = evaluate_model(model, y_train, y_pred_train, "Training Set", target_cols)',
+        '        test_metrics = evaluate_model(model, y_test, y_pred_test, "Test Set", target_cols)',
         '        ',
         '        # Step 5: Save model',
         '        print("\\nSTEP 5: Saving model...")',
@@ -1745,6 +1826,7 @@ def generate_sklearn_code(model_def) -> str:
     
     # Generate header and imports
     code_lines.extend(_generate_sklearn_header(model_def))
+    
     
     # Create model function
     code_lines.extend([

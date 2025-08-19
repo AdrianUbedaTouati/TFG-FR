@@ -117,16 +117,20 @@ def get_model_config(model_type):
             'sequence_length': 10
         },
         'random_forest': {
-            # Basic options with new defaults
+            # Basic options with improved defaults
             'preset': 'balanceado',
-            'problem_type': 'regression',
+            'problem_type': 'auto',  # Auto-detect based on target
             'n_estimators': 300,
             'max_depth_enabled': False,
             'max_depth': None,
-            'max_features': '1.0',  # Default for regression
-            'criterion': 'squared_error',
-            'class_weight_balanced': False,
+            'max_features': 'auto',  # Will be set based on problem_type
+            'criterion': 'auto',  # Will be set based on problem_type
+            'class_weight': None,  # None, 'balanced', or 'balanced_subsample'
             'validation_method': 'holdout',
+            'test_size': 20,  # Percentage
+            'cv_folds': 5,
+            'stratified': True,  # For classification
+            'time_series_split': False,
             
             # Advanced options with scikit-learn defaults
             'min_samples_split': 2,
@@ -135,17 +139,28 @@ def get_model_config(model_type):
             'min_impurity_decrease': 0.0,
             'max_leaf_nodes': None,
             'ccp_alpha': 0.0,
-            'criterion_advanced': 'default',
             'bootstrap': True,
             'max_samples': None,
             'oob_score': False,
             'n_jobs': -1,
-            'random_state': None,
+            'random_state': 42,
             'verbose': 0,
             'warm_start': False,
-            'class_weight_custom': False,
+            
+            # Classification specific
             'decision_threshold': 0.5,
-            'output_type': 'class'
+            'threshold_optimization': 'f1',  # accuracy, f1, precision, recall
+            
+            # Feature engineering
+            'encode_categorical': True,
+            'encoding_method': 'onehot',  # onehot, target, ordinal
+            'add_cyclic_features': True,
+            'cyclic_columns': [],  # Will be auto-detected
+            
+            # Data quality
+            'handle_missing': 'mean',  # mean, median, mode, drop
+            'check_data_leakage': True,
+            'min_samples_warning': 100
         },
         'xgboost': {
             # Basic parameters
@@ -693,13 +708,17 @@ def _prepare_random_forest_params(hyperparams):
     # Start with a copy of hyperparams
     clean_params = hyperparams.copy()
     
-    # Remove UI-specific parameters that don't belong to scikit-learn
+    # Remove UI-specific and feature engineering parameters
     ui_only_params = [
         'preset', 'problem_type', 'max_depth_enabled', 'class_weight_balanced', 
         'validation_method', 'criterion_advanced', 'class_weight_custom',
         'decision_threshold', 'output_type', 'max_features_fraction',
-        'epochs', 'batch_size', 'learning_rate',  # Neural network params that don't apply to RF
-        'use_custom_architecture', 'custom_architecture'  # Architecture params for neural networks
+        'test_size', 'cv_folds', 'stratified', 'time_series_split',
+        'threshold_optimization', 'encode_categorical', 'encoding_method',
+        'add_cyclic_features', 'cyclic_columns', 'handle_missing',
+        'check_data_leakage', 'min_samples_warning',
+        'epochs', 'batch_size', 'learning_rate',  # Neural network params
+        'use_custom_architecture', 'custom_architecture'  # Architecture params
     ]
     for param in ui_only_params:
         clean_params.pop(param, None)
@@ -708,34 +727,65 @@ def _prepare_random_forest_params(hyperparams):
     if not hyperparams.get('max_depth_enabled', False):
         clean_params['max_depth'] = None
     
-    # Handle max_features conversion
-    max_features = hyperparams.get('max_features', 'sqrt')
-    if max_features == 'custom':
+    # Handle max_features based on problem type
+    max_features = hyperparams.get('max_features', 'auto')
+    problem_type = hyperparams.get('problem_type', 'regression')
+    
+    if max_features == 'auto':
+        # Set default based on problem type
+        if problem_type == 'classification':
+            max_features = 'sqrt'
+        else:
+            max_features = 1.0
+    elif max_features == 'custom':
         max_features = hyperparams.get('max_features_fraction', 0.5)
-    elif max_features == '1.0':
-        max_features = 1.0
+    elif max_features in ['sqrt', 'log2']:
+        # Keep as string
+        pass
+    else:
+        # Try to convert to float
+        try:
+            max_features = float(max_features)
+        except:
+            max_features = 'sqrt'  # fallback
+    
     clean_params['max_features'] = max_features
     
     # Handle criterion selection
-    criterion_advanced = hyperparams.get('criterion_advanced', 'default')
-    if criterion_advanced != 'default':
-        clean_params['criterion'] = criterion_advanced
-    elif hyperparams.get('criterion') == 'auto':
-        # Auto criterion was already resolved in frontend, but fallback logic
-        problem_type = hyperparams.get('problem_type', 'regression')
+    criterion = hyperparams.get('criterion', 'auto')
+    if criterion == 'auto':
         if problem_type == 'classification':
             clean_params['criterion'] = 'gini'
         else:
             clean_params['criterion'] = 'squared_error'
+    elif criterion in ['gini', 'entropy', 'log_loss']:  # Classification criteria
+        if problem_type == 'classification':
+            clean_params['criterion'] = criterion
+        else:
+            clean_params['criterion'] = 'squared_error'  # fallback for regression
+    elif criterion in ['squared_error', 'absolute_error', 'poisson']:  # Regression criteria
+        if problem_type == 'regression':
+            clean_params['criterion'] = criterion
+        else:
+            clean_params['criterion'] = 'gini'  # fallback for classification
     
     # Handle class_weight
-    if hyperparams.get('class_weight_balanced', False):
-        clean_params['class_weight'] = 'balanced'
+    class_weight = hyperparams.get('class_weight', None)
+    if problem_type == 'classification' and class_weight in ['balanced', 'balanced_subsample']:
+        clean_params['class_weight'] = class_weight
     else:
         clean_params.pop('class_weight', None)
     
-    # Handle null values properly for scikit-learn
-    for key, value in clean_params.items():
+    # Handle OOB score - only valid if bootstrap is True
+    if clean_params.get('bootstrap', True) and hyperparams.get('oob_score', False):
+        clean_params['oob_score'] = True
+    else:
+        clean_params['oob_score'] = False
+    
+    # Clean up None values
+    keys_to_check = list(clean_params.keys())
+    for key in keys_to_check:
+        value = clean_params[key]
         if value is None or value == 'None':
             if key in ['max_depth', 'max_leaf_nodes', 'random_state', 'max_samples']:
                 clean_params[key] = None
@@ -861,13 +911,69 @@ def _prepare_xgboost_params(hyperparams):
 
 
 def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_val, y_val):
-    """Train scikit-learn models"""
+    """Train scikit-learn models with enhanced feature engineering"""
     print(f"[train_sklearn_model] Model type: {model_type}")
     print(f"[train_sklearn_model] Hyperparameters received: {hyperparams}")
     print(f"[train_sklearn_model] Input shapes - X_train: {X_train.shape}, y_train: {y_train.shape}")
     
     # Create progress callback
     progress_callback = SklearnProgressCallback(session, model_type)
+    
+    # Apply feature engineering for Random Forest
+    if model_type == 'random_forest' and hyperparams.get('encode_categorical', True):
+        # Convert to DataFrame for easier manipulation
+        import pandas as pd
+        predictor_columns = session.predictor_columns
+        X_train_df = pd.DataFrame(X_train, columns=predictor_columns)
+        X_val_df = pd.DataFrame(X_val, columns=predictor_columns)
+        
+        # Auto-detect problem type if needed
+        if hyperparams.get('problem_type', 'auto') == 'auto':
+            target_col = session.target_columns[0]
+            # Create a temporary DataFrame with target to analyze
+            temp_df = pd.DataFrame(y_train, columns=[target_col])
+            problem_type, subtype = detect_problem_type(target_col, temp_df)
+            hyperparams['problem_type'] = problem_type
+            print(f"[train_sklearn_model] Auto-detected problem type: {problem_type} ({subtype})")
+        
+        # Detect categorical columns
+        categorical_columns = []
+        for col in predictor_columns:
+            # Check if column has few unique values or is object type
+            if X_train_df[col].dtype == 'object' or X_train_df[col].nunique() < 10:
+                categorical_columns.append(col)
+        
+        if categorical_columns:
+            print(f"[train_sklearn_model] Encoding categorical columns: {categorical_columns}")
+            encoding_method = hyperparams.get('encoding_method', 'onehot')
+            X_train_df = encode_categorical_features(X_train_df, categorical_columns, encoding_method, y_train)
+            X_val_df = encode_categorical_features(X_val_df, categorical_columns, encoding_method, y_val)
+        
+        # Add cyclic features if enabled
+        if hyperparams.get('add_cyclic_features', True):
+            # Auto-detect cyclic columns
+            cyclic_columns = hyperparams.get('cyclic_columns', [])
+            if not cyclic_columns:
+                for col in X_train_df.columns:
+                    if any(term in col.lower() for term in ['hour', 'day', 'month', 'bearing', 'degree', 'angle']):
+                        cyclic_columns.append(col)
+            
+            if cyclic_columns:
+                print(f"[train_sklearn_model] Adding cyclic features for: {cyclic_columns}")
+                X_train_df = add_cyclic_features(X_train_df, cyclic_columns)
+                X_val_df = add_cyclic_features(X_val_df, cyclic_columns)
+        
+        # Check for data leakage
+        if hyperparams.get('check_data_leakage', True):
+            warnings = check_data_leakage(list(X_train_df.columns), session.target_columns[0], X_train_df)
+            if warnings:
+                print(f"[train_sklearn_model] Data leakage warnings: {warnings}")
+                # Could optionally store these warnings in the session
+        
+        # Convert back to numpy arrays
+        X_train = X_train_df.values
+        X_val = X_val_df.values
+        print(f"[train_sklearn_model] After feature engineering - X_train: {X_train.shape}, X_val: {X_val.shape}")
     
     if model_type == 'decision_tree':
         # Determine if it's classification or regression
@@ -1475,6 +1581,128 @@ def generate_weather_map_data(session, date):
             predictions.append(pred)
     
     return predictions
+
+
+def detect_problem_type(target_column, df):
+    """
+    Automatically detect if the problem is classification or regression
+    based on the target column characteristics
+    """
+    # Get unique values in target column
+    unique_values = df[target_column].dropna().unique()
+    n_unique = len(unique_values)
+    n_samples = len(df[target_column].dropna())
+    
+    # Heuristics for classification vs regression
+    if n_unique <= 2:
+        # Binary classification
+        return 'classification', 'binary'
+    elif n_unique < 20 and n_unique < n_samples * 0.05:
+        # Multi-class classification (few unique values relative to samples)
+        return 'classification', 'multiclass'
+    elif df[target_column].dtype == 'object' or df[target_column].dtype.name == 'category':
+        # String/categorical type = classification
+        return 'classification', 'multiclass'
+    else:
+        # Continuous values = regression
+        return 'regression', None
+
+
+def encode_categorical_features(X, categorical_columns, method='onehot', y=None):
+    """
+    Encode categorical features using specified method
+    """
+    from sklearn.preprocessing import OneHotEncoder, LabelEncoder, OrdinalEncoder
+    
+    X_encoded = X.copy()
+    
+    if method == 'onehot':
+        # One-hot encoding
+        encoder = OneHotEncoder(drop='first', sparse=False, handle_unknown='ignore')
+        for col in categorical_columns:
+            if col in X_encoded.columns:
+                encoded = encoder.fit_transform(X_encoded[[col]])
+                feature_names = [f"{col}_{cat}" for cat in encoder.categories_[0][1:]]
+                encoded_df = pd.DataFrame(encoded, columns=feature_names, index=X_encoded.index)
+                X_encoded = pd.concat([X_encoded.drop(col, axis=1), encoded_df], axis=1)
+    
+    elif method == 'ordinal':
+        # Ordinal encoding
+        encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+        for col in categorical_columns:
+            if col in X_encoded.columns:
+                X_encoded[col] = encoder.fit_transform(X_encoded[[col]])
+    
+    elif method == 'target' and y is not None:
+        # Target encoding (mean encoding)
+        for col in categorical_columns:
+            if col in X_encoded.columns:
+                # Calculate mean target value for each category
+                mean_target = y.groupby(X[col]).mean()
+                X_encoded[col] = X[col].map(mean_target).fillna(mean_target.mean())
+    
+    return X_encoded
+
+
+def add_cyclic_features(df, columns):
+    """
+    Add sine and cosine transformations for cyclic features
+    """
+    df_encoded = df.copy()
+    
+    for col in columns:
+        if col in df_encoded.columns:
+            # Detect the period based on column name or values
+            if 'hour' in col.lower():
+                period = 24
+            elif 'day' in col.lower() and 'week' in col.lower():
+                period = 7
+            elif 'month' in col.lower():
+                period = 12
+            elif 'bearing' in col.lower() or 'degree' in col.lower():
+                period = 360
+            else:
+                # Try to infer from data
+                period = df_encoded[col].max() - df_encoded[col].min() + 1
+            
+            # Add sine and cosine features
+            df_encoded[f'{col}_sin'] = np.sin(2 * np.pi * df_encoded[col] / period)
+            df_encoded[f'{col}_cos'] = np.cos(2 * np.pi * df_encoded[col] / period)
+            
+            # Optionally remove original column to avoid linear order assumption
+            # df_encoded = df_encoded.drop(col, axis=1)
+    
+    return df_encoded
+
+
+def check_data_leakage(predictor_columns, target_column, df):
+    """
+    Check for potential data leakage issues
+    """
+    warnings = []
+    
+    # Check for future information in column names
+    future_indicators = ['future', 'next', 'forecast', 'prediction', 'will', 'tomorrow']
+    for col in predictor_columns:
+        if any(indicator in col.lower() for indicator in future_indicators):
+            warnings.append(f"Column '{col}' might contain future information")
+    
+    # Check for perfect correlation with target
+    for col in predictor_columns:
+        if col in df.columns and target_column in df.columns:
+            corr = df[col].corr(df[target_column])
+            if abs(corr) > 0.99:
+                warnings.append(f"Column '{col}' has perfect correlation ({corr:.3f}) with target")
+    
+    # Check for derived features from target
+    target_variants = [target_column.lower(), target_column.upper(), 
+                      target_column.replace('_', ''), target_column.replace('-', '')]
+    for col in predictor_columns:
+        col_clean = col.lower().replace('_', '').replace('-', '')
+        if any(variant in col_clean for variant in target_variants):
+            warnings.append(f"Column '{col}' might be derived from target '{target_column}'")
+    
+    return warnings
 
 
 def _create_fallback_prediction(session, date, city):

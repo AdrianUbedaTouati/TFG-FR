@@ -2065,3 +2065,81 @@ class DatasetNumericTransformView(APIView):
             })
         except Exception as e:
             return error_response(f"Error applying numeric transformation: {str(e)}")
+
+
+class DatasetColumnInfoView(APIView):
+    """Get detailed information about a specific column"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, dataset_id, column_name):
+        try:
+            # Get dataset
+            if request.user.is_staff:
+                dataset = get_object_or_404(Dataset, id=dataset_id)
+            else:
+                dataset = get_object_or_404(Dataset, id=dataset_id, user=request.user)
+            
+            # Load dataset
+            df = load_dataset(dataset.file.path)
+            
+            if df is None:
+                return error_response(f"Error loading dataset: {dataset.name}")
+            
+            # Check if column exists
+            if column_name not in df.columns:
+                return error_response(f"Column '{column_name}' not found in dataset")
+            
+            # Get column data
+            column = df[column_name]
+            
+            # Basic statistics
+            info = {
+                'column_name': column_name,
+                'dtype': str(column.dtype),
+                'total_values': len(column),
+                'null_values': int(column.isnull().sum()),
+                'unique_values': int(column.nunique()),
+                'is_numeric': pd.api.types.is_numeric_dtype(column),
+                'is_categorical': column.dtype == 'object' or column.dtype.name == 'category'
+            }
+            
+            # Add value distribution for categorical/low cardinality columns
+            if info['unique_values'] <= 20:
+                value_counts = column.value_counts().to_dict()
+                info['value_distribution'] = {str(k): int(v) for k, v in value_counts.items()}
+            
+            # Add statistics for numeric columns
+            if info['is_numeric']:
+                info['statistics'] = {
+                    'mean': float(column.mean()) if not column.empty else None,
+                    'std': float(column.std()) if not column.empty else None,
+                    'min': float(column.min()) if not column.empty else None,
+                    'max': float(column.max()) if not column.empty else None,
+                    'q1': float(column.quantile(0.25)) if not column.empty else None,
+                    'median': float(column.quantile(0.5)) if not column.empty else None,
+                    'q3': float(column.quantile(0.75)) if not column.empty else None
+                }
+            
+            # Detect if column might be cyclic
+            is_cyclic = False
+            cyclic_period = None
+            col_lower = column_name.lower()
+            
+            if any(term in col_lower for term in ['hour', 'month', 'day', 'bearing', 'degree', 'angle']):
+                is_cyclic = True
+                if 'hour' in col_lower:
+                    cyclic_period = 24
+                elif 'day' in col_lower and 'week' in col_lower:
+                    cyclic_period = 7
+                elif 'month' in col_lower:
+                    cyclic_period = 12
+                elif 'bearing' in col_lower or 'degree' in col_lower:
+                    cyclic_period = 360
+            
+            info['is_cyclic'] = is_cyclic
+            info['cyclic_period'] = cyclic_period
+            
+            return success_response(info)
+            
+        except Exception as e:
+            return error_response(f"Error getting column info: {str(e)}")
