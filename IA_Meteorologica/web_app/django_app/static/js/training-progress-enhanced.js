@@ -164,7 +164,7 @@ window.updateTrainingStatus = function(data) {
 
 // Enhanced polling function
 function enhancedPolling() {
-    fetch(`/api/training/${sessionId}/status/`)
+    fetch(`/api/training-sessions/${sessionId}/train/`)
         .then(response => response.json())
         .then(data => {
             // Show all log entries from backend

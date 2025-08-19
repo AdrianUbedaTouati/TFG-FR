@@ -48,6 +48,7 @@ urlpatterns = [
     path('training-sessions/<int:pk>/', views.TrainingSessionDetailView.as_view(), name='training-session-detail'),
     path('training-sessions/<int:pk>/train/', views.TrainModelView.as_view(), name='train-model'),
     path('training-sessions/<int:pk>/results/', views.TrainingResultsView.as_view(), name='training-results'),
+    path('training-sessions/<int:pk>/analysis/', views.TrainingAnalysisView.as_view(), name='training-analysis'),
     
     # Model configuration endpoints
     path('model-configs/', views.ModelConfigView.as_view(), name='model-configs'),
