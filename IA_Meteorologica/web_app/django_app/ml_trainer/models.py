@@ -247,6 +247,9 @@ class TrainingSession(models.Model):
     total_epochs = models.IntegerField(default=0)
     current_batch = models.IntegerField(default=0)
     total_batches = models.IntegerField(default=0)
+    
+    # Preprocessing information for sklearn models
+    preprocessing_info = models.JSONField(null=True, blank=True, help_text='Information about preprocessing steps applied')
     train_loss = models.FloatField(null=True, blank=True)
     val_loss = models.FloatField(null=True, blank=True)
     train_accuracy = models.FloatField(null=True, blank=True)

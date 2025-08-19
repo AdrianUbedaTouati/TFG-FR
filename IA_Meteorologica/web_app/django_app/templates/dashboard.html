@@ -586,8 +586,22 @@
                                 <small class="text-muted" id="predictorHelp">Cliquez pour sélectionner les variables d'entrée</small>
                             </div>
                             <div class="mb-3">
-                                <label for="testSize" class="form-label">Taille du Test (%)</label>
-                                <input type="number" class="form-control" id="testSize" min="10" max="50" value="20" required>
+                                <label class="form-label">Division des Données</label>
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label for="trainSize" class="form-label small">Entraînement (%)</label>
+                                        <input type="number" class="form-control" id="trainSize" min="40" max="80" value="70" required onchange="updateDataSplits()">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="valSize" class="form-label small">Validation (%)</label>
+                                        <input type="number" class="form-control" id="valSize" min="10" max="30" value="15" required onchange="updateDataSplits()">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="testSize" class="form-label small">Test (%)</label>
+                                        <input type="number" class="form-control" id="testSize" min="10" max="30" value="15" readonly style="background-color: rgba(255,255,255,0.1);">
+                                    </div>
+                                </div>
+                                <small class="text-muted">Les pourcentages doivent totaliser 100%</small>
                             </div>
                             <div class="mb-3">
                                 <label for="epochs" class="form-label">Époques (pour Deep Learning)</label>
@@ -1735,7 +1749,10 @@ function trainModel() {
             target_columns: targetColumns,
             target_column: targetColumns[0], // Pour compatibilité avec le backend
             predictor_columns: predictorColumns,
-            test_size: document.getElementById('testSize').value / 100,
+            train_split: document.getElementById('trainSize').value / 100,
+            val_split: document.getElementById('valSize').value / 100,
+            test_split: document.getElementById('testSize').value / 100,
+            test_size: document.getElementById('testSize').value / 100,  // Para compatibilidad
             config: modelConfig,
             hyperparameters: modelConfig,
             custom_architecture: modelDef.custom_architecture,
@@ -1803,6 +1820,21 @@ function createModelOnly() {
     
     if (predictorColumns.length < rules.minPredictors) {
         showNotification('Erreur', `${rules.name} nécessite au moins ${rules.minPredictors} variable(s) prédictive(s)`, 'error');
+        return;
+    }
+    
+    // Validation des pourcentages de division des données
+    if (!updateDataSplits()) {
+        showNotification('Erreur', 'Les pourcentages de division des données doivent totaliser 100%', 'error');
+        return;
+    }
+    
+    const trainSize = parseInt(document.getElementById('trainSize').value);
+    const valSize = parseInt(document.getElementById('valSize').value);
+    const testSize = parseInt(document.getElementById('testSize').value);
+    
+    if (trainSize < 40) {
+        showNotification('Erreur', 'Le pourcentage d\'entraînement doit être d\'au moins 40%', 'error');
         return;
     }
     
@@ -2092,6 +2124,34 @@ function getCookie(name) {
         }
     }
     return cookieValue;
+}
+
+// Función para actualizar los porcentajes de división de datos
+function updateDataSplits() {
+    const trainSize = parseInt(document.getElementById('trainSize').value) || 0;
+    const valSize = parseInt(document.getElementById('valSize').value) || 0;
+    const testSizeInput = document.getElementById('testSize');
+    
+    // Calcular el porcentaje de test restante
+    const testSize = 100 - trainSize - valSize;
+    
+    // Validar que los porcentajes sean válidos
+    if (testSize < 0 || testSize > 100) {
+        testSizeInput.value = 'Error';
+        testSizeInput.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
+        return false;
+    }
+    
+    testSizeInput.value = testSize;
+    testSizeInput.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+    
+    // Validar que la suma sea 100
+    if (trainSize + valSize + testSize !== 100) {
+        testSizeInput.style.backgroundColor = 'rgba(255, 193, 7, 0.2)';
+        return false;
+    }
+    
+    return true;
 }
 </script>
 {% endblock %}

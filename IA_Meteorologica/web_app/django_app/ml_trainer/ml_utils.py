@@ -28,6 +28,10 @@ from .ml_utils_pytorch import (
 # Import training callbacks
 from .training_callbacks import SessionProgressCallback, SklearnProgressCallback
 
+# Import sklearn preprocessor
+from .sklearn_preprocessor import SklearnPreprocessor
+from .sklearn_preprocessing_fix import SklearnPreprocessingPipeline
+
 
 def get_model_config(model_type):
     """Get default hyperparameters for each model type"""
@@ -910,7 +914,7 @@ def _prepare_xgboost_params(hyperparams):
     return clean_params
 
 
-def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_val, y_val):
+def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_val, y_val, X_test=None, y_test=None):
     """Train scikit-learn models with enhanced feature engineering"""
     print(f"[train_sklearn_model] Model type: {model_type}")
     print(f"[train_sklearn_model] Hyperparameters received: {hyperparams}")
@@ -918,6 +922,9 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
     
     # Create progress callback
     progress_callback = SklearnProgressCallback(session, model_type)
+    
+    # Initialize preprocessing pipeline
+    preprocessing_pipeline = None
     
     # Apply feature engineering for Random Forest
     if model_type == 'random_forest' and hyperparams.get('encode_categorical', True):
@@ -943,37 +950,59 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
             if X_train_df[col].dtype == 'object' or X_train_df[col].nunique() < 10:
                 categorical_columns.append(col)
         
-        if categorical_columns:
-            print(f"[train_sklearn_model] Encoding categorical columns: {categorical_columns}")
-            encoding_method = hyperparams.get('encoding_method', 'onehot')
-            X_train_df = encode_categorical_features(X_train_df, categorical_columns, encoding_method, y_train)
-            X_val_df = encode_categorical_features(X_val_df, categorical_columns, encoding_method, y_val)
+        # Auto-detect cyclic columns
+        cyclic_columns = hyperparams.get('cyclic_columns', [])
+        if hyperparams.get('add_cyclic_features', True) and not cyclic_columns:
+            for col in predictor_columns:
+                if any(term in col.lower() for term in ['hour', 'day', 'month', 'bearing', 'degree', 'angle']):
+                    cyclic_columns.append(col)
         
-        # Add cyclic features if enabled
-        if hyperparams.get('add_cyclic_features', True):
-            # Auto-detect cyclic columns
-            cyclic_columns = hyperparams.get('cyclic_columns', [])
-            if not cyclic_columns:
-                for col in X_train_df.columns:
-                    if any(term in col.lower() for term in ['hour', 'day', 'month', 'bearing', 'degree', 'angle']):
-                        cyclic_columns.append(col)
-            
-            if cyclic_columns:
-                print(f"[train_sklearn_model] Adding cyclic features for: {cyclic_columns}")
-                X_train_df = add_cyclic_features(X_train_df, cyclic_columns)
-                X_val_df = add_cyclic_features(X_val_df, cyclic_columns)
+        # Create preprocessing pipeline
+        encoding_method = hyperparams.get('encoding_method', 'onehot')
+        preprocessing_pipeline = SklearnPreprocessingPipeline(
+            predictor_columns=predictor_columns,
+            categorical_columns=categorical_columns,
+            cyclic_columns=cyclic_columns if hyperparams.get('add_cyclic_features', True) else [],
+            encoding_method=encoding_method,
+            normalization_method='none'  # We don't normalize here since it's already done
+        )
+        
+        # Fit and transform the data
+        print(f"[train_sklearn_model] Fitting preprocessing pipeline...")
+        print(f"[train_sklearn_model] Categorical columns: {categorical_columns}")
+        print(f"[train_sklearn_model] Cyclic columns: {cyclic_columns}")
+        
+        X_train = preprocessing_pipeline.fit_transform(X_train_df, y_train)
+        X_val = preprocessing_pipeline.transform(X_val_df)
+        
+        # Process test data if provided
+        if X_test is not None:
+            X_test_df = pd.DataFrame(X_test, columns=predictor_columns)
+            X_test = preprocessing_pipeline.transform(X_test_df)
+            print(f"[train_sklearn_model] After preprocessing - X_train: {X_train.shape}, X_val: {X_val.shape}, X_test: {X_test.shape}")
+        else:
+            print(f"[train_sklearn_model] After preprocessing - X_train: {X_train.shape}, X_val: {X_val.shape}")
+        
+        # Store preprocessing info in session for later use
+        preprocessing_info = preprocessing_pipeline.get_preprocessing_info()
+        session.preprocessing_info = preprocessing_info
+        session.save()
+        
+        # Save the preprocessing pipeline with the model
+        import os
+        import tempfile
+        pipeline_path = os.path.join(tempfile.gettempdir(), f'preprocessing_pipeline_{session.id}.pkl')
+        preprocessing_pipeline.save(pipeline_path)
+        preprocessing_info['pipeline_path'] = pipeline_path
+        session.preprocessing_info = preprocessing_info
+        session.save()
         
         # Check for data leakage
         if hyperparams.get('check_data_leakage', True):
-            warnings = check_data_leakage(list(X_train_df.columns), session.target_columns[0], X_train_df)
+            feature_names = preprocessing_info['feature_names_after_preprocessing']
+            warnings = check_data_leakage(feature_names, session.target_columns[0], pd.DataFrame(X_train, columns=feature_names))
             if warnings:
                 print(f"[train_sklearn_model] Data leakage warnings: {warnings}")
-                # Could optionally store these warnings in the session
-        
-        # Convert back to numpy arrays
-        X_train = X_train_df.values
-        X_val = X_val_df.values
-        print(f"[train_sklearn_model] After feature engineering - X_train: {X_train.shape}, X_val: {X_val.shape}")
     
     if model_type == 'decision_tree':
         # Determine if it's classification or regression
@@ -1055,8 +1084,47 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                       verbose=False)
         else:
             print(f"[train_sklearn_model] Training {model_type} model...")
-            model.fit(X_train, y_train)
-            progress_callback.update_progress(0.8, f"Entraînement {model_type} terminé")
+            
+            # For Random Forest, we can track progress using warm_start
+            if model_type == 'random_forest':
+                n_estimators = hyperparams.get('n_estimators', 100)
+                print(f"[train_sklearn_model] Training Random Forest with {n_estimators} trees...")
+                
+                # Enable warm_start to train incrementally
+                model.set_params(warm_start=True)
+                
+                # Train in batches to show progress
+                batch_size = max(10, n_estimators // 10)  # Train in 10 steps minimum
+                trees_trained = 0
+                
+                for i in range(0, n_estimators, batch_size):
+                    current_batch = min(batch_size, n_estimators - i)
+                    model.set_params(n_estimators=trees_trained + current_batch)
+                    model.fit(X_train, y_train)
+                    trees_trained += current_batch
+                    
+                    # Update progress
+                    progress = 0.3 + (0.5 * (trees_trained / n_estimators))
+                    progress_callback.update_progress(
+                        progress, 
+                        f"Random Forest - {trees_trained}/{n_estimators} arbres entraînés"
+                    )
+                    
+                    # Log OOB score if available
+                    if hasattr(model, 'oob_score_') and model.oob_score_:
+                        print(f"[train_sklearn_model] OOB Score after {trees_trained} trees: {model.oob_score_:.4f}")
+                        progress_callback.update_message(
+                            f"Score OOB actuel: {model.oob_score_:.4f}"
+                        )
+                
+                # Disable warm_start after training
+                model.set_params(warm_start=False)
+                progress_callback.update_progress(0.8, f"Random Forest - {n_estimators} arbres entraînés avec succès")
+                
+            else:
+                # For other models, simple fit
+                model.fit(X_train, y_train)
+                progress_callback.update_progress(0.8, f"Entraînement {model_type} terminé")
         
         print(f"[train_sklearn_model] Model training completed successfully!")
     except Exception as e:
@@ -1131,7 +1199,15 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
     # Finish progress tracking
     progress_callback.on_train_end()
     
-    return model, history
+    # Return processed data along with model
+    return {
+        'model': model,
+        'history': history,
+        'preprocessing_pipeline': preprocessing_pipeline,
+        'X_train_processed': X_train,
+        'X_val_processed': X_val,
+        'X_test_processed': X_test if X_test is not None else None
+    }
 
 
 def train_model(session):
@@ -1188,13 +1264,22 @@ def train_model(session):
         # Train model based on type
         print(f"[Training] Starting model training...")
         if session.model_type in ['decision_tree', 'random_forest', 'xgboost']:
-            model, history = train_sklearn_model(
+            result = train_sklearn_model(
                 session,
                 session.model_type, 
                 session.hyperparameters,
                 X_train, y_train, 
-                X_val, y_val
+                X_val, y_val,
+                X_test, y_test
             )
+            model = result['model']
+            history = result['history']
+            preprocessing_pipeline = result.get('preprocessing_pipeline')
+            
+            # Use processed data for evaluation
+            if preprocessing_pipeline:
+                X_test = result['X_test_processed']
+            
             model_format = 'sklearn'
         else:
             # Train neural network based on framework
@@ -1319,12 +1404,24 @@ def train_model(session):
         else:
             # Save sklearn model
             model_path = f"{model_dir}/model_{session.id}.pkl"
+            
+            # Load preprocessing pipeline if it exists
+            preprocessing_pipeline = None
+            if session.preprocessing_info and 'pipeline_path' in session.preprocessing_info:
+                pipeline_path = session.preprocessing_info['pipeline_path']
+                if os.path.exists(pipeline_path):
+                    preprocessing_pipeline = SklearnPreprocessingPipeline.load(pipeline_path)
+                    # Clean up temp file
+                    os.remove(pipeline_path)
+            
             joblib.dump({
                 'model': model,
                 'scaler_X': scaler_X,
                 'scaler_y': scaler_y,
                 'predictor_columns': session.predictor_columns,
-                'target_columns': session.target_columns
+                'target_columns': session.target_columns,
+                'preprocessing_pipeline': preprocessing_pipeline,
+                'preprocessing_info': session.preprocessing_info
             }, model_path)
         
         # Update session
@@ -1407,15 +1504,24 @@ def make_predictions(session, input_file):
         model = model_data['model']
         scaler_X = model_data['scaler_X']
         scaler_y = model_data['scaler_y']
+        preprocessing_pipeline = model_data.get('preprocessing_pipeline', None)
         sequence_length = None
     
     # Load input data
     df = pd.read_csv(input_file)
-    X = df[session.predictor_columns].values
     
-    # Scale input if needed
-    if scaler_X:
-        X = scaler_X.transform(X)
+    # For sklearn models with preprocessing pipeline
+    if not is_neural and preprocessing_pipeline:
+        # Use preprocessing pipeline
+        X_df = df[session.predictor_columns]
+        X = preprocessing_pipeline.transform(X_df)
+    else:
+        # Traditional approach
+        X = df[session.predictor_columns].values
+        
+        # Scale input if needed
+        if scaler_X:
+            X = scaler_X.transform(X)
     
     # Create sequences for neural networks
     if is_neural and sequence_length:
@@ -1618,7 +1724,7 @@ def encode_categorical_features(X, categorical_columns, method='onehot', y=None)
     
     if method == 'onehot':
         # One-hot encoding
-        encoder = OneHotEncoder(drop='first', sparse=False, handle_unknown='ignore')
+        encoder = OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore')
         for col in categorical_columns:
             if col in X_encoded.columns:
                 encoded = encoder.fit_transform(X_encoded[[col]])

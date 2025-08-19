@@ -637,6 +637,52 @@
     </div>
 </div>
 
+<!-- Modal Configuration d'Entraînement -->
+<div class="modal fade" id="trainConfigModal" tabindex="-1">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-white" id="trainConfigTitle">
+                    <i class="bi bi-gear"></i> Configuration d'Entraînement
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="trainModelInfo" class="text-info mb-3"></p>
+                
+                <div class="mb-4">
+                    <label class="form-label">Division des Données</label>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label for="trainSizeConfig" class="form-label small">Entraînement (%)</label>
+                            <input type="number" class="form-control" id="trainSizeConfig" min="40" max="80" value="70" required onchange="updateDataSplitsConfig()">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="valSizeConfig" class="form-label small">Validation (%)</label>
+                            <input type="number" class="form-control" id="valSizeConfig" min="10" max="30" value="15" required onchange="updateDataSplitsConfig()">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="testSizeConfig" class="form-label small">Test (%)</label>
+                            <input type="number" class="form-control" id="testSizeConfig" min="10" max="30" value="15" readonly style="background-color: rgba(255,255,255,0.1);">
+                        </div>
+                    </div>
+                    <small class="text-muted">Les pourcentages doivent totaliser 100%</small>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Ces paramètres s'appliquent uniquement à cette session d'entraînement.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" id="confirmTrainBtn" onclick="confirmTraining()">
+                    <i class="bi bi-play-fill"></i> Lancer l'Entraînement
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Créer un Modèle (identique à dashboard) -->
 <div class="modal fade" id="createModelModal" tabindex="-1">
     <div class="modal-dialog modal-xl">
@@ -697,8 +743,22 @@
                                 <small class="text-muted" id="predictorHelp">Cliquez pour sélectionner les variables d'entrée</small>
                             </div>
                             <div class="mb-3">
-                                <label for="testSize" class="form-label">Taille du Test (%)</label>
-                                <input type="number" class="form-control" id="testSize" min="10" max="50" value="20" required>
+                                <label class="form-label">Division des Données</label>
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label for="trainSize" class="form-label small">Entraînement (%)</label>
+                                        <input type="number" class="form-control" id="trainSize" min="40" max="80" value="70" required onchange="updateDataSplits()">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="valSize" class="form-label small">Validation (%)</label>
+                                        <input type="number" class="form-control" id="valSize" min="10" max="30" value="15" required onchange="updateDataSplits()">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="testSize" class="form-label small">Test (%)</label>
+                                        <input type="number" class="form-control" id="testSize" min="10" max="30" value="15" readonly style="background-color: rgba(255,255,255,0.1);">
+                                    </div>
+                                </div>
+                                <small class="text-muted">Les pourcentages doivent totaliser 100%</small>
                             </div>
                             <div class="mb-3" id="epochsContainer">
                                 <label for="epochs" class="form-label">Époques (pour Deep Learning)</label>
@@ -2058,23 +2118,62 @@ function displayTrainingHistory(trainings) {
 }
 
 // Entraîner le modèle
+// Variable globale pour stocker le modèle en cours d'entraînement
+let currentTrainingModel = null;
+
 function trainModel(modelId) {
     const model = modelsList.find(m => m.id === modelId);
     if (!model) return;
     
-    // Créer une nouvelle session d'entraînement basée sur la définition du modèle
+    // Stocker le modèle pour l'utiliser dans confirmTraining
+    currentTrainingModel = model;
+    
+    // Mettre à jour les informations du modal
+    document.getElementById('trainModelInfo').innerHTML = `
+        <strong>Modèle:</strong> ${model.name}<br>
+        <strong>Type:</strong> ${model.model_type.toUpperCase()}<br>
+        <strong>Dataset:</strong> ${model.dataset_name || 'Dataset #' + model.dataset}
+    `;
+    
+    // Afficher le modal de configuration
+    const modal = new bootstrap.Modal(document.getElementById('trainConfigModal'));
+    modal.show();
+}
+
+function confirmTraining() {
+    if (!currentTrainingModel) return;
+    
+    // Valider les pourcentages
+    if (!updateDataSplitsConfig()) {
+        showNotification('Erreur', 'Les pourcentages de division des données doivent totaliser 100%', 'error');
+        return;
+    }
+    
+    const trainSize = parseInt(document.getElementById('trainSizeConfig').value);
+    const valSize = parseInt(document.getElementById('valSizeConfig').value);
+    const testSize = parseInt(document.getElementById('testSizeConfig').value);
+    
+    // Créer une nouvelle session d'entraînement avec les paramètres de division
     const trainingData = {
-        model_definition: modelId,
-        name: `${model.name} - Training ${new Date().toISOString()}`,
-        model_type: model.model_type,
-        dataset: model.dataset,
-        predictor_columns: model.predictor_columns,
-        target_columns: model.target_columns,
-        config: model.default_config,
-        hyperparameters: model.hyperparameters,
-        custom_architecture: model.custom_architecture,
-        use_custom_architecture: model.use_custom_architecture
+        model_definition: currentTrainingModel.id,
+        name: `${currentTrainingModel.name} - Training ${new Date().toISOString()}`,
+        model_type: currentTrainingModel.model_type,
+        dataset: currentTrainingModel.dataset,
+        predictor_columns: currentTrainingModel.predictor_columns,
+        target_columns: currentTrainingModel.target_columns,
+        config: currentTrainingModel.default_config,
+        hyperparameters: currentTrainingModel.hyperparameters,
+        custom_architecture: currentTrainingModel.custom_architecture,
+        use_custom_architecture: currentTrainingModel.use_custom_architecture,
+        train_split: trainSize / 100,
+        val_split: valSize / 100,
+        test_split: testSize / 100,
+        test_size: testSize / 100  // Pour compatibilité
     };
+    
+    // Fermer le modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('trainConfigModal'));
+    modal.hide();
     
     showLoading('Initialisation de l\'entraînement...', 'Préparation de votre modèle d\'IA');
     
@@ -2089,11 +2188,13 @@ function trainModel(modelId) {
     .then(response => response.json())
     .then(session => {
         hideLoading();
+        currentTrainingModel = null;
         // Rediriger vers la page de progression
         window.location.href = `/training-progress/${session.id}/`;
     })
     .catch(error => {
         hideLoading();
+        currentTrainingModel = null;
         console.error('Erreur:', error);
         showNotification('Erreur', 'Impossible de démarrer l\'entraînement', 'error');
     });
@@ -4505,6 +4606,62 @@ function loadDecisionTreeConfiguration(hyperparams) {
     
     // Update UI based on problem type
     updateDecisionTreeOptions();
+}
+
+// Función para actualizar los porcentajes de división de datos
+function updateDataSplits() {
+    const trainSize = parseInt(document.getElementById('trainSize').value) || 0;
+    const valSize = parseInt(document.getElementById('valSize').value) || 0;
+    const testSizeInput = document.getElementById('testSize');
+    
+    // Calcular el porcentaje de test restante
+    const testSize = 100 - trainSize - valSize;
+    
+    // Validar que los porcentajes sean válidos
+    if (testSize < 0 || testSize > 100) {
+        testSizeInput.value = 'Error';
+        testSizeInput.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
+        return false;
+    }
+    
+    testSizeInput.value = testSize;
+    testSizeInput.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+    
+    // Validar que la suma sea 100
+    if (trainSize + valSize + testSize !== 100) {
+        testSizeInput.style.backgroundColor = 'rgba(255, 193, 7, 0.2)';
+        return false;
+    }
+    
+    return true;
+}
+
+// Función para actualizar los porcentajes de división de datos en el modal de configuración
+function updateDataSplitsConfig() {
+    const trainSize = parseInt(document.getElementById('trainSizeConfig').value) || 0;
+    const valSize = parseInt(document.getElementById('valSizeConfig').value) || 0;
+    const testSizeInput = document.getElementById('testSizeConfig');
+    
+    // Calcular el porcentaje de test restante
+    const testSize = 100 - trainSize - valSize;
+    
+    // Validar que los porcentajes sean válidos
+    if (testSize < 0 || testSize > 100) {
+        testSizeInput.value = 'Error';
+        testSizeInput.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
+        return false;
+    }
+    
+    testSizeInput.value = testSize;
+    testSizeInput.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+    
+    // Validar que la suma sea 100
+    if (trainSize + valSize + testSize !== 100) {
+        testSizeInput.style.backgroundColor = 'rgba(255, 193, 7, 0.2)';
+        return false;
+    }
+    
+    return true;
 }
 </script>
 
