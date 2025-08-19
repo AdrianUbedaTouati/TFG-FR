@@ -2226,14 +2226,22 @@ function editModel(modelId) {
             // Setup modal UI for editing
             setupEditModalUI(model, modelId);
             
-            // Load model-specific configurations
-            if (model.model_type === 'random_forest' && model.hyperparameters) {
-                loadRandomForestConfiguration(model.hyperparameters);
-            } else if (model.model_type === 'xgboost' && model.hyperparameters) {
-                loadXGBoostConfiguration(model.hyperparameters);
-            } else if (model.model_type === 'decision_tree' && model.hyperparameters) {
-                loadDecisionTreeConfiguration(model.hyperparameters);
-            }
+            // Load model-specific configurations with delay to ensure DOM is ready
+            setTimeout(() => {
+                if (model.model_type === 'random_forest' && model.hyperparameters) {
+                    if (typeof loadRandomForestConfiguration === 'function') {
+                        loadRandomForestConfiguration(model.hyperparameters);
+                    }
+                } else if (model.model_type === 'xgboost' && model.hyperparameters) {
+                    if (typeof loadXGBoostConfiguration === 'function') {
+                        loadXGBoostConfiguration(model.hyperparameters);
+                    }
+                } else if (model.model_type === 'decision_tree' && model.hyperparameters) {
+                    if (typeof loadDecisionTreeConfiguration === 'function') {
+                        loadDecisionTreeConfiguration(model.hyperparameters);
+                    }
+                }
+            }, 500);
             
             // Update framework options and show modal
             updateFrameworkOptions();
@@ -2277,11 +2285,23 @@ function updateModel(modelId) {
     }
     
     // Construire la configuration du modèle
-    const expertMode = document.getElementById('expertMode').checked;
+    const expertModeElement = document.getElementById('expertMode');
+    const expertMode = expertModeElement ? expertModeElement.checked : false;
+    
+    // Get test size with null check
+    const testSizeElement = document.getElementById('testSize');
+    const testSizeValue = testSizeElement ? parseInt(testSizeElement.value) / 100 : 0.2;
+    
+    // Get epochs with null check
+    const epochsElement = document.getElementById('epochs');
+    const epochsValue = epochsElement ? parseInt(epochsElement.value) : 50;
+    
     let modelConfig = {
-        epochs: parseInt(document.getElementById('epochs').value),
-        test_size: parseInt(document.getElementById('testSize').value) / 100
+        epochs: epochsValue,
+        test_size: testSizeValue
     };
+    
+    console.log('Saving model config:', modelConfig);
     
     // Configuration commune pour les modèles de deep learning
     if (isDeepLearningModel(modelType) || expertMode) {
@@ -2308,7 +2328,9 @@ function updateModel(modelId) {
     
     // Configuration Random Forest
     if (modelType === 'random_forest') {
-        modelConfig = { ...modelConfig, ...getRandomForestConfig() };
+        const rfConfig = getRandomForestConfig();
+        console.log('Random Forest config:', rfConfig);
+        modelConfig = { ...modelConfig, ...rfConfig };
     }
     
     // Configuration XGBoost
@@ -2844,13 +2866,13 @@ function applyModelRules() {
     const modelReqText = document.getElementById('modelRequirementsText');
     
     if (!modelType || !modelRules[modelType]) {
-        modelReqDiv.style.display = 'none';
+        if (modelReqDiv) modelReqDiv.style.display = 'none';
         return;
     }
     
     const rules = modelRules[modelType];
-    modelReqDiv.style.display = 'block';
-    modelReqText.innerHTML = rules.description;
+    if (modelReqDiv) modelReqDiv.style.display = 'block';
+    if (modelReqText) modelReqText.innerHTML = rules.description;
     
     // Mettre à jour les textes d'aide
     const targetHelp = document.getElementById('targetHelp');
@@ -2917,31 +2939,48 @@ function updateVariableRestrictions() {
 
 // Toggle du mode expert
 function toggleExpertMode() {
-    const expertMode = document.getElementById('expertMode').checked;
-    const modelType = document.getElementById('modelType').value;
+    const expertModeElement = document.getElementById('expertMode');
+    const modelTypeElement = document.getElementById('modelType');
+    
+    if (!expertModeElement || !modelTypeElement) {
+        console.error('Expert mode or model type element not found');
+        return;
+    }
+    
+    const expertMode = expertModeElement.checked;
+    const modelType = modelTypeElement.value;
+    
+    // Get all elements with null checks
+    const modelConfigElement = document.getElementById('modelConfiguration');
+    const networkArchElement = document.getElementById('networkArchitecture');
+    const metricsCallbacksElement = document.getElementById('metricsCallbacks');
+    const randomForestConfigElement = document.getElementById('randomForestConfiguration');
+    const layersContainerElement = document.getElementById('layersContainer');
     
     // Afficher/masquer les sections selon le mode et le type de modèle
     if (modelType === 'random_forest') {
         // Pour Random Forest, ne montrer que sa configuration spécifique
-        document.getElementById('modelConfiguration').style.display = 'none';
-        document.getElementById('networkArchitecture').style.display = 'none';
-        document.getElementById('metricsCallbacks').style.display = 'none';
-        document.getElementById('randomForestConfiguration').style.display = 'block';
+        if (modelConfigElement && modelConfigElement.style) modelConfigElement.style.display = 'none';
+        if (networkArchElement && networkArchElement.style) networkArchElement.style.display = 'none';
+        if (metricsCallbacksElement && metricsCallbacksElement.style) metricsCallbacksElement.style.display = 'none';
+        if (randomForestConfigElement && randomForestConfigElement.style) randomForestConfigElement.style.display = 'block';
         if (typeof updateRandomForestOptions === 'function') {
             updateRandomForestOptions();
         }
     } else {
         // Pour les autres modèles, logique normale
-        document.getElementById('modelConfiguration').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
-        document.getElementById('networkArchitecture').style.display = expertMode ? 'block' : 'none';
-        document.getElementById('metricsCallbacks').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
-        document.getElementById('randomForestConfiguration').style.display = 'none';
+        if (modelConfigElement && modelConfigElement.style) modelConfigElement.style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
+        if (networkArchElement && networkArchElement.style) networkArchElement.style.display = expertMode ? 'block' : 'none';
+        if (metricsCallbacksElement && metricsCallbacksElement.style) metricsCallbacksElement.style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
+        if (randomForestConfigElement && randomForestConfigElement.style) randomForestConfigElement.style.display = 'none';
     }
     
     // Si on désactive le mode expert, réinitialiser l'architecture personnalisée
     if (!expertMode) {
         networkLayers = [];
-        document.getElementById('layersContainer').innerHTML = '<p class="text-muted text-center">Aucune couche ajoutée. Cliquez sur les boutons ci-dessus pour ajouter des couches.</p>';
+        if (layersContainerElement) {
+            layersContainerElement.innerHTML = '<p class="text-muted text-center">Aucune couche ajoutée. Cliquez sur les boutons ci-dessus pour ajouter des couches.</p>';
+        }
     }
 }
 
@@ -3147,7 +3186,9 @@ function createModelOnly() {
     
     // Configuration Random Forest
     if (modelType === 'random_forest') {
-        modelConfig = { ...modelConfig, ...getRandomForestConfig() };
+        const rfConfig = getRandomForestConfig();
+        console.log('Random Forest config:', rfConfig);
+        modelConfig = { ...modelConfig, ...rfConfig };
     }
     
     // Configuration XGBoost
@@ -3465,22 +3506,29 @@ function updateFrameworkOptions() {
     
     // Show framework selection only for neural networks
     if (['lstm', 'gru', 'cnn', 'transformer'].includes(modelType)) {
-        frameworkDiv.style.display = 'block';
+        if (frameworkDiv) frameworkDiv.style.display = 'block';
     } else {
-        frameworkDiv.style.display = 'none';
+        if (frameworkDiv) frameworkDiv.style.display = 'none';
     }
     
     // Configurar las secciones según el tipo de modelo
     if (modelType === 'random_forest') {
         // Para Random Forest, ocultar secciones de redes neuronales
-        document.getElementById('modelConfiguration').style.display = 'none';
-        document.getElementById('networkArchitecture').style.display = 'none';
-        document.getElementById('metricsCallbacks').style.display = 'none';
-        document.getElementById('randomForestConfiguration').style.display = 'block';
-        document.getElementById('xgboostConfiguration').style.display = 'none';
-        document.getElementById('decisionTreeConfiguration').style.display = 'none';
-        epochsContainer.style.display = 'none';
-        expertModeContainer.style.display = 'none';
+        const modelConfig = document.getElementById('modelConfiguration');
+        const networkArch = document.getElementById('networkArchitecture');
+        const metricsCallbacks = document.getElementById('metricsCallbacks');
+        const randomForestConfig = document.getElementById('randomForestConfiguration');
+        const xgboostConfig = document.getElementById('xgboostConfiguration');
+        const decisionTreeConfig = document.getElementById('decisionTreeConfiguration');
+        
+        if (modelConfig) modelConfig.style.display = 'none';
+        if (networkArch) networkArch.style.display = 'none';
+        if (metricsCallbacks) metricsCallbacks.style.display = 'none';
+        if (randomForestConfig) randomForestConfig.style.display = 'block';
+        if (xgboostConfig) xgboostConfig.style.display = 'none';
+        if (decisionTreeConfig) decisionTreeConfig.style.display = 'none';
+        if (epochsContainer) epochsContainer.style.display = 'none';
+        if (expertModeContainer) expertModeContainer.style.display = 'none';
         // Inicializar configuración de Random Forest
         if (typeof initializeRandomForestConfig === 'function') {
             initializeRandomForestConfig();
@@ -3490,45 +3538,75 @@ function updateFrameworkOptions() {
         }
     } else if (modelType === 'xgboost') {
         // Para XGBoost, ocultar secciones de redes neuronales y opciones no relevantes
-        document.getElementById('modelConfiguration').style.display = 'none';
-        document.getElementById('networkArchitecture').style.display = 'none';
-        document.getElementById('metricsCallbacks').style.display = 'none';
-        document.getElementById('randomForestConfiguration').style.display = 'none';
-        document.getElementById('xgboostConfiguration').style.display = 'block';
-        document.getElementById('decisionTreeConfiguration').style.display = 'none';
-        epochsContainer.style.display = 'none';
-        expertModeContainer.style.display = 'none';
+        const modelConfig = document.getElementById('modelConfiguration');
+        const networkArch = document.getElementById('networkArchitecture');
+        const metricsCallbacks = document.getElementById('metricsCallbacks');
+        const randomForestConfig = document.getElementById('randomForestConfiguration');
+        const xgboostConfig = document.getElementById('xgboostConfiguration');
+        const decisionTreeConfig = document.getElementById('decisionTreeConfiguration');
+        
+        if (modelConfig) modelConfig.style.display = 'none';
+        if (networkArch) networkArch.style.display = 'none';
+        if (metricsCallbacks) metricsCallbacks.style.display = 'none';
+        if (randomForestConfig) randomForestConfig.style.display = 'none';
+        if (xgboostConfig) xgboostConfig.style.display = 'block';
+        if (decisionTreeConfig) decisionTreeConfig.style.display = 'none';
+        if (epochsContainer) epochsContainer.style.display = 'none';
+        if (expertModeContainer) expertModeContainer.style.display = 'none';
         
         // Asegurar que el modo experto esté desactivado
-        document.getElementById('expertMode').checked = false;
-        updateXGBoostOptions();
+        const expertModeElement = document.getElementById('expertMode');
+        if (expertModeElement) expertModeElement.checked = false;
+        if (typeof updateXGBoostOptions === 'function') {
+            updateXGBoostOptions();
+        }
     } else if (modelType === 'decision_tree') {
         // Para Decision Tree, ocultar secciones de redes neuronales y opciones no relevantes
-        document.getElementById('modelConfiguration').style.display = 'none';
-        document.getElementById('networkArchitecture').style.display = 'none';
-        document.getElementById('metricsCallbacks').style.display = 'none';
-        document.getElementById('randomForestConfiguration').style.display = 'none';
-        document.getElementById('xgboostConfiguration').style.display = 'none';
-        document.getElementById('decisionTreeConfiguration').style.display = 'block';
-        epochsContainer.style.display = 'none';
-        expertModeContainer.style.display = 'none';
+        const modelConfig = document.getElementById('modelConfiguration');
+        const networkArch = document.getElementById('networkArchitecture');
+        const metricsCallbacks = document.getElementById('metricsCallbacks');
+        const randomForestConfig = document.getElementById('randomForestConfiguration');
+        const xgboostConfig = document.getElementById('xgboostConfiguration');
+        const decisionTreeConfig = document.getElementById('decisionTreeConfiguration');
+        
+        if (modelConfig) modelConfig.style.display = 'none';
+        if (networkArch) networkArch.style.display = 'none';
+        if (metricsCallbacks) metricsCallbacks.style.display = 'none';
+        if (randomForestConfig) randomForestConfig.style.display = 'none';
+        if (xgboostConfig) xgboostConfig.style.display = 'none';
+        if (decisionTreeConfig) decisionTreeConfig.style.display = 'block';
+        if (epochsContainer) epochsContainer.style.display = 'none';
+        if (expertModeContainer) expertModeContainer.style.display = 'none';
         
         // Asegurar que el modo experto esté desactivado
-        document.getElementById('expertMode').checked = false;
-        updateDecisionTreeOptions();
+        const expertModeElement = document.getElementById('expertMode');
+        if (expertModeElement) expertModeElement.checked = false;
+        if (typeof updateDecisionTreeOptions === 'function') {
+            updateDecisionTreeOptions();
+        }
     } else {
         // Para otros modelos (redes neuronales)
-        document.getElementById('randomForestConfiguration').style.display = 'none';
-        document.getElementById('xgboostConfiguration').style.display = 'none';
-        document.getElementById('decisionTreeConfiguration').style.display = 'none';
-        epochsContainer.style.display = isDeepLearningModel(modelType) ? 'block' : 'none';
-        expertModeContainer.style.display = isDeepLearningModel(modelType) ? 'block' : 'none';
+        const randomForestConfig = document.getElementById('randomForestConfiguration');
+        const xgboostConfig = document.getElementById('xgboostConfiguration');
+        const decisionTreeConfig = document.getElementById('decisionTreeConfiguration');
+        const modelConfig = document.getElementById('modelConfiguration');
+        const metricsCallbacks = document.getElementById('metricsCallbacks');
+        const networkArch = document.getElementById('networkArchitecture');
+        
+        if (randomForestConfig) randomForestConfig.style.display = 'none';
+        if (xgboostConfig) xgboostConfig.style.display = 'none';
+        if (decisionTreeConfig) decisionTreeConfig.style.display = 'none';
+        
+        if (epochsContainer) epochsContainer.style.display = isDeepLearningModel(modelType) ? 'block' : 'none';
+        if (expertModeContainer) expertModeContainer.style.display = isDeepLearningModel(modelType) ? 'block' : 'none';
         
         // Aplicar lógica normal para modelos de deep learning
-        const expertMode = document.getElementById('expertMode').checked;
-        document.getElementById('modelConfiguration').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
-        document.getElementById('metricsCallbacks').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
-        document.getElementById('networkArchitecture').style.display = expertMode ? 'block' : 'none';
+        const expertModeElement = document.getElementById('expertMode');
+        const expertMode = expertModeElement ? expertModeElement.checked : false;
+        
+        if (modelConfig) modelConfig.style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
+        if (metricsCallbacks) metricsCallbacks.style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
+        if (networkArch) networkArch.style.display = expertMode ? 'block' : 'none';
     }
 }
 
@@ -4479,6 +4557,6 @@ function loadDecisionTreeConfiguration(hyperparams) {
 </script>
 
 <!-- Include Random Forest configuration script -->
-<script src="{% static 'js/random-forest-config.js' %}"></script>
+<script src="{% static 'js/random-forest-config-v2.js' %}"></script>
 
 {% endblock %}
