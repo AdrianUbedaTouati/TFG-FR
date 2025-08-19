@@ -41,4 +41,4 @@ Thumbs.db
 *.bak
 
 #Modelos 
-web_app/django_app/models/
+IA_Meteorologica/web_app/django_app/media/models/
