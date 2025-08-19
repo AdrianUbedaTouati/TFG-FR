@@ -486,6 +486,8 @@ function addLog(message) {
 
 // Mettre à jour l'interface avec les données
 function updateUI(data) {
+    console.log('UpdateUI called with status:', data.status);
+    
     // Mettre à jour le statut
     const statusBadge = document.getElementById('status-badge');
     statusBadge.className = `status-badge status-${data.status}`;
@@ -499,12 +501,33 @@ function updateUI(data) {
         statusBadge.innerHTML = '<i class="bi bi-check-circle"></i> Terminé';
         document.getElementById('stop-training').style.display = 'none';
         document.getElementById('view-results').style.display = 'inline-block';
-        clearInterval(pollingInterval);
+        
+        // Clear all polling intervals
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+        }
+        if (window.pollingInterval) {
+            clearInterval(window.pollingInterval);
+            window.pollingInterval = null;
+        }
+        
         addLog('Entraînement terminé avec succès!');
+        console.log('Training completed - all polling should be stopped');
     } else if (data.status === 'failed') {
         statusBadge.innerHTML = '<i class="bi bi-x-circle"></i> Échec';
         document.getElementById('stop-training').style.display = 'none';
-        clearInterval(pollingInterval);
+        
+        // Clear all polling intervals
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+        }
+        if (window.pollingInterval) {
+            clearInterval(window.pollingInterval);
+            window.pollingInterval = null;
+        }
+        
         addLog('Erreur: ' + (data.error_message || 'Erreur inconnue'));
     }
     

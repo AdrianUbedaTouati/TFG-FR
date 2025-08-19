@@ -178,11 +178,37 @@ function enhancedPolling() {
             }
             
             // Update status with enhanced info
-            updateTrainingStatus(data);
+            if (typeof updateUI === 'function') {
+                updateUI(data);
+            } else {
+                console.error('updateUI function not found');
+            }
             
             // Stop polling if training is complete
             if (data.status === 'completed' || data.status === 'failed') {
-                clearInterval(pollingInterval);
+                console.log('Training completed/failed. Stopping all polling...');
+                // Clear both polling intervals to be sure
+                if (window.pollingInterval) {
+                    clearInterval(window.pollingInterval);
+                    window.pollingInterval = null;
+                }
+                if (pollingInterval) {
+                    clearInterval(pollingInterval);
+                    pollingInterval = null;
+                }
+                
+                // Ensure UI is updated for completed state
+                const viewResultsBtn = document.getElementById('view-results');
+                const stopTrainingBtn = document.getElementById('stop-training');
+                
+                if (viewResultsBtn && data.status === 'completed') {
+                    viewResultsBtn.style.display = 'inline-block';
+                    console.log('View results button should be visible now');
+                }
+                
+                if (stopTrainingBtn) {
+                    stopTrainingBtn.style.display = 'none';
+                }
             }
         })
         .catch(error => {
@@ -193,15 +219,31 @@ function enhancedPolling() {
 
 // Initialize enhanced features
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing enhanced training progress...');
     window.processedLogs = new Set();
     window.modelTypeSet = false;
     
-    // Start enhanced polling
+    // Clear any existing polling intervals first
     if (window.pollingInterval) {
         clearInterval(window.pollingInterval);
+        window.pollingInterval = null;
     }
-    window.pollingInterval = setInterval(enhancedPolling, 1000);
+    if (typeof pollingInterval !== 'undefined' && pollingInterval) {
+        clearInterval(pollingInterval);
+    }
     
-    // Initial poll
-    enhancedPolling();
+    // Wait a bit to let the main page initialize, then take over polling
+    setTimeout(() => {
+        console.log('Starting enhanced polling...');
+        // Clear the main polling interval if it exists
+        if (typeof pollingInterval !== 'undefined' && pollingInterval) {
+            clearInterval(pollingInterval);
+        }
+        
+        // Start our enhanced polling
+        window.pollingInterval = setInterval(enhancedPolling, 1000);
+        
+        // Do initial check immediately
+        enhancedPolling();
+    }, 500);
 });

@@ -159,23 +159,37 @@ class TrainingAnalysisView(APIView):
     
     def get(self, request, pk):
         """Get detailed analysis for training session"""
+        print(f"=== TrainingAnalysisView GET request for session {pk} ===")
+        
         # Verificar permisos
         if request.user.is_staff:
             session = get_object_or_404(TrainingSession, pk=pk)
         else:
             session = get_object_or_404(TrainingSession, pk=pk, user=request.user)
-            
+        
+        print(f"Session found: ID={session.id}, Status={session.status}, Model type={session.model_type}")
+        print(f"Model file: {session.model_file}")
+        print(f"Dataset: {session.dataset}")
+        
         if session.status != 'completed':
+            print(f"Session not completed, status: {session.status}")
             return error_response("Training session is not completed")
             
         try:
+            print("Starting analysis generation...")
             analysis_data = self._generate_analysis(session)
+            print(f"Analysis completed successfully. Keys: {analysis_data.keys()}")
             return Response(analysis_data)
         except Exception as e:
+            print(f"ERROR in analysis generation: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return error_response(f"Error generating analysis: {str(e)}")
     
     def _generate_analysis(self, session):
         """Generate comprehensive analysis based on model type"""
+        print(f"_generate_analysis called for session {session.id}")
+        
         analysis = {
             'session_id': session.id,
             'model_type': session.model_type,
@@ -187,20 +201,47 @@ class TrainingAnalysisView(APIView):
             'residuals_analysis': None
         }
         
+        print(f"Basic analysis structure created")
+        
         # Load model and make predictions for analysis
-        if session.model_file and os.path.exists(session.model_file.path):
-            try:
-                predictions_data = self._generate_predictions_analysis(session)
-                analysis.update(predictions_data)
-            except Exception as e:
-                print(f"Error generating predictions analysis: {e}")
+        if session.model_file:
+            # Fix path if it's relative
+            model_path = session.model_file.path
+            if not os.path.isabs(model_path):
+                # If it's a relative path, make it absolute from MEDIA_ROOT
+                from django.conf import settings
+                model_path = os.path.join(settings.MEDIA_ROOT, session.model_file.name)
+            
+            print(f"Checking model file at: {model_path}")
+            if os.path.exists(model_path):
+                print(f"Model file exists at: {model_path}")
+                try:
+                    print("Calling _generate_predictions_analysis...")
+                    predictions_data = self._generate_predictions_analysis(session, model_path)
+                    print(f"Predictions data returned: {type(predictions_data)}")
+                    print(f"Predictions data keys: {predictions_data.keys() if isinstance(predictions_data, dict) else 'Not a dict'}")
+                    analysis.update(predictions_data)
+                except Exception as e:
+                    print(f"Error generating predictions analysis: {e}")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print(f"Model file not found at: {model_path}")
+        else:
+            print(f"No model file associated with session")
         
         # Add model-specific analysis
         if session.model_type in ['random_forest', 'decision_tree', 'xgboost']:
-            analysis.update(self._analyze_sklearn_model(session))
+            print("Adding sklearn model analysis...")
+            # Pass the corrected model path if we have it
+            sklearn_analysis = self._analyze_sklearn_model(session, model_path if 'model_path' in locals() else None)
+            print(f"Sklearn analysis keys: {sklearn_analysis.keys()}")
+            analysis.update(sklearn_analysis)
         elif session.model_type in ['lstm', 'gru', 'cnn']:
+            print("Adding neural model analysis...")
             analysis.update(self._analyze_neural_model(session))
-            
+        
+        print(f"Final analysis keys: {analysis.keys()}")
         return analysis
     
     def _get_basic_info(self, session):
@@ -224,40 +265,107 @@ class TrainingAnalysisView(APIView):
             return (session.updated_at - session.created_at).total_seconds()
         return None
     
-    def _generate_predictions_analysis(self, session):
+    def _generate_predictions_analysis(self, session, model_path=None):
         """Generate predictions vs actual analysis"""
         try:
             # Load the dataset
             df = pd.read_csv(session.dataset.file.path)
+            print(f"Dataset loaded: {len(df)} rows, columns: {df.columns.tolist()}")
+            
+            # Check if required columns exist
+            missing_predictors = [col for col in session.predictor_columns if col not in df.columns]
+            missing_targets = [col for col in session.target_columns if col not in df.columns]
+            
+            if missing_predictors:
+                print(f"Missing predictor columns: {missing_predictors}")
+                return {'predictions_analysis': f'Missing predictor columns: {missing_predictors}'}
+            
+            if missing_targets:
+                print(f"Missing target columns: {missing_targets}")
+                return {'predictions_analysis': f'Missing target columns: {missing_targets}'}
             
             # Prepare data splits (similar to prepare_data in ml_utils)
             n = len(df)
-            train_end = int(n * session.train_split)
-            val_end = int(n * (session.train_split + session.val_split))
+            
+            # Handle None splits - use defaults that match training
+            train_split = session.train_split if session.train_split is not None else 0.7
+            val_split = session.val_split if session.val_split is not None else 0.15
+            test_split = session.test_split if session.test_split is not None else 0.15
+            
+            print(f"Session splits - train: {session.train_split}, val: {session.val_split}, test: {session.test_split}")
+            print(f"Using splits - train: {train_split}, val: {val_split}, test: {test_split}")
+            
+            train_end = int(n * train_split)
+            val_end = int(n * (train_split + val_split))
+            
+            print(f"Data splits - Train: 0-{train_end}, Val: {train_end}-{val_end}, Test: {val_end}-{n}")
+            print(f"Dataset total size: {n}")
             
             # Get test data
             X_test = df[session.predictor_columns].iloc[val_end:].values
-            y_test = df[session.target_columns].iloc[val_end:].values
+            y_test_raw = df[session.target_columns].iloc[val_end:]
+            
+            print(f"Test data shape - X: {X_test.shape}, y_test_raw: {y_test_raw.shape}")
+            print(f"Target columns data types: {y_test_raw.dtypes}")
+            print(f"Sample target values: {y_test_raw.head()}")
+            
+            # Handle categorical targets (like 'Summary')
+            y_test = y_test_raw.values
+            target_encoders = {}
+            
+            for i, col in enumerate(session.target_columns):
+                col_data = y_test_raw[col]
+                if col_data.dtype == 'object' or col_data.dtype.name == 'category':
+                    print(f"Encoding categorical target column: {col}")
+                    from sklearn.preprocessing import LabelEncoder
+                    encoder = LabelEncoder()
+                    y_test[:, i] = encoder.fit_transform(col_data)
+                    target_encoders[col] = encoder
+                    print(f"Unique values in {col}: {encoder.classes_}")
+                    print(f"Encoded values sample: {y_test[:5, i]}")
+            
+            print(f"Final test data shape - X: {X_test.shape}, y: {y_test.shape}")
+            
+            if X_test.shape[0] == 0:
+                print("No test data available - test split too small")
+                return {'predictions_analysis': 'No test data available - test split too small'}
             
             # Load model
             if session.model_type in ['decision_tree', 'random_forest', 'xgboost']:
-                model_data = joblib.load(session.model_file.path)
+                # Use provided model_path or default to session path
+                if model_path is None:
+                    model_path = session.model_file.path
+                    
+                print(f"Loading model from: {model_path}")
+                model_data = joblib.load(model_path)
+                print(f"Model data keys: {model_data.keys()}")
+                
                 model = model_data['model']
                 preprocessing_pipeline = model_data.get('preprocessing_pipeline')
+                
+                print(f"Model type: {type(model)}")
+                print(f"Preprocessing pipeline: {preprocessing_pipeline is not None}")
                 
                 # Apply preprocessing if available
                 if preprocessing_pipeline:
                     X_test_df = pd.DataFrame(X_test, columns=session.predictor_columns)
+                    print(f"Before preprocessing: {X_test_df.shape}")
                     X_test = preprocessing_pipeline.transform(X_test_df)
+                    print(f"After preprocessing: {X_test.shape}")
                 
                 # Make predictions
+                print(f"Making predictions with X_test shape: {X_test.shape}")
                 y_pred = model.predict(X_test)
+                print(f"Predictions shape: {y_pred.shape}")
+                print(f"Predictions sample: {y_pred[:5] if len(y_pred) > 0 else 'Empty'}")
                 
                 # Ensure predictions are 2D
                 if len(y_pred.shape) == 1:
                     y_pred = y_pred.reshape(-1, 1)
                 if len(y_test.shape) == 1:
                     y_test = y_test.reshape(-1, 1)
+                    
+                print(f"Final shapes - y_test: {y_test.shape}, y_pred: {y_pred.shape}")
                     
             else:
                 # Neural networks - simplified for now
@@ -269,8 +377,9 @@ class TrainingAnalysisView(APIView):
             # For each target column
             for i, target_col in enumerate(session.target_columns):
                 if i < y_test.shape[1] and i < y_pred.shape[1]:
+                    encoder = target_encoders.get(target_col, None)
                     col_analysis = self._analyze_predictions(
-                        y_test[:, i], y_pred[:, i], target_col, session.model_type
+                        y_test[:, i], y_pred[:, i], target_col, session.model_type, encoder
                     )
                     analysis[f'target_{i}_{target_col}'] = col_analysis
             
@@ -280,7 +389,7 @@ class TrainingAnalysisView(APIView):
             print(f"Error in predictions analysis: {e}")
             return {'predictions_analysis': f'Error: {str(e)}'}
     
-    def _analyze_predictions(self, y_true, y_pred, target_name, model_type):
+    def _analyze_predictions(self, y_true, y_pred, target_name, model_type, label_encoder=None):
         """Analyze predictions for a single target variable"""
         analysis = {
             'target_name': target_name,
@@ -318,17 +427,29 @@ class TrainingAnalysisView(APIView):
         
         # Determine if it's classification or regression
         unique_true = len(np.unique(y_true))
-        if unique_true <= 10 and model_type in ['random_forest', 'decision_tree', 'xgboost']:
-            # Likely classification
-            analysis['task_type'] = 'classification'
-            analysis['confusion_matrix'] = self._calculate_confusion_matrix(y_true, y_pred)
+        unique_pred = len(np.unique(y_pred))
+        
+        print(f"Target analysis - unique_true: {unique_true}, unique_pred: {unique_pred}")
+        print(f"Model type: {model_type}")
+        
+        # For sklearn models, always try to create confusion matrix if reasonable number of classes
+        if model_type in ['random_forest', 'decision_tree', 'xgboost']:
+            if unique_true <= 20:  # Increased threshold for more flexibility
+                print("Creating confusion matrix for classification task")
+                analysis['task_type'] = 'classification'
+                analysis['confusion_matrix'] = self._calculate_confusion_matrix(y_true, y_pred, label_encoder)
+            else:
+                print("Treating as regression task (too many unique values)")
+                analysis['task_type'] = 'regression'
+                # Still create a simplified confusion matrix for regression (binned)
+                analysis['confusion_matrix'] = self._create_regression_confusion_matrix(y_true, y_pred)
         else:
-            # Regression
+            # Neural networks
             analysis['task_type'] = 'regression'
             
         return analysis
     
-    def _calculate_confusion_matrix(self, y_true, y_pred):
+    def _calculate_confusion_matrix(self, y_true, y_pred, label_encoder=None):
         """Calculate confusion matrix for classification"""
         from sklearn.metrics import confusion_matrix, classification_report
         
@@ -338,17 +459,84 @@ class TrainingAnalysisView(APIView):
         
         cm = confusion_matrix(y_true_int, y_pred_rounded)
         
+        # Get unique labels
+        unique_labels = sorted(np.unique(np.concatenate([y_true_int, y_pred_rounded])))
+        
+        # Use encoder to get real labels if available
+        if label_encoder is not None:
+            try:
+                # Get the class names for the unique labels
+                label_names = []
+                for label in unique_labels:
+                    if label < len(label_encoder.classes_):
+                        label_names.append(label_encoder.classes_[label])
+                    else:
+                        label_names.append(f'Unknown_{label}')
+                print(f"Using encoded labels: {label_names}")
+            except Exception as e:
+                print(f"Error getting label names: {e}")
+                label_names = [f'Class_{label}' for label in unique_labels]
+        else:
+            label_names = [f'Class_{label}' for label in unique_labels]
+        
         return {
             'matrix': cm.tolist(),
-            'labels': sorted(np.unique(np.concatenate([y_true_int, y_pred_rounded]))).tolist()
+            'labels': label_names
         }
     
-    def _analyze_sklearn_model(self, session):
+    def _create_regression_confusion_matrix(self, y_true, y_pred):
+        """Create a binned confusion matrix for regression tasks"""
+        try:
+            # Create bins for continuous values
+            n_bins = 5
+            
+            # Create bins based on true values range
+            y_min, y_max = np.min(y_true), np.max(y_true)
+            bin_edges = np.linspace(y_min, y_max, n_bins + 1)
+            
+            # Digitize values into bins
+            y_true_binned = np.digitize(y_true, bin_edges) - 1
+            y_pred_binned = np.digitize(y_pred, bin_edges) - 1
+            
+            # Ensure bins are within range
+            y_true_binned = np.clip(y_true_binned, 0, n_bins - 1)
+            y_pred_binned = np.clip(y_pred_binned, 0, n_bins - 1)
+            
+            # Create confusion matrix
+            from sklearn.metrics import confusion_matrix
+            cm = confusion_matrix(y_true_binned, y_pred_binned, labels=range(n_bins))
+            
+            # Create bin labels
+            bin_labels = []
+            for i in range(n_bins):
+                start = bin_edges[i]
+                end = bin_edges[i + 1]
+                bin_labels.append(f"{start:.2f}-{end:.2f}")
+            
+            return {
+                'matrix': cm.tolist(),
+                'labels': bin_labels,
+                'type': 'regression_binned'
+            }
+        except Exception as e:
+            print(f"Error creating regression confusion matrix: {e}")
+            return None
+    
+    def _analyze_sklearn_model(self, session, model_path=None):
         """Analyze sklearn models (Random Forest, Decision Tree, XGBoost)"""
         analysis = {}
         
         try:
-            model_data = joblib.load(session.model_file.path)
+            # Use provided model_path or default to session path
+            if model_path is None:
+                model_path = session.model_file.path
+                # Fix path if needed
+                if not os.path.isabs(model_path):
+                    from django.conf import settings
+                    model_path = os.path.join(settings.MEDIA_ROOT, session.model_file.name)
+                    
+            print(f"Loading sklearn model from: {model_path}")
+            model_data = joblib.load(model_path)
             model = model_data['model']
             
             # Feature importance
@@ -419,3 +607,58 @@ class TrainingAnalysisView(APIView):
                 }
         
         return analysis
+
+
+class TrainingAnalysisTestView(APIView):
+    """Simple test view for debugging"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, pk):
+        """Simple test endpoint"""
+        print(f"=== TEST VIEW CALLED for session {pk} ===")
+        
+        try:
+            # Get session
+            if request.user.is_staff:
+                session = get_object_or_404(TrainingSession, pk=pk)
+            else:
+                session = get_object_or_404(TrainingSession, pk=pk, user=request.user)
+            
+            test_data = {
+                'message': 'Test endpoint working',
+                'session_id': session.id,
+                'model_type': session.model_type,
+                'status': session.status,
+                'model_file_exists': bool(session.model_file and session.model_file.name),
+                'predictor_columns': session.predictor_columns,
+                'target_columns': session.target_columns,
+                'predictions_analysis': {
+                    'target_0_test': {
+                        'scatter_data': {
+                            'y_true': [1, 2, 3, 4, 5],
+                            'y_pred': [1.1, 2.2, 2.8, 4.1, 4.9]
+                        },
+                        'confusion_matrix': {
+                            'matrix': [[10, 2], [1, 15]],
+                            'labels': ['Class_0', 'Class_1']
+                        },
+                        'residuals': {
+                            'values': [0.1, -0.2, 0.2, -0.1, 0.1]
+                        }
+                    }
+                },
+                'feature_importance': [
+                    {'feature': 'feature_1', 'importance': 0.3},
+                    {'feature': 'feature_2', 'importance': 0.2},
+                    {'feature': 'feature_3', 'importance': 0.5}
+                ]
+            }
+            
+            print(f"Returning test data: {test_data}")
+            return Response(test_data)
+            
+        except Exception as e:
+            print(f"Error in test view: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=500)

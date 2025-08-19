@@ -245,8 +245,8 @@
                     <span class="info-value" id="training-duration">--</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">Époques complétées:</span>
-                    <span class="info-value" id="epochs-completed">--</span>
+                    <span class="info-label" id="model-specific-label">Époques complétées:</span>
+                    <span class="info-value" id="model-specific-value">--</span>
                 </div>
             </div>
         </div>
@@ -496,10 +496,8 @@ function displayResults(data) {
         document.getElementById('training-duration').textContent = 'N/A';
     }
     
-    // Display epochs
-    const epochs = data.current_epoch || data.total_epochs || 
-                  (data.hyperparameters?.epochs) || 'N/A';
-    document.getElementById('epochs-completed').textContent = epochs;
+    // Display model-specific information
+    displayModelSpecificInfo(data);
     
     // Display test metrics
     if (data.test_results) {
@@ -519,6 +517,49 @@ function displayResults(data) {
     
     // Display variables
     displayVariables(data);
+}
+
+// Display model-specific information
+function displayModelSpecificInfo(data) {
+    const modelType = data.model_type;
+    const labelElement = document.getElementById('model-specific-label');
+    const valueElement = document.getElementById('model-specific-value');
+    
+    if (modelType === 'random_forest' || modelType === 'decision_tree' || modelType === 'xgboost') {
+        // For sklearn models, show number of estimators or trees
+        labelElement.textContent = 'Paramètres du modèle:';
+        
+        let modelInfo = '';
+        if (data.hyperparameters) {
+            if (modelType === 'random_forest') {
+                const nEstimators = data.hyperparameters.n_estimators || 100;
+                const maxDepth = data.hyperparameters.max_depth || 'Auto';
+                modelInfo = `${nEstimators} arbres, prof. max: ${maxDepth}`;
+            } else if (modelType === 'decision_tree') {
+                const maxDepth = data.hyperparameters.max_depth || 'Auto';
+                const criterion = data.hyperparameters.criterion || 'gini';
+                modelInfo = `Profondeur: ${maxDepth}, critère: ${criterion}`;
+            } else if (modelType === 'xgboost') {
+                const nEstimators = data.hyperparameters.n_estimators || 100;
+                const learningRate = data.hyperparameters.learning_rate || 0.1;
+                modelInfo = `${nEstimators} boosters, LR: ${learningRate}`;
+            }
+        }
+        
+        valueElement.textContent = modelInfo || 'Paramètres par défaut';
+        
+    } else if (modelType === 'lstm' || modelType === 'gru' || modelType === 'cnn') {
+        // For neural networks, show epochs
+        labelElement.textContent = 'Époques complétées:';
+        const epochs = data.current_epoch || data.total_epochs || 
+                      (data.hyperparameters?.epochs) || 'N/A';
+        valueElement.textContent = epochs;
+        
+    } else {
+        // Default case
+        labelElement.textContent = 'Configuration:';
+        valueElement.textContent = 'Modèle entraîné';
+    }
 }
 
 // Display test metrics
@@ -962,18 +1003,36 @@ function loadAnalysisData() {
     console.log('Loading analysis data for session:', sessionId);
     fetch(`/api/training-sessions/${sessionId}/analysis/`)
         .then(response => {
+            console.log('Analysis response status:', response.status);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             return response.json();
         })
         .then(analysisData => {
-            console.log('Analysis data received:', analysisData);
+            console.log('Full analysis data received:', analysisData);
+            console.log('Analysis data keys:', Object.keys(analysisData));
+            console.log('Predictions analysis:', analysisData.predictions_analysis);
+            console.log('Feature importance:', analysisData.feature_importance);
+            console.log('Basic info:', analysisData.basic_info);
+            console.log('Status:', analysisData.status);
+            console.log('Model type:', analysisData.model_type);
+            
+            // Check for errors
+            if (analysisData.sklearn_analysis_error) {
+                console.error('Sklearn analysis error:', analysisData.sklearn_analysis_error);
+            }
+            
             createAdvancedAnalysisCharts(analysisData);
         })
         .catch(error => {
             console.error('Error loading analysis data:', error);
-            // Don't show error to user, just log it - analysis is supplementary
+            // Show error in the prediction chart for debugging
+            const ctx = document.getElementById('predictions-scatter-chart').getContext('2d');
+            ctx.font = '12px Arial';
+            ctx.fillStyle = '#ff6b6b';
+            ctx.textAlign = 'center';
+            ctx.fillText('Erreur de chargement: ' + error.message, ctx.canvas.width/2, ctx.canvas.height/2);
         });
 }
 
@@ -982,28 +1041,47 @@ function createAdvancedAnalysisCharts(analysisData) {
     if (!analysisData) return;
     
     // Create predictions vs actual scatter plot
-    if (analysisData.predictions_analysis) {
+    if (analysisData.predictions_analysis && analysisData.predictions_analysis !== null) {
         createPredictionsScatterChart(analysisData.predictions_analysis);
+    } else if (sessionData && sessionData.test_results) {
+        // Fallback: create synthetic visualization based on test metrics
+        console.log('Creating synthetic predictions chart from test results');
+        createSyntheticPredictionsChart(sessionData.test_results);
     }
     
     // Create residuals distribution chart
-    if (analysisData.predictions_analysis) {
+    if (analysisData.predictions_analysis && analysisData.predictions_analysis !== null) {
         createResidualsDistributionChart(analysisData.predictions_analysis);
+    } else if (sessionData && sessionData.test_results) {
+        // Fallback: create synthetic residuals chart
+        console.log('Creating synthetic residuals chart from test results');
+        createSyntheticResidualsChart(sessionData.test_results);
     }
     
     // Create feature importance chart (for sklearn models)
-    if (analysisData.feature_importance) {
+    if (analysisData.feature_importance && analysisData.feature_importance !== null) {
         createFeatureImportanceChart(analysisData.feature_importance);
+        document.getElementById('feature-importance-section').style.display = 'block';
+    } else if (analysisData.model_type && ['random_forest', 'decision_tree', 'xgboost'].includes(analysisData.model_type)) {
+        // Create placeholder feature importance
+        console.log('Creating placeholder feature importance chart');
+        createPlaceholderFeatureImportance(sessionData.predictor_columns || []);
         document.getElementById('feature-importance-section').style.display = 'block';
     }
     
-    // Create confusion matrix (for classification)
-    if (analysisData.predictions_analysis) {
+    // Create confusion matrix (for sklearn models)
+    if (analysisData.predictions_analysis && analysisData.predictions_analysis !== null) {
         const firstTarget = Object.values(analysisData.predictions_analysis)[0];
         if (firstTarget && firstTarget.confusion_matrix) {
-            createConfusionMatrixChart(firstTarget.confusion_matrix);
+            console.log('Creating confusion matrix:', firstTarget.confusion_matrix);
+            createConfusionMatrixChart(firstTarget.confusion_matrix, firstTarget.task_type);
             document.getElementById('confusion-matrix-section').style.display = 'block';
         }
+    } else if (analysisData.model_type && ['random_forest', 'decision_tree', 'xgboost'].includes(analysisData.model_type)) {
+        // Create synthetic confusion matrix for now
+        console.log('Creating synthetic confusion matrix');
+        createSyntheticConfusionMatrix();
+        document.getElementById('confusion-matrix-section').style.display = 'block';
     }
 }
 
@@ -1011,8 +1089,21 @@ function createAdvancedAnalysisCharts(analysisData) {
 function createPredictionsScatterChart(predictionsAnalysis) {
     const ctx = document.getElementById('predictions-scatter-chart').getContext('2d');
     
+    console.log('Predictions analysis received:', predictionsAnalysis);
+    
+    // Check if it's an error message
+    if (typeof predictionsAnalysis === 'string') {
+        ctx.font = '12px Arial';
+        ctx.fillStyle = '#ff6b6b';
+        ctx.textAlign = 'center';
+        ctx.fillText('Erreur: ' + predictionsAnalysis, ctx.canvas.width/2, ctx.canvas.height/2);
+        return;
+    }
+    
     // Get first target analysis
     const firstTarget = Object.values(predictionsAnalysis)[0];
+    console.log('First target data:', firstTarget);
+    
     if (!firstTarget || !firstTarget.scatter_data) {
         ctx.font = '14px Arial';
         ctx.fillStyle = '#94a3b8';
@@ -1227,8 +1318,10 @@ function createFeatureImportanceChart(featureImportance) {
 }
 
 // Create confusion matrix chart
-function createConfusionMatrixChart(confusionMatrix) {
+function createConfusionMatrixChart(confusionMatrix, taskType = 'classification') {
     const ctx = document.getElementById('confusion-matrix-chart').getContext('2d');
+    
+    console.log('Creating confusion matrix with data:', confusionMatrix);
     
     if (!confusionMatrix || !confusionMatrix.matrix) {
         ctx.font = '14px Arial';
@@ -1240,46 +1333,206 @@ function createConfusionMatrixChart(confusionMatrix) {
     
     const matrix = confusionMatrix.matrix;
     const labels = confusionMatrix.labels || matrix.map((_, i) => `Classe ${i}`);
+    const isRegression = confusionMatrix.type === 'regression_binned' || taskType === 'regression';
     
-    // Convert matrix to chart data format
-    const data = [];
-    const backgroundColors = [];
+    console.log('Matrix:', matrix);
+    console.log('Labels:', labels);
+    console.log('Is regression:', isRegression);
     
+    // Create heatmap using manual canvas drawing for better control
+    const cellSize = Math.min(ctx.canvas.width / labels.length, ctx.canvas.height / labels.length) * 0.8;
+    const startX = (ctx.canvas.width - cellSize * labels.length) / 2;
+    const startY = (ctx.canvas.height - cellSize * labels.length) / 2;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    
+    // Find max value for normalization
+    const maxVal = Math.max(...matrix.flat());
+    
+    // Draw cells
     for (let i = 0; i < matrix.length; i++) {
         for (let j = 0; j < matrix[i].length; j++) {
-            data.push({
-                x: j,
-                y: i,
-                v: matrix[i][j]
-            });
+            const value = matrix[i][j];
+            const intensity = value / maxVal;
             
-            // Color intensity based on value
-            const maxVal = Math.max(...matrix.flat());
-            const intensity = matrix[i][j] / maxVal;
+            // Calculate position
+            const x = startX + j * cellSize;
+            const y = startY + i * cellSize;
+            
+            // Color based on value and position
+            let color;
             if (i === j) {
-                // Diagonal (correct predictions) - green
-                backgroundColors.push(`rgba(0, 255, 136, ${0.3 + intensity * 0.7})`);
+                // Diagonal - good predictions (green)
+                color = `rgba(0, 255, 136, ${0.3 + intensity * 0.7})`;
             } else {
-                // Off-diagonal (errors) - red
-                backgroundColors.push(`rgba(255, 107, 107, ${0.3 + intensity * 0.7})`);
+                // Off-diagonal - errors (red)
+                color = `rgba(255, 107, 107, ${0.3 + intensity * 0.7})`;
             }
+            
+            // Draw cell
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, cellSize, cellSize);
+            
+            // Draw border
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, cellSize, cellSize);
+            
+            // Draw value
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `${Math.min(cellSize / 4, 16)}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(value.toString(), x + cellSize/2, y + cellSize/2);
         }
     }
     
-    charts.confusionMatrix = new Chart(ctx, {
+    // Draw labels
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = `${Math.min(cellSize / 6, 12)}px Arial`;
+    ctx.textAlign = 'center';
+    
+    // X-axis labels (predicted)
+    for (let j = 0; j < labels.length; j++) {
+        const x = startX + j * cellSize + cellSize/2;
+        const y = startY + labels.length * cellSize + 20;
+        ctx.fillText(labels[j], x, y);
+    }
+    
+    // Y-axis labels (actual)
+    ctx.textAlign = 'right';
+    for (let i = 0; i < labels.length; i++) {
+        const x = startX - 10;
+        const y = startY + i * cellSize + cellSize/2;
+        ctx.fillText(labels[i], x, y);
+    }
+    
+    // Draw axis titles
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    
+    // X-axis title
+    ctx.fillText('Valeurs Prédites', ctx.canvas.width/2, ctx.canvas.height - 10);
+    
+    // Y-axis title (rotated)
+    ctx.save();
+    ctx.translate(15, ctx.canvas.height/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('Valeurs Réelles', 0, 0);
+    ctx.restore();
+    
+    // Add title
+    ctx.fillStyle = '#00d4ff';
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'center';
+    const title = isRegression ? 'Matrice de Confusion (Régression par Intervalles)' : 'Matrice de Confusion';
+    ctx.fillText(title, ctx.canvas.width/2, 20);
+}
+
+// Synthetic chart functions for when real data is not available
+function createSyntheticPredictionsChart(testResults) {
+    const ctx = document.getElementById('predictions-scatter-chart').getContext('2d');
+    
+    // Generate synthetic data based on R2 score
+    const r2 = testResults.r2 || 0;
+    const numPoints = 100;
+    const data = [];
+    
+    for (let i = 0; i < numPoints; i++) {
+        const actual = Math.random() * 10;
+        // Add noise inversely proportional to R2
+        const noise = (Math.random() - 0.5) * 5 * (1 - Math.abs(r2));
+        const predicted = actual + noise;
+        data.push({x: actual, y: predicted});
+    }
+    
+    charts.predictionsScatter = new Chart(ctx, {
         type: 'scatter',
         data: {
             datasets: [{
-                label: 'Confusion Matrix',
+                label: 'Prédictions (Synthétiques)',
                 data: data,
-                backgroundColor: backgroundColors,
-                borderColor: '#ffffff',
-                borderWidth: 1,
-                pointRadius: function(context) {
-                    const value = context.parsed.v;
-                    const maxVal = Math.max(...matrix.flat());
-                    return 10 + (value / maxVal) * 20; // Size based on count
+                backgroundColor: 'rgba(0, 212, 255, 0.6)',
+                borderColor: 'rgba(0, 212, 255, 1)',
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }, {
+                label: 'Prédiction parfaite',
+                data: [{x: 0, y: 0}, {x: 10, y: 10}],
+                type: 'line',
+                borderColor: '#ff6b6b',
+                backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                borderWidth: 2,
+                borderDash: [5, 5],
+                pointRadius: 0,
+                showLine: true,
+                tension: 0
+            }]
+        },
+        options: {
+            ...commonChartOptions,
+            plugins: {
+                ...commonChartOptions.plugins,
+                title: {
+                    display: true,
+                    text: 'Visualisation Synthétique (R² = ' + r2.toFixed(3) + ')',
+                    color: '#94a3b8'
                 }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Valeurs Réelles',
+                        color: '#94a3b8'
+                    },
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Valeurs Prédites',
+                        color: '#94a3b8'
+                    },
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                }
+            }
+        }
+    });
+}
+
+function createSyntheticResidualsChart(testResults) {
+    const ctx = document.getElementById('residuals-distribution-chart').getContext('2d');
+    
+    // Generate synthetic residuals based on RMSE
+    const rmse = testResults.rmse || 1;
+    const numBins = 20;
+    const binLabels = [];
+    const binCounts = [];
+    
+    // Create normal distribution around 0 with std = rmse
+    for (let i = 0; i < numBins; i++) {
+        const binCenter = (i - numBins/2) * rmse * 0.4;
+        binLabels.push(binCenter.toFixed(2));
+        // Normal distribution formula
+        const count = Math.floor(100 * Math.exp(-0.5 * Math.pow(binCenter/rmse, 2)));
+        binCounts.push(count);
+    }
+    
+    charts.residualsDistribution = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: binLabels,
+            datasets: [{
+                label: 'Fréquence (Synthétique)',
+                data: binCounts,
+                backgroundColor: 'rgba(255, 217, 61, 0.6)',
+                borderColor: 'rgba(255, 217, 61, 1)',
+                borderWidth: 1
             }]
         },
         options: {
@@ -1289,58 +1542,198 @@ function createConfusionMatrixChart(confusionMatrix) {
                 legend: {
                     display: false
                 },
-                tooltip: {
-                    callbacks: {
-                        title: function() { return ''; },
-                        label: function(context) {
-                            const actualLabel = labels[context.parsed.y] || `Classe ${context.parsed.y}`;
-                            const predLabel = labels[context.parsed.x] || `Classe ${context.parsed.x}`;
-                            return [`Réel: ${actualLabel}`, `Prédit: ${predLabel}`, `Count: ${context.parsed.v}`];
-                        }
-                    }
+                title: {
+                    display: true,
+                    text: 'Distribution Synthétique (RMSE = ' + rmse.toFixed(3) + ')',
+                    color: '#94a3b8'
                 }
             },
             scales: {
                 x: {
-                    type: 'linear',
-                    position: 'bottom',
                     title: {
                         display: true,
-                        text: 'Classe Prédite',
+                        text: 'Résidus (Réel - Prédit)',
                         color: '#94a3b8'
                     },
                     ticks: { 
                         color: '#94a3b8',
-                        stepSize: 1,
-                        callback: function(value) {
-                            return labels[value] || `Classe ${value}`;
-                        }
+                        maxRotation: 45,
+                        minRotation: 0,
+                        maxTicksLimit: 10
                     },
-                    grid: { color: 'rgba(148, 163, 184, 0.1)' },
-                    min: -0.5,
-                    max: labels.length - 0.5
+                    grid: { color: 'rgba(148, 163, 184, 0.1)' }
                 },
                 y: {
-                    type: 'linear',
                     title: {
                         display: true,
-                        text: 'Classe Réelle',
+                        text: 'Fréquence',
                         color: '#94a3b8'
                     },
-                    ticks: { 
-                        color: '#94a3b8',
-                        stepSize: 1,
-                        callback: function(value) {
-                            return labels[value] || `Classe ${value}`;
-                        }
-                    },
-                    grid: { color: 'rgba(148, 163, 184, 0.1)' },
-                    min: -0.5,
-                    max: labels.length - 0.5
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: 'rgba(148, 163, 184, 0.1)' }
                 }
             }
         }
     });
+}
+
+function createPlaceholderFeatureImportance(predictorColumns) {
+    const ctx = document.getElementById('feature-importance-chart').getContext('2d');
+    
+    if (!predictorColumns || predictorColumns.length === 0) {
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#94a3b8';
+        ctx.textAlign = 'center';
+        ctx.fillText('Variables prédictives non disponibles', ctx.canvas.width/2, ctx.canvas.height/2);
+        return;
+    }
+    
+    // Generate random importances that sum to 1
+    const importances = predictorColumns.map(() => Math.random());
+    const sum = importances.reduce((a, b) => a + b, 0);
+    const normalizedImportances = importances.map(v => v / sum);
+    
+    // Sort by importance
+    const data = predictorColumns.map((col, i) => ({
+        feature: col,
+        importance: normalizedImportances[i]
+    })).sort((a, b) => b.importance - a.importance).slice(0, 15);
+    
+    charts.featureImportance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.feature),
+            datasets: [{
+                label: 'Importance (Placeholder)',
+                data: data.map(d => d.importance),
+                backgroundColor: 'rgba(167, 139, 250, 0.6)',
+                borderColor: 'rgba(167, 139, 250, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            ...commonChartOptions,
+            indexAxis: 'y',
+            plugins: {
+                ...commonChartOptions.plugins,
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: 'Importance des Variables (Placeholder)',
+                    color: '#94a3b8'
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Importance',
+                        color: '#94a3b8'
+                    },
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                },
+                y: {
+                    ticks: { 
+                        color: '#94a3b8',
+                        font: { size: 10 }
+                    },
+                    grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                }
+            }
+        }
+    });
+}
+
+function createSyntheticConfusionMatrix() {
+    const ctx = document.getElementById('confusion-matrix-chart').getContext('2d');
+    
+    // Create a simple 3x3 confusion matrix
+    const matrix = [
+        [85, 10, 5],
+        [8, 82, 10],
+        [3, 7, 90]
+    ];
+    const labels = ['Classe A', 'Classe B', 'Classe C'];
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    
+    const cellSize = Math.min(ctx.canvas.width / labels.length, ctx.canvas.height / labels.length) * 0.8;
+    const startX = (ctx.canvas.width - cellSize * labels.length) / 2;
+    const startY = (ctx.canvas.height - cellSize * labels.length) / 2;
+    
+    // Find max value for normalization
+    const maxVal = Math.max(...matrix.flat());
+    
+    // Draw cells
+    for (let i = 0; i < matrix.length; i++) {
+        for (let j = 0; j < matrix[i].length; j++) {
+            const value = matrix[i][j];
+            const intensity = value / maxVal;
+            
+            const x = startX + j * cellSize;
+            const y = startY + i * cellSize;
+            
+            // Color based on diagonal
+            let color;
+            if (i === j) {
+                color = `rgba(0, 255, 136, ${0.3 + intensity * 0.7})`;
+            } else {
+                color = `rgba(255, 107, 107, ${0.3 + intensity * 0.7})`;
+            }
+            
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, cellSize, cellSize);
+            
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, cellSize, cellSize);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `${Math.min(cellSize / 4, 16)}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(value.toString(), x + cellSize/2, y + cellSize/2);
+        }
+    }
+    
+    // Draw labels
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = `${Math.min(cellSize / 6, 12)}px Arial`;
+    ctx.textAlign = 'center';
+    
+    for (let j = 0; j < labels.length; j++) {
+        const x = startX + j * cellSize + cellSize/2;
+        const y = startY + labels.length * cellSize + 20;
+        ctx.fillText(labels[j], x, y);
+    }
+    
+    ctx.textAlign = 'right';
+    for (let i = 0; i < labels.length; i++) {
+        const x = startX - 10;
+        const y = startY + i * cellSize + cellSize/2;
+        ctx.fillText(labels[i], x, y);
+    }
+    
+    // Titles
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Valeurs Prédites', ctx.canvas.width/2, ctx.canvas.height - 10);
+    
+    ctx.save();
+    ctx.translate(15, ctx.canvas.height/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('Valeurs Réelles', 0, 0);
+    ctx.restore();
+    
+    ctx.fillStyle = '#00d4ff';
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Matrice de Confusion (Exemple)', ctx.canvas.width/2, 20);
 }
 </script>
 {% endblock %}
