@@ -116,7 +116,39 @@
     /* Special styling for confusion matrix */
     #confusion-matrix-section .chart-container {
         max-height: 600px;
-        min-height: 500px;
+        min-height: 550px;
+        background: linear-gradient(135deg, rgba(10, 14, 39, 0.9) 0%, rgba(20, 24, 49, 0.9) 100%);
+        border: 2px solid rgba(99, 102, 241, 0.2);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3), 
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        position: relative;
+        overflow: visible;
+    }
+    
+    #confusion-matrix-section .chart-container::before {
+        content: '';
+        position: absolute;
+        top: -2px;
+        left: -2px;
+        right: -2px;
+        bottom: -2px;
+        background: linear-gradient(45deg, #60a5fa, #a78bfa, #60a5fa);
+        background-size: 300% 300%;
+        border-radius: 15px;
+        opacity: 0;
+        z-index: -1;
+        transition: opacity 0.3s ease;
+        animation: gradientShift 3s ease-in-out infinite;
+    }
+    
+    #confusion-matrix-section .chart-container:hover::before {
+        opacity: 0.3;
+    }
+    
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
     }
     
     #confusion-matrix-section .chart-wrapper {
@@ -124,13 +156,28 @@
         display: flex;
         justify-content: center;
         align-items: center;
+        padding: 20px;
     }
     
     #confusion-matrix-chart {
         max-width: 600px;
-        max-height: 600px;
+        max-height: 500px;
         width: 100%;
         height: 100%;
+        filter: drop-shadow(0 4px 20px rgba(0, 0, 0, 0.4));
+    }
+    
+    #confusion-matrix-section .chart-title {
+        background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 700;
+        font-size: 1.3rem;
+        text-align: center;
+        margin-bottom: 20px;
+        text-transform: uppercase;
+        letter-spacing: 2px;
     }
     
     @media (max-width: 768px) {
@@ -1370,124 +1417,159 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
     const labels = confusionMatrix.labels || matrix.map((_, i) => `Classe ${i}`);
     const isRegression = confusionMatrix.type === 'regression_binned' || taskType === 'regression';
     
-    console.log('Matrix:', matrix);
-    console.log('Labels:', labels);
-    console.log('Is regression:', isRegression);
-    
     // Set canvas size for high DPI displays
     const scale = window.devicePixelRatio || 1;
     ctx.canvas.width = 600 * scale;
     ctx.canvas.height = 500 * scale;
     ctx.scale(scale, scale);
     
-    // Create heatmap using manual canvas drawing for better control
-    // Increased cell size and adjusted padding for larger display
-    const padding = 120; // Increased padding for labels
-    const availableWidth = 600 - (padding * 2);
-    const availableHeight = 500 - (padding * 2);
-    const cellSize = Math.min(availableWidth / labels.length, availableHeight / labels.length);
+    // Clear canvas with dark background
+    ctx.fillStyle = '#0a0e27';
+    ctx.fillRect(0, 0, 600, 500);
+    
+    // Add subtle gradient background
+    const gradient = ctx.createLinearGradient(0, 0, 600, 500);
+    gradient.addColorStop(0, 'rgba(0, 212, 255, 0.05)');
+    gradient.addColorStop(1, 'rgba(139, 92, 246, 0.05)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 600, 500);
+    
+    // Layout calculations
+    const padding = 100;
+    const cellSize = Math.min((600 - padding * 2) / labels.length, (400 - padding) / labels.length);
     const totalWidth = cellSize * labels.length;
     const totalHeight = cellSize * labels.length;
     const startX = (600 - totalWidth) / 2;
-    const startY = (500 - totalHeight) / 2;
-    
-    // Clear canvas
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    const startY = (500 - totalHeight) / 2 - 20;
     
     // Find max value for normalization
     const maxVal = Math.max(...matrix.flat());
     
-    // Draw cells
+    // Calculate row totals for percentage calculation
+    const rowTotals = matrix.map(row => row.reduce((a, b) => a + b, 0));
+    
+    // Draw shadow for the matrix
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 10;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.fillRect(startX - 5, startY - 5, totalWidth + 10, totalHeight + 10);
+    ctx.shadowBlur = 0;
+    
+    // Draw cells with modern styling
     for (let i = 0; i < matrix.length; i++) {
         for (let j = 0; j < matrix[i].length; j++) {
             const value = matrix[i][j];
-            const intensity = value / maxVal;
+            const rowTotal = rowTotals[i];
+            const percentage = rowTotal > 0 ? (value / rowTotal * 100) : 0;
             
-            // Calculate position
             const x = startX + j * cellSize;
             const y = startY + i * cellSize;
             
-            // Color based on value and position
-            let color;
+            // Create gradient for cells
+            let cellGradient;
             if (i === j) {
-                // Diagonal - good predictions (green)
-                color = `rgba(0, 255, 136, ${0.3 + intensity * 0.7})`;
+                // Diagonal cells - success gradient
+                cellGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
+                const intensity = value / maxVal;
+                cellGradient.addColorStop(0, `rgba(16, 185, 129, ${0.2 + intensity * 0.6})`);
+                cellGradient.addColorStop(1, `rgba(59, 130, 246, ${0.2 + intensity * 0.6})`);
             } else {
-                // Off-diagonal - errors (red)
-                color = `rgba(255, 107, 107, ${0.3 + intensity * 0.7})`;
+                // Off-diagonal cells - error gradient
+                const intensity = value / maxVal;
+                cellGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
+                cellGradient.addColorStop(0, `rgba(239, 68, 68, ${0.1 + intensity * 0.5})`);
+                cellGradient.addColorStop(1, `rgba(245, 158, 11, ${0.1 + intensity * 0.5})`);
             }
             
-            // Draw cell
-            ctx.fillStyle = color;
-            ctx.fillRect(x, y, cellSize, cellSize);
+            // Draw cell with rounded corners
+            ctx.fillStyle = cellGradient;
+            roundRect(ctx, x + 2, y + 2, cellSize - 4, cellSize - 4, 8);
+            ctx.fill();
             
-            // Draw border
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(x, y, cellSize, cellSize);
+            // Add subtle inner border
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            roundRect(ctx, x + 2, y + 2, cellSize - 4, cellSize - 4, 8);
+            ctx.stroke();
             
-            // Draw value - larger font
+            // Draw value with modern typography
             ctx.fillStyle = '#ffffff';
-            ctx.font = `bold ${Math.max(20, Math.min(cellSize / 3, 28))}px Arial`;
+            ctx.font = `700 ${Math.min(cellSize / 3, 24)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(value.toString(), x + cellSize/2, y + cellSize/2);
+            ctx.fillText(value.toString(), x + cellSize/2, y + cellSize/2 - 8);
             
-            // Add percentage if significant
-            if (maxVal > 0) {
-                const percentage = ((value / maxVal) * 100).toFixed(0);
-                ctx.font = `${Math.max(12, Math.min(cellSize / 5, 16))}px Arial`;
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-                ctx.fillText(`${percentage}%`, x + cellSize/2, y + cellSize/2 + cellSize/5);
+            // Add percentage with smaller font
+            if (percentage > 0) {
+                ctx.font = `400 ${Math.min(cellSize / 5, 14)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.fillText(`${percentage.toFixed(1)}%`, x + cellSize/2, y + cellSize/2 + 12);
             }
         }
     }
     
-    // Draw labels - larger font
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${Math.max(14, Math.min(cellSize / 4, 18))}px Arial`;
-    ctx.textAlign = 'center';
+    // Modern labels with better typography
+    ctx.font = `500 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
     
-    // X-axis labels (predicted)
+    // X-axis labels with icons
     for (let j = 0; j < labels.length; j++) {
         const x = startX + j * cellSize + cellSize/2;
-        const y = startY + labels.length * cellSize + 30;
+        const y = startY + labels.length * cellSize + 25;
+        
+        // Label background
+        ctx.fillStyle = 'rgba(99, 102, 241, 0.1)';
+        roundRect(ctx, x - 40, y - 10, 80, 20, 10);
+        ctx.fill();
+        
+        ctx.fillStyle = '#e0e7ff';
+        ctx.textAlign = 'center';
         ctx.fillText(labels[j], x, y);
     }
     
-    // Y-axis labels (actual)
-    ctx.textAlign = 'right';
+    // Y-axis labels with icons
     for (let i = 0; i < labels.length; i++) {
-        const x = startX - 15;
+        const x = startX - 25;
         const y = startY + i * cellSize + cellSize/2;
+        
+        // Label background
+        ctx.fillStyle = 'rgba(99, 102, 241, 0.1)';
+        roundRect(ctx, x - 55, y - 10, 80, 20, 10);
+        ctx.fill();
+        
+        ctx.fillStyle = '#e0e7ff';
+        ctx.textAlign = 'right';
         ctx.fillText(labels[i], x, y);
     }
     
-    // Draw axis titles
-    ctx.fillStyle = '#00d4ff';
-    ctx.font = 'bold 20px Arial';
+    // Modern axis titles with gradients
+    const titleGradient = ctx.createLinearGradient(0, 0, 600, 0);
+    titleGradient.addColorStop(0, '#60a5fa');
+    titleGradient.addColorStop(1, '#a78bfa');
+    
+    ctx.fillStyle = titleGradient;
+    ctx.font = '600 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'center';
     
-    // X-axis title
-    ctx.fillText('Valeurs Prédites', 300, 470);
+    // X-axis title with icon
+    ctx.fillText('→ Prédictions', 300, 450);
     
-    // Y-axis title (rotated)
+    // Y-axis title (rotated) with icon
     ctx.save();
-    ctx.translate(25, 250);
+    ctx.translate(30, 250);
     ctx.rotate(-Math.PI/2);
-    ctx.fillText('Valeurs Réelles', 0, 0);
+    ctx.fillText('→ Valeurs Réelles', 0, 0);
     ctx.restore();
     
-    // Add title
-    ctx.fillStyle = '#00d4ff';
-    ctx.font = 'bold 24px Arial';
-    ctx.textAlign = 'center';
-    const title = isRegression ? 'Matrice de Confusion (Régression par Intervalles)' : 'Matrice de Confusion';
-    ctx.fillText(title, 300, 30);
+    // Modern title with gradient
+    ctx.font = '700 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = titleGradient;
+    const title = isRegression ? 'Matrice de Confusion - Régression' : 'Matrice de Confusion';
+    ctx.fillText(title, 300, 35);
     
-    // Add performance metrics below matrix
+    // Calculate and display metrics with modern cards
     if (matrix.length > 0) {
-        // Calculate accuracy for classification
         let correct = 0;
         let total = 0;
         for (let i = 0; i < matrix.length; i++) {
@@ -1499,11 +1581,39 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
         
         if (total > 0) {
             const accuracy = (correct / total * 100).toFixed(1);
-            ctx.fillStyle = '#00ff88';
-            ctx.font = 'bold 18px Arial';
-            ctx.fillText(`Précision globale: ${accuracy}%`, 300, 460);
+            
+            // Draw metric card
+            ctx.fillStyle = 'rgba(16, 185, 129, 0.1)';
+            roundRect(ctx, 200, 465, 200, 25, 12);
+            ctx.fill();
+            
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.3)';
+            ctx.lineWidth = 1;
+            roundRect(ctx, 200, 465, 200, 25, 12);
+            ctx.stroke();
+            
+            // Metric text
+            ctx.fillStyle = '#10b981';
+            ctx.font = '600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`✓ Précision: ${accuracy}%`, 300, 480);
         }
     }
+}
+
+// Helper function to draw rounded rectangles
+function roundRect(ctx, x, y, width, height, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
 }
 
 // Synthetic chart functions for when real data is not available
