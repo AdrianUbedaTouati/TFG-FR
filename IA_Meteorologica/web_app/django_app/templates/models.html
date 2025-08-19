@@ -2102,10 +2102,16 @@ function trainModel(modelId) {
 // Éditer le modèle
 // Helper function to load model form data
 function loadModelFormData(model) {
+    console.log('Loading model form data:', model);
+    console.log('Hyperparameters:', model.hyperparameters);
+    
     document.getElementById('modelName').value = model.name;
     document.getElementById('modelType').value = model.model_type;
     document.getElementById('epochs').value = model.hyperparameters?.epochs || 50;
-    document.getElementById('testSize').value = (model.hyperparameters?.test_size || 0.2) * 100;
+    
+    const testSize = model.hyperparameters?.test_size || 0.2;
+    console.log('Loading test_size:', testSize, '-> UI value:', testSize * 100);
+    document.getElementById('testSize').value = testSize * 100;
 }
 
 // Helper function to load hyperparameters
@@ -2302,6 +2308,8 @@ function updateModel(modelId) {
     };
     
     console.log('Saving model config:', modelConfig);
+    console.log('Test size being saved:', testSizeValue);
+    console.log('Model type:', modelType);
     
     // Configuration commune pour les modèles de deep learning
     if (isDeepLearningModel(modelType) || expertMode) {
@@ -4105,63 +4113,7 @@ function setCheckboxValue(elementId, value, callback) {
     }
 }
 
-// Load Random Forest configuration for editing
-function loadRandomForestConfiguration(hyperparams) {
-    if (!hyperparams) return;
-    
-    // Basic parameters
-    setValueWithRangeUpdate('rfPreset', hyperparams.preset || 'balanceado');
-    setValueWithRangeUpdate('rfProblemType', hyperparams.problem_type || 'auto');
-    setValueWithRangeUpdate('rfNEstimators', hyperparams.n_estimators || 300, 'rfNEstimatorsValue');
-    
-    // Max depth
-    setCheckboxValue('rfMaxDepthEnabled', hyperparams.max_depth_enabled || false, toggleRandomForestMaxDepth);
-    if (hyperparams.max_depth) {
-        setValueWithRangeUpdate('rfMaxDepth', hyperparams.max_depth);
-    }
-    
-    // Max features
-    if (hyperparams.max_features) {
-        if (typeof hyperparams.max_features === 'number') {
-            setValueWithRangeUpdate('rfMaxFeatures', 'custom');
-            setValueWithRangeUpdate('rfMaxFeaturesFraction', hyperparams.max_features, 'rfMaxFeaturesFractionValue');
-        } else {
-            setValueWithRangeUpdate('rfMaxFeatures', hyperparams.max_features);
-        }
-        toggleCustomMaxFeatures();
-    }
-    
-    // Other parameters
-    setValueWithRangeUpdate('rfCriterion', hyperparams.criterion || 'auto');
-    setValueWithRangeUpdate('rfMinSamplesSplit', hyperparams.min_samples_split || 2);
-    setValueWithRangeUpdate('rfMinSamplesLeaf', hyperparams.min_samples_leaf || 1);
-    setValueWithRangeUpdate('rfMinWeightFractionLeaf', hyperparams.min_weight_fraction_leaf || 0);
-    setValueWithRangeUpdate('rfMinImpurityDecrease', hyperparams.min_impurity_decrease || 0);
-    
-    // Bootstrap and OOB
-    setCheckboxValue('rfBootstrap', hyperparams.bootstrap !== false, toggleBootstrapOptions);
-    setCheckboxValue('rfOobScore', hyperparams.oob_score || false);
-    
-    // Performance
-    setValueWithRangeUpdate('rfNJobs', hyperparams.n_jobs || -1);
-    if (hyperparams.random_state !== null && hyperparams.random_state !== undefined) {
-        setValueWithRangeUpdate('rfRandomState', hyperparams.random_state);
-    }
-    
-    // Classification settings
-    if (hyperparams.class_weight) {
-        setValueWithRangeUpdate('rfClassWeight', hyperparams.class_weight);
-    }
-    if (hyperparams.decision_threshold !== undefined) {
-        setValueWithRangeUpdate('rfDecisionThreshold', hyperparams.decision_threshold, 'rfDecisionThresholdValue');
-    }
-    
-    // Validation method
-    setValueWithRangeUpdate('rfValidationMethod', hyperparams.validation_method || 'holdout');
-    
-    // Update UI based on problem type
-    updateRandomForestOptions();
-}
+// loadRandomForestConfiguration is now defined in random-forest-config-v2.js
 
 // Load XGBoost configuration for editing
 function loadXGBoostConfiguration(hyperparams) {

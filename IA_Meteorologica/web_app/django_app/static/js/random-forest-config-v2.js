@@ -279,6 +279,14 @@ function updateCriterionOptionsPreserving(problemType, config) {
     const currentValue = criterionSelect.value;
     const userModifiedValue = RFUserState.getValue('criterion');
     
+    // Guardar el valor actual antes de reconstruir
+    let valueToRestore = currentValue;
+    
+    // Si hay un valor modificado por el usuario, usarlo
+    if (RFUserState.isUserModified('criterion') && userModifiedValue) {
+        valueToRestore = userModifiedValue;
+    }
+    
     // Rebuild options
     criterionSelect.innerHTML = '<option value="auto">Automatique (recommandé)</option>';
     
@@ -289,19 +297,21 @@ function updateCriterionOptionsPreserving(problemType, config) {
         criterionSelect.appendChild(option);
     });
     
-    // Restaurar valor del usuario si existe y es válido para este tipo de problema
-    if (RFUserState.isUserModified('criterion') && userModifiedValue) {
-        // Verificar si el criterio guardado es válido para el tipo de problema actual
-        if (config.criteriaOptions.includes(userModifiedValue)) {
-            criterionSelect.value = userModifiedValue;
+    // Intentar restaurar el valor
+    if (valueToRestore && valueToRestore !== 'auto') {
+        // Verificar si el valor es válido para el tipo de problema actual
+        if (config.criteriaOptions.includes(valueToRestore)) {
+            criterionSelect.value = valueToRestore;
         } else {
-            // Si no es válido, usar el default pero no marcar como modificado por usuario
-            criterionSelect.value = config.defaultCriterion;
-            RFUserState.userModified.criterion = false;
+            // Si no es válido pero existe, mantener 'auto' sin marcar como modificado
+            criterionSelect.value = 'auto';
+            if (RFUserState.isUserModified('criterion')) {
+                RFUserState.userModified.criterion = false;
+            }
         }
-    } else if (currentValue !== 'auto' && config.criteriaOptions.includes(currentValue)) {
-        // Mantener el valor actual si es válido
-        criterionSelect.value = currentValue;
+    } else {
+        // Mantener auto si ese era el valor
+        criterionSelect.value = 'auto';
     }
 }
 
@@ -574,6 +584,8 @@ function getRandomForestConfig() {
 function loadRandomForestConfiguration(hyperparams) {
     if (!hyperparams) return;
     
+    console.log('Loading Random Forest configuration:', hyperparams);
+    
     // Reset user modification state when loading existing model
     RFUserState.resetModificationState();
     
@@ -599,8 +611,10 @@ function loadRandomForestConfiguration(hyperparams) {
         toggleCustomMaxFeatures();
     }
     
-    // Other parameters
-    setValueWithRangeUpdate('rfCriterion', hyperparams.criterion || 'auto');
+    // Other parameters - NO usar valores por defecto para criterion
+    if (hyperparams.criterion !== undefined) {
+        setValueWithRangeUpdate('rfCriterion', hyperparams.criterion);
+    }
     setValueWithRangeUpdate('rfMinSamplesSplit', hyperparams.min_samples_split || 2);
     setValueWithRangeUpdate('rfMinSamplesLeaf', hyperparams.min_samples_leaf || 1);
     setValueWithRangeUpdate('rfMinWeightFractionLeaf', hyperparams.min_weight_fraction_leaf || 0);
@@ -629,6 +643,23 @@ function loadRandomForestConfiguration(hyperparams) {
     
     // Update UI based on problem type
     updateRandomForestOptions();
+    
+    // IMPORTANTE: Después de actualizar opciones, restaurar el criterio si existe
+    if (hyperparams.criterion && hyperparams.criterion !== 'auto') {
+        setTimeout(() => {
+            const criterionSelect = document.getElementById('rfCriterion');
+            if (criterionSelect) {
+                // Verificar si la opción existe
+                const optionExists = Array.from(criterionSelect.options).some(opt => opt.value === hyperparams.criterion);
+                if (optionExists) {
+                    criterionSelect.value = hyperparams.criterion;
+                    console.log('Criterion restored to:', hyperparams.criterion);
+                } else {
+                    console.warn('Criterion not valid for current problem type:', hyperparams.criterion);
+                }
+            }
+        }, 100);
+    }
     
     // Guardar valores cargados en el estado
     RFUserState.currentValues = { ...hyperparams };
