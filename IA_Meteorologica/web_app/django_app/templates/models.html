@@ -325,11 +325,13 @@
     
     /* Framework selection modal styles */
     .framework-btn {
-        height: 120px;
+        min-height: 150px;
+        height: auto;
+        padding: 20px;
         border-radius: 15px;
         transition: all 0.3s ease;
         position: relative;
-        overflow: hidden;
+        overflow: visible;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -1913,11 +1915,11 @@ function createModelCard(model) {
                 </div>
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <span class="text-muted small">Créé le:</span>
-                    <span class="small">${new Date(model.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                    <span class="small">${new Date(model.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <span class="text-muted small">Modifié le:</span>
-                    <span class="small">${new Date(model.updated_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                    <span class="small">${new Date(model.updated_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
                 ${latestTraining ? `
                 <div class="d-flex justify-content-between align-items-center">
@@ -3641,8 +3643,7 @@ function showSklearnOnlyModal(modelId, action, model) {
         sklearnCol = document.createElement('div');
         sklearnCol.className = 'col-12';
         sklearnCol.innerHTML = `
-            <button type="button" class="btn btn-outline-warning w-100 framework-btn" data-framework="sklearn" 
-                    style="padding: 20px;">
+            <button type="button" class="btn btn-outline-warning w-100 framework-btn" data-framework="sklearn">
                 <i class="bi bi-graph-up" style="font-size: 2rem;"></i>
                 <div class="mt-2">
                     <strong>Scikit-learn</strong>
