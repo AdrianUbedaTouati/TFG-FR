@@ -375,7 +375,12 @@ function editDatasetInfo() {
     document.getElementById('datasetShortDescription').value = window.selectedDataset.short_description || '';
     document.getElementById('datasetLongDescription').value = window.selectedDataset.long_description || '';
     
-    // Cerrar el modal del editor de dataset
+    // Cerrar cualquier modal abierto
+    const detailModal = bootstrap.Modal.getInstance(document.getElementById('datasetDetailModal'));
+    if (detailModal) {
+        detailModal.hide();
+    }
+    
     const editorModal = bootstrap.Modal.getInstance(document.getElementById('datasetEditorModal'));
     if (editorModal) {
         editorModal.hide();
