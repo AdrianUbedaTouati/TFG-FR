@@ -876,10 +876,22 @@
                 <div class="row">
                     <!-- Panel de selección de columna -->
                     <div class="col-md-4">
+                        <!-- Sección de información del dataset -->
+                        <div class="card mb-3" style="background-color: #0d1225; border: 1px solid #2d3561;">
+                            <div class="card-body">
+                                <h6 class="text-info mb-3">
+                                    <i class="bi bi-database"></i> Información del Dataset
+                                </h6>
+                                <button class="btn btn-sm btn-primary w-100" onclick="editDatasetInfo()">
+                                    <i class="bi bi-pencil"></i> Editar Información del Dataset
+                                </button>
+                            </div>
+                        </div>
+                        
                         <h6 class="text-info mb-3">
                             <i class="bi bi-list-columns"></i> Seleccionar Columna
                         </h6>
-                        <div class="list-group" id="columnListEditor" style="max-height: 500px; overflow-y: auto;">
+                        <div class="list-group" id="columnListEditor" style="max-height: 400px; overflow-y: auto;">
                             <!-- Se llenará dinámicamente -->
                         </div>
                     </div>
@@ -10219,6 +10231,50 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+<!-- Modal para editar información del dataset -->
+<div class="modal fade" id="editDatasetInfoModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-info">
+                    <i class="bi bi-pencil-square"></i> Editar Información del Dataset
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editDatasetInfoForm">
+                    <div class="mb-3">
+                        <label for="datasetName" class="form-label">Nombre del Dataset</label>
+                        <input type="text" class="form-control bg-dark text-light border-secondary" 
+                               id="datasetName" maxlength="255" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="datasetShortDescription" class="form-label">
+                            Descripción Corta 
+                            <small class="text-muted">(máx. 80 caracteres)</small>
+                        </label>
+                        <input type="text" class="form-control bg-dark text-light border-secondary" 
+                               id="datasetShortDescription" maxlength="80">
+                    </div>
+                    <div class="mb-3">
+                        <label for="datasetLongDescription" class="form-label">Descripción Detallada</label>
+                        <textarea class="form-control bg-dark text-light border-secondary" 
+                                  id="datasetLongDescription" rows="4"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="saveDatasetInfo()">
+                    <i class="bi bi-check-circle"></i> Guardar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Script para análisis avanzados -->
 <script src="{% static 'js/dataset-analysis.js' %}?v={% now 'U' %}"></script>

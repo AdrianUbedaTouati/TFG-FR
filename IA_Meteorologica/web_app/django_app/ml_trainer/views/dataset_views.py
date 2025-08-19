@@ -66,6 +66,45 @@ class DatasetDetailView(generics.RetrieveDestroyAPIView):
         return Dataset.objects.filter(user=self.request.user)
 
 
+class DatasetUpdateInfoView(APIView):
+    """Update dataset metadata (name, descriptions)"""
+    permission_classes = [IsAuthenticated]
+    
+    def put(self, request, dataset_id):
+        try:
+            # Obtener el dataset
+            if request.user.is_staff:
+                dataset = get_object_or_404(Dataset, id=dataset_id)
+            else:
+                dataset = get_object_or_404(Dataset, id=dataset_id, user=request.user)
+            
+            # Obtener los nuevos valores
+            name = request.data.get('name', '').strip()
+            short_description = request.data.get('short_description', '').strip()
+            long_description = request.data.get('long_description', '').strip()
+            
+            # Validar que el nombre no esté vacío
+            if not name:
+                return error_response('El nombre del dataset es obligatorio')
+            
+            # Actualizar los campos
+            dataset.name = name
+            dataset.short_description = short_description if short_description else None
+            dataset.long_description = long_description if long_description else None
+            dataset.save()
+            
+            # Retornar la información actualizada
+            return success_response({
+                'id': dataset.id,
+                'name': dataset.name,
+                'short_description': dataset.short_description,
+                'long_description': dataset.long_description
+            })
+            
+        except Exception as e:
+            return error_response(f'Error al actualizar la información del dataset: {str(e)}')
+
+
 class DatasetColumnsView(APIView):
     """Get column information for a dataset"""
     permission_classes = [IsAuthenticated]

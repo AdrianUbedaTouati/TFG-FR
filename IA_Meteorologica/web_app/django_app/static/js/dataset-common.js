@@ -363,8 +363,101 @@ function showOutliers(columnName) {
     });
 }
 
+// Función para editar la información del dataset
+function editDatasetInfo() {
+    if (!window.selectedDataset) {
+        showNotification('Error', 'No se ha seleccionado ningún dataset', 'error');
+        return;
+    }
+    
+    // Cargar los valores actuales en el formulario
+    document.getElementById('datasetName').value = window.selectedDataset.name || '';
+    document.getElementById('datasetShortDescription').value = window.selectedDataset.short_description || '';
+    document.getElementById('datasetLongDescription').value = window.selectedDataset.long_description || '';
+    
+    // Cerrar el modal del editor de dataset
+    const editorModal = bootstrap.Modal.getInstance(document.getElementById('datasetEditorModal'));
+    if (editorModal) {
+        editorModal.hide();
+    }
+    
+    // Esperar un poco y abrir el modal de edición
+    setTimeout(() => {
+        const editModal = new bootstrap.Modal(document.getElementById('editDatasetInfoModal'));
+        editModal.show();
+    }, 300);
+}
+
+// Función para guardar la información del dataset
+function saveDatasetInfo() {
+    if (!window.selectedDataset) return;
+    
+    const name = document.getElementById('datasetName').value.trim();
+    const shortDescription = document.getElementById('datasetShortDescription').value.trim();
+    const longDescription = document.getElementById('datasetLongDescription').value.trim();
+    
+    if (!name) {
+        showNotification('Error', 'El nombre del dataset es obligatorio', 'error');
+        return;
+    }
+    
+    showLoading();
+    
+    fetch(`/api/datasets/${window.selectedDataset.id}/update-info/`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            name: name,
+            short_description: shortDescription,
+            long_description: longDescription
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Error al actualizar la información');
+        }
+        return response.json();
+    })
+    .then(data => {
+        hideLoading();
+        showNotification('Éxito', 'Información del dataset actualizada correctamente', 'success');
+        
+        // Cerrar el modal
+        const editModal = bootstrap.Modal.getInstance(document.getElementById('editDatasetInfoModal'));
+        if (editModal) {
+            editModal.hide();
+        }
+        
+        // Actualizar la información local
+        window.selectedDataset.name = name;
+        window.selectedDataset.short_description = shortDescription;
+        window.selectedDataset.long_description = longDescription;
+        
+        // Actualizar el título del modal del editor si está abierto
+        const editorTitle = document.getElementById('datasetEditorModalLabel');
+        if (editorTitle) {
+            editorTitle.innerHTML = `<i class="bi bi-pencil-square"></i> Editor de Dataset - ${name}`;
+        }
+        
+        // Recargar la página para actualizar los cards
+        setTimeout(() => {
+            location.reload();
+        }, 1000);
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('Error:', error);
+        showNotification('Error', 'Error al actualizar la información del dataset', 'error');
+    });
+}
+
 // Exportar funciones para uso global
 window.renameColumn = renameColumn;
 window.deleteColumn = deleteColumn;
 window.showUniqueValues = showUniqueValues;
+window.editDatasetInfo = editDatasetInfo;
+window.saveDatasetInfo = saveDatasetInfo;
 window.showOutliers = showOutliers;

@@ -6,6 +6,7 @@ urlpatterns = [
     # Dataset endpoints
     path('datasets/', views.DatasetListCreateView.as_view(), name='dataset-list-create'),
     path('datasets/<int:pk>/', views.DatasetDetailView.as_view(), name='dataset-detail'),
+    path('datasets/<int:dataset_id>/update-info/', views.DatasetUpdateInfoView.as_view(), name='dataset-update-info'),
     path('datasets/<int:pk>/columns/', views.DatasetColumnsView.as_view(), name='dataset-columns'),
     path('datasets/<int:pk>/columns/<path:column_name>/analysis/', views.DatasetVariableAnalysisView.as_view(), name='dataset-variable-analysis'),
     path('datasets/<int:pk>/columns/<path:column_name>/', views.DatasetColumnDetailsView.as_view(), name='dataset-column-details'),
