@@ -54,27 +54,42 @@ const RF_PRESETS = {
         max_depth_enabled: false,
         max_depth: null,
         max_features: 'sqrt',
+        min_samples_split: 2,
         min_samples_leaf: 1,
+        min_weight_fraction_leaf: 0,
+        min_impurity_decrease: 0,
         bootstrap: true,
-        oob_score: false
+        oob_score: false,
+        n_jobs: -1,
+        random_state: 42
     },
     balanceado: {
         n_estimators: 300,
         max_depth_enabled: false,
         max_depth: null,
         max_features: 'auto',
+        min_samples_split: 2,
         min_samples_leaf: 1,
+        min_weight_fraction_leaf: 0,
+        min_impurity_decrease: 0,
         bootstrap: true,
-        oob_score: false
+        oob_score: false,
+        n_jobs: -1,
+        random_state: 42
     },
     preciso: {
         n_estimators: 1000,
-        max_depth_enabled: false,
-        max_depth: null,
+        max_depth_enabled: true,
+        max_depth: 20,
         max_features: 'auto',
-        min_samples_leaf: 1,
+        min_samples_split: 5,
+        min_samples_leaf: 2,
+        min_weight_fraction_leaf: 0,
+        min_impurity_decrease: 0,
         bootstrap: true,
-        oob_score: true
+        oob_score: true,
+        n_jobs: -1,
+        random_state: 42
     }
 };
 
@@ -192,52 +207,53 @@ function setupEventListenersWithTracking() {
 }
 
 /**
- * Apply selected preset configuration (mejorado para no sobrescribir valores del usuario)
+ * Apply selected preset configuration
  */
 function applyRandomForestPreset() {
     const preset = document.getElementById('rfPreset').value;
     const config = RF_PRESETS[preset];
     
     if (config) {
-        // Solo aplicar valores que NO han sido modificados por el usuario
-        
-        // Número de árboles - NO sobrescribir si el usuario lo modificó
-        if (!RFUserState.isUserModified('n_estimators')) {
-            // NO actualizar el número de árboles según tu petición
-            // document.getElementById('rfNEstimators').value = config.n_estimators;
-            // document.getElementById('rfNEstimatorsValue').textContent = config.n_estimators;
-        }
+        // Aplicar TODOS los valores del preset
+        document.getElementById('rfNEstimators').value = config.n_estimators;
+        document.getElementById('rfNEstimatorsValue').textContent = config.n_estimators;
         
         // Max depth
-        if (!RFUserState.isUserModified('max_depth')) {
-            document.getElementById('rfMaxDepthEnabled').checked = config.max_depth_enabled;
-            document.getElementById('rfMaxDepth').disabled = !config.max_depth_enabled;
-            if (config.max_depth) {
-                document.getElementById('rfMaxDepth').value = config.max_depth;
-            }
+        document.getElementById('rfMaxDepthEnabled').checked = config.max_depth_enabled;
+        document.getElementById('rfMaxDepth').disabled = !config.max_depth_enabled;
+        if (config.max_depth) {
+            document.getElementById('rfMaxDepth').value = config.max_depth;
         }
         
         // Max features
-        if (!RFUserState.isUserModified('max_features')) {
-            if (config.max_features === 'auto') {
-                updateMaxFeaturesDefault();
-            } else {
-                document.getElementById('rfMaxFeatures').value = config.max_features;
-            }
+        if (config.max_features === 'auto') {
+            updateMaxFeaturesDefault();
+        } else {
+            document.getElementById('rfMaxFeatures').value = config.max_features;
         }
         
-        // Min samples leaf
-        if (!RFUserState.isUserModified('min_samples_leaf')) {
-            document.getElementById('rfMinSamplesLeaf').value = config.min_samples_leaf;
-        }
+        // Parámetros de división
+        document.getElementById('rfMinSamplesSplit').value = config.min_samples_split;
+        document.getElementById('rfMinSamplesLeaf').value = config.min_samples_leaf;
+        document.getElementById('rfMinWeightFractionLeaf').value = config.min_weight_fraction_leaf;
+        document.getElementById('rfMinImpurityDecrease').value = config.min_impurity_decrease;
         
-        // Bootstrap y OOB siempre se actualizan con el preset
+        // Bootstrap y OOB
         document.getElementById('rfBootstrap').checked = config.bootstrap;
         document.getElementById('rfOobScore').checked = config.oob_score;
+        
+        // Performance
+        document.getElementById('rfNJobs').value = config.n_jobs;
+        if (config.random_state) {
+            document.getElementById('rfRandomState').value = config.random_state;
+        }
         
         // Update dependent options
         toggleBootstrapOptions();
         toggleCustomMaxFeatures();
+        toggleRandomForestMaxDepth();
+        
+        console.log(`Preset "${preset}" aplicado con éxito`);
     }
 }
 
@@ -747,6 +763,119 @@ function setCheckboxValue(elementId, value, callback) {
             callback();
         }
     }
+}
+
+/**
+ * Reset to default preset (balanceado)
+ */
+function resetRandomForestPreset() {
+    // Reset modificaciones del usuario
+    RFUserState.resetModificationState();
+    
+    // Establecer preset balanceado
+    document.getElementById('rfPreset').value = 'balanceado';
+    applyRandomForestPreset();
+    
+    showNotification('Restablecido', 'Configuración predefinida restablecida a "Balanceado"', 'info');
+}
+
+/**
+ * Optimize configuration for current problem type
+ */
+function resetRandomForestProblemType() {
+    const problemType = document.getElementById('rfProblemType').value;
+    
+    if (problemType === 'auto') {
+        showNotification('Información', 'Seleccione primero un tipo de problema específico (Clasificación o Regresión)', 'warning');
+        return;
+    }
+    
+    // Configuraciones óptimas para cada tipo
+    const optimalConfigs = {
+        classification: {
+            n_estimators: 500,
+            max_depth_enabled: true,
+            max_depth: 20,
+            max_features: 'sqrt',
+            min_samples_split: 2,
+            min_samples_leaf: 1,
+            criterion: 'gini',
+            bootstrap: true,
+            oob_score: true,
+            class_weight: 'balanced',
+            validation_method: 'stratified_cv'
+        },
+        regression: {
+            n_estimators: 500,
+            max_depth_enabled: true,
+            max_depth: 25,
+            max_features: 1.0,
+            min_samples_split: 5,
+            min_samples_leaf: 2,
+            criterion: 'squared_error',
+            bootstrap: true,
+            oob_score: true,
+            validation_method: 'cv'
+        }
+    };
+    
+    const config = optimalConfigs[problemType];
+    if (!config) return;
+    
+    // Aplicar configuración óptima
+    document.getElementById('rfNEstimators').value = config.n_estimators;
+    document.getElementById('rfNEstimatorsValue').textContent = config.n_estimators;
+    
+    document.getElementById('rfMaxDepthEnabled').checked = config.max_depth_enabled;
+    document.getElementById('rfMaxDepth').disabled = !config.max_depth_enabled;
+    document.getElementById('rfMaxDepth').value = config.max_depth;
+    
+    // Manejar max_features correctamente
+    if (typeof config.max_features === 'number') {
+        // Si es un número, usar la opción "todas las características"
+        document.getElementById('rfMaxFeatures').value = '1.0';
+    } else {
+        document.getElementById('rfMaxFeatures').value = config.max_features;
+    }
+    
+    document.getElementById('rfMinSamplesSplit').value = config.min_samples_split;
+    document.getElementById('rfMinSamplesLeaf').value = config.min_samples_leaf;
+    
+    // Primero actualizar las opciones según el tipo de problema
+    updateRandomForestOptions();
+    
+    // Luego establecer el criterio después de que las opciones estén disponibles
+    setTimeout(() => {
+        document.getElementById('rfCriterion').value = config.criterion;
+    }, 100);
+    
+    document.getElementById('rfBootstrap').checked = config.bootstrap;
+    document.getElementById('rfOobScore').checked = config.oob_score;
+    document.getElementById('rfValidationMethod').value = config.validation_method;
+    
+    // Para clasificación, configurar class weight
+    if (problemType === 'classification') {
+        const classWeightSelect = document.getElementById('rfClassWeight');
+        if (classWeightSelect) {
+            classWeightSelect.value = config.class_weight;
+        }
+    }
+    
+    // Actualizar opciones dependientes
+    toggleBootstrapOptions();
+    toggleCustomMaxFeatures();
+    toggleRandomForestMaxDepth();
+    handleValidationMethodChange();
+    
+    // Marcar todos los valores como NO modificados por el usuario
+    // para que puedan ser actualizados por futuros presets si se desea
+    RFUserState.resetModificationState();
+    
+    const message = problemType === 'classification' 
+        ? 'Configuración optimizada para Clasificación aplicada' 
+        : 'Configuración optimizada para Regresión aplicada';
+    
+    showNotification('Optimizado', message, 'success');
 }
 
 // Initialize when DOM is ready

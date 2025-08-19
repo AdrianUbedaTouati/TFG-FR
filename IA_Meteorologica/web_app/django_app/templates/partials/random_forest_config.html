@@ -11,7 +11,13 @@
     <!-- Selector de preset y tipo de problema -->
     <div class="row mb-3">
         <div class="col-md-4">
-            <label for="rfPreset" class="form-label">Configuración predefinida</label>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <label for="rfPreset" class="form-label mb-0">Configuración predefinida</label>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetRandomForestPreset()" 
+                        data-bs-toggle="tooltip" title="Restablecer a configuración balanceada">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                </button>
+            </div>
             <select class="form-select" id="rfPreset" onchange="applyRandomForestPreset()">
                 <option value="rapido">Rápido (100 árboles)</option>
                 <option value="balanceado" selected>Balanceado (300 árboles)</option>
@@ -20,7 +26,13 @@
             <small class="text-muted">Presets optimizados para diferentes necesidades</small>
         </div>
         <div class="col-md-4">
-            <label for="rfProblemType" class="form-label">Tipo de problema</label>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <label for="rfProblemType" class="form-label mb-0">Tipo de problema</label>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="resetRandomForestProblemType()" 
+                        data-bs-toggle="tooltip" title="Configurar valores óptimos para el tipo de problema">
+                    <i class="bi bi-magic"></i> Optimizar
+                </button>
+            </div>
             <select class="form-select" id="rfProblemType" onchange="updateRandomForestOptions()">
                 <option value="auto">Auto-detectar (usa primera variable objetivo)</option>
                 <option value="regression">Regresión</option>
