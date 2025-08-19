@@ -639,7 +639,9 @@ def _prepare_random_forest_params(hyperparams):
     ui_only_params = [
         'preset', 'problem_type', 'max_depth_enabled', 'class_weight_balanced', 
         'validation_method', 'criterion_advanced', 'class_weight_custom',
-        'decision_threshold', 'output_type', 'max_features_fraction'
+        'decision_threshold', 'output_type', 'max_features_fraction',
+        'epochs', 'batch_size', 'learning_rate',  # Neural network params that don't apply to RF
+        'use_custom_architecture', 'custom_architecture'  # Architecture params for neural networks
     ]
     for param in ui_only_params:
         clean_params.pop(param, None)
@@ -693,7 +695,9 @@ def _prepare_decision_tree_params(hyperparams):
     # Remove UI-specific parameters that don't belong to scikit-learn
     ui_only_params = [
         'preset', 'problem_type', 'max_depth_enabled', 'min_samples_leaf_fraction',
-        'validation_method', 'criterion_advanced', 'decision_threshold', 'output_type'
+        'validation_method', 'criterion_advanced', 'decision_threshold', 'output_type',
+        'epochs', 'batch_size', 'learning_rate',  # Neural network params that don't apply to DT
+        'use_custom_architecture', 'custom_architecture'  # Architecture params for neural networks
     ]
     for param in ui_only_params:
         clean_params.pop(param, None)
@@ -739,7 +743,9 @@ def _prepare_xgboost_params(hyperparams):
     # Remove UI-specific parameters that don't belong to XGBoost
     ui_only_params = [
         'preset', 'problem_type', 'early_stopping_enabled', 'use_gpu', 
-        'max_features_fraction', 'decision_threshold', 'output_type'
+        'max_features_fraction', 'decision_threshold', 'output_type',
+        'epochs', 'batch_size',  # Neural network params (XGBoost uses n_estimators instead)
+        'use_custom_architecture', 'custom_architecture'  # Architecture params for neural networks
     ]
     for param in ui_only_params:
         clean_params.pop(param, None)
@@ -798,6 +804,10 @@ def _prepare_xgboost_params(hyperparams):
 
 def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val):
     """Train scikit-learn models"""
+    print(f"[train_sklearn_model] Model type: {model_type}")
+    print(f"[train_sklearn_model] Hyperparameters received: {hyperparams}")
+    print(f"[train_sklearn_model] Input shapes - X_train: {X_train.shape}, y_train: {y_train.shape}")
+    
     if model_type == 'decision_tree':
         # Determine if it's classification or regression
         problem_type = hyperparams.get('problem_type', 'regression')
@@ -813,10 +823,15 @@ def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val)
         problem_type = hyperparams.get('problem_type', 'regression')
         clean_params = _prepare_random_forest_params(hyperparams)
         
+        print(f"[train_sklearn_model] Problem type: {problem_type}")
+        print(f"[train_sklearn_model] Cleaned parameters for RandomForest: {clean_params}")
+        
         if problem_type == 'classification':
             model = RandomForestClassifier(**clean_params)
         else:
             model = RandomForestRegressor(**clean_params)
+        
+        print(f"[train_sklearn_model] Model created successfully: {type(model).__name__}")
     elif model_type == 'xgboost':
         # Prepare XGBoost parameters
         problem_type = hyperparams.get('problem_type', 'regression')
@@ -837,19 +852,48 @@ def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val)
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
     
-    # Handle early stopping for XGBoost
-    if model_type == 'xgboost' and hyperparams.get('early_stopping_enabled', True):
-        early_stopping_rounds = hyperparams.get('early_stopping_rounds', 50)
-        eval_set = [(X_val, y_val)]
-        model.fit(X_train, y_train, 
-                  eval_set=eval_set, 
-                  early_stopping_rounds=early_stopping_rounds,
-                  verbose=False)
-    else:
-        model.fit(X_train, y_train)
+    # Train the model
+    print(f"[train_sklearn_model] Training model...")
+    print(f"[train_sklearn_model] Final data shapes before fit - X_train: {X_train.shape}, y_train: {y_train.shape}")
+    
+    try:
+        # Handle early stopping for XGBoost
+        if model_type == 'xgboost' and hyperparams.get('early_stopping_enabled', True):
+            early_stopping_rounds = hyperparams.get('early_stopping_rounds', 50)
+            eval_set = [(X_val, y_val)]
+            print(f"[train_sklearn_model] Training XGBoost with early stopping (rounds={early_stopping_rounds})")
+            model.fit(X_train, y_train, 
+                      eval_set=eval_set, 
+                      early_stopping_rounds=early_stopping_rounds,
+                      verbose=False)
+        else:
+            print(f"[train_sklearn_model] Training {model_type} model...")
+            model.fit(X_train, y_train)
+        
+        print(f"[train_sklearn_model] Model training completed successfully!")
+    except Exception as e:
+        print(f"[train_sklearn_model] ERROR during model.fit: {str(e)}")
+        print(f"[train_sklearn_model] Error type: {type(e).__name__}")
+        import traceback
+        print(f"[train_sklearn_model] Traceback: {traceback.format_exc()}")
+        raise
     
     # Calculate validation metrics
-    val_pred = model.predict(X_val)
+    print(f"[train_sklearn_model] Calculating validation metrics...")
+    
+    try:
+        val_pred = model.predict(X_val)
+        print(f"[train_sklearn_model] Validation predictions shape: {val_pred.shape}")
+    except Exception as e:
+        print(f"[train_sklearn_model] ERROR during validation prediction: {str(e)}")
+        # If predict fails, it might be due to data shape issues
+        if "Expected 2D array, got 1D array" in str(e):
+            print(f"[train_sklearn_model] Attempting to reshape validation data...")
+            if len(X_val.shape) == 1:
+                X_val = X_val.reshape(-1, 1)
+            val_pred = model.predict(X_val)
+        else:
+            raise
     
     # Choose appropriate metrics based on problem type
     if (model_type in ['random_forest', 'xgboost', 'decision_tree'] and 
@@ -863,7 +907,8 @@ def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val)
                 'train_loss': [log_loss(y_train, model.predict_proba(X_train))],
                 'val_loss': [log_loss(y_val, model.predict_proba(X_val))]
             }
-        except:
+        except Exception as e:
+            print(f"[train_sklearn_model] Warning: Could not calculate log_loss: {str(e)}")
             # Fallback to basic accuracy if log_loss fails
             train_pred = model.predict(X_train)
             history = {
@@ -872,10 +917,17 @@ def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val)
             }
     else:
         # Regression metrics
-        history = {
-            'train_loss': [mean_squared_error(y_train, model.predict(X_train))],
-            'val_loss': [mean_squared_error(y_val, val_pred)]
-        }
+        print(f"[train_sklearn_model] Calculating regression metrics...")
+        try:
+            train_pred = model.predict(X_train)
+            history = {
+                'train_loss': [mean_squared_error(y_train, train_pred)],
+                'val_loss': [mean_squared_error(y_val, val_pred)]
+            }
+            print(f"[train_sklearn_model] Metrics calculated successfully")
+        except Exception as e:
+            print(f"[train_sklearn_model] ERROR calculating metrics: {str(e)}")
+            raise
     
     return model, history
 
@@ -886,15 +938,39 @@ def train_model(session):
         session.status = 'training'
         session.save()
         
+        # Log initial info
+        print(f"[Training] Starting training for model type: {session.model_type}")
+        print(f"[Training] Dataset: {session.dataset.name}")
+        print(f"[Training] Predictor columns: {session.predictor_columns}")
+        print(f"[Training] Target columns: {session.target_columns}")
+        
         # Check if it's a neural network
         is_neural = session.model_type in ['lstm', 'gru', 'cnn', 'transformer']
         
         # Prepare data
+        print(f"[Training] Preparing data...")
         data, scalers = prepare_data(session, is_neural_network=is_neural)
         X_train, y_train, X_val, y_val, X_test, y_test = data
         scaler_X, scaler_y = scalers
         
+        # Log data shapes
+        print(f"[Training] Data shapes after preparation:")
+        print(f"  X_train: {X_train.shape}, y_train: {y_train.shape}")
+        print(f"  X_val: {X_val.shape}, y_val: {y_val.shape}")
+        print(f"  X_test: {X_test.shape}, y_test: {y_test.shape}")
+        
+        # Ensure y data is properly shaped for sklearn models
+        if session.model_type in ['decision_tree', 'random_forest', 'xgboost']:
+            # For sklearn models, if y has only one column, it should be 1D
+            if y_train.shape[1] == 1:
+                print(f"[Training] Converting y data to 1D for sklearn model")
+                y_train = y_train.ravel()
+                y_val = y_val.ravel()
+                y_test = y_test.ravel()
+                print(f"[Training] New y shapes - train: {y_train.shape}, val: {y_val.shape}, test: {y_test.shape}")
+        
         # Train model based on type
+        print(f"[Training] Starting model training...")
         if session.model_type in ['decision_tree', 'random_forest', 'xgboost']:
             model, history = train_sklearn_model(
                 session.model_type, 
