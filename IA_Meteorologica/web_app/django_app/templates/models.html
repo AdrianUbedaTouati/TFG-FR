@@ -2178,8 +2178,12 @@ function setupEditModalUI(model, modelId) {
 
 // Refactored editModel function
 function editModel(modelId) {
+    console.log('Editing model:', modelId);
     const model = modelsList.find(m => m.id === modelId);
-    if (!model) return;
+    if (!model) {
+        console.error('Model not found:', modelId);
+        return;
+    }
     
     selectedModel = model;
     
@@ -2218,23 +2222,27 @@ function editModel(modelId) {
                 // Select appropriate columns after loading
                 setTimeout(() => selectDatasetColumns(model), 1000);
             }
+            
+            // Setup modal UI for editing
+            setupEditModalUI(model, modelId);
+            
+            // Load model-specific configurations
+            if (model.model_type === 'random_forest' && model.hyperparameters) {
+                loadRandomForestConfiguration(model.hyperparameters);
+            } else if (model.model_type === 'xgboost' && model.hyperparameters) {
+                loadXGBoostConfiguration(model.hyperparameters);
+            } else if (model.model_type === 'decision_tree' && model.hyperparameters) {
+                loadDecisionTreeConfiguration(model.hyperparameters);
+            }
+            
+            // Update framework options and show modal
+            updateFrameworkOptions();
+            showModalSafely('createModelModal');
+        })
+        .catch(error => {
+            console.error('Error loading datasets:', error);
+            showNotification('Erreur', 'Impossible de charger les datasets', 'error');
         });
-    
-    // Setup modal UI for editing
-    setupEditModalUI(model, modelId);
-    
-    // Load model-specific configurations
-    if (model.model_type === 'random_forest' && model.hyperparameters) {
-        loadRandomForestConfiguration(model.hyperparameters);
-    } else if (model.model_type === 'xgboost' && model.hyperparameters) {
-        loadXGBoostConfiguration(model.hyperparameters);
-    } else if (model.model_type === 'decision_tree' && model.hyperparameters) {
-        loadDecisionTreeConfiguration(model.hyperparameters);
-    }
-    
-    // Update framework options and show modal
-    updateFrameworkOptions();
-    showModalSafely('createModelModal');
 }
 
 // Mettre à jour le modèle
@@ -2809,7 +2817,8 @@ function loadDatasetColumns() {
             // Appliquer les règles du modèle sélectionné
             applyModelRules();
             
-            showNotification('Succès', `${columns.length} colonnes chargées`, 'success');
+            // Commented out to avoid interfering with modal display
+            // showNotification('Succès', `${columns.length} colonnes chargées`, 'success');
         })
         .catch(error => {
             console.error('Erreur lors du chargement des colonnes:', error);
@@ -3238,7 +3247,7 @@ function createModelOnly() {
 function showModalSafely(modalId, options = {}) {
     // Default options
     const defaultOptions = {
-        backdrop: false,
+        backdrop: true,
         keyboard: true,
         focus: true
     };
@@ -3248,10 +3257,15 @@ function showModalSafely(modalId, options = {}) {
     
     // Small delay to ensure cleanup is complete
     setTimeout(() => {
+        console.log('Trying to show modal:', modalId);
         const modalElement = document.getElementById(modalId);
         if (modalElement) {
+            console.log('Modal element found, creating Bootstrap modal...');
             const modal = new bootstrap.Modal(modalElement, {...defaultOptions, ...options});
             modal.show();
+            console.log('Modal shown');
+        } else {
+            console.error('Modal element not found:', modalId);
         }
     }, 100);
 }
@@ -3980,6 +3994,95 @@ function getXGBoostConfig() {
     }
     
     return config;
+}
+
+// Update range value display
+function updateRangeValue(rangeId, displayId) {
+    const range = document.getElementById(rangeId);
+    const display = document.getElementById(displayId);
+    if (range && display) {
+        display.textContent = range.value;
+    }
+}
+
+// Helper function to set value and update range display
+function setValueWithRangeUpdate(elementId, value, rangeDisplayId) {
+    const element = document.getElementById(elementId);
+    if (element && value !== undefined && value !== null) {
+        element.value = value;
+        if (rangeDisplayId) {
+            updateRangeValue(elementId, rangeDisplayId);
+        }
+    }
+}
+
+// Helper function to set checkbox value
+function setCheckboxValue(elementId, value, callback) {
+    const element = document.getElementById(elementId);
+    if (element && value !== undefined) {
+        element.checked = value;
+        if (callback && typeof callback === 'function') {
+            callback();
+        }
+    }
+}
+
+// Load Random Forest configuration for editing
+function loadRandomForestConfiguration(hyperparams) {
+    if (!hyperparams) return;
+    
+    // Basic parameters
+    setValueWithRangeUpdate('rfPreset', hyperparams.preset || 'balanceado');
+    setValueWithRangeUpdate('rfProblemType', hyperparams.problem_type || 'auto');
+    setValueWithRangeUpdate('rfNEstimators', hyperparams.n_estimators || 300, 'rfNEstimatorsValue');
+    
+    // Max depth
+    setCheckboxValue('rfMaxDepthEnabled', hyperparams.max_depth_enabled || false, toggleRandomForestMaxDepth);
+    if (hyperparams.max_depth) {
+        setValueWithRangeUpdate('rfMaxDepth', hyperparams.max_depth);
+    }
+    
+    // Max features
+    if (hyperparams.max_features) {
+        if (typeof hyperparams.max_features === 'number') {
+            setValueWithRangeUpdate('rfMaxFeatures', 'custom');
+            setValueWithRangeUpdate('rfMaxFeaturesFraction', hyperparams.max_features, 'rfMaxFeaturesFractionValue');
+        } else {
+            setValueWithRangeUpdate('rfMaxFeatures', hyperparams.max_features);
+        }
+        toggleCustomMaxFeatures();
+    }
+    
+    // Other parameters
+    setValueWithRangeUpdate('rfCriterion', hyperparams.criterion || 'auto');
+    setValueWithRangeUpdate('rfMinSamplesSplit', hyperparams.min_samples_split || 2);
+    setValueWithRangeUpdate('rfMinSamplesLeaf', hyperparams.min_samples_leaf || 1);
+    setValueWithRangeUpdate('rfMinWeightFractionLeaf', hyperparams.min_weight_fraction_leaf || 0);
+    setValueWithRangeUpdate('rfMinImpurityDecrease', hyperparams.min_impurity_decrease || 0);
+    
+    // Bootstrap and OOB
+    setCheckboxValue('rfBootstrap', hyperparams.bootstrap !== false, toggleBootstrapOptions);
+    setCheckboxValue('rfOobScore', hyperparams.oob_score || false);
+    
+    // Performance
+    setValueWithRangeUpdate('rfNJobs', hyperparams.n_jobs || -1);
+    if (hyperparams.random_state !== null && hyperparams.random_state !== undefined) {
+        setValueWithRangeUpdate('rfRandomState', hyperparams.random_state);
+    }
+    
+    // Classification settings
+    if (hyperparams.class_weight) {
+        setValueWithRangeUpdate('rfClassWeight', hyperparams.class_weight);
+    }
+    if (hyperparams.decision_threshold !== undefined) {
+        setValueWithRangeUpdate('rfDecisionThreshold', hyperparams.decision_threshold, 'rfDecisionThresholdValue');
+    }
+    
+    // Validation method
+    setValueWithRangeUpdate('rfValidationMethod', hyperparams.validation_method || 'holdout');
+    
+    // Update UI based on problem type
+    updateRandomForestOptions();
 }
 
 // Load XGBoost configuration for editing
