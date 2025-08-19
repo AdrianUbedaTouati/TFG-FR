@@ -1364,16 +1364,21 @@ def train_model(session):
                 test_results[metric] = None
         
         # Save model
-        model_dir = 'media/models'
-        os.makedirs(model_dir, exist_ok=True)
+        # Use absolute path for file operations
+        from django.conf import settings
+        model_dir_abs = os.path.join(settings.MEDIA_ROOT, 'models')
+        os.makedirs(model_dir_abs, exist_ok=True)
+        # But use relative path for saving in database
+        model_dir_rel = 'models'
         
         if model_format == 'tensorflow':
             # Save TensorFlow model
-            model_path = f"{model_dir}/model_{session.id}"
-            model.save(model_path)
+            model_path_abs = f"{model_dir_abs}/model_{session.id}"
+            model.save(model_path_abs)
+            model_path = f"{model_dir_rel}/model_{session.id}"
             
             # Save scalers and metadata separately
-            metadata_path = f"{model_dir}/model_{session.id}_metadata.pkl"
+            metadata_path_abs = f"{model_dir_abs}/model_{session.id}_metadata.pkl"
             joblib.dump({
                 'scaler_X': scaler_X,
                 'scaler_y': scaler_y,
@@ -1382,14 +1387,15 @@ def train_model(session):
                 'sequence_length': session.hyperparameters.get('sequence_length', 10),
                 'model_type': session.model_type,
                 'framework': 'keras'
-            }, metadata_path)
+            }, metadata_path_abs)
         elif model_format == 'pytorch':
             # Save PyTorch model
-            model_path = f"{model_dir}/model_{session.id}.pth"
-            save_pytorch_model(model, model_path)
+            model_path_abs = f"{model_dir_abs}/model_{session.id}.pth"
+            save_pytorch_model(model, model_path_abs)
+            model_path = f"{model_dir_rel}/model_{session.id}.pth"
             
             # Save scalers and metadata separately
-            metadata_path = f"{model_dir}/model_{session.id}_metadata.pkl"
+            metadata_path_abs = f"{model_dir_abs}/model_{session.id}_metadata.pkl"
             joblib.dump({
                 'scaler_X': scaler_X,
                 'scaler_y': scaler_y,
@@ -1400,10 +1406,11 @@ def train_model(session):
                 'framework': 'pytorch',
                 'input_shape': X_train.shape[1:],
                 'output_shape': (y_train.shape[1] if len(y_train.shape) > 1 else 1,)
-            }, metadata_path)
+            }, metadata_path_abs)
         else:
             # Save sklearn model
-            model_path = f"{model_dir}/model_{session.id}.pkl"
+            model_path_abs = f"{model_dir_abs}/model_{session.id}.pkl"
+            model_path = f"{model_dir_rel}/model_{session.id}.pkl"
             
             # Load preprocessing pipeline if it exists
             preprocessing_pipeline = None
@@ -1422,7 +1429,7 @@ def train_model(session):
                 'target_columns': session.target_columns,
                 'preprocessing_pipeline': preprocessing_pipeline,
                 'preprocessing_info': session.preprocessing_info
-            }, model_path)
+            }, model_path_abs)
         
         # Update session
         print(f"[Training] Saving session with test results: {test_results}")
