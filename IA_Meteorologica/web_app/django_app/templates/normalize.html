@@ -1418,7 +1418,14 @@
                     <div class="alert alert-info" style="background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
                         <i class="bi bi-info-circle"></i> La función debe recibir un parámetro 'value' y retornar el valor normalizado.
                         Para funciones numéricas, también puede recibir 'series' con toda la columna.
-                        <br><br>
+                        
+                        <div id="columnStatsInfo" style="margin: 15px 0; display: none;">
+                            <strong style="color: #00d4ff;">Estadísticas de columnas disponibles:</strong>
+                            <div id="columnStatsList" style="margin-top: 10px; padding: 10px; background: rgba(0, 0, 0, 0.3); border-radius: 5px; font-family: 'Fira Code', monospace; font-size: 0.9em;">
+                                <!-- Se llenará dinámicamente -->
+                            </div>
+                        </div>
+                        
                         <strong>Módulos disponibles para importar:</strong>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
                             <div>
@@ -1454,11 +1461,14 @@
                         <div style="margin-top: 10px; padding: 10px; background: rgba(255, 107, 107, 0.1); border-radius: 5px;">
                             <strong>Ejemplo de uso:</strong>
                             <pre style="margin: 0; font-size: 0.85em;"><code>import numpy as np
-from sklearn.preprocessing import StandardScaler
 
 def normalize(value, series=None):
-    # Tu código aquí
-    return np.log1p(value)  # Ejemplo: log(1+x)</code></pre>
+    # Usa las estadísticas mostradas arriba
+    mean = 5.47  # μ de tu columna
+    std = 1.44   # σ de tu columna
+    
+    # Normalización Z-score
+    return (value - mean) / std</code></pre>
                         </div>
                     </div>
                     <textarea class="code-editor" id="functionCode" placeholder="def normalize(value):
@@ -5969,6 +5979,9 @@ ${response.details}
         const modal = new bootstrap.Modal(document.getElementById('customFunctionModal'));
         const modalTitle = document.querySelector('#customFunctionModal .modal-title');
         
+        // Mostrar estadísticas de columnas
+        displayColumnStatistics();
+        
         if (functionData) {
             // Modo edición
             console.log('Opening modal for edit mode with data:', functionData);
@@ -6042,6 +6055,74 @@ ${response.details}
         
         // Poblar el selector de columnas
         populateColumnSelector();
+    }
+    
+    function displayColumnStatistics() {
+        const statsInfo = document.getElementById('columnStatsInfo');
+        const statsList = document.getElementById('columnStatsList');
+        
+        if (!datasetInfo || !datasetInfo.normalization_info) {
+            statsInfo.style.display = 'none';
+            return;
+        }
+        
+        let statsContent = '';
+        const columns = Object.entries(datasetInfo.normalization_info);
+        
+        // Mostrar estadísticas de todas las columnas numéricas
+        columns.forEach(([column, info]) => {
+            if (info.type === 'numeric' && info.stats) {
+                statsContent += `<div style="margin-bottom: 10px;">`;
+                statsContent += `<strong style="color: #4CAF50;">${column}:</strong><br>`;
+                
+                // Estadísticas con formato científico/matemático
+                if (info.stats.mean !== null) {
+                    statsContent += `  μ = ${info.stats.mean.toFixed(4)}<br>`;
+                }
+                if (info.stats.std !== null) {
+                    statsContent += `  σ = ${info.stats.std.toFixed(4)}<br>`;
+                }
+                if (info.stats.min !== null) {
+                    statsContent += `  min = ${info.stats.min.toFixed(4)}<br>`;
+                }
+                if (info.stats.max !== null) {
+                    statsContent += `  max = ${info.stats.max.toFixed(4)}<br>`;
+                }
+                
+                // Variables adicionales útiles
+                if (info.stats.mean !== null && info.stats.std !== null) {
+                    const cv = (info.stats.std / Math.abs(info.stats.mean)) * 100;
+                    statsContent += `  CV = ${cv.toFixed(2)}% (Coef. de variación)<br>`;
+                }
+                if (info.stats.min !== null && info.stats.max !== null) {
+                    const range = info.stats.max - info.stats.min;
+                    statsContent += `  rango = ${range.toFixed(4)}<br>`;
+                }
+                
+                statsContent += `</div>`;
+            }
+        });
+        
+        if (statsContent) {
+            statsList.innerHTML = statsContent;
+            statsInfo.style.display = 'block';
+            
+            // Agregar nota de uso
+            statsList.innerHTML += `
+                <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(0, 212, 255, 0.3);">
+                    <strong style="color: #FFA500;">Uso en tu función:</strong><br>
+                    <code style="color: #00d4ff;">
+                    # Ejemplo usando estadísticas de 'Temperature (C)':<br>
+                    mean = 5.47  # μ<br>
+                    std = 1.44   # σ<br>
+                    normalized = (value - mean) / std
+                    </code>
+                </div>
+            `;
+        } else {
+            statsList.innerHTML = '<em>No hay columnas numéricas con estadísticas disponibles</em>';
+            statsInfo.style.display = 'block';
+        }
     }
     
     function selectFunctionType(type, skipCodeUpdate = false) {
@@ -6118,8 +6199,9 @@ ${response.details}
         if (selectedFunctionType === 'numeric') {
             if (numColumns === 1) {
                 codeEditor.value = `# Los imports son opcionales - los módulos también están disponibles directamente
+# import numpy as np
 # import math
-# from datetime import datetime
+# from scipy import stats
 
 def normalize(value, series=None):
     """
@@ -6130,12 +6212,24 @@ def normalize(value, series=None):
     Returns:
         El valor normalizado para la nueva columna
     """
-    # Ejemplo: normalización min-max
+    # ESTADÍSTICAS DISPONIBLES (ver panel superior):
+    # Usa los valores μ (mean), σ (std), min, max de tu columna
+    
+    # Ejemplo 1: Normalización Z-score (estandarización)
+    # mean = 5.47  # Reemplaza con el μ de tu columna
+    # std = 1.44   # Reemplaza con el σ de tu columna
+    # return (value - mean) / std
+    
+    # Ejemplo 2: Normalización min-max usando series
     if series is not None:
         min_val = series.min()
         max_val = series.max()
         if max_val - min_val > 0:
             return (value - min_val) / (max_val - min_val)
+    
+    # Ejemplo 3: Transformación logarítmica
+    # return np.log1p(value) if value >= 0 else 0
+    
     return value`;
             } else {
                 // Generar ejemplo para múltiples columnas
@@ -6145,7 +6239,10 @@ def normalize(value, series=None):
                     columnNames.push(`'${inputName}'`);
                 }
                 
-                codeEditor.value = `def normalize(value, series=None):
+                codeEditor.value = `# import numpy as np
+# from scipy import stats
+
+def normalize(value, series=None):
     """
     Normaliza valores numéricos y crea múltiples columnas nuevas
     Args:
@@ -6155,12 +6252,20 @@ def normalize(value, series=None):
         dict: Diccionario con los valores para cada columna nueva
               Las claves deben ser: ${columnNames.join(', ')}
     """
-    # Ejemplo: crear múltiples features a partir del valor original
+    # ESTADÍSTICAS DISPONIBLES (ver panel superior):
+    # Usa los valores μ (mean), σ (std), min, max de tu columna
+    
     result = {}
+    
+    # Ejemplo usando estadísticas precalculadas
+    # mean = 5.47  # Reemplaza con el μ de tu columna
+    # std = 1.44   # Reemplaza con el σ de tu columna
     
     if series is not None:
         min_val = series.min()
         max_val = series.max()
+        mean_val = series.mean()
+        std_val = series.std()
         
         # Columna 1: Normalización min-max
         if max_val - min_val > 0:
