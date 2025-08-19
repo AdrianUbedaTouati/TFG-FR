@@ -5,7 +5,9 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
+from django.views.generic import TemplateView
+from django.contrib.auth.mixins import LoginRequiredMixin
 import threading
 
 from ..models import TrainingSession, ModelDefinition
@@ -96,8 +98,23 @@ class TrainModelView(APIView):
             'id': session.id,
             'status': session.status,
             'created_at': session.created_at,
+            'updated_at': getattr(session, 'updated_at', session.created_at),
             'model_type': session.model_type,
-            'framework': getattr(session, 'framework', 'keras')
+            'framework': getattr(session, 'framework', 'keras'),
+            'dataset_name': session.dataset.name if session.dataset else None,
+            'predictor_columns': session.predictor_columns,
+            'target_columns': session.target_columns,
+            # Progress tracking fields
+            'progress': session.progress,
+            'current_epoch': session.current_epoch,
+            'total_epochs': session.total_epochs,
+            'current_batch': session.current_batch,
+            'total_batches': session.total_batches,
+            'train_loss': session.train_loss,
+            'val_loss': session.val_loss,
+            'train_accuracy': session.train_accuracy,
+            'val_accuracy': session.val_accuracy,
+            'training_logs': session.training_logs,
         }
         
         # Add results if completed
@@ -111,3 +128,22 @@ class TrainModelView(APIView):
             response_data['error_message'] = session.error_message
         
         return success_response(response_data)
+
+
+class TrainingResultsView(LoginRequiredMixin, TemplateView):
+    """Display training results"""
+    template_name = 'training_results.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        session_id = self.kwargs.get('pk')
+        
+        # Get the training session
+        if self.request.user.is_staff:
+            session = get_object_or_404(TrainingSession, pk=session_id)
+        else:
+            session = get_object_or_404(TrainingSession, pk=session_id, user=self.request.user)
+        
+        context['session_id'] = session_id
+        context['session'] = session
+        return context

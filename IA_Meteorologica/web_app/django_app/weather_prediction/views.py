@@ -74,3 +74,19 @@ def dataset_analyze(request, dataset_id):
     }
     
     return render(request, 'dataset_analyze.html', context)
+
+
+@login_required
+def training_results(request, pk):
+    """Training results page"""
+    session = get_object_or_404(TrainingSession, id=pk)
+    
+    # Verificar que el usuario tenga acceso a la sesión
+    if session.user != request.user and not request.user.is_staff:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("No tienes permiso para acceder a estos resultados.")
+    
+    return render(request, 'training_results.html', {
+        'session_id': pk,
+        'session': session
+    })

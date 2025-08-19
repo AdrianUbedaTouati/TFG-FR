@@ -39,3 +39,6 @@ Thumbs.db
 
 # Otros
 *.bak
+
+#Modelos 
+web_app/django_app/models/

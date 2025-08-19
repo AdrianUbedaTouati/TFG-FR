@@ -2308,9 +2308,14 @@ function displayTrainingHistory(trainings) {
                     </div>
                     <div class="col-md-2 text-end">
                         ${training.status === 'completed' ? `
-                            <button class="btn btn-sm btn-outline-info" 
+                            <button class="btn btn-sm btn-success" 
+                                    onclick="window.location.href='/training-sessions/${training.id}/results/'">
+                                <i class="bi bi-graph-up"></i> Résultats
+                            </button>
+                        ` : training.status === 'training' ? `
+                            <button class="btn btn-sm btn-info" 
                                     onclick="window.location.href='/training-progress/${training.id}/'">
-                                <i class="bi bi-eye"></i> Détails
+                                <i class="bi bi-hourglass-split"></i> En cours
                             </button>
                         ` : ''}
                     </div>

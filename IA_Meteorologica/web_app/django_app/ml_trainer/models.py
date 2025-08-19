@@ -192,6 +192,7 @@ class TrainingSession(models.Model):
     dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
     model_type = models.CharField(max_length=50, choices=ModelType.choices)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='training_sessions')
     
     # Variable selection
@@ -240,6 +241,18 @@ class TrainingSession(models.Model):
     # Status
     status = models.CharField(max_length=50, default='pending')
     error_message = models.TextField(null=True, blank=True)
+    
+    # Real-time progress tracking
+    current_epoch = models.IntegerField(default=0)
+    total_epochs = models.IntegerField(default=0)
+    current_batch = models.IntegerField(default=0)
+    total_batches = models.IntegerField(default=0)
+    train_loss = models.FloatField(null=True, blank=True)
+    val_loss = models.FloatField(null=True, blank=True)
+    train_accuracy = models.FloatField(null=True, blank=True)
+    val_accuracy = models.FloatField(null=True, blank=True)
+    progress = models.FloatField(default=0.0)  # Overall progress 0-1
+    training_logs = models.JSONField(default=list)  # Store training logs
     
     def __str__(self):
         return f"{self.model_type} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"

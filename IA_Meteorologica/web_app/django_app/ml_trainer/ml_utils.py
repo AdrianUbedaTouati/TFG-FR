@@ -25,6 +25,9 @@ from .ml_utils_pytorch import (
     save_pytorch_model, load_pytorch_model
 )
 
+# Import training callbacks
+from .training_callbacks import SessionProgressCallback, SklearnProgressCallback
+
 
 def get_model_config(model_type):
     """Get default hyperparameters for each model type"""
@@ -241,9 +244,39 @@ def prepare_data(session, is_neural_network=False):
     """Prepare data for training"""
     df = pd.read_csv(session.dataset.file.path)
     
+    print(f"[prepare_data] Dataset shape: {df.shape}")
+    print(f"[prepare_data] Predictor columns: {session.predictor_columns}")
+    print(f"[prepare_data] Target columns: {session.target_columns}")
+    
+    # Check if target columns exist
+    for col in session.target_columns:
+        if col not in df.columns:
+            raise ValueError(f"Target column '{col}' not found in dataset. Available columns: {list(df.columns)}")
+    
     # Select columns
     X = df[session.predictor_columns].values
     y = df[session.target_columns].values
+    
+    print(f"[prepare_data] X shape before reshape: {X.shape}")
+    print(f"[prepare_data] y shape before reshape: {y.shape}")
+    
+    # Ensure X is always 2D
+    if len(X.shape) == 1:
+        print(f"[prepare_data] X is 1D, reshaping to 2D...")
+        X = X.reshape(-1, 1)
+    
+    # Check if we need to determine problem type based on target data
+    if session.model_type in ['random_forest', 'decision_tree', 'xgboost']:
+        # Check if target is categorical (for single target)
+        if len(session.target_columns) == 1:
+            target_col = session.target_columns[0]
+            unique_values = df[target_col].nunique()
+            print(f"[prepare_data] Target column '{target_col}' has {unique_values} unique values")
+            print(f"[prepare_data] Sample target values: {df[target_col].value_counts().head()}")
+            
+            # If target has few unique values and they are integers, it's likely classification
+            if unique_values < 20 and df[target_col].dtype in ['int64', 'int32', 'float64', 'float32']:
+                print(f"[prepare_data] Detected categorical target with {unique_values} classes")
     
     # Ensure y is 2D
     if len(y.shape) == 1:
@@ -294,13 +327,26 @@ def prepare_data(session, is_neural_network=False):
         scaler_y = get_scaler(session.normalization_method)
         
         if scaler_X:
+            print(f"[prepare_data] Normalizing data with method: {session.normalization_method}")
+            print(f"[prepare_data] Shapes before normalization - X_train: {X_train.shape}, y_train: {y_train.shape}")
+            
             X_train = scaler_X.fit_transform(X_train)
             X_val = scaler_X.transform(X_val)
             X_test = scaler_X.transform(X_test)
             
-            y_train = scaler_y.fit_transform(y_train)
-            y_val = scaler_y.transform(y_val)
-            y_test = scaler_y.transform(y_test)
+            # For classification problems, we typically don't normalize y
+            # Check if this is likely a classification problem
+            is_classification = session.model_type in ['random_forest', 'decision_tree', 'xgboost'] and len(np.unique(y_train)) < 20
+            
+            if is_classification:
+                print(f"[prepare_data] Skipping y normalization for classification problem")
+                scaler_y = None  # Set to None for classification
+            else:
+                y_train = scaler_y.fit_transform(y_train)
+                y_val = scaler_y.transform(y_val)
+                y_test = scaler_y.transform(y_test)
+            
+            print(f"[prepare_data] Shapes after normalization - X_train: {X_train.shape}, y_train: {y_train.shape}")
     
     return (X_train, y_train, X_val, y_val, X_test, y_test), (scaler_X, scaler_y)
 
@@ -603,7 +649,19 @@ def train_neural_network(session, model_type, hyperparams, X_train, y_train, X_v
         metrics=['mae', 'mse']
     )
     
-    # Callbacks
+    # Calculate batches per epoch for progress tracking
+    batch_size = hyperparams.get('batch_size', 32)
+    total_epochs = hyperparams.get('epochs', 50)
+    total_batches_per_epoch = (len(X_train) + batch_size - 1) // batch_size
+    
+    # Create progress callback
+    progress_callback = SessionProgressCallback(
+        session=session,
+        total_epochs=total_epochs,
+        total_batches_per_epoch=total_batches_per_epoch
+    )
+    
+    # Other callbacks
     early_stopping = callbacks.EarlyStopping(
         monitor='val_loss',
         patience=10,
@@ -621,9 +679,9 @@ def train_neural_network(session, model_type, hyperparams, X_train, y_train, X_v
     history = model.fit(
         X_train, y_train,
         validation_data=(X_val, y_val),
-        epochs=hyperparams.get('epochs', 50),
-        batch_size=hyperparams.get('batch_size', 32),
-        callbacks=[early_stopping, reduce_lr],
+        epochs=total_epochs,
+        batch_size=batch_size,
+        callbacks=[progress_callback, early_stopping, reduce_lr],
         verbose=1
     )
     
@@ -802,11 +860,14 @@ def _prepare_xgboost_params(hyperparams):
     return clean_params
 
 
-def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val):
+def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_val, y_val):
     """Train scikit-learn models"""
     print(f"[train_sklearn_model] Model type: {model_type}")
     print(f"[train_sklearn_model] Hyperparameters received: {hyperparams}")
     print(f"[train_sklearn_model] Input shapes - X_train: {X_train.shape}, y_train: {y_train.shape}")
+    
+    # Create progress callback
+    progress_callback = SklearnProgressCallback(session, model_type)
     
     if model_type == 'decision_tree':
         # Determine if it's classification or regression
@@ -852,23 +913,44 @@ def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val)
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
     
+    # Start progress tracking
+    progress_callback.on_train_begin()
+    progress_callback.update_progress(0.1, f"Préparation de l'entraînement {model_type}...")
+    
     # Train the model
     print(f"[train_sklearn_model] Training model...")
     print(f"[train_sklearn_model] Final data shapes before fit - X_train: {X_train.shape}, y_train: {y_train.shape}")
     
     try:
+        progress_callback.update_progress(0.3, f"Entraînement du modèle {model_type} en cours...")
+        
         # Handle early stopping for XGBoost
         if model_type == 'xgboost' and hyperparams.get('early_stopping_enabled', True):
             early_stopping_rounds = hyperparams.get('early_stopping_rounds', 50)
             eval_set = [(X_val, y_val)]
             print(f"[train_sklearn_model] Training XGBoost with early stopping (rounds={early_stopping_rounds})")
+            
+            # For XGBoost, we can use a custom callback to track progress
+            class XGBProgressCallback(xgb.callback.TrainingCallback):
+                def after_iteration(self, model, epoch, evals_log):
+                    # Update progress based on number of boosting rounds
+                    n_estimators = hyperparams.get('n_estimators', 100)
+                    progress = 0.3 + (0.5 * (epoch / n_estimators))
+                    progress_callback.update_progress(
+                        progress, 
+                        f"XGBoost - Round {epoch + 1}/{n_estimators}"
+                    )
+                    return False
+            
             model.fit(X_train, y_train, 
                       eval_set=eval_set, 
                       early_stopping_rounds=early_stopping_rounds,
+                      callbacks=[XGBProgressCallback()],
                       verbose=False)
         else:
             print(f"[train_sklearn_model] Training {model_type} model...")
             model.fit(X_train, y_train)
+            progress_callback.update_progress(0.8, f"Entraînement {model_type} terminé")
         
         print(f"[train_sklearn_model] Model training completed successfully!")
     except Exception as e:
@@ -880,6 +962,7 @@ def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val)
     
     # Calculate validation metrics
     print(f"[train_sklearn_model] Calculating validation metrics...")
+    progress_callback.update_progress(0.9, "Calcul des métriques de validation...")
     
     try:
         val_pred = model.predict(X_val)
@@ -929,6 +1012,19 @@ def train_sklearn_model(model_type, hyperparams, X_train, y_train, X_val, y_val)
             print(f"[train_sklearn_model] ERROR calculating metrics: {str(e)}")
             raise
     
+    # Update session with metrics
+    if 'train_loss' in history:
+        session.train_loss = history['train_loss'][0]
+        session.val_loss = history['val_loss'][0]
+    if 'train_accuracy' in history:
+        session.train_accuracy = history['train_accuracy'][0]
+        session.val_accuracy = history.get('val_accuracy', [0])[0]
+    
+    session.save()
+    
+    # Finish progress tracking
+    progress_callback.on_train_end()
+    
     return model, history
 
 
@@ -943,6 +1039,20 @@ def train_model(session):
         print(f"[Training] Dataset: {session.dataset.name}")
         print(f"[Training] Predictor columns: {session.predictor_columns}")
         print(f"[Training] Target columns: {session.target_columns}")
+        
+        # Validate columns
+        if len(session.predictor_columns) == 0:
+            raise ValueError("No predictor columns selected. Please select at least one predictor column.")
+        if len(session.target_columns) == 0:
+            raise ValueError("No target columns selected. Please select at least one target column.")
+        
+        # Check if target column is being used as predictor
+        overlap = set(session.predictor_columns) & set(session.target_columns)
+        if overlap:
+            raise ValueError(f"Columns cannot be both predictor and target: {overlap}")
+        
+        print(f"[Training] Number of predictors: {len(session.predictor_columns)}")
+        print(f"[Training] Number of targets: {len(session.target_columns)}")
         
         # Check if it's a neural network
         is_neural = session.model_type in ['lstm', 'gru', 'cnn', 'transformer']
@@ -973,6 +1083,7 @@ def train_model(session):
         print(f"[Training] Starting model training...")
         if session.model_type in ['decision_tree', 'random_forest', 'xgboost']:
             model, history = train_sklearn_model(
+                session,
                 session.model_type, 
                 session.hyperparameters,
                 X_train, y_train, 
@@ -1039,15 +1150,27 @@ def train_model(session):
         
         # Calculate test metrics
         test_results = {}
-        for metric in session.selected_metrics:
-            if metric == 'mae':
-                test_results[metric] = float(mean_absolute_error(y_test_orig, y_pred_orig))
-            elif metric == 'mse':
-                test_results[metric] = float(mean_squared_error(y_test_orig, y_pred_orig))
-            elif metric == 'rmse':
-                test_results[metric] = float(np.sqrt(mean_squared_error(y_test_orig, y_pred_orig)))
-            elif metric == 'r2':
-                test_results[metric] = float(r2_score(y_test_orig, y_pred_orig))
+        
+        # Use selected metrics or default ones if none selected
+        metrics_to_calculate = session.selected_metrics if session.selected_metrics else ['mae', 'mse', 'rmse', 'r2']
+        
+        print(f"[Training] Calculating test metrics: {metrics_to_calculate}")
+        print(f"[Training] Test data shapes - y_test: {y_test_orig.shape}, y_pred: {y_pred_orig.shape}")
+        
+        for metric in metrics_to_calculate:
+            try:
+                if metric == 'mae':
+                    test_results[metric] = float(mean_absolute_error(y_test_orig, y_pred_orig))
+                elif metric == 'mse':
+                    test_results[metric] = float(mean_squared_error(y_test_orig, y_pred_orig))
+                elif metric == 'rmse':
+                    test_results[metric] = float(np.sqrt(mean_squared_error(y_test_orig, y_pred_orig)))
+                elif metric == 'r2':
+                    test_results[metric] = float(r2_score(y_test_orig, y_pred_orig))
+                print(f"[Training] {metric}: {test_results[metric]}")
+            except Exception as e:
+                print(f"[Training] Error calculating {metric}: {str(e)}")
+                test_results[metric] = None
         
         # Save model
         model_dir = 'media/models'
@@ -1099,11 +1222,14 @@ def train_model(session):
             }, model_path)
         
         # Update session
+        print(f"[Training] Saving session with test results: {test_results}")
         session.training_history = history
         session.test_results = test_results
         session.model_file = model_path
         session.status = 'completed'
         session.save()
+        
+        print(f"[Training] Session saved successfully with status: {session.status}")
         
         # Update model definition statistics
         if session.model_definition:
@@ -1119,9 +1245,27 @@ def train_model(session):
             model_def.save()
         
     except Exception as e:
+        print(f"\n[ERROR] ====== TRAINING FAILED ======")
+        print(f"[ERROR] Error type: {type(e).__name__}")
+        print(f"[ERROR] Error message: {str(e)}")
+        
+        # Get detailed traceback
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"[ERROR] Full traceback:\n{error_traceback}")
+        print(f"[ERROR] =============================\n")
+        
+        # Save error details to session
         session.status = 'failed'
-        session.error_message = str(e)
+        session.error_message = f"{type(e).__name__}: {str(e)}"
+        
+        # You could also save more details if your model has a field for it
+        # For example, if you add a 'error_details' or 'logs' field to TrainingSession:
+        # session.error_details = error_traceback
+        
         session.save()
+        
+        # Re-raise the exception to ensure execution stops
         raise
 
 
