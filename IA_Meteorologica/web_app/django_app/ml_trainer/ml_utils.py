@@ -274,7 +274,26 @@ def prepare_data(session, is_neural_network=False):
     
     # Select columns
     X = df[session.predictor_columns].values
-    y = df[session.target_columns].values
+    y_raw = df[session.target_columns]
+    
+    # Handle categorical targets
+    target_encoders = {}
+    y = y_raw.values.copy()
+    
+    # For sklearn models, encode categorical targets
+    if session.model_type in ['random_forest', 'decision_tree', 'xgboost']:
+        for i, col in enumerate(session.target_columns):
+            col_data = y_raw[col]
+            if col_data.dtype == 'object' or col_data.dtype.name == 'category':
+                print(f"[prepare_data] Encoding categorical target column: {col}")
+                from sklearn.preprocessing import LabelEncoder
+                encoder = LabelEncoder()
+                y[:, i] = encoder.fit_transform(col_data)
+                target_encoders[col] = encoder
+                print(f"[prepare_data] Unique classes in {col}: {encoder.classes_}")
+                print(f"[prepare_data] Sample encoded values: {y[:5, i]}")
+    else:
+        y = y_raw.values
     
     print(f"[prepare_data] X shape before reshape: {X.shape}")
     print(f"[prepare_data] y shape before reshape: {y.shape}")
@@ -367,7 +386,7 @@ def prepare_data(session, is_neural_network=False):
             
             print(f"[prepare_data] Shapes after normalization - X_train: {X_train.shape}, y_train: {y_train.shape}")
     
-    return (X_train, y_train, X_val, y_val, X_test, y_test), (scaler_X, scaler_y)
+    return (X_train, y_train, X_val, y_val, X_test, y_test), (scaler_X, scaler_y), target_encoders
 
 
 def get_optimizer(optimizer_name, learning_rate):
@@ -1241,7 +1260,7 @@ def train_model(session):
         
         # Prepare data
         print(f"[Training] Preparing data...")
-        data, scalers = prepare_data(session, is_neural_network=is_neural)
+        data, scalers, target_encoders = prepare_data(session, is_neural_network=is_neural)
         X_train, y_train, X_val, y_val, X_test, y_test = data
         scaler_X, scaler_y = scalers
         
@@ -1427,6 +1446,7 @@ def train_model(session):
                 'scaler_y': scaler_y,
                 'predictor_columns': session.predictor_columns,
                 'target_columns': session.target_columns,
+                'target_encoders': target_encoders,  # Add target encoders
                 'preprocessing_pipeline': preprocessing_pipeline,
                 'preprocessing_info': session.preprocessing_info
             }, model_path_abs)

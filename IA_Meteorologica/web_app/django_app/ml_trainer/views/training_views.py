@@ -310,19 +310,44 @@ class TrainingAnalysisView(APIView):
             print(f"Sample target values: {y_test_raw.head()}")
             
             # Handle categorical targets (like 'Summary')
-            y_test = y_test_raw.values
+            y_test = y_test_raw.values.copy()  # Make a copy to avoid modifying original
             target_encoders = {}
             
-            for i, col in enumerate(session.target_columns):
-                col_data = y_test_raw[col]
-                if col_data.dtype == 'object' or col_data.dtype.name == 'category':
-                    print(f"Encoding categorical target column: {col}")
-                    from sklearn.preprocessing import LabelEncoder
-                    encoder = LabelEncoder()
-                    y_test[:, i] = encoder.fit_transform(col_data)
-                    target_encoders[col] = encoder
-                    print(f"Unique values in {col}: {encoder.classes_}")
-                    print(f"Encoded values sample: {y_test[:5, i]}")
+            # Check if model was saved with target encoders
+            if model_path and os.path.exists(model_path):
+                try:
+                    model_data_check = joblib.load(model_path)
+                    if 'target_encoders' in model_data_check:
+                        print(f"Found saved target encoders in model file")
+                        target_encoders = model_data_check['target_encoders']
+                        print(f"Loaded target encoders for columns: {list(target_encoders.keys())}")
+                        # Apply the saved encoders
+                        for i, col in enumerate(session.target_columns):
+                            if col in target_encoders:
+                                encoder = target_encoders[col]
+                                col_data = y_test_raw[col]
+                                print(f"Using saved encoder for {col} with classes: {list(encoder.classes_)}")
+                                y_test[:, i] = encoder.transform(col_data)
+                    else:
+                        print(f"No target_encoders found in model file, available keys: {list(model_data_check.keys())}")
+                except Exception as e:
+                    print(f"Error loading target encoders: {e}")
+            
+            # If no saved encoders, create new ones for categorical columns
+            if not target_encoders:
+                for i, col in enumerate(session.target_columns):
+                    col_data = y_test_raw[col]
+                    if col_data.dtype == 'object' or col_data.dtype.name == 'category':
+                        print(f"Encoding categorical target column: {col}")
+                        from sklearn.preprocessing import LabelEncoder
+                        encoder = LabelEncoder()
+                        # Use the entire dataset column to fit the encoder to get all possible classes
+                        full_col_data = df[col]
+                        encoder.fit(full_col_data)
+                        y_test[:, i] = encoder.transform(col_data)
+                        target_encoders[col] = encoder
+                        print(f"Unique values in {col}: {encoder.classes_}")
+                        print(f"Encoded values sample: {y_test[:5, i]}")
             
             print(f"Final test data shape - X: {X_test.shape}, y: {y_test.shape}")
             
@@ -378,10 +403,40 @@ class TrainingAnalysisView(APIView):
             for i, target_col in enumerate(session.target_columns):
                 if i < y_test.shape[1] and i < y_pred.shape[1]:
                     encoder = target_encoders.get(target_col, None)
+                    print(f"Analyzing target column {target_col}, encoder: {encoder}")
+                    if encoder:
+                        print(f"Encoder classes for {target_col}: {list(encoder.classes_)}")
                     col_analysis = self._analyze_predictions(
                         y_test[:, i], y_pred[:, i], target_col, session.model_type, encoder
                     )
                     analysis[f'target_{i}_{target_col}'] = col_analysis
+                
+                # If this is a classification task without encoder, try to get labels from dataset
+                if col_analysis.get('task_type') == 'classification' and col_analysis.get('confusion_matrix'):
+                    cm_data = col_analysis['confusion_matrix']
+                    if cm_data.get('labels') and all('Class_' in str(label) for label in cm_data['labels']):
+                        # Try to get actual labels from the dataset
+                        try:
+                            unique_values = sorted(df[target_col].unique())
+                            if df[target_col].dtype == 'object':
+                                # String labels - use them directly
+                                cm_data['labels'] = [str(val) for val in unique_values[:len(cm_data['labels'])]]
+                                print(f"Updated confusion matrix labels from dataset: {cm_data['labels']}")
+                            elif len(unique_values) <= 20:
+                                # Numeric but categorical - check for common patterns
+                                if target_col.lower() == 'summary' or 'weather' in target_col.lower():
+                                    # Try weather mapping
+                                    weather_map = {
+                                        0: 'Clear', 1: 'Partly Cloudy', 2: 'Mostly Cloudy',
+                                        3: 'Overcast', 4: 'Foggy', 5: 'Light Rain',
+                                        6: 'Rain', 7: 'Heavy Rain', 8: 'Light Snow',
+                                        9: 'Snow', 10: 'Heavy Snow', 11: 'Thunderstorm'
+                                    }
+                                    cm_data['labels'] = [weather_map.get(int(val), f'Type_{val}') 
+                                                       for val in unique_values[:len(cm_data['labels'])]]
+                                    print(f"Applied weather mapping to labels: {cm_data['labels']}")
+                        except Exception as e:
+                            print(f"Could not update labels from dataset: {e}")
             
             return {'predictions_analysis': analysis}
             
@@ -453,6 +508,8 @@ class TrainingAnalysisView(APIView):
         """Calculate confusion matrix for classification"""
         from sklearn.metrics import confusion_matrix, classification_report
         
+        print(f"[_calculate_confusion_matrix] Called with label_encoder: {label_encoder}")
+        
         # Round predictions for classification
         y_pred_rounded = np.round(y_pred).astype(int)
         y_true_int = y_true.astype(int)
@@ -461,28 +518,60 @@ class TrainingAnalysisView(APIView):
         
         # Get unique labels
         unique_labels = sorted(np.unique(np.concatenate([y_true_int, y_pred_rounded])))
+        print(f"[_calculate_confusion_matrix] Unique labels found: {unique_labels}")
         
         # Use encoder to get real labels if available
         if label_encoder is not None:
             try:
+                print(f"[_calculate_confusion_matrix] Label encoder classes: {list(label_encoder.classes_)}")
                 # Get the class names for the unique labels
                 label_names = []
                 for label in unique_labels:
                     if label < len(label_encoder.classes_):
-                        label_names.append(label_encoder.classes_[label])
+                        label_names.append(str(label_encoder.classes_[label]))
                     else:
                         label_names.append(f'Unknown_{label}')
-                print(f"Using encoded labels: {label_names}")
+                print(f"[_calculate_confusion_matrix] Using encoded labels: {label_names}")
             except Exception as e:
-                print(f"Error getting label names: {e}")
+                print(f"[_calculate_confusion_matrix] Error getting label names: {e}")
+                import traceback
+                traceback.print_exc()
                 label_names = [f'Class_{label}' for label in unique_labels]
         else:
-            label_names = [f'Class_{label}' for label in unique_labels]
+            print(f"[_calculate_confusion_matrix] No label encoder provided")
+            # Try to infer meaningful labels based on the data
+            if len(unique_labels) <= 12:  # Common weather-related classifications
+                # Check if these might be weather conditions (0-11 mapping)
+                weather_conditions = {
+                    0: 'Clear',
+                    1: 'Partly Cloudy', 
+                    2: 'Mostly Cloudy',
+                    3: 'Overcast',
+                    4: 'Foggy',
+                    5: 'Light Rain',
+                    6: 'Rain', 
+                    7: 'Heavy Rain',
+                    8: 'Light Snow',
+                    9: 'Snow',
+                    10: 'Heavy Snow',
+                    11: 'Thunderstorm'
+                }
+                
+                # Check if labels match weather pattern
+                if max(unique_labels) < len(weather_conditions):
+                    label_names = [weather_conditions.get(label, f'Condition_{label}') for label in unique_labels]
+                    print(f"[_calculate_confusion_matrix] Using inferred weather labels: {label_names}")
+                else:
+                    label_names = [f'Class_{label}' for label in unique_labels]
+            else:
+                label_names = [f'Class_{label}' for label in unique_labels]
         
-        return {
+        result = {
             'matrix': cm.tolist(),
             'labels': label_names
         }
+        print(f"[_calculate_confusion_matrix] Returning result: {result}")
+        return result
     
     def _create_regression_confusion_matrix(self, y_true, y_pred):
         """Create a binned confusion matrix for regression tasks"""

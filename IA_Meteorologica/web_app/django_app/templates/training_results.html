@@ -115,23 +115,24 @@
     
     /* Special styling for confusion matrix */
     #confusion-matrix-section .chart-container {
-        max-height: 600px;
-        min-height: 550px;
-        background: linear-gradient(135deg, rgba(10, 14, 39, 0.9) 0%, rgba(20, 24, 49, 0.9) 100%);
-        border: 2px solid rgba(99, 102, 241, 0.2);
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3), 
-                    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        max-height: 900px;
+        min-height: 800px;
+        background: linear-gradient(135deg, rgba(10, 14, 39, 0.95) 0%, rgba(20, 24, 49, 0.95) 100%);
+        border: 3px solid rgba(99, 102, 241, 0.3);
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.4), 
+                    inset 0 2px 0 rgba(255, 255, 255, 0.1);
         position: relative;
         overflow: visible;
+        padding: 40px;
     }
     
     #confusion-matrix-section .chart-container::before {
         content: '';
         position: absolute;
-        top: -2px;
-        left: -2px;
-        right: -2px;
-        bottom: -2px;
+        top: -3px;
+        left: -3px;
+        right: -3px;
+        bottom: -3px;
         background: linear-gradient(45deg, #60a5fa, #a78bfa, #60a5fa);
         background-size: 300% 300%;
         border-radius: 15px;
@@ -142,7 +143,7 @@
     }
     
     #confusion-matrix-section .chart-container:hover::before {
-        opacity: 0.3;
+        opacity: 0.4;
     }
     
     @keyframes gradientShift {
@@ -152,19 +153,19 @@
     }
     
     #confusion-matrix-section .chart-wrapper {
-        height: 500px;
+        height: 700px;
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 20px;
+        padding: 30px;
     }
     
     #confusion-matrix-chart {
-        max-width: 600px;
-        max-height: 500px;
+        max-width: 800px;
+        max-height: 700px;
         width: 100%;
         height: 100%;
-        filter: drop-shadow(0 4px 20px rgba(0, 0, 0, 0.4));
+        filter: drop-shadow(0 6px 30px rgba(0, 0, 0, 0.5));
     }
     
     #confusion-matrix-section .chart-title {
@@ -191,17 +192,19 @@
         
         /* Confusion matrix responsive adjustments */
         #confusion-matrix-section .chart-container {
-            max-height: 450px;
-            min-height: 400px;
+            max-height: 600px;
+            min-height: 550px;
+            padding: 20px;
         }
         
         #confusion-matrix-section .chart-wrapper {
-            height: 400px;
+            height: 500px;
+            padding: 20px;
         }
         
         #confusion-matrix-chart {
-            max-width: 400px;
-            max-height: 400px;
+            max-width: 500px;
+            max-height: 500px;
         }
     }
     
@@ -402,7 +405,7 @@
                 <div class="chart-container">
                     <h4 class="chart-title">Matrice de Confusion</h4>
                     <div class="chart-wrapper">
-                        <canvas id="confusion-matrix-chart" width="600" height="500"></canvas>
+                        <canvas id="confusion-matrix-chart" width="800" height="700"></canvas>
                     </div>
                 </div>
             </div>
@@ -1095,6 +1098,20 @@ function loadAnalysisData() {
             console.log('Full analysis data received:', analysisData);
             console.log('Analysis data keys:', Object.keys(analysisData));
             console.log('Predictions analysis:', analysisData.predictions_analysis);
+            
+            // Deep dive into confusion matrix data
+            if (analysisData.predictions_analysis) {
+                Object.keys(analysisData.predictions_analysis).forEach(targetKey => {
+                    const targetData = analysisData.predictions_analysis[targetKey];
+                    console.log(`Target ${targetKey}:`, targetData);
+                    if (targetData.confusion_matrix) {
+                        console.log(`Confusion matrix for ${targetKey}:`, targetData.confusion_matrix);
+                        console.log(`Labels:`, targetData.confusion_matrix.labels);
+                        console.log(`Matrix:`, targetData.confusion_matrix.matrix);
+                    }
+                });
+            }
+            
             console.log('Feature importance:', analysisData.feature_importance);
             console.log('Basic info:', analysisData.basic_info);
             console.log('Status:', analysisData.status);
@@ -1153,9 +1170,13 @@ function createAdvancedAnalysisCharts(analysisData) {
     
     // Create confusion matrix (for sklearn models)
     if (analysisData.predictions_analysis && analysisData.predictions_analysis !== null) {
+        console.log('Predictions analysis data:', analysisData.predictions_analysis);
         const firstTarget = Object.values(analysisData.predictions_analysis)[0];
+        console.log('First target data:', firstTarget);
         if (firstTarget && firstTarget.confusion_matrix) {
             console.log('Creating confusion matrix:', firstTarget.confusion_matrix);
+            console.log('Confusion matrix labels:', firstTarget.confusion_matrix.labels);
+            console.log('Confusion matrix matrix:', firstTarget.confusion_matrix.matrix);
             createConfusionMatrixChart(firstTarget.confusion_matrix, firstTarget.task_type);
             document.getElementById('confusion-matrix-section').style.display = 'block';
         }
@@ -1406,7 +1427,7 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
     console.log('Creating confusion matrix with data:', confusionMatrix);
     
     if (!confusionMatrix || !confusionMatrix.matrix) {
-        ctx.font = '18px Arial';
+        ctx.font = '24px Arial';
         ctx.fillStyle = '#94a3b8';
         ctx.textAlign = 'center';
         ctx.fillText('Matrice de confusion non disponible', ctx.canvas.width/2, ctx.canvas.height/2);
@@ -1417,30 +1438,39 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
     const labels = confusionMatrix.labels || matrix.map((_, i) => `Classe ${i}`);
     const isRegression = confusionMatrix.type === 'regression_binned' || taskType === 'regression';
     
+    console.log('Using labels for confusion matrix:', labels);
+    console.log('Label source:', confusionMatrix.labels ? 'From server' : 'Generated default');
+    
     // Set canvas size for high DPI displays
-    const scale = window.devicePixelRatio || 1;
-    ctx.canvas.width = 600 * scale;
-    ctx.canvas.height = 500 * scale;
+    const canvasWidth = 800;
+    const canvasHeight = 700;
+    const scale = window.devicePixelRatio || 2; // Force at least 2x for better quality
+    ctx.canvas.width = canvasWidth * scale;
+    ctx.canvas.height = canvasHeight * scale;
+    ctx.canvas.style.width = canvasWidth + 'px';
+    ctx.canvas.style.height = canvasHeight + 'px';
     ctx.scale(scale, scale);
     
     // Clear canvas with dark background
     ctx.fillStyle = '#0a0e27';
-    ctx.fillRect(0, 0, 600, 500);
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
     
     // Add subtle gradient background
-    const gradient = ctx.createLinearGradient(0, 0, 600, 500);
-    gradient.addColorStop(0, 'rgba(0, 212, 255, 0.05)');
-    gradient.addColorStop(1, 'rgba(139, 92, 246, 0.05)');
+    const gradient = ctx.createLinearGradient(0, 0, canvasWidth, canvasHeight);
+    gradient.addColorStop(0, 'rgba(0, 212, 255, 0.08)');
+    gradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.05)');
+    gradient.addColorStop(1, 'rgba(139, 92, 246, 0.08)');
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 600, 500);
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
     
-    // Layout calculations
-    const padding = 100;
-    const cellSize = Math.min((600 - padding * 2) / labels.length, (400 - padding) / labels.length);
+    // Layout calculations - make cells bigger
+    const padding = 150;
+    const maxCellSize = 100; // Maximum cell size for better visibility
+    const cellSize = Math.min(maxCellSize, (canvasWidth - padding * 2) / labels.length, (canvasHeight - padding * 1.5) / labels.length);
     const totalWidth = cellSize * labels.length;
     const totalHeight = cellSize * labels.length;
-    const startX = (600 - totalWidth) / 2;
-    const startY = (500 - totalHeight) / 2 - 20;
+    const startX = (canvasWidth - totalWidth) / 2;
+    const startY = (canvasHeight - totalHeight) / 2;
     
     // Find max value for normalization
     const maxVal = Math.max(...matrix.flat());
@@ -1449,12 +1479,12 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
     const rowTotals = matrix.map(row => row.reduce((a, b) => a + b, 0));
     
     // Draw shadow for the matrix
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-    ctx.shadowBlur = 20;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 30;
     ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 10;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-    ctx.fillRect(startX - 5, startY - 5, totalWidth + 10, totalHeight + 10);
+    ctx.shadowOffsetY = 15;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(startX - 10, startY - 10, totalWidth + 20, totalHeight + 20);
     ctx.shadowBlur = 0;
     
     // Draw cells with modern styling
@@ -1467,106 +1497,174 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
             const x = startX + j * cellSize;
             const y = startY + i * cellSize;
             
-            // Create gradient for cells
+            // Create gradient for cells with improved colors
             let cellGradient;
             if (i === j) {
-                // Diagonal cells - success gradient
+                // Diagonal cells - success gradient (more vibrant)
                 cellGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
                 const intensity = value / maxVal;
-                cellGradient.addColorStop(0, `rgba(16, 185, 129, ${0.2 + intensity * 0.6})`);
-                cellGradient.addColorStop(1, `rgba(59, 130, 246, ${0.2 + intensity * 0.6})`);
+                cellGradient.addColorStop(0, `rgba(34, 197, 94, ${0.3 + intensity * 0.7})`);
+                cellGradient.addColorStop(0.5, `rgba(16, 185, 129, ${0.3 + intensity * 0.7})`);
+                cellGradient.addColorStop(1, `rgba(59, 130, 246, ${0.3 + intensity * 0.7})`);
             } else {
-                // Off-diagonal cells - error gradient
+                // Off-diagonal cells - error gradient (more subtle)
                 const intensity = value / maxVal;
                 cellGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
-                cellGradient.addColorStop(0, `rgba(239, 68, 68, ${0.1 + intensity * 0.5})`);
-                cellGradient.addColorStop(1, `rgba(245, 158, 11, ${0.1 + intensity * 0.5})`);
+                cellGradient.addColorStop(0, `rgba(251, 146, 60, ${0.2 + intensity * 0.6})`);
+                cellGradient.addColorStop(0.5, `rgba(239, 68, 68, ${0.2 + intensity * 0.6})`);
+                cellGradient.addColorStop(1, `rgba(217, 70, 239, ${0.2 + intensity * 0.6})`);
             }
             
-            // Draw cell with rounded corners
+            // Draw cell with rounded corners and spacing
             ctx.fillStyle = cellGradient;
-            roundRect(ctx, x + 2, y + 2, cellSize - 4, cellSize - 4, 8);
+            const cellPadding = 4;
+            roundRect(ctx, x + cellPadding, y + cellPadding, cellSize - cellPadding * 2, cellSize - cellPadding * 2, 12);
             ctx.fill();
             
-            // Add subtle inner border
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.lineWidth = 1;
-            roundRect(ctx, x + 2, y + 2, cellSize - 4, cellSize - 4, 8);
-            ctx.stroke();
+            // Add glowing border for high values
+            if (value / maxVal > 0.5) {
+                ctx.strokeStyle = i === j ? 'rgba(34, 197, 94, 0.6)' : 'rgba(251, 146, 60, 0.4)';
+                ctx.lineWidth = 2;
+                roundRect(ctx, x + cellPadding, y + cellPadding, cellSize - cellPadding * 2, cellSize - cellPadding * 2, 12);
+                ctx.stroke();
+            }
             
-            // Draw value with modern typography
+            // Draw value with better typography and shadow
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 3;
+            ctx.shadowOffsetX = 1;
+            ctx.shadowOffsetY = 1;
             ctx.fillStyle = '#ffffff';
-            ctx.font = `700 ${Math.min(cellSize / 3, 24)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+            ctx.font = `800 ${Math.min(cellSize / 2.5, 32)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(value.toString(), x + cellSize/2, y + cellSize/2 - 8);
+            ctx.fillText(value.toString(), x + cellSize/2, y + cellSize/2 - cellSize/8);
+            ctx.shadowBlur = 0;
             
-            // Add percentage with smaller font
+            // Add percentage with improved styling
             if (percentage > 0) {
-                ctx.font = `400 ${Math.min(cellSize / 5, 14)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-                ctx.fillText(`${percentage.toFixed(1)}%`, x + cellSize/2, y + cellSize/2 + 12);
+                ctx.font = `500 ${Math.min(cellSize / 4, 18)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.fillText(`${percentage.toFixed(1)}%`, x + cellSize/2, y + cellSize/2 + cellSize/6);
             }
         }
     }
     
     // Modern labels with better typography
-    ctx.font = `500 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.shadowBlur = 0;
+    ctx.font = `600 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
     
-    // X-axis labels with icons
+    // X-axis labels (Predictions)
     for (let j = 0; j < labels.length; j++) {
         const x = startX + j * cellSize + cellSize/2;
-        const y = startY + labels.length * cellSize + 25;
+        const y = startY + labels.length * cellSize + 35;
         
-        // Label background
-        ctx.fillStyle = 'rgba(99, 102, 241, 0.1)';
-        roundRect(ctx, x - 40, y - 10, 80, 20, 10);
+        // Calculate label width dynamically
+        ctx.font = `600 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+        const labelWidth = ctx.measureText(labels[j]).width + 30;
+        
+        // Label background with gradient
+        const labelGradient = ctx.createLinearGradient(x - labelWidth/2, y - 15, x + labelWidth/2, y + 15);
+        labelGradient.addColorStop(0, 'rgba(99, 102, 241, 0.15)');
+        labelGradient.addColorStop(1, 'rgba(139, 92, 246, 0.15)');
+        ctx.fillStyle = labelGradient;
+        roundRect(ctx, x - labelWidth/2, y - 15, labelWidth, 30, 15);
         ctx.fill();
         
-        ctx.fillStyle = '#e0e7ff';
+        // Label border
+        ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, x - labelWidth/2, y - 15, labelWidth, 30, 15);
+        ctx.stroke();
+        
+        // Label text with shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+        ctx.shadowBlur = 2;
+        ctx.fillStyle = '#f0f9ff';
         ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         ctx.fillText(labels[j], x, y);
+        ctx.shadowBlur = 0;
     }
     
-    // Y-axis labels with icons
+    // Y-axis labels (Real values)
     for (let i = 0; i < labels.length; i++) {
-        const x = startX - 25;
+        const x = startX - 30;
         const y = startY + i * cellSize + cellSize/2;
         
-        // Label background
-        ctx.fillStyle = 'rgba(99, 102, 241, 0.1)';
-        roundRect(ctx, x - 55, y - 10, 80, 20, 10);
+        // Calculate label width
+        ctx.font = `600 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+        const labelWidth = ctx.measureText(labels[i]).width + 30;
+        
+        // Label background with gradient
+        const labelGradient = ctx.createLinearGradient(x - labelWidth, y - 15, x, y + 15);
+        labelGradient.addColorStop(0, 'rgba(99, 102, 241, 0.15)');
+        labelGradient.addColorStop(1, 'rgba(139, 92, 246, 0.15)');
+        ctx.fillStyle = labelGradient;
+        roundRect(ctx, x - labelWidth, y - 15, labelWidth, 30, 15);
         ctx.fill();
         
-        ctx.fillStyle = '#e0e7ff';
+        // Label border
+        ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, x - labelWidth, y - 15, labelWidth, 30, 15);
+        ctx.stroke();
+        
+        // Label text with shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+        ctx.shadowBlur = 2;
+        ctx.fillStyle = '#f0f9ff';
         ctx.textAlign = 'right';
-        ctx.fillText(labels[i], x, y);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(labels[i], x - 15, y);
+        ctx.shadowBlur = 0;
     }
     
     // Modern axis titles with gradients
-    const titleGradient = ctx.createLinearGradient(0, 0, 600, 0);
+    const titleGradient = ctx.createLinearGradient(0, 0, canvasWidth, 0);
     titleGradient.addColorStop(0, '#60a5fa');
-    titleGradient.addColorStop(1, '#a78bfa');
+    titleGradient.addColorStop(0.5, '#a78bfa');
+    titleGradient.addColorStop(1, '#ec4899');
+    
+    // X-axis title
+    ctx.fillStyle = titleGradient;
+    ctx.font = '700 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // Add background for X-axis title
+    const xTitleY = startY + totalHeight + 80;
+    ctx.fillStyle = 'rgba(99, 102, 241, 0.1)';
+    roundRect(ctx, canvasWidth/2 - 100, xTitleY - 20, 200, 40, 20);
+    ctx.fill();
     
     ctx.fillStyle = titleGradient;
-    ctx.font = '600 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.textAlign = 'center';
+    ctx.fillText('→ Prédictions', canvasWidth/2, xTitleY);
     
-    // X-axis title with icon
-    ctx.fillText('→ Prédictions', 300, 450);
-    
-    // Y-axis title (rotated) with icon
+    // Y-axis title (rotated)
     ctx.save();
-    ctx.translate(30, 250);
+    ctx.translate(50, canvasHeight/2);
     ctx.rotate(-Math.PI/2);
+    
+    // Add background for Y-axis title
+    ctx.fillStyle = 'rgba(99, 102, 241, 0.1)';
+    roundRect(ctx, -100, -20, 200, 40, 20);
+    ctx.fill();
+    
+    ctx.fillStyle = titleGradient;
+    ctx.font = '700 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
     ctx.fillText('→ Valeurs Réelles', 0, 0);
     ctx.restore();
     
-    // Modern title with gradient
-    ctx.font = '700 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    // Main title with improved styling
+    ctx.shadowColor = 'rgba(139, 92, 246, 0.5)';
+    ctx.shadowBlur = 10;
+    ctx.font = '900 32px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
     ctx.fillStyle = titleGradient;
+    ctx.textAlign = 'center';
     const title = isRegression ? 'Matrice de Confusion - Régression' : 'Matrice de Confusion';
-    ctx.fillText(title, 300, 35);
+    ctx.fillText(title, canvasWidth/2, 50);
+    ctx.shadowBlur = 0;
     
     // Calculate and display metrics with modern cards
     if (matrix.length > 0) {
@@ -1582,21 +1680,42 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
         if (total > 0) {
             const accuracy = (correct / total * 100).toFixed(1);
             
-            // Draw metric card
-            ctx.fillStyle = 'rgba(16, 185, 129, 0.1)';
-            roundRect(ctx, 200, 465, 200, 25, 12);
+            // Draw larger, more prominent metric card
+            const cardY = canvasHeight - 60;
+            const cardWidth = 300;
+            const cardHeight = 45;
+            const cardX = (canvasWidth - cardWidth) / 2;
+            
+            // Card background with gradient
+            const cardGradient = ctx.createLinearGradient(cardX, cardY, cardX + cardWidth, cardY + cardHeight);
+            cardGradient.addColorStop(0, 'rgba(34, 197, 94, 0.2)');
+            cardGradient.addColorStop(1, 'rgba(16, 185, 129, 0.2)');
+            ctx.fillStyle = cardGradient;
+            roundRect(ctx, cardX, cardY, cardWidth, cardHeight, 22);
             ctx.fill();
             
-            ctx.strokeStyle = 'rgba(16, 185, 129, 0.3)';
-            ctx.lineWidth = 1;
-            roundRect(ctx, 200, 465, 200, 25, 12);
+            // Card border with glow
+            ctx.strokeStyle = 'rgba(34, 197, 94, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.shadowColor = 'rgba(34, 197, 94, 0.5)';
+            ctx.shadowBlur = 10;
+            roundRect(ctx, cardX, cardY, cardWidth, cardHeight, 22);
             ctx.stroke();
+            ctx.shadowBlur = 0;
             
-            // Metric text
-            ctx.fillStyle = '#10b981';
-            ctx.font = '600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            // Metric text with icon
+            ctx.fillStyle = '#22c55e';
+            ctx.font = '700 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(`✓ Précision: ${accuracy}%`, 300, 480);
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`✓ Précision Globale: ${accuracy}%`, canvasWidth/2, cardY + cardHeight/2);
+            
+            // Add sub-metrics if space allows
+            if (matrix.length <= 3) {
+                ctx.font = '500 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+                ctx.fillStyle = 'rgba(34, 197, 94, 0.8)';
+                ctx.fillText(`${correct} sur ${total} prédictions correctes`, canvasWidth/2, cardY + cardHeight + 15);
+            }
         }
     }
 }
