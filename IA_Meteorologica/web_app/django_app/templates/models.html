@@ -2302,17 +2302,35 @@ function displayTrainingHistory(trainings) {
                             <span class="badge bg-${statusClass} px-3 py-2">
                                 <i class="bi bi-${statusIcon}"></i> ${getStatusText(training.status)}
                             </span>
-                            ${training.status === 'completed' && metrics.accuracy !== undefined ? `
+                            ${training.status === 'completed' && Object.keys(metrics).length > 0 ? `
                                 <div class="mt-2">
-                                    <div class="text-success small fw-bold">
-                                        <i class="bi bi-bullseye"></i> ${(metrics.accuracy * 100).toFixed(1)}%
-                                    </div>
-                                </div>
-                            ` : training.status === 'completed' && metrics.r2 !== undefined ? `
-                                <div class="mt-2">
-                                    <div class="text-info small fw-bold">
-                                        <i class="bi bi-graph-up"></i> R²: ${metrics.r2.toFixed(3)}
-                                    </div>
+                                    ${(() => {
+                                        // Get problem type from training hyperparameters
+                                        let isClassification = false;
+                                        if (training.hyperparameters && training.hyperparameters.problem_type) {
+                                            isClassification = training.hyperparameters.problem_type === 'classification';
+                                        } else {
+                                            // Fallback: determine from available metrics
+                                            isClassification = metrics.accuracy !== undefined || metrics.precision !== undefined || metrics.f1_score !== undefined;
+                                        }
+                                        
+                                        if (isClassification) {
+                                            if (metrics.accuracy !== undefined) {
+                                                return `<div class="text-success small fw-bold"><i class="bi bi-bullseye"></i> ${(metrics.accuracy * 100).toFixed(1)}%</div>`;
+                                            } else if (metrics.f1_score !== undefined) {
+                                                return `<div class="text-success small fw-bold"><i class="bi bi-bullseye"></i> F1: ${(metrics.f1_score * 100).toFixed(1)}%</div>`;
+                                            } else if (metrics.precision !== undefined) {
+                                                return `<div class="text-success small fw-bold"><i class="bi bi-bullseye"></i> ${(metrics.precision * 100).toFixed(1)}%</div>`;
+                                            }
+                                        } else {
+                                            if (metrics.r2 !== undefined) {
+                                                return `<div class="text-info small fw-bold"><i class="bi bi-graph-up"></i> R²: ${metrics.r2.toFixed(3)}</div>`;
+                                            } else if (metrics.mae !== undefined) {
+                                                return `<div class="text-warning small fw-bold"><i class="bi bi-graph-down"></i> MAE: ${metrics.mae.toFixed(3)}</div>`;
+                                            }
+                                        }
+                                        return '';
+                                    })()}
                                 </div>
                             ` : ''}
                         </div>
@@ -2324,6 +2342,27 @@ function displayTrainingHistory(trainings) {
                                             <i class="bi bi-bullseye"></i>
                                             <span class="metric-label">Précision:</span>
                                             <span class="metric-value">${(metrics.accuracy * 100).toFixed(2)}%</span>
+                                        </div>
+                                    ` : ''}
+                                    ${metrics.precision !== undefined ? `
+                                        <div class="metric-item">
+                                            <i class="bi bi-check-circle"></i>
+                                            <span class="metric-label">Précision:</span>
+                                            <span class="metric-value">${(metrics.precision * 100).toFixed(2)}%</span>
+                                        </div>
+                                    ` : ''}
+                                    ${metrics.recall !== undefined ? `
+                                        <div class="metric-item">
+                                            <i class="bi bi-search"></i>
+                                            <span class="metric-label">Rappel:</span>
+                                            <span class="metric-value">${(metrics.recall * 100).toFixed(2)}%</span>
+                                        </div>
+                                    ` : ''}
+                                    ${metrics.f1_score !== undefined ? `
+                                        <div class="metric-item">
+                                            <i class="bi bi-award"></i>
+                                            <span class="metric-label">Score F1:</span>
+                                            <span class="metric-value">${(metrics.f1_score * 100).toFixed(2)}%</span>
                                         </div>
                                     ` : ''}
                                     ${metrics.mae !== undefined ? `

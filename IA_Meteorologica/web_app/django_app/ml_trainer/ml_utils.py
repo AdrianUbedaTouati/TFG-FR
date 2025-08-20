@@ -1361,14 +1361,37 @@ def train_model(session):
         # Calculate test metrics
         test_results = {}
         
-        # Use selected metrics or default ones if none selected
-        metrics_to_calculate = session.selected_metrics if session.selected_metrics else ['mae', 'mse', 'rmse', 'r2']
+        # Determine if it's a classification or regression task
+        problem_type = 'regression'  # default
+        if session.model_type in ['decision_tree', 'random_forest', 'xgboost']:
+            problem_type = session.hyperparameters.get('problem_type', 'regression')
+            # If problem_type is auto, try to detect from training data
+            if problem_type == 'auto' and len(session.target_columns) == 1:
+                unique_values = len(np.unique(y_test_orig))
+                if unique_values <= 20:  # Likely classification
+                    problem_type = 'classification'
+                    print(f"[Training] Auto-detected classification with {unique_values} classes")
+                else:
+                    problem_type = 'regression'
+                    print(f"[Training] Auto-detected regression with {unique_values} unique values")
+        
+        print(f"[Training] Problem type: {problem_type}")
+        
+        # Use selected metrics or default ones based on problem type
+        if session.selected_metrics:
+            metrics_to_calculate = session.selected_metrics
+        else:
+            if problem_type == 'classification':
+                metrics_to_calculate = ['accuracy', 'precision', 'recall', 'f1_score']
+            else:
+                metrics_to_calculate = ['mae', 'mse', 'rmse', 'r2']
         
         print(f"[Training] Calculating test metrics: {metrics_to_calculate}")
         print(f"[Training] Test data shapes - y_test: {y_test_orig.shape}, y_pred: {y_pred_orig.shape}")
         
         for metric in metrics_to_calculate:
             try:
+                # Regression metrics
                 if metric == 'mae':
                     test_results[metric] = float(mean_absolute_error(y_test_orig, y_pred_orig))
                 elif metric == 'mse':
@@ -1377,6 +1400,29 @@ def train_model(session):
                     test_results[metric] = float(np.sqrt(mean_squared_error(y_test_orig, y_pred_orig)))
                 elif metric == 'r2':
                     test_results[metric] = float(r2_score(y_test_orig, y_pred_orig))
+                # Classification metrics
+                elif metric == 'accuracy':
+                    from sklearn.metrics import accuracy_score
+                    # For classification, need to round predictions to get classes
+                    y_pred_classes = np.round(y_pred_orig).astype(int)
+                    y_test_classes = y_test_orig.astype(int)
+                    test_results[metric] = float(accuracy_score(y_test_classes, y_pred_classes))
+                elif metric == 'precision':
+                    from sklearn.metrics import precision_score
+                    y_pred_classes = np.round(y_pred_orig).astype(int)
+                    y_test_classes = y_test_orig.astype(int)
+                    # Use average='weighted' for multiclass
+                    test_results[metric] = float(precision_score(y_test_classes, y_pred_classes, average='weighted', zero_division=0))
+                elif metric == 'recall':
+                    from sklearn.metrics import recall_score
+                    y_pred_classes = np.round(y_pred_orig).astype(int)
+                    y_test_classes = y_test_orig.astype(int)
+                    test_results[metric] = float(recall_score(y_test_classes, y_pred_classes, average='weighted', zero_division=0))
+                elif metric == 'f1_score':
+                    from sklearn.metrics import f1_score
+                    y_pred_classes = np.round(y_pred_orig).astype(int)
+                    y_test_classes = y_test_orig.astype(int)
+                    test_results[metric] = float(f1_score(y_test_classes, y_pred_classes, average='weighted', zero_division=0))
                 print(f"[Training] {metric}: {test_results[metric]}")
             except Exception as e:
                 print(f"[Training] Error calculating {metric}: {str(e)}")

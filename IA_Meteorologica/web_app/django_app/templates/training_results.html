@@ -783,20 +783,54 @@ function displayMainScore(testResults) {
     let mainMetric, mainValue, mainLabel;
     
     try {
-        if ('accuracy' in testResults && testResults.accuracy !== null && testResults.accuracy !== undefined) {
-            mainMetric = 'accuracy';
-            mainValue = (testResults.accuracy * 100).toFixed(2) + '%';
-            mainLabel = 'Précision du Modèle';
-        } else if ('r2' in testResults && testResults.r2 !== null && testResults.r2 !== undefined) {
-            mainMetric = 'r2';
-            mainValue = (testResults.r2 * 100).toFixed(2) + '%';
-            mainLabel = 'Score R² du Modèle';
-        } else if ('mae' in testResults && testResults.mae !== null && testResults.mae !== undefined) {
-            mainMetric = 'mae';
-            mainValue = testResults.mae.toFixed(4);
-            mainLabel = 'Erreur Absolue Moyenne';
+        // Get problem type from session data (for sklearn models) or determine from metrics
+        let isClassification = false;
+        if (sessionData && sessionData.hyperparameters && sessionData.hyperparameters.problem_type) {
+            isClassification = sessionData.hyperparameters.problem_type === 'classification';
+            console.log('Problem type from hyperparameters:', sessionData.hyperparameters.problem_type);
         } else {
-            // Use the first available metric
+            // Fallback: determine from available metrics
+            isClassification = testResults.accuracy !== undefined || 
+                             testResults.precision !== undefined || 
+                             testResults.recall !== undefined ||
+                             testResults.f1_score !== undefined;
+            console.log('Problem type detected from metrics, isClassification:', isClassification);
+        }
+        
+        if (isClassification) {
+            // Classification task - prioritize accuracy
+            if (testResults.accuracy !== undefined && testResults.accuracy !== null) {
+                mainMetric = 'accuracy';
+                mainValue = (testResults.accuracy * 100).toFixed(2) + '%';
+                mainLabel = 'Précision du Modèle';
+            } else if (testResults.f1_score !== undefined && testResults.f1_score !== null) {
+                mainMetric = 'f1_score';
+                mainValue = (testResults.f1_score * 100).toFixed(2) + '%';
+                mainLabel = 'Score F1 du Modèle';
+            } else if (testResults.precision !== undefined && testResults.precision !== null) {
+                mainMetric = 'precision';
+                mainValue = (testResults.precision * 100).toFixed(2) + '%';
+                mainLabel = 'Précision du Modèle';
+            }
+        } else {
+            // Regression task - prioritize R²
+            if (testResults.r2 !== undefined && testResults.r2 !== null) {
+                mainMetric = 'r2';
+                mainValue = (testResults.r2 * 100).toFixed(2) + '%';
+                mainLabel = 'Score R² du Modèle';
+            } else if (testResults.mae !== undefined && testResults.mae !== null) {
+                mainMetric = 'mae';
+                mainValue = testResults.mae.toFixed(4);
+                mainLabel = 'Erreur Absolue Moyenne';
+            } else if (testResults.rmse !== undefined && testResults.rmse !== null) {
+                mainMetric = 'rmse';
+                mainValue = testResults.rmse.toFixed(4);
+                mainLabel = 'Erreur Quadratique Moyenne';
+            }
+        }
+        
+        // If no specific metric was selected, use the first available one
+        if (!mainValue) {
             const firstMetric = Object.keys(testResults)[0];
             const firstValue = testResults[firstMetric];
             

@@ -52,6 +52,57 @@
         100% { transform: scale(1); opacity: 1; }
     }
     
+    .performance-summary {
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 153, 255, 0.1));
+        border: 2px solid rgba(0, 212, 255, 0.5);
+        border-radius: 20px;
+        padding: 30px;
+        margin-bottom: 30px;
+        text-align: center;
+        display: none;
+    }
+    
+    .performance-title {
+        font-size: 1.5rem;
+        color: #00d4ff;
+        margin-bottom: 20px;
+        font-weight: 600;
+        text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+    }
+    
+    .performance-score {
+        font-size: 3.5rem;
+        font-weight: bold;
+        color: #00ff88;
+        margin-bottom: 10px;
+        text-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+        font-family: 'Courier New', monospace;
+    }
+    
+    .performance-label {
+        font-size: 1.1rem;
+        color: #94a3b8;
+        margin-bottom: 15px;
+    }
+    
+    .success-badge {
+        background: rgba(40, 167, 69, 0.2);
+        color: #28a745;
+        border: 2px solid rgba(40, 167, 69, 0.5);
+        padding: 12px 24px;
+        border-radius: 50px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        display: inline-block;
+        animation: successPulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes successPulse {
+        0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+    }
+    
     @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
@@ -180,6 +231,18 @@
         .metric-value {
             font-size: 2rem;
         }
+        
+        .performance-summary {
+            padding: 20px;
+        }
+        
+        .performance-score {
+            font-size: 2.5rem;
+        }
+        
+        .performance-title {
+            font-size: 1.3rem;
+        }
     }
 </style>
 {% endblock %}
@@ -250,6 +313,16 @@
                     0%
                 </div>
             </div>
+        </div>
+    </div>
+    
+    <!-- Performance Summary (shown when completed) -->
+    <div class="performance-summary" id="performance-summary">
+        <h2 class="performance-title">Performance Globale</h2>
+        <div class="performance-score" id="main-score">--</div>
+        <div class="performance-label" id="main-score-label">Chargement...</div>
+        <div class="success-badge mt-3" id="success-badge" style="display: inline-block;">
+            <i class="bi bi-check-circle"></i> Entraînement réussi
         </div>
     </div>
     
@@ -502,6 +575,9 @@ function updateUI(data) {
         document.getElementById('stop-training').style.display = 'none';
         document.getElementById('view-results').style.display = 'inline-block';
         
+        // Show performance summary
+        displayPerformanceSummary(data);
+        
         // Clear all polling intervals
         if (pollingInterval) {
             clearInterval(pollingInterval);
@@ -704,6 +780,11 @@ document.addEventListener('DOMContentLoaded', function() {
     } else if ('{{ session.status }}' === 'training') {
         // Si déjà en cours, commencer le polling
         pollingInterval = setInterval(checkTrainingStatus, 2000);
+    } else if ('{{ session.status }}' === 'completed') {
+        // Si déjà terminé, afficher les résultats
+        document.getElementById('view-results').style.display = 'inline-block';
+        // Load and display performance summary
+        loadTrainingResults({{ session.id }});
     }
     
     // Gérer le redimensionnement avec debounce
@@ -717,6 +798,105 @@ document.addEventListener('DOMContentLoaded', function() {
     
     devToolsObserver.observe(document.body);
 });
+
+// Function to display performance summary when training is completed
+function displayPerformanceSummary(sessionData) {
+    const performanceSummary = document.getElementById('performance-summary');
+    const mainScore = document.getElementById('main-score');
+    const mainScoreLabel = document.getElementById('main-score-label');
+    const successBadge = document.getElementById('success-badge');
+    
+    // Show the performance summary
+    performanceSummary.style.display = 'block';
+    
+    // Get the test results/metrics
+    const metrics = sessionData.test_results || {};
+    
+    // Determine the main metric to display
+    let score = '--';
+    let label = 'Chargement...';
+    let isGoodScore = false;
+    
+    if (Object.keys(metrics).length > 0) {
+        console.log('Available metrics:', metrics);
+        
+        // Get problem type from session data (for sklearn models) or determine from metrics
+        let isClassification = false;
+        if (sessionData && sessionData.hyperparameters && sessionData.hyperparameters.problem_type) {
+            isClassification = sessionData.hyperparameters.problem_type === 'classification';
+            console.log('Problem type from hyperparameters:', sessionData.hyperparameters.problem_type);
+        } else {
+            // Fallback: determine from available metrics
+            isClassification = metrics.accuracy !== undefined || metrics.precision !== undefined || metrics.recall !== undefined;
+            console.log('Problem type detected from metrics, isClassification:', isClassification);
+        }
+        
+        if (isClassification) {
+            // Classification task - prioritize accuracy
+            if (metrics.accuracy !== undefined) {
+                score = (metrics.accuracy * 100).toFixed(1) + '%';
+                label = 'Précision du Modèle';
+                isGoodScore = metrics.accuracy > 0.7; // Good if > 70%
+            } else if (metrics.f1_score !== undefined) {
+                score = (metrics.f1_score * 100).toFixed(1) + '%';
+                label = 'Score F1 du Modèle';
+                isGoodScore = metrics.f1_score > 0.7; // Good if > 70%
+            } else if (metrics.precision !== undefined) {
+                score = (metrics.precision * 100).toFixed(1) + '%';
+                label = 'Précision du Modèle';
+                isGoodScore = metrics.precision > 0.7; // Good if > 70%
+            }
+        } else {
+            // Regression task - prioritize R²
+            if (metrics.r2 !== undefined) {
+                score = (metrics.r2 * 100).toFixed(1) + '%';
+                label = 'Score R² du Modèle';
+                isGoodScore = metrics.r2 > 0.5; // Good if > 50%
+            } else if (metrics.mae !== undefined) {
+                score = metrics.mae.toFixed(3);
+                label = 'Erreur Absolue Moyenne';
+                isGoodScore = metrics.mae < 1.0; // Good if < 1.0
+            } else if (metrics.rmse !== undefined) {
+                score = metrics.rmse.toFixed(3);
+                label = 'Erreur Quadratique Moyenne';
+                isGoodScore = metrics.rmse < 1.0; // Good if < 1.0
+            }
+        }
+    } else {
+        // Try to load metrics via API if not available in session data
+        loadTrainingResults(sessionData.id);
+    }
+    
+    // Update the display
+    mainScore.textContent = score;
+    mainScoreLabel.textContent = label;
+    
+    // Update score color based on performance
+    if (isGoodScore) {
+        mainScore.style.color = '#00ff88'; // Green for good scores
+    } else if (score !== '--') {
+        mainScore.style.color = '#ffa500'; // Orange for okay scores
+    }
+    
+    // Show success badge
+    successBadge.style.display = 'inline-block';
+}
+
+// Function to load training results if not available in session data
+function loadTrainingResults(sessionId) {
+    fetch(`/api/training-sessions/${sessionId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.test_results && Object.keys(data.test_results).length > 0) {
+                displayPerformanceSummary(data);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading training results:', error);
+            document.getElementById('main-score').textContent = 'Erreur';
+            document.getElementById('main-score-label').textContent = 'Impossible de charger les métriques';
+        });
+}
 
 // Cleanup au déchargement de la page
 window.addEventListener('beforeunload', function() {
