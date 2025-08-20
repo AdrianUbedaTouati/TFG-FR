@@ -1126,35 +1126,73 @@ function loadAnalysisData() {
         })
         .catch(error => {
             console.error('Error loading analysis data:', error);
+            console.error('Error stack:', error.stack);
+            
+            // Show error message to user
+            alert(`Erreur lors du chargement des données d'analyse: ${error.message}. Vérifiez la console pour plus de détails.`);
+            
             // Show error in the prediction chart for debugging
             const ctx = document.getElementById('predictions-scatter-chart').getContext('2d');
             ctx.font = '12px Arial';
             ctx.fillStyle = '#ff6b6b';
             ctx.textAlign = 'center';
             ctx.fillText('Erreur de chargement: ' + error.message, ctx.canvas.width/2, ctx.canvas.height/2);
+            
+            // Try to create synthetic charts as fallback
+            if (sessionData && sessionData.test_results) {
+                console.log('Falling back to synthetic charts due to analysis error');
+                const syntheticAnalysis = {
+                    predictions_analysis: null,
+                    feature_importance: null,
+                    model_type: sessionData.model_type
+                };
+                createAdvancedAnalysisCharts(syntheticAnalysis);
+            }
         });
 }
 
 // Create advanced analysis charts
 function createAdvancedAnalysisCharts(analysisData) {
-    if (!analysisData) return;
+    if (!analysisData) {
+        console.error('No analysis data provided to createAdvancedAnalysisCharts');
+        return;
+    }
+    
+    console.log('=== Creating Advanced Analysis Charts ===');
+    console.log('Analysis data predictions_analysis:', analysisData.predictions_analysis);
+    console.log('Type of predictions_analysis:', typeof analysisData.predictions_analysis);
     
     // Create predictions vs actual scatter plot
-    if (analysisData.predictions_analysis && analysisData.predictions_analysis !== null) {
+    if (analysisData.predictions_analysis && 
+        analysisData.predictions_analysis !== null && 
+        typeof analysisData.predictions_analysis === 'object' &&
+        Object.keys(analysisData.predictions_analysis).length > 0) {
+        console.log('Creating REAL predictions scatter chart');
         createPredictionsScatterChart(analysisData.predictions_analysis);
-    } else if (sessionData && sessionData.test_results) {
-        // Fallback: create synthetic visualization based on test metrics
-        console.log('Creating synthetic predictions chart from test results');
-        createSyntheticPredictionsChart(sessionData.test_results);
+    } else {
+        console.warn('No predictions analysis data available, checking for fallback...');
+        if (sessionData && sessionData.test_results) {
+            // Fallback: create synthetic visualization based on test metrics
+            console.log('Creating SYNTHETIC predictions chart from test results');
+            createSyntheticPredictionsChart(sessionData.test_results);
+        } else {
+            console.error('No data available for predictions chart');
+        }
     }
     
     // Create residuals distribution chart
-    if (analysisData.predictions_analysis && analysisData.predictions_analysis !== null) {
+    if (analysisData.predictions_analysis && 
+        analysisData.predictions_analysis !== null && 
+        typeof analysisData.predictions_analysis === 'object' &&
+        Object.keys(analysisData.predictions_analysis).length > 0) {
+        console.log('Creating REAL residuals distribution chart');
         createResidualsDistributionChart(analysisData.predictions_analysis);
     } else if (sessionData && sessionData.test_results) {
         // Fallback: create synthetic residuals chart
-        console.log('Creating synthetic residuals chart from test results');
+        console.log('Creating SYNTHETIC residuals chart from test results');
         createSyntheticResidualsChart(sessionData.test_results);
+    } else {
+        console.error('No data available for residuals chart');
     }
     
     // Create feature importance chart (for sklearn models)

@@ -468,10 +468,17 @@
         border: 1px solid rgba(138, 43, 226, 0.3);
         border-radius: 15px;
         padding: 20px;
+        padding-right: 15px; /* Reduced right padding */
         margin-bottom: 15px;
         transition: all 0.3s ease;
         position: relative;
         overflow: hidden;
+    }
+    
+    /* Ensure modal body has some padding to avoid cutting off content */
+    #trainingHistoryModal .modal-body {
+        padding-right: 25px;
+        overflow-x: hidden;
     }
     
     .training-history-item::before {
@@ -546,6 +553,40 @@
         margin-right: 5px;
         background: rgba(99, 102, 241, 0.2);
         color: #a5b4fc;
+    }
+    
+    /* Responsive button group in training history */
+    .training-history-item .btn-group {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 3px;
+    }
+    
+    .training-history-item .btn-group .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        white-space: nowrap;
+    }
+    
+    @media (max-width: 992px) {
+        .training-history-item .row > div {
+            margin-bottom: 10px;
+        }
+        
+        .training-history-item .btn-group {
+            justify-content: flex-start;
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .training-history-item .btn-group {
+            flex-wrap: wrap;
+        }
+        
+        .training-history-item .btn-group .btn {
+            flex: 1;
+            min-width: 80px;
+        }
     }
 </style>
 {% endblock %}
@@ -2184,15 +2225,32 @@ function displayTrainingHistory(trainings) {
             const statusIcon = training.status === 'completed' ? 'check-circle-fill' : 
                               training.status === 'training' ? 'hourglass-split' : 'x-circle-fill';
             
-            // Calculate training duration
-            let duration = '';
-            if (training.created_at && training.updated_at) {
-                const start = new Date(training.created_at);
-                const end = new Date(training.updated_at);
-                const diff = Math.round((end - start) / 1000);
-                const minutes = Math.floor(diff / 60);
-                const seconds = diff % 60;
-                duration = `${minutes}m ${seconds}s`;
+            // Calculate how long ago the training was
+            let timeAgo = '';
+            if (training.created_at) {
+                const now = new Date();
+                const created = new Date(training.created_at);
+                const diffMs = now - created;
+                const diffSeconds = Math.floor(diffMs / 1000);
+                const diffMinutes = Math.floor(diffSeconds / 60);
+                const diffHours = Math.floor(diffMinutes / 60);
+                const diffDays = Math.floor(diffHours / 24);
+                const diffMonths = Math.floor(diffDays / 30);
+                const diffYears = Math.floor(diffDays / 365);
+                
+                if (diffYears > 0) {
+                    timeAgo = diffYears === 1 ? 'il y a 1 an' : `il y a ${diffYears} ans`;
+                } else if (diffMonths > 0) {
+                    timeAgo = diffMonths === 1 ? 'il y a 1 mois' : `il y a ${diffMonths} mois`;
+                } else if (diffDays > 0) {
+                    timeAgo = diffDays === 1 ? 'il y a 1 jour' : `il y a ${diffDays} jours`;
+                } else if (diffHours > 0) {
+                    timeAgo = diffHours === 1 ? 'il y a 1 heure' : `il y a ${diffHours} heures`;
+                } else if (diffMinutes > 0) {
+                    timeAgo = diffMinutes === 1 ? 'il y a 1 minute' : `il y a ${diffMinutes} minutes`;
+                } else {
+                    timeAgo = 'à l\'instant';
+                }
             }
             
             return `
@@ -2207,7 +2265,7 @@ function displayTrainingHistory(trainings) {
                                 <i class="bi bi-calendar3"></i> ${new Date(training.created_at).toLocaleDateString('fr-FR')}
                                 <br>
                                 <i class="bi bi-clock"></i> ${new Date(training.created_at).toLocaleTimeString('fr-FR')}
-                                ${duration ? `<br><i class="bi bi-stopwatch"></i> Durée: ${duration}` : ''}
+                                ${timeAgo ? `<br><i class="bi bi-clock-history"></i> ${timeAgo}` : ''}
                             </small>
                         </div>
                         <div class="col-md-2">
@@ -2260,8 +2318,8 @@ function displayTrainingHistory(trainings) {
                                 </div>
                             ` : '<span class="text-muted">Aucune métrique disponible</span>'}
                         </div>
-                        <div class="col-md-3 text-end">
-                            <div class="btn-group" role="group">
+                        <div class="col-md-3 text-end pe-0">
+                            <div class="btn-group btn-group-sm" role="group">
                                 ${training.status === 'completed' ? `
                                     <button class="btn btn-sm btn-primary" 
                                             onclick="window.location.href='/training-sessions/${training.id}/results/'"

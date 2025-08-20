@@ -179,6 +179,13 @@ class TrainingAnalysisView(APIView):
             print("Starting analysis generation...")
             analysis_data = self._generate_analysis(session)
             print(f"Analysis completed successfully. Keys: {analysis_data.keys()}")
+            
+            # Debug: Print what we're returning
+            if 'predictions_analysis' in analysis_data:
+                print(f"Predictions analysis type: {type(analysis_data['predictions_analysis'])}")
+                if analysis_data['predictions_analysis']:
+                    print(f"Predictions analysis keys: {analysis_data['predictions_analysis'].keys() if isinstance(analysis_data['predictions_analysis'], dict) else 'Not a dict'}")
+            
             return Response(analysis_data)
         except Exception as e:
             print(f"ERROR in analysis generation: {str(e)}")
@@ -220,6 +227,15 @@ class TrainingAnalysisView(APIView):
                     predictions_data = self._generate_predictions_analysis(session, model_path)
                     print(f"Predictions data returned: {type(predictions_data)}")
                     print(f"Predictions data keys: {predictions_data.keys() if isinstance(predictions_data, dict) else 'Not a dict'}")
+                    
+                    # Debug: Check if we got actual predictions analysis
+                    if 'predictions_analysis' in predictions_data and predictions_data['predictions_analysis']:
+                        print(f"SUCCESS: Got predictions analysis with {len(predictions_data['predictions_analysis'])} targets")
+                        for target_key, target_data in predictions_data['predictions_analysis'].items():
+                            print(f"  Target {target_key}: has scatter_data={bool(target_data.get('scatter_data'))}, has confusion_matrix={bool(target_data.get('confusion_matrix'))}")
+                    else:
+                        print("WARNING: No predictions analysis data generated")
+                    
                     analysis.update(predictions_data)
                 except Exception as e:
                     print(f"Error generating predictions analysis: {e}")
