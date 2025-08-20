@@ -58,7 +58,31 @@ class ModelDefinitionTrainingsView(APIView):
             model_def = get_object_or_404(ModelDefinition, pk=pk, user=request.user)
         
         # Get all training sessions
+        # Debug: Print relationship info
+        print(f"Getting trainings for model definition {model_def.id} - {model_def.name}")
+        
+        # First try the direct relationship
         trainings = model_def.trainingsession_set.all().order_by('-created_at')
+        print(f"Found {trainings.count()} training sessions via model_definition relationship")
+        
+        # If no trainings found via relationship, try alternative matching
+        if trainings.count() == 0:
+            from ..models import TrainingSession
+            # Try to find by matching fields
+            trainings = TrainingSession.objects.filter(
+                model_type=model_def.model_type,
+                dataset=model_def.dataset,
+                predictor_columns=model_def.predictor_columns,
+                target_columns=model_def.target_columns
+            ).order_by('-created_at')
+            print(f"Found {trainings.count()} training sessions via field matching")
+            
+            # Update the relationship for found sessions
+            for training in trainings:
+                if not training.model_definition:
+                    training.model_definition = model_def
+                    training.save()
+                    print(f"Updated training session {training.id} to link to model {model_def.id}")
         
         # Format response
         training_data = []
@@ -68,10 +92,26 @@ class ModelDefinitionTrainingsView(APIView):
                 'name': training.name,
                 'status': training.status,
                 'created_at': training.created_at,
+                'updated_at': training.updated_at if hasattr(training, 'updated_at') else training.created_at,
                 'framework': getattr(training, 'framework', 'keras'),
-                'metrics': training.test_results,
+                'model_type': training.model_type,
+                'dataset': training.dataset.id if training.dataset else None,
+                'predictor_columns': training.predictor_columns,
+                'target_columns': training.target_columns,
+                'test_results': training.test_results,
+                'metrics': training.test_results,  # Keep for backward compatibility
+                'hyperparameters': training.hyperparameters,
+                'config': training.config,
+                'train_split': training.train_split,
+                'val_split': training.val_split,
+                'test_split': training.test_split,
+                'normalization_method': training.normalization_method,
+                'selected_metrics': training.selected_metrics,
                 'epochs': training.hyperparameters.get('epochs', 0),
-                'error_message': training.error_message
+                'error_message': training.error_message,
+                'progress': training.progress,
+                'model_file': training.model_file.url if training.model_file else None,
+                'model_definition': model_def.id
             })
         
         return success_response({

@@ -120,7 +120,8 @@ class TrainingSessionSerializer(serializers.ModelSerializer):
             'predictor_columns', 'target_columns', 'target_column', 'normalization_method',
             'hyperparameters', 'config', 'train_split', 'val_split', 'test_split', 'test_size',
             'selected_metrics', 'training_history', 'test_results',
-            'status', 'error_message', 'custom_architecture', 'use_custom_architecture'
+            'status', 'error_message', 'custom_architecture', 'use_custom_architecture',
+            'model_definition'  # Added model_definition field
         ]
         read_only_fields = ['created_at', 'training_history', 'test_results', 'status', 'error_message']
 

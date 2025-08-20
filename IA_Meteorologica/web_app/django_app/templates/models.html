@@ -466,15 +466,76 @@
     .training-history-item {
         background: rgba(0, 0, 0, 0.3);
         border: 1px solid rgba(138, 43, 226, 0.3);
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 10px;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 15px;
         transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .training-history-item::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(138, 43, 226, 0.1), transparent);
+        transition: left 0.5s ease;
+    }
+    
+    .training-history-item:hover::before {
+        left: 100%;
     }
     
     .training-history-item:hover {
+        background: rgba(138, 43, 226, 0.15);
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(138, 43, 226, 0.3);
+    }
+    
+    .training-history-item.completed {
+        border-color: rgba(0, 255, 0, 0.3);
+    }
+    
+    .training-history-item.completed:hover {
+        background: rgba(0, 255, 0, 0.1);
+        box-shadow: 0 5px 20px rgba(0, 255, 0, 0.3);
+    }
+    
+    .training-history-header {
+        padding: 10px;
+        border-bottom: 1px solid rgba(138, 43, 226, 0.2);
+    }
+    
+    .metrics-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    
+    .metric-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
         background: rgba(138, 43, 226, 0.1);
-        transform: translateX(5px);
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+    }
+    
+    .metric-item i {
+        color: #8a2be2;
+    }
+    
+    .metric-label {
+        color: #94a3b8;
+    }
+    
+    .metric-value {
+        color: #00d4ff;
+        font-weight: bold;
     }
     
     .metric-badge {
@@ -1993,7 +2054,7 @@ function createModelCard(model) {
             </div>
             
             <div class="text-center mt-3 pt-2">
-                <button class="btn btn-sm btn-outline-primary" onclick="showTrainingHistory(${model.id})">
+                <button class="btn btn-sm btn-outline-primary" onclick="showTrainingHistory(${model.id}); return false;">
                     <i class="bi bi-clock-history"></i> Voir l'historique
                 </button>
             </div>
@@ -2015,13 +2076,28 @@ function getStatusText(status) {
 
 // Afficher l'historique des entraînements
 function showTrainingHistory(modelId) {
+    // Prevent the event from propagating to parent elements
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    
     const model = modelsList.find(m => m.id === modelId);
     if (!model) return;
     
     selectedModel = model;
     
-    // Clean up any existing modals first
+    // Close any other open modals first
     cleanupModals();
+    
+    // Extra cleanup with delay to ensure everything is closed
+    setTimeout(() => {
+        // Remove any remaining backdrops
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+    }, 100);
     
     document.getElementById('trainingHistoryTitle').innerHTML = `
         <i class="bi bi-clock-history"></i> Historique - ${model.name}
@@ -2031,18 +2107,35 @@ function showTrainingHistory(modelId) {
     
     fetch(`/api/models/${modelId}/trainings/`)
         .then(response => response.json())
-        .then(trainings => {
+        .then(data => {
             hideLoading();
+            console.log('Training history API response:', data);
+            // The API returns data wrapped in success response
+            const trainings = data.trainings || data.data?.trainings || [];
+            console.log('Extracted trainings:', trainings);
+            console.log('Number of trainings:', trainings.length);
             displayTrainingHistory(trainings);
             
+            // Ensure no other modal is interfering
             const modalElement = document.getElementById('trainingHistoryModal');
-            // Always create a fresh instance
+            
+            // Dispose of any existing instance
+            const existingInstance = bootstrap.Modal.getInstance(modalElement);
+            if (existingInstance) {
+                existingInstance.dispose();
+            }
+            
+            // Create a new instance
             const modal = new bootstrap.Modal(modalElement, {
-                backdrop: false,  // Pas de backdrop
+                backdrop: 'static',  // Changed to static backdrop
                 keyboard: true,
                 focus: true
             });
-            modal.show();
+            
+            // Show the modal with a longer delay to ensure all cleanup is complete
+            setTimeout(() => {
+                modal.show();
+            }, 300);
         })
         .catch(error => {
             hideLoading();
@@ -2068,53 +2161,231 @@ function displayTrainingHistory(trainings) {
         return;
     }
     
-    content.innerHTML = trainings.map(training => {
-        const metrics = training.test_results || {};
-        const statusClass = training.status === 'completed' ? 'success' : 
-                           training.status === 'training' ? 'warning' : 'danger';
-        
-        return `
-            <div class="training-history-item">
-                <div class="row align-items-center">
-                    <div class="col-md-3">
-                        <h6 class="mb-1">Session #${training.id}</h6>
-                        <small class="text-muted">
-                            ${new Date(training.created_at).toLocaleString('fr-FR')}
-                        </small>
-                    </div>
-                    <div class="col-md-2">
-                        <span class="badge bg-${statusClass}">
-                            ${getStatusText(training.status)}
-                        </span>
-                    </div>
-                    <div class="col-md-5">
-                        ${metrics.accuracy ? `
-                            <span class="metric-badge">Accuracy: ${(metrics.accuracy * 100).toFixed(2)}%</span>
-                        ` : ''}
-                        ${metrics.mae ? `
-                            <span class="metric-badge">MAE: ${metrics.mae.toFixed(4)}</span>
-                        ` : ''}
-                        ${metrics.rmse ? `
-                            <span class="metric-badge">RMSE: ${metrics.rmse.toFixed(4)}</span>
-                        ` : ''}
-                    </div>
-                    <div class="col-md-2 text-end">
-                        ${training.status === 'completed' ? `
-                            <button class="btn btn-sm btn-success" 
-                                    onclick="window.location.href='/training-sessions/${training.id}/results/'">
-                                <i class="bi bi-graph-up"></i> Résultats
-                            </button>
-                        ` : training.status === 'training' ? `
-                            <button class="btn btn-sm btn-info" 
-                                    onclick="window.location.href='/training-progress/${training.id}/'">
-                                <i class="bi bi-hourglass-split"></i> En cours
-                            </button>
-                        ` : ''}
-                    </div>
+    // Sort trainings by date (most recent first)
+    const sortedTrainings = trainings.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    
+    content.innerHTML = `
+        <div class="training-history-header mb-3">
+            <div class="row">
+                <div class="col-6">
+                    <small class="text-muted">Total: ${trainings.length} entraînement(s)</small>
+                </div>
+                <div class="col-6 text-end">
+                    <button class="btn btn-sm btn-primary" onclick="trainModel(${selectedModel.id})">
+                        <i class="bi bi-plus-circle"></i> Nouvel entraînement
+                    </button>
                 </div>
             </div>
-        `;
-    }).join('');
+        </div>
+        ${sortedTrainings.map((training, index) => {
+            const metrics = training.test_results || {};
+            const statusClass = training.status === 'completed' ? 'success' : 
+                               training.status === 'training' ? 'warning' : 'danger';
+            const statusIcon = training.status === 'completed' ? 'check-circle-fill' : 
+                              training.status === 'training' ? 'hourglass-split' : 'x-circle-fill';
+            
+            // Calculate training duration
+            let duration = '';
+            if (training.created_at && training.updated_at) {
+                const start = new Date(training.created_at);
+                const end = new Date(training.updated_at);
+                const diff = Math.round((end - start) / 1000);
+                const minutes = Math.floor(diff / 60);
+                const seconds = diff % 60;
+                duration = `${minutes}m ${seconds}s`;
+            }
+            
+            return `
+                <div class="training-history-item ${training.status === 'completed' ? 'completed' : ''}">
+                    <div class="row align-items-center">
+                        <div class="col-md-3">
+                            <h6 class="mb-1 text-white">
+                                <i class="bi bi-${statusIcon} text-${statusClass}"></i> 
+                                Session #${training.id}
+                            </h6>
+                            <small class="text-muted">
+                                <i class="bi bi-calendar3"></i> ${new Date(training.created_at).toLocaleDateString('fr-FR')}
+                                <br>
+                                <i class="bi bi-clock"></i> ${new Date(training.created_at).toLocaleTimeString('fr-FR')}
+                                ${duration ? `<br><i class="bi bi-stopwatch"></i> Durée: ${duration}` : ''}
+                            </small>
+                        </div>
+                        <div class="col-md-2">
+                            <span class="badge bg-${statusClass} px-3 py-2">
+                                <i class="bi bi-${statusIcon}"></i> ${getStatusText(training.status)}
+                            </span>
+                        </div>
+                        <div class="col-md-4">
+                            ${training.status === 'completed' && Object.keys(metrics).length > 0 ? `
+                                <div class="metrics-summary">
+                                    ${metrics.accuracy !== undefined ? `
+                                        <div class="metric-item">
+                                            <i class="bi bi-bullseye"></i>
+                                            <span class="metric-label">Précision:</span>
+                                            <span class="metric-value">${(metrics.accuracy * 100).toFixed(2)}%</span>
+                                        </div>
+                                    ` : ''}
+                                    ${metrics.mae !== undefined ? `
+                                        <div class="metric-item">
+                                            <i class="bi bi-graph-down"></i>
+                                            <span class="metric-label">MAE:</span>
+                                            <span class="metric-value">${metrics.mae.toFixed(4)}</span>
+                                        </div>
+                                    ` : ''}
+                                    ${metrics.rmse !== undefined ? `
+                                        <div class="metric-item">
+                                            <i class="bi bi-activity"></i>
+                                            <span class="metric-label">RMSE:</span>
+                                            <span class="metric-value">${metrics.rmse.toFixed(4)}</span>
+                                        </div>
+                                    ` : ''}
+                                    ${metrics.r2 !== undefined ? `
+                                        <div class="metric-item">
+                                            <i class="bi bi-graph-up"></i>
+                                            <span class="metric-label">R²:</span>
+                                            <span class="metric-value">${metrics.r2.toFixed(4)}</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            ` : training.status === 'failed' ? `
+                                <div class="text-danger">
+                                    <i class="bi bi-exclamation-triangle"></i> 
+                                    ${training.error_message || 'Échec de l\'entraînement'}
+                                </div>
+                            ` : training.status === 'training' ? `
+                                <div class="text-info">
+                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                    Entraînement en cours...
+                                    ${training.progress ? `(${Math.round(training.progress * 100)}%)` : ''}
+                                </div>
+                            ` : '<span class="text-muted">Aucune métrique disponible</span>'}
+                        </div>
+                        <div class="col-md-3 text-end">
+                            <div class="btn-group" role="group">
+                                ${training.status === 'completed' ? `
+                                    <button class="btn btn-sm btn-primary" 
+                                            onclick="window.location.href='/training-sessions/${training.id}/results/'"
+                                            title="Voir l'analyse complète">
+                                        <i class="bi bi-bar-chart-line"></i> Analyse
+                                    </button>
+                                    <button class="btn btn-sm btn-success" 
+                                            onclick="downloadModel(${training.id})"
+                                            title="Télécharger le modèle">
+                                        <i class="bi bi-download"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-info" 
+                                            onclick="window.location.href='/predictions/?session=${training.id}'"
+                                            title="Faire des prédictions">
+                                        <i class="bi bi-cpu"></i> Prédire
+                                    </button>
+                                ` : training.status === 'training' ? `
+                                    <button class="btn btn-sm btn-warning" 
+                                            onclick="window.location.href='/training-progress/${training.id}/'"
+                                            title="Voir la progression">
+                                        <i class="bi bi-hourglass-split"></i> Progression
+                                    </button>
+                                ` : training.status === 'failed' ? `
+                                    <button class="btn btn-sm btn-danger" 
+                                            onclick="retryTraining(${training.id})"
+                                            title="Réessayer l'entraînement">
+                                        <i class="bi bi-arrow-clockwise"></i> Réessayer
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('')}
+    `;
+}
+
+// Download model file
+function downloadModel(sessionId) {
+    // Check if the session has a model file
+    fetch(`/api/training-sessions/${sessionId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.model_file) {
+                // Create a download link
+                const link = document.createElement('a');
+                link.href = data.model_file;
+                link.download = `model_session_${sessionId}.pkl`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showNotification('Succès', 'Le téléchargement du modèle a commencé', 'success');
+            } else {
+                showNotification('Erreur', 'Aucun fichier de modèle disponible', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showNotification('Erreur', 'Impossible de télécharger le modèle', 'error');
+        });
+}
+
+// Retry training for a failed session
+function retryTraining(sessionId) {
+    if (confirm('Voulez-vous réessayer cet entraînement avec les mêmes paramètres ?')) {
+        // Get the training session data
+        fetch(`/api/training-sessions/${sessionId}/`)
+            .then(response => response.json())
+            .then(session => {
+                // Create a new training session with the same parameters
+                const trainingData = {
+                    model_definition: session.model_definition,
+                    name: `${session.name} - Retry ${new Date().toISOString()}`,
+                    model_type: session.model_type,
+                    dataset: session.dataset,
+                    predictor_columns: session.predictor_columns,
+                    target_columns: session.target_columns,
+                    config: session.config,
+                    hyperparameters: session.hyperparameters,
+                    train_split: session.train_split,
+                    val_split: session.val_split,
+                    test_split: session.test_split,
+                    normalization_method: session.normalization_method,
+                    selected_metrics: session.selected_metrics
+                };
+                
+                // Create and start the new training
+                fetch('/api/training-sessions/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify(trainingData)
+                })
+                .then(response => response.json())
+                .then(newSession => {
+                    // Start training
+                    return fetch(`/api/training-sessions/${newSession.id}/train/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    });
+                })
+                .then(response => response.json())
+                .then(result => {
+                    showNotification('Succès', 'L\'entraînement a été relancé', 'success');
+                    // Refresh the training history
+                    if (session.model_definition) {
+                        showTrainingHistory(session.model_definition);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showNotification('Erreur', 'Impossible de relancer l\'entraînement', 'error');
+                });
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showNotification('Erreur', 'Impossible de récupérer les données de la session', 'error');
+            });
+    }
 }
 
 // Entraîner le modèle
@@ -2654,19 +2925,25 @@ function getCookie(name) {
 // Ensure cleanupModals is available if not defined in base.html
 if (typeof cleanupModals === 'undefined') {
     function cleanupModals() {
-        // Remove all backdrops
-        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('overflow');
-        document.body.style.removeProperty('padding-right');
-        
-        // Dispose of all modal instances
-        document.querySelectorAll('.modal').forEach(modalEl => {
+        // Hide and dispose all visible modals
+        document.querySelectorAll('.modal.show').forEach(modalEl => {
             const modalInstance = bootstrap.Modal.getInstance(modalEl);
             if (modalInstance) {
-                modalInstance.dispose();
+                modalInstance.hide();
+                // Dispose after hiding to ensure clean transition
+                setTimeout(() => {
+                    modalInstance.dispose();
+                }, 300);
             }
         });
+        
+        // Remove all backdrops with a slight delay
+        setTimeout(() => {
+            document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+        }, 100);
     }
 }
 
