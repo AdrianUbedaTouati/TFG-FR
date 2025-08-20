@@ -545,6 +545,36 @@
         font-weight: bold;
     }
     
+    .primary-metric {
+        background: rgba(16, 185, 129, 0.15) !important;
+        border: 1px solid rgba(16, 185, 129, 0.3) !important;
+        padding: 6px 12px !important;
+        font-size: 0.9rem !important;
+    }
+    
+    .secondary-metrics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 4px;
+    }
+    
+    .secondary-metrics .metric-item {
+        flex: 1;
+        min-width: 110px;
+        font-size: 0.8rem !important;
+        padding: 4px 8px !important;
+    }
+    
+    .primary-metric i {
+        color: #10b981 !important;
+    }
+    
+    .primary-metric .metric-value {
+        color: #10b981 !important;
+        font-size: 1rem !important;
+    }
+    
     .metric-badge {
         display: inline-block;
         padding: 4px 8px;
@@ -1919,7 +1949,7 @@ function updateStatistics() {
     let lastTrainingDate = null;
     
     modelsList.forEach(model => {
-        totalTrainings += model.training_count || 0;
+        totalTrainings += model.actual_training_count || 0;
         if (model.best_score && model.best_score > bestScore) {
             bestScore = model.best_score;
         }
@@ -1963,7 +1993,7 @@ function filterModels() {
             case 'performance':
                 return (b.best_score || 0) - (a.best_score || 0);
             case 'trainings':
-                return (b.training_count || 0) - (a.training_count || 0);
+                return (b.actual_training_count || 0) - (a.actual_training_count || 0);
             default:
                 return new Date(b.updated_at) - new Date(a.updated_at);
         }
@@ -2057,7 +2087,7 @@ function createModelCard(model) {
             
             <div class="model-stats">
                 <div class="stat-item">
-                    <div class="stat-value">${model.training_count || 0}</div>
+                    <div class="stat-value">${model.actual_training_count || 0}</div>
                     <div class="text-muted small">Entraînements</div>
                 </div>
                 <div class="stat-item">
@@ -2272,6 +2302,19 @@ function displayTrainingHistory(trainings) {
                             <span class="badge bg-${statusClass} px-3 py-2">
                                 <i class="bi bi-${statusIcon}"></i> ${getStatusText(training.status)}
                             </span>
+                            ${training.status === 'completed' && metrics.accuracy !== undefined ? `
+                                <div class="mt-2">
+                                    <div class="text-success small fw-bold">
+                                        <i class="bi bi-bullseye"></i> ${(metrics.accuracy * 100).toFixed(1)}%
+                                    </div>
+                                </div>
+                            ` : training.status === 'completed' && metrics.r2 !== undefined ? `
+                                <div class="mt-2">
+                                    <div class="text-info small fw-bold">
+                                        <i class="bi bi-graph-up"></i> R²: ${metrics.r2.toFixed(3)}
+                                    </div>
+                                </div>
+                            ` : ''}
                         </div>
                         <div class="col-md-4">
                             ${training.status === 'completed' && Object.keys(metrics).length > 0 ? `

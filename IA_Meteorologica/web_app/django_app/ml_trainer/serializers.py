@@ -80,6 +80,7 @@ class ModelDefinitionSerializer(serializers.ModelSerializer):
     dataset_name = serializers.CharField(source='dataset.name', read_only=True)
     latest_training = serializers.SerializerMethodField()
     success_rate = serializers.SerializerMethodField()
+    actual_training_count = serializers.SerializerMethodField()
     
     class Meta:
         model = ModelDefinition
@@ -88,7 +89,7 @@ class ModelDefinitionSerializer(serializers.ModelSerializer):
             'dataset', 'dataset_name', 'predictor_columns', 'target_columns',
             'default_config', 'hyperparameters', 'custom_architecture', 
             'use_custom_architecture', 'training_count', 'best_score', 
-            'last_trained', 'is_active', 'latest_training', 'success_rate'
+            'last_trained', 'is_active', 'latest_training', 'success_rate', 'actual_training_count'
         ]
     
     def get_latest_training(self, obj):
@@ -101,6 +102,10 @@ class ModelDefinitionSerializer(serializers.ModelSerializer):
                 'metrics': latest.test_results
             }
         return None
+    
+    def get_actual_training_count(self, obj):
+        """Get the real count of training sessions"""
+        return obj.trainingsession_set.count()
     
     def get_success_rate(self, obj):
         total = obj.trainingsession_set.count()
