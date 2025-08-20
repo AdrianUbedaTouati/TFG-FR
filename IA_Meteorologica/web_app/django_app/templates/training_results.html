@@ -115,15 +115,15 @@
     
     /* Special styling for confusion matrix */
     #confusion-matrix-section .chart-container {
-        max-height: 900px;
-        min-height: 800px;
+        max-height: 1100px;
+        min-height: 1000px;
         background: linear-gradient(135deg, rgba(10, 14, 39, 0.95) 0%, rgba(20, 24, 49, 0.95) 100%);
         border: 3px solid rgba(99, 102, 241, 0.3);
         box-shadow: 0 15px 50px rgba(0, 0, 0, 0.4), 
                     inset 0 2px 0 rgba(255, 255, 255, 0.1);
         position: relative;
         overflow: visible;
-        padding: 40px;
+        padding: 50px;
     }
     
     #confusion-matrix-section .chart-container::before {
@@ -153,16 +153,16 @@
     }
     
     #confusion-matrix-section .chart-wrapper {
-        height: 700px;
+        height: 900px;
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 30px;
+        padding: 40px;
     }
     
     #confusion-matrix-chart {
-        max-width: 800px;
-        max-height: 700px;
+        max-width: 1000px;
+        max-height: 900px;
         width: 100%;
         height: 100%;
         filter: drop-shadow(0 6px 30px rgba(0, 0, 0, 0.5));
@@ -192,19 +192,19 @@
         
         /* Confusion matrix responsive adjustments */
         #confusion-matrix-section .chart-container {
-            max-height: 600px;
-            min-height: 550px;
-            padding: 20px;
+            max-height: 700px;
+            min-height: 650px;
+            padding: 30px;
         }
         
         #confusion-matrix-section .chart-wrapper {
-            height: 500px;
-            padding: 20px;
+            height: 600px;
+            padding: 25px;
         }
         
         #confusion-matrix-chart {
-            max-width: 500px;
-            max-height: 500px;
+            max-width: 650px;
+            max-height: 600px;
         }
     }
     
@@ -405,7 +405,7 @@
                 <div class="chart-container">
                     <h4 class="chart-title">Matrice de Confusion</h4>
                     <div class="chart-wrapper">
-                        <canvas id="confusion-matrix-chart" width="800" height="700"></canvas>
+                        <canvas id="confusion-matrix-chart" width="1000" height="900"></canvas>
                     </div>
                 </div>
             </div>
@@ -1442,8 +1442,8 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
     console.log('Label source:', confusionMatrix.labels ? 'From server' : 'Generated default');
     
     // Set canvas size for high DPI displays
-    const canvasWidth = 800;
-    const canvasHeight = 700;
+    const canvasWidth = 1000;
+    const canvasHeight = 900;
     const scale = window.devicePixelRatio || 2; // Force at least 2x for better quality
     ctx.canvas.width = canvasWidth * scale;
     ctx.canvas.height = canvasHeight * scale;
@@ -1463,14 +1463,26 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
     
-    // Layout calculations - make cells bigger
-    const padding = 150;
-    const maxCellSize = 100; // Maximum cell size for better visibility
-    const cellSize = Math.min(maxCellSize, (canvasWidth - padding * 2) / labels.length, (canvasHeight - padding * 1.5) / labels.length);
+    // Layout calculations - make cells bigger with dynamic sizing
+    const leftPadding = 180;  // More space for Y-axis labels
+    const rightPadding = 100;
+    const topPadding = 100;
+    const bottomPadding = 200; // More space for X-axis labels
+    
+    const availableWidth = canvasWidth - leftPadding - rightPadding;
+    const availableHeight = canvasHeight - topPadding - bottomPadding;
+    
+    const maxCellSize = 90; // Maximum cell size
+    const minCellSize = 50; // Minimum cell size
+    const cellSize = Math.max(minCellSize, Math.min(maxCellSize, 
+        availableWidth / labels.length, 
+        availableHeight / labels.length
+    ));
+    
     const totalWidth = cellSize * labels.length;
     const totalHeight = cellSize * labels.length;
-    const startX = (canvasWidth - totalWidth) / 2;
-    const startY = (canvasHeight - totalHeight) / 2;
+    const startX = leftPadding + (availableWidth - totalWidth) / 2;
+    const startY = topPadding + (availableHeight - totalHeight) / 2;
     
     // Find max value for normalization
     const maxVal = Math.max(...matrix.flat());
@@ -1554,61 +1566,82 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
     ctx.shadowBlur = 0;
     ctx.font = `600 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
     
-    // X-axis labels (Predictions)
+    // X-axis labels (Predictions) - with rotation for long labels
     for (let j = 0; j < labels.length; j++) {
         const x = startX + j * cellSize + cellSize/2;
-        const y = startY + labels.length * cellSize + 35;
+        const baseY = startY + labels.length * cellSize + 40;
         
-        // Calculate label width dynamically
-        ctx.font = `600 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
-        const labelWidth = ctx.measureText(labels[j]).width + 30;
+        ctx.save();
         
-        // Label background with gradient
-        const labelGradient = ctx.createLinearGradient(x - labelWidth/2, y - 15, x + labelWidth/2, y + 15);
-        labelGradient.addColorStop(0, 'rgba(99, 102, 241, 0.15)');
-        labelGradient.addColorStop(1, 'rgba(139, 92, 246, 0.15)');
-        ctx.fillStyle = labelGradient;
-        roundRect(ctx, x - labelWidth/2, y - 15, labelWidth, 30, 15);
-        ctx.fill();
+        // Check if we need to rotate labels
+        const needsRotation = labels.length > 5 || labels.some(label => label.length > 10);
         
-        // Label border
-        ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)';
-        ctx.lineWidth = 1;
-        roundRect(ctx, x - labelWidth/2, y - 15, labelWidth, 30, 15);
-        ctx.stroke();
+        if (needsRotation) {
+            // Rotate labels for better fit
+            ctx.translate(x, baseY);
+            ctx.rotate(-Math.PI / 4); // 45 degree rotation
+            
+            // Calculate label width
+            ctx.font = `600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+            const labelWidth = ctx.measureText(labels[j]).width + 25;
+            
+            // Label background
+            const labelGradient = ctx.createLinearGradient(-labelWidth/2, -12, labelWidth/2, 12);
+            labelGradient.addColorStop(0, 'rgba(99, 102, 241, 0.15)');
+            labelGradient.addColorStop(1, 'rgba(139, 92, 246, 0.15)');
+            ctx.fillStyle = labelGradient;
+            roundRect(ctx, -labelWidth/2, -12, labelWidth, 24, 12);
+            ctx.fill();
+            
+            // Label text
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            ctx.shadowBlur = 2;
+            ctx.fillStyle = '#f0f9ff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(labels[j], 0, 0);
+        } else {
+            // No rotation needed
+            ctx.font = `600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+            const labelWidth = ctx.measureText(labels[j]).width + 30;
+            
+            // Label background
+            const labelGradient = ctx.createLinearGradient(x - labelWidth/2, baseY - 15, x + labelWidth/2, baseY + 15);
+            labelGradient.addColorStop(0, 'rgba(99, 102, 241, 0.15)');
+            labelGradient.addColorStop(1, 'rgba(139, 92, 246, 0.15)');
+            ctx.fillStyle = labelGradient;
+            roundRect(ctx, x - labelWidth/2, baseY - 15, labelWidth, 30, 15);
+            ctx.fill();
+            
+            // Label text
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            ctx.shadowBlur = 2;
+            ctx.fillStyle = '#f0f9ff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(labels[j], x, baseY);
+        }
         
-        // Label text with shadow
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-        ctx.shadowBlur = 2;
-        ctx.fillStyle = '#f0f9ff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(labels[j], x, y);
         ctx.shadowBlur = 0;
+        ctx.restore();
     }
     
     // Y-axis labels (Real values)
     for (let i = 0; i < labels.length; i++) {
-        const x = startX - 30;
+        const x = startX - 20;
         const y = startY + i * cellSize + cellSize/2;
         
         // Calculate label width
-        ctx.font = `600 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
-        const labelWidth = ctx.measureText(labels[i]).width + 30;
+        ctx.font = `600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+        const labelWidth = Math.min(ctx.measureText(labels[i]).width + 25, leftPadding - 40);
         
         // Label background with gradient
-        const labelGradient = ctx.createLinearGradient(x - labelWidth, y - 15, x, y + 15);
+        const labelGradient = ctx.createLinearGradient(x - labelWidth, y - 12, x, y + 12);
         labelGradient.addColorStop(0, 'rgba(99, 102, 241, 0.15)');
         labelGradient.addColorStop(1, 'rgba(139, 92, 246, 0.15)');
         ctx.fillStyle = labelGradient;
-        roundRect(ctx, x - labelWidth, y - 15, labelWidth, 30, 15);
+        roundRect(ctx, x - labelWidth, y - 12, labelWidth, 24, 12);
         ctx.fill();
-        
-        // Label border
-        ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)';
-        ctx.lineWidth = 1;
-        roundRect(ctx, x - labelWidth, y - 15, labelWidth, 30, 15);
-        ctx.stroke();
         
         // Label text with shadow
         ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
@@ -1616,7 +1649,13 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
         ctx.fillStyle = '#f0f9ff';
         ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
-        ctx.fillText(labels[i], x - 15, y);
+        
+        // Truncate label if too long
+        let labelText = labels[i];
+        if (labelText.length > 15) {
+            labelText = labelText.substring(0, 13) + '...';
+        }
+        ctx.fillText(labelText, x - 10, y);
         ctx.shadowBlur = 0;
     }
     
@@ -1632,8 +1671,9 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
-    // Add background for X-axis title
-    const xTitleY = startY + totalHeight + 80;
+    // Add background for X-axis title - adjust position based on whether labels are rotated
+    const needsRotation = labels.length > 5 || labels.some(label => label.length > 10);
+    const xTitleY = startY + totalHeight + (needsRotation ? 120 : 90);
     ctx.fillStyle = 'rgba(99, 102, 241, 0.1)';
     roundRect(ctx, canvasWidth/2 - 100, xTitleY - 20, 200, 40, 20);
     ctx.fill();
@@ -1681,9 +1721,9 @@ function createConfusionMatrixChart(confusionMatrix, taskType = 'classification'
             const accuracy = (correct / total * 100).toFixed(1);
             
             // Draw larger, more prominent metric card
-            const cardY = canvasHeight - 60;
-            const cardWidth = 300;
-            const cardHeight = 45;
+            const cardY = canvasHeight - 80;
+            const cardWidth = 350;
+            const cardHeight = 50;
             const cardX = (canvasWidth - cardWidth) / 2;
             
             // Card background with gradient
