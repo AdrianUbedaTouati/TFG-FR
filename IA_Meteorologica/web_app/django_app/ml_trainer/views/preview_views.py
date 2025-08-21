@@ -30,10 +30,6 @@ def preview_split_data(request):
         test_size = data.get('test_size', 0.15)
         random_state = data.get('random_state')
         target_columns = data.get('target_columns', [])
-        
-        # Debug logging
-        print(f"DEBUG preview_views: Received sizes - train: {train_size}, val: {val_size}, test: {test_size}")
-        print(f"DEBUG preview_views: Sum = {train_size + val_size + test_size}")
         predictor_columns = data.get('predictor_columns', [])
         preview_rows = data.get('preview_rows', 20)
         
@@ -150,6 +146,42 @@ def preview_split_data(request):
                 except:
                     stats[col] = {'error': 'No se pudieron calcular estadísticas'}
         
+        # Calcular estadísticas específicas para variables target
+        target_stats = {}
+        if target_columns:
+            # Obtener los datos completos del conjunto (no solo preview)
+            split_data = df.iloc[indices]
+            
+            for target_col in target_columns:
+                if target_col in split_data.columns:
+                    target_data = split_data[target_col]
+                    
+                    # Estadísticas básicas
+                    target_stat = {
+                        'column_name': target_col,
+                        'total_rows': len(target_data),
+                        'unique_count': int(target_data.nunique()),
+                        'null_count': int(target_data.isnull().sum()),
+                        'dtype': str(target_data.dtype)
+                    }
+                    
+                    # Añadir value_counts para variables categóricas o con pocos valores únicos
+                    if target_stat['unique_count'] <= 50:  # Límite razonable para value_counts
+                        value_counts = target_data.value_counts()
+                        target_stat['value_counts'] = value_counts.to_dict()
+                    
+                    # Estadísticas numéricas si es aplicable
+                    if pd.api.types.is_numeric_dtype(target_data):
+                        target_stat['stats'] = {
+                            'mean': float(target_data.mean()),
+                            'std': float(target_data.std()),
+                            'min': float(target_data.min()),
+                            'max': float(target_data.max()),
+                            'dtype': str(target_data.dtype)
+                        }
+                    
+                    target_stats[target_col] = target_stat
+        
         # Preparar respuesta
         response_data = {
             'success': True,
@@ -161,6 +193,7 @@ def preview_split_data(request):
             'columns': all_columns,
             'data': preview_dict,
             'statistics': stats,
+            'target_statistics': target_stats,  # Nuevas estadísticas específicas de target
             'preview_rows': len(preview_dict)
         }
         
