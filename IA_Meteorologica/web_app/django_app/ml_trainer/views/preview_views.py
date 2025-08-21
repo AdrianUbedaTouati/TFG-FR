@@ -28,7 +28,15 @@ def preview_split_data(request):
         train_size = data.get('train_size', 0.7)
         val_size = data.get('val_size', 0.15)
         test_size = data.get('test_size', 0.15)
+        
+        # Asegurar que random_state sea entero o None
         random_state = data.get('random_state')
+        if random_state is not None:
+            try:
+                random_state = int(random_state)
+            except (ValueError, TypeError):
+                random_state = None
+                
         target_columns = data.get('target_columns', [])
         predictor_columns = data.get('predictor_columns', [])
         preview_rows = data.get('preview_rows', 20)

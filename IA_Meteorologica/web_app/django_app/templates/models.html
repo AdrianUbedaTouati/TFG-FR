@@ -5396,12 +5396,16 @@ function getDataSplitConfig() {
     // Normalizar para que sumen exactamente 100
     const total = trainPct + valPct + testPct;
     
+    // Obtener y convertir random_state a entero si existe
+    const randomStateValue = document.getElementById('globalRandomState').value;
+    const randomState = randomStateValue ? parseInt(randomStateValue) : null;
+    
     const config = {
         split_method: document.getElementById('splitMethod').value,
         train_split: trainPct / total,
         val_split: valPct / total,
         test_split: testPct / total,
-        random_state: document.getElementById('globalRandomState').value || null,
+        random_state: randomState,
         split_config: {}
     };
     
@@ -5445,17 +5449,61 @@ function updateDataSplitVisualization() {
             const valPct = parseInt(document.getElementById('valSize').value) || 15;
             const testPct = parseInt(document.getElementById('testSize').value) || 15;
             
-            // Calcular número de muestras (asumiendo que no hay filtros por ahora)
+            // Calcular número de muestras usando el nuevo endpoint para obtener conteos exactos
             const totalSamples = dataset.row_count || 0;
             const filteredSamples = totalSamples; // TODO: aplicar filtros reales
             
-            const trainSamples = Math.floor(filteredSamples * trainPct / 100);
-            const valSamples = Math.floor(filteredSamples * valPct / 100);
-            const testSamples = filteredSamples - trainSamples - valSamples;
+            // Obtener configuración de división
+            const splitConfig = getDataSplitConfig();
             
-            // Actualizar elementos de la visualización
-            updateSplitVisualizationElements(trainSamples, valSamples, testSamples, trainPct, valPct, testPct);
-            updateDatasetInfoElements(totalSamples, filteredSamples, predictorCount, targetCount);
+            // Solicitar conteos exactos al servidor
+            fetch('/api/datasets/split-counts/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    dataset_id: datasetId,
+                    split_method: splitConfig.split_method,
+                    split_config: splitConfig.split_config,
+                    train_size: splitConfig.train_split,
+                    val_size: splitConfig.val_split,
+                    test_size: splitConfig.test_split,
+                    random_state: splitConfig.random_state
+                })
+            })
+            .then(response => response.json())
+            .then(counts => {
+                if (counts.success) {
+                    // Usar los conteos exactos del servidor
+                    updateSplitVisualizationElements(
+                        counts.train_count, 
+                        counts.val_count, 
+                        counts.test_count, 
+                        counts.train_percentage, 
+                        counts.val_percentage, 
+                        counts.test_percentage
+                    );
+                    updateDatasetInfoElements(totalSamples, filteredSamples, predictorCount, targetCount);
+                } else {
+                    // Fallback: usar cálculo aproximado si falla
+                    const trainSamples = Math.floor(filteredSamples * trainPct / 100);
+                    const valSamples = Math.floor(filteredSamples * valPct / 100);
+                    const testSamples = filteredSamples - trainSamples - valSamples;
+                    updateSplitVisualizationElements(trainSamples, valSamples, testSamples, trainPct, valPct, testPct);
+                    updateDatasetInfoElements(totalSamples, filteredSamples, predictorCount, targetCount);
+                }
+            })
+            .catch(error => {
+                console.error('Error obteniendo conteos exactos:', error);
+                // Fallback: usar cálculo aproximado
+                const trainSamples = Math.floor(filteredSamples * trainPct / 100);
+                const valSamples = Math.floor(filteredSamples * valPct / 100);
+                const testSamples = filteredSamples - trainSamples - valSamples;
+                updateSplitVisualizationElements(trainSamples, valSamples, testSamples, trainPct, valPct, testPct);
+                updateDatasetInfoElements(totalSamples, filteredSamples, predictorCount, targetCount);
+            });
             
             // Mostrar la visualización
             document.getElementById('dataSplitVisualization').style.display = 'block';
@@ -5933,6 +5981,9 @@ function displayPreviewData(response) {
     document.getElementById('dataPreviewLoading').style.display = 'none';
     document.getElementById('dataPreviewContent').style.display = 'block';
     
+    // Actualizar el contador en el modal con el valor real del servidor
+    document.getElementById('previewCount').textContent = response.total_rows.toLocaleString();
+    
     // Actualizar rango de índices
     document.getElementById('previewIndexRange').textContent = 
         `${response.start_index} - ${response.end_index - 1} (${response.total_rows} filas)`;
@@ -6037,8 +6088,118 @@ function refreshPreview() {
 }
 
 // Exportar datos de vista previa
-function exportPreviewData(format) {
-    showNotification('Info', `Exportación en formato ${format.toUpperCase()} próximamente disponible`, 'info');
+async function exportPreviewData(format) {
+    try {
+        // Obtener el tipo de conjunto actual del modal
+        const currentSplitType = getCurrentSplitType();
+        const datasetId = document.getElementById('dataset').value;
+        
+        if (!datasetId) {
+            showNotification('Error', 'No hay dataset seleccionado', 'error');
+            return;
+        }
+        
+        // Obtener configuración actual
+        const splitConfig = getDataSplitConfig();
+        const targetColumns = Array.from(document.querySelectorAll('.target-checkbox:checked')).map(cb => cb.value);
+        const predictorColumns = Array.from(document.querySelectorAll('.predictor-checkbox:checked')).map(cb => cb.value);
+        
+        // Preparar datos para la descarga
+        const requestData = {
+            dataset_id: datasetId,
+            split_type: currentSplitType,
+            split_method: splitConfig.split_method,
+            split_config: splitConfig.split_config,
+            train_size: splitConfig.train_split,
+            val_size: splitConfig.val_split,
+            test_size: splitConfig.test_split,
+            random_state: splitConfig.random_state,
+            target_columns: targetColumns,
+            predictor_columns: predictorColumns,
+            format: format
+        };
+        
+        // Mostrar notificación de descarga
+        showNotification('Info', `Preparando descarga en formato ${format.toUpperCase()}...`, 'info');
+        
+        // Crear formulario temporal para la descarga
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/api/datasets/download-split/';
+        form.style.display = 'none';
+        
+        // Añadir token CSRF
+        const csrfToken = getCookie('csrftoken');
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = csrfToken;
+        form.appendChild(csrfInput);
+        
+        // Añadir datos como campo JSON
+        const dataInput = document.createElement('input');
+        dataInput.type = 'hidden';
+        dataInput.name = 'data';
+        dataInput.value = JSON.stringify(requestData);
+        form.appendChild(dataInput);
+        
+        // Usar fetch con blob para manejar la descarga
+        const response = await fetch('/api/datasets/download-split/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(requestData)
+        });
+        
+        if (!response.ok) {
+            throw new Error('Error al generar el archivo');
+        }
+        
+        // Obtener el blob del archivo
+        const blob = await response.blob();
+        
+        // Obtener el nombre del archivo del header Content-Disposition
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = `split_data_${currentSplitType}.${format}`;
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+            if (filenameMatch) {
+                filename = filenameMatch[1];
+            }
+        }
+        
+        // Crear link de descarga
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Limpiar
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showNotification('Succès', `Archivo ${format.toUpperCase()} descargado correctamente`, 'success');
+        
+    } catch (error) {
+        console.error('Error al exportar datos:', error);
+        showNotification('Error', `Error al exportar datos: ${error.message}`, 'error');
+    }
+}
+
+// Función auxiliar para obtener el tipo de conjunto actual
+function getCurrentSplitType() {
+    const modalTitle = document.getElementById('dataPreviewType').textContent.toLowerCase();
+    const splitTypeMap = {
+        'entrenamiento': 'train',
+        'validation': 'val',
+        'test': 'test'
+    };
+    return splitTypeMap[modalTitle] || 'train';
 }
 </script>
 

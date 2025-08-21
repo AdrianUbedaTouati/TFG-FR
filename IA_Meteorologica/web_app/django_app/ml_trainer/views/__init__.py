@@ -19,3 +19,5 @@ from .prediction_views import *
 from .export_views import *
 from .normalization_views import *
 from .report_views import *
+from .split_count_view import *
+from .split_download_view import *
