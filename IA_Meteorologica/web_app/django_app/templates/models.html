@@ -5,6 +5,16 @@
 
 {% block extra_css %}
 <style>
+    /* Styles pour les cartes de division de données clickables */
+    .data-split-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+    
+    .data-split-card:active {
+        transform: translateY(-2px);
+    }
+    
     /* Styles similaires aux cartes de datasets */
     .model-card {
         background: rgba(10, 14, 39, 0.8);
@@ -988,9 +998,10 @@
                                         <div class="row g-3">
                                             <!-- Zone Entraînement -->
                                             <div class="col-md-4">
-                                                <div class="card border-primary">
+                                                <div class="card border-primary data-split-card" onclick="showDataPreview('train')" style="cursor: pointer; transition: all 0.3s ease;">
                                                     <div class="card-header bg-primary text-white text-center">
                                                         <h6 class="mb-0"><i class="bi bi-play-fill"></i> Entraînement</h6>
+                                                        <small class="text-white-50">Cliquez pour voir les données</small>
                                                     </div>
                                                     <div class="card-body text-center">
                                                         <div class="display-6 text-primary" id="trainCount">--</div>
@@ -1007,9 +1018,10 @@
                                             
                                             <!-- Zone Validation -->
                                             <div class="col-md-4">
-                                                <div class="card border-warning">
+                                                <div class="card border-warning data-split-card" onclick="showDataPreview('val')" style="cursor: pointer; transition: all 0.3s ease;">
                                                     <div class="card-header bg-warning text-dark text-center">
                                                         <h6 class="mb-0"><i class="bi bi-check-circle"></i> Validation</h6>
+                                                        <small class="text-dark-50">Cliquez pour voir les données</small>
                                                     </div>
                                                     <div class="card-body text-center">
                                                         <div class="display-6 text-warning" id="valCount">--</div>
@@ -1026,9 +1038,10 @@
                                             
                                             <!-- Zone Test -->
                                             <div class="col-md-4">
-                                                <div class="card border-success">
+                                                <div class="card border-success data-split-card" onclick="showDataPreview('test')" style="cursor: pointer; transition: all 0.3s ease;">
                                                     <div class="card-header bg-success text-white text-center">
                                                         <h6 class="mb-0"><i class="bi bi-clipboard-check"></i> Test</h6>
+                                                        <small class="text-white-50">Cliquez pour voir les données</small>
                                                     </div>
                                                     <div class="card-body text-center">
                                                         <div class="display-6 text-success" id="testCount">--</div>
@@ -5491,7 +5504,439 @@ window.createModelOnly = function() {
         originalCreateModelOnly();
     }
 };
+
+// Función principal para mostrar vista previa de datos
+function showDataPreview(splitType) {
+    const datasetId = document.getElementById('dataset').value;
+    
+    if (!datasetId) {
+        showNotification('Error', 'Seleccione primero un dataset', 'error');
+        return;
+    }
+    
+    // Configurar el modal según el tipo de conjunto
+    setupPreviewModal(splitType);
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('dataPreviewModal'));
+    modal.show();
+    
+    // Cargar datos de vista previa
+    loadDataPreview(splitType, datasetId);
+}
+
+// Configurar el modal según el tipo de conjunto
+function setupPreviewModal(splitType) {
+    const modalTitle = document.getElementById('dataPreviewType');
+    const setName = document.getElementById('previewSetName');
+    const infoCard = document.getElementById('previewInfoCard');
+    const badge = document.getElementById('previewPercentage');
+    const count = document.getElementById('previewCount');
+    
+    // Configuración según el tipo
+    const config = {
+        'train': {
+            title: 'Entrenamiento',
+            name: 'Conjunto de Entrenamiento',
+            cardClass: 'border-primary',
+            badgeClass: 'bg-primary',
+            countClass: 'text-primary',
+            count: document.getElementById('trainCount').textContent,
+            percentage: document.getElementById('trainPercentage').textContent
+        },
+        'val': {
+            title: 'Validation',
+            name: 'Conjunto de Validación',
+            cardClass: 'border-warning',
+            badgeClass: 'bg-warning text-dark',
+            countClass: 'text-warning',
+            count: document.getElementById('valCount').textContent,
+            percentage: document.getElementById('valPercentage').textContent
+        },
+        'test': {
+            title: 'Test',
+            name: 'Conjunto de Test',
+            cardClass: 'border-success',
+            badgeClass: 'bg-success',
+            countClass: 'text-success',
+            count: document.getElementById('testCount').textContent,
+            percentage: document.getElementById('testPercentage').textContent
+        }
+    };
+    
+    const cfg = config[splitType];
+    modalTitle.textContent = cfg.title;
+    setName.textContent = cfg.name;
+    count.textContent = cfg.count;
+    count.className = `display-6 mb-2 ${cfg.countClass}`;
+    badge.textContent = cfg.percentage;
+    badge.className = `badge ${cfg.badgeClass}`;
+    
+    // Actualizar clase del card
+    infoCard.className = `card text-center ${cfg.cardClass}`;
+}
+
+// Cargar datos de vista previa
+async function loadDataPreview(splitType, datasetId) {
+    // Mostrar loading
+    document.getElementById('dataPreviewLoading').style.display = 'block';
+    document.getElementById('dataPreviewError').style.display = 'none';
+    document.getElementById('dataPreviewContent').style.display = 'none';
+    
+    try {
+        // Obtener configuración actual de división
+        const splitConfig = getDataSplitConfig();
+        const targetColumns = Array.from(document.querySelectorAll('.target-checkbox:checked')).map(cb => cb.value);
+        const predictorColumns = Array.from(document.querySelectorAll('.predictor-checkbox:checked')).map(cb => cb.value);
+        
+        // Actualizar información de división en el modal
+        updateSplitInfo(splitConfig, targetColumns, predictorColumns);
+        
+        // Preparar request para vista previa
+        const requestData = {
+            dataset_id: datasetId,
+            split_type: splitType,
+            split_method: splitConfig.split_method,
+            split_config: splitConfig.split_config,
+            train_size: splitConfig.train_split,
+            val_size: splitConfig.val_split,
+            test_size: splitConfig.test_split,
+            random_state: splitConfig.random_state,
+            target_columns: targetColumns,
+            predictor_columns: predictorColumns,
+            preview_rows: 20
+        };
+        
+        // Llamar a la API para obtener vista previa (simulada por ahora)
+        const response = await simulateDataPreviewAPI(requestData);
+        
+        // Mostrar datos
+        displayPreviewData(response);
+        
+    } catch (error) {
+        console.error('Error cargando vista previa:', error);
+        showPreviewError(error.message);
+    }
+}
+
+// Simular API de vista previa (reemplazar con llamada real)
+async function simulateDataPreviewAPI(requestData) {
+    // Simular delay de API
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Obtener datos del dataset original
+    const response = await fetch(`/api/datasets/${requestData.dataset_id}/`);
+    const dataset = await response.json();
+    
+    // Calcular índices según método de división
+    const totalRows = dataset.row_count;
+    const trainSize = Math.floor(totalRows * requestData.train_size);
+    const valSize = Math.floor(totalRows * requestData.val_size);
+    
+    let startIdx, endIdx, sampleData;
+    
+    switch (requestData.split_type) {
+        case 'train':
+            startIdx = 0;
+            endIdx = trainSize;
+            break;
+        case 'val':
+            startIdx = trainSize;
+            endIdx = trainSize + valSize;
+            break;
+        case 'test':
+            startIdx = trainSize + valSize;
+            endIdx = totalRows;
+            break;
+    }
+    
+    // Simular datos de muestra
+    const columns = [...requestData.predictor_columns, ...requestData.target_columns];
+    sampleData = generateSampleData(columns, Math.min(requestData.preview_rows, endIdx - startIdx), startIdx);
+    
+    return {
+        split_type: requestData.split_type,
+        split_method: requestData.split_method,
+        total_rows: endIdx - startIdx,
+        start_index: startIdx,
+        end_index: endIdx,
+        columns: columns,
+        data: sampleData,
+        statistics: generateSampleStats(columns, sampleData)
+    };
+}
+
+// Generar datos de muestra simulados
+function generateSampleData(columns, numRows, startIdx) {
+    const data = [];
+    for (let i = 0; i < numRows; i++) {
+        const row = {};
+        columns.forEach(col => {
+            // Generar valores de ejemplo según el tipo de columna
+            if (col.toLowerCase().includes('temp')) {
+                row[col] = (Math.random() * 40 - 10).toFixed(2); // Temperatura -10 a 30
+            } else if (col.toLowerCase().includes('humid')) {
+                row[col] = (Math.random() * 100).toFixed(1); // Humedad 0-100%
+            } else if (col.toLowerCase().includes('pressure')) {
+                row[col] = (1000 + Math.random() * 100).toFixed(1); // Presión 1000-1100
+            } else {
+                row[col] = (Math.random() * 100).toFixed(2); // Valor genérico
+            }
+        });
+        row['_index'] = startIdx + i; // Índice original
+        data.push(row);
+    }
+    return data;
+}
+
+// Generar estadísticas de muestra
+function generateSampleStats(columns, data) {
+    const stats = {};
+    columns.forEach(col => {
+        const values = data.map(row => parseFloat(row[col])).filter(v => !isNaN(v));
+        if (values.length > 0) {
+            stats[col] = {
+                count: values.length,
+                mean: (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2),
+                min: Math.min(...values).toFixed(2),
+                max: Math.max(...values).toFixed(2),
+                std: Math.sqrt(values.map(x => Math.pow(x - stats[col]?.mean || 0, 2)).reduce((a, b) => a + b, 0) / values.length).toFixed(2)
+            };
+        }
+    });
+    return stats;
+}
+
+// Actualizar información de división
+function updateSplitInfo(splitConfig, targetColumns, predictorColumns) {
+    document.getElementById('previewSplitMethod').textContent = getSplitMethodName(splitConfig.split_method);
+    document.getElementById('previewTargetCount').textContent = targetColumns.length;
+    document.getElementById('previewPredictorCount').textContent = predictorColumns.length;
+}
+
+// Obtener nombre legible del método de división
+function getSplitMethodName(method) {
+    const names = {
+        'random': 'Aléatoire',
+        'stratified': 'Stratifiée',
+        'group': 'Par Groupes',
+        'temporal': 'Temporelle',
+        'sequential': 'Séquentielle'
+    };
+    return names[method] || method;
+}
+
+// Mostrar datos de vista previa
+function displayPreviewData(response) {
+    // Ocultar loading
+    document.getElementById('dataPreviewLoading').style.display = 'none';
+    document.getElementById('dataPreviewContent').style.display = 'block';
+    
+    // Actualizar rango de índices
+    document.getElementById('previewIndexRange').textContent = 
+        `${response.start_index} - ${response.end_index - 1} (${response.total_rows} filas)`;
+    
+    // Crear tabla
+    const table = document.getElementById('dataPreviewTable');
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+    
+    // Limpiar tabla
+    thead.innerHTML = '';
+    tbody.innerHTML = '';
+    
+    // Crear headers
+    const headerRow = document.createElement('tr');
+    headerRow.innerHTML = '<th>Índice Original</th>';
+    response.columns.forEach(col => {
+        headerRow.innerHTML += `<th>${col}</th>`;
+    });
+    thead.appendChild(headerRow);
+    
+    // Crear filas
+    response.data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><strong>${row._index}</strong></td>`;
+        response.columns.forEach(col => {
+            tr.innerHTML += `<td>${row[col]}</td>`;
+        });
+        tbody.appendChild(tr);
+    });
+    
+    // Mostrar estadísticas
+    displayStatistics(response.statistics);
+    displayColumnInfo(response.columns);
+}
+
+// Mostrar estadísticas
+function displayStatistics(stats) {
+    const container = document.getElementById('dataPreviewStats');
+    container.innerHTML = '';
+    
+    Object.entries(stats).slice(0, 5).forEach(([col, stat]) => {
+        container.innerHTML += `
+            <div class="mb-2">
+                <strong>${col}:</strong><br>
+                <small>Promedio: ${stat.mean}, Min: ${stat.min}, Max: ${stat.max}</small>
+            </div>
+        `;
+    });
+}
+
+// Mostrar información de columnas
+function displayColumnInfo(columns) {
+    const container = document.getElementById('dataPreviewColumnInfo');
+    container.innerHTML = `
+        <div class="mb-2"><strong>Total de columnas:</strong> ${columns.length}</div>
+        <div class="small">
+            ${columns.slice(0, 10).join(', ')}${columns.length > 10 ? '...' : ''}
+        </div>
+    `;
+}
+
+// Mostrar error en vista previa
+function showPreviewError(message) {
+    document.getElementById('dataPreviewLoading').style.display = 'none';
+    document.getElementById('dataPreviewError').style.display = 'block';
+    document.getElementById('dataPreviewErrorMessage').textContent = message;
+}
+
+// Refrescar vista previa
+function refreshPreview() {
+    const modal = document.getElementById('dataPreviewModal');
+    const currentSplitType = modal.querySelector('#dataPreviewType').textContent.toLowerCase();
+    const splitTypeMap = {
+        'entrenamiento': 'train',
+        'validation': 'val',
+        'test': 'test'
+    };
+    
+    const datasetId = document.getElementById('dataset').value;
+    loadDataPreview(splitTypeMap[currentSplitType] || 'train', datasetId);
+}
+
+// Exportar datos de vista previa
+function exportPreviewData(format) {
+    showNotification('Info', `Exportación en formato ${format.toUpperCase()} próximamente disponible`, 'info');
+}
 </script>
+
+<!-- Modal para Vista Previa de Datos -->
+<div class="modal fade" id="dataPreviewModal" tabindex="-1" aria-labelledby="dataPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="dataPreviewModalLabel">
+                    <i class="bi bi-table"></i> Vista Previa de Datos - <span id="dataPreviewType">Entrenamiento</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Información del conjunto -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card text-center" id="previewInfoCard">
+                            <div class="card-body">
+                                <h6 class="card-title" id="previewSetName">Conjunto de Entrenamiento</h6>
+                                <div class="display-6 mb-2" id="previewCount">--</div>
+                                <small class="text-muted">échantillons</small>
+                                <div class="mt-2">
+                                    <span class="badge" id="previewPercentage">--%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Información de División</h6>
+                                <div class="row text-center">
+                                    <div class="col-md-3">
+                                        <strong>Método:</strong> <span id="previewSplitMethod">--</span>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Rango de Índices:</strong> <span id="previewIndexRange">--</span>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Variables Objetivo:</strong> <span id="previewTargetCount">--</span>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Variables Predictivas:</strong> <span id="previewPredictorCount">--</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Loading state -->
+                <div id="dataPreviewLoading" class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="mt-2">Cargando vista previa de datos...</p>
+                </div>
+                
+                <!-- Error state -->
+                <div id="dataPreviewError" class="alert alert-danger" style="display: none;">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Error:</strong> <span id="dataPreviewErrorMessage">No se pudieron cargar los datos</span>
+                </div>
+                
+                <!-- Data table -->
+                <div id="dataPreviewContent" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6>Primeras 20 filas del conjunto</h6>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="exportPreviewData('csv')">
+                                <i class="bi bi-download"></i> CSV
+                            </button>
+                            <button type="button" class="btn btn-outline-success btn-sm" onclick="exportPreviewData('excel')">
+                                <i class="bi bi-file-excel"></i> Excel
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Responsive table wrapper -->
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="dataPreviewTable">
+                            <thead class="table-dark">
+                                <!-- Headers will be populated dynamically -->
+                            </thead>
+                            <tbody>
+                                <!-- Rows will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Data summary -->
+                    <div class="mt-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Resumen Estadístico</h6>
+                                <div id="dataPreviewStats">
+                                    <!-- Statistics will be populated dynamically -->
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Información de Columnas</h6>
+                                <div id="dataPreviewColumnInfo">
+                                    <!-- Column info will be populated dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" onclick="refreshPreview()">
+                    <i class="bi bi-arrow-clockwise"></i> Actualizar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Include Random Forest configuration script -->
 <script src="{% static 'js/random-forest-config-v2.js' %}"></script>
