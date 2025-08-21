@@ -195,6 +195,27 @@ class ModelDefinition(models.Model):
         help_text='Configuración de división por defecto'
     )
     
+    # Default execution configuration
+    default_execution_method = models.CharField(
+        max_length=30,
+        choices=[
+            ('standard', 'Ejecución Estándar'),
+            ('kfold', 'K-Fold Cross Validation'),
+            ('stratified_kfold', 'Stratified K-Fold CV'),
+            ('time_series_split', 'Time Series Split'),
+            ('leave_one_out', 'Leave-One-Out CV'),
+            ('repeated_kfold', 'Repeated K-Fold CV'),
+            ('repeated_stratified_kfold', 'Repeated Stratified K-Fold CV'),
+        ],
+        default='standard',
+        help_text='Método de ejecución por defecto'
+    )
+    default_execution_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Configuración de ejecución por defecto'
+    )
+    
     def __str__(self):
         return f"{self.name} ({self.get_model_type_display()})"
     
@@ -294,6 +315,28 @@ class TrainingSession(models.Model):
         null=True,
         blank=True,
         help_text='Semilla global para reproducibilidad'
+    )
+    
+    # Execution configuration (Module 2)
+    EXECUTION_METHOD_CHOICES = [
+        ('standard', 'Ejecución Estándar'),
+        ('kfold', 'K-Fold Cross Validation'),
+        ('stratified_kfold', 'Stratified K-Fold CV'),
+        ('time_series_split', 'Time Series Split'),
+        ('leave_one_out', 'Leave-One-Out CV'),
+        ('repeated_kfold', 'Repeated K-Fold CV'),
+        ('repeated_stratified_kfold', 'Repeated Stratified K-Fold CV'),
+    ]
+    execution_method = models.CharField(
+        max_length=30,
+        choices=EXECUTION_METHOD_CHOICES,
+        default='standard',
+        help_text='Método de ejecución del entrenamiento'
+    )
+    execution_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Configuración específica del método de ejecución'
     )
     
     # Metrics

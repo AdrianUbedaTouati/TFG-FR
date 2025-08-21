@@ -1075,17 +1075,14 @@
                                             <div class="col-12">
                                                 <div class="alert alert-info">
                                                     <div class="row text-center">
-                                                        <div class="col-md-3">
-                                                            <strong>Total Dataset:</strong> <span id="totalDatasetCount">--</span> échantillons
+                                                        <div class="col-md-4">
+                                                            <strong>Total Dataset:</strong> <span id="totalDatasetCount">0</span> échantillons
                                                         </div>
-                                                        <div class="col-md-3">
-                                                            <strong>Après Filtres:</strong> <span id="filteredDatasetCount">--</span> échantillons
+                                                        <div class="col-md-4">
+                                                            <strong>Variables Prédictives:</strong> <span id="predictorCount">0</span>
                                                         </div>
-                                                        <div class="col-md-3">
-                                                            <strong>Variables Prédictives:</strong> <span id="predictorCount">--</span>
-                                                        </div>
-                                                        <div class="col-md-3">
-                                                            <strong>Variables Cibles:</strong> <span id="targetCount">--</span>
+                                                        <div class="col-md-4">
+                                                            <strong>Variables Cibles:</strong> <span id="targetCount">0</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1099,10 +1096,77 @@
                             <!-- MODULE 2: (À définir) -->
                             <div class="card mb-3">
                                 <div class="card-header bg-info text-white">
-                                    <h6 class="mb-0">🔧 Module 2: Configuration Avancée (En développement)</h6>
+                                    <h6 class="mb-0">🔧 Module 2: Configuración de Ejecución</h6>
                                 </div>
                                 <div class="card-body">
-                                    <p class="text-muted">Ce module sera défini prochainement...</p>
+                                    <div class="form-group">
+                                        <label for="executionMethod">Método de Ejecución</label>
+                                        <select class="form-control" id="executionMethod" onchange="updateExecutionConfig()">
+                                            <option value="standard">Ejecución Estándar (sin cross-validation)</option>
+                                            <option value="kfold">K-Fold Cross Validation</option>
+                                            <option value="stratified_kfold">Stratified K-Fold Cross Validation</option>
+                                            <option value="time_series_split">Time Series Split</option>
+                                            <option value="leave_one_out">Leave-One-Out Cross Validation</option>
+                                            <option value="repeated_kfold">Repeated K-Fold Cross Validation</option>
+                                            <option value="repeated_stratified_kfold">Repeated Stratified K-Fold Cross Validation</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Configuración específica para K-Fold y variantes -->
+                                    <div id="kfoldConfig" style="display: none;">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label for="kfoldSplits">Número de Folds (K)</label>
+                                                    <input type="number" class="form-control" id="kfoldSplits" min="2" max="20" value="5">
+                                                    <small class="form-text text-muted">Número de divisiones para cross-validation</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6" id="kfoldShuffleDiv">
+                                                <div class="form-group">
+                                                    <div class="form-check mt-4">
+                                                        <input type="checkbox" class="form-check-input" id="kfoldShuffle" checked>
+                                                        <label class="form-check-label" for="kfoldShuffle">
+                                                            Mezclar datos antes de dividir
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Configuración para Repeated K-Fold -->
+                                    <div id="repeatedConfig" style="display: none;">
+                                        <div class="form-group">
+                                            <label for="nRepeats">Número de Repeticiones</label>
+                                            <input type="number" class="form-control" id="nRepeats" min="2" max="50" value="10">
+                                            <small class="form-text text-muted">Cuántas veces repetir el proceso de K-Fold</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Configuración para Time Series Split -->
+                                    <div id="timeSeriesConfig" style="display: none;">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label for="tsSplits">Número de Splits</label>
+                                                    <input type="number" class="form-control" id="tsSplits" min="2" max="20" value="5">
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label for="tsGap">Gap entre Train y Test</label>
+                                                    <input type="number" class="form-control" id="tsGap" min="0" value="0">
+                                                    <small class="form-text text-muted">Período de separación temporal</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Información sobre el método seleccionado -->
+                                    <div id="executionInfo" class="alert alert-info mt-3" style="display: none;">
+                                        <i class="bi bi-info-circle"></i> <span id="executionInfoText"></span>
+                                    </div>
                                 </div>
                             </div>
                             <div class="mb-3" id="epochsContainer">
@@ -3539,6 +3603,10 @@ function loadDatasetColumns() {
             
             const dtypes = data.dtypes || {};
             
+            // Actualizar información del dataset con valores reales
+            const datasetRows = data.shape ? data.shape[0] : 0;
+            updateDatasetInfoElements(datasetRows, 0, 0);
+            
             // Créer les checkboxes pour les variables cibles et prédictives
             targetDiv.innerHTML = '';
             predictorDiv.innerHTML = '';
@@ -3588,6 +3656,17 @@ function loadDatasetColumns() {
             
             // Appliquer les règles du modèle sélectionné
             applyModelRules();
+            
+            // Añadir event listeners para actualizar contadores
+            document.querySelectorAll('.target-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', updateVariableCounters);
+            });
+            document.querySelectorAll('.predictor-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', updateVariableCounters);
+            });
+            
+            // Actualizar contadores iniciales
+            updateVariableCounters();
             
             // Commented out to avoid interfering with modal display
             // showNotification('Succès', `${columns.length} colonnes chargées`, 'success');
@@ -3690,6 +3769,9 @@ function updateVariableRestrictions() {
             checkbox.disabled = false;
         });
     }
+    
+    // Actualizar contadores después de aplicar las reglas
+    updateVariableCounters();
 }
 
 // Toggle du mode expert
@@ -3967,10 +4049,15 @@ function createModelOnly() {
     // Obtener la configuración de división de datos
     const dataSplitConfig = getDataSplitConfig();
     
+    // Obtener configuración de ejecución del Module 2
+    const executionConfig = getExecutionConfig();
+    
     // Integrar la configuración de división en los hiperparámetros
     modelConfig = {
         ...modelConfig,
-        ...dataSplitConfig
+        ...dataSplitConfig,
+        execution_method: executionConfig.method,
+        execution_config: executionConfig.config
     };
     
     const modelDefinitionData = {
@@ -3986,7 +4073,10 @@ function createModelOnly() {
         use_custom_architecture: expertMode && networkLayers.length > 0,
         // Agregar configuración de división de datos
         default_split_method: dataSplitConfig.split_method,
-        default_split_config: dataSplitConfig.split_config
+        default_split_config: dataSplitConfig.split_config,
+        // Agregar configuración de ejecución
+        default_execution_method: executionConfig.method,
+        default_execution_config: executionConfig.config
     };
     
     showLoading();
@@ -5498,14 +5588,14 @@ function updateDataSplitVisualization() {
                         counts.val_percentage, 
                         counts.test_percentage
                     );
-                    updateDatasetInfoElements(totalSamples, filteredSamples, predictorCount, targetCount);
+                    updateDatasetInfoElements(totalSamples, predictorCount, targetCount);
                 } else {
                     // Fallback: usar cálculo aproximado si falla
                     const trainSamples = Math.floor(filteredSamples * trainPct / 100);
                     const valSamples = Math.floor(filteredSamples * valPct / 100);
                     const testSamples = filteredSamples - trainSamples - valSamples;
                     updateSplitVisualizationElements(trainSamples, valSamples, testSamples, trainPct, valPct, testPct);
-                    updateDatasetInfoElements(totalSamples, filteredSamples, predictorCount, targetCount);
+                    updateDatasetInfoElements(totalSamples, predictorCount, targetCount);
                 }
             })
             .catch(error => {
@@ -5515,7 +5605,7 @@ function updateDataSplitVisualization() {
                 const valSamples = Math.floor(filteredSamples * valPct / 100);
                 const testSamples = filteredSamples - trainSamples - valSamples;
                 updateSplitVisualizationElements(trainSamples, valSamples, testSamples, trainPct, valPct, testPct);
-                updateDatasetInfoElements(totalSamples, filteredSamples, predictorCount, targetCount);
+                updateDatasetInfoElements(totalSamples, predictorCount, targetCount);
             });
             
             // Mostrar la visualización
@@ -5546,9 +5636,8 @@ function updateSplitVisualizationElements(trainSamples, valSamples, testSamples,
 }
 
 // Función para actualizar información del dataset
-function updateDatasetInfoElements(totalSamples, filteredSamples, predictorCount, targetCount) {
+function updateDatasetInfoElements(totalSamples, predictorCount, targetCount) {
     document.getElementById('totalDatasetCount').textContent = totalSamples.toLocaleString();
-    document.getElementById('filteredDatasetCount').textContent = filteredSamples.toLocaleString();
     document.getElementById('predictorCount').textContent = predictorCount;
     document.getElementById('targetCount').textContent = targetCount;
 }
@@ -5556,6 +5645,20 @@ function updateDatasetInfoElements(totalSamples, filteredSamples, predictorCount
 // Función para actualizar la visualización cuando cambian las variables
 function updateVariableVisualization() {
     // Esta función se puede llamar cuando se seleccionan/deseleccionan variables
+    updateDataSplitVisualization();
+}
+
+// Función para actualizar los contadores de variables
+function updateVariableCounters() {
+    const targetCount = document.querySelectorAll('.target-checkbox:checked').length;
+    const predictorCount = document.querySelectorAll('.predictor-checkbox:checked:not(:disabled)').length;
+    const totalSamples = parseInt(document.getElementById('totalDatasetCount').textContent.replace(/,/g, '')) || 0;
+    
+    // Actualizar solo los contadores de predictor y target
+    document.getElementById('predictorCount').textContent = predictorCount;
+    document.getElementById('targetCount').textContent = targetCount;
+    
+    // También actualizar la visualización de división
     updateDataSplitVisualization();
 }
 
@@ -5664,6 +5767,100 @@ function displayTargetStatisticsFromResponse(targetStats) {
     
     // Actualizar contenido
     contentDiv.innerHTML = statisticsHTML;
+}
+
+// Module 2: Execution Configuration Functions
+function updateExecutionConfig() {
+    const method = document.getElementById('executionMethod').value;
+    
+    // Hide all config sections
+    document.getElementById('kfoldConfig').style.display = 'none';
+    document.getElementById('repeatedConfig').style.display = 'none';
+    document.getElementById('timeSeriesConfig').style.display = 'none';
+    document.getElementById('executionInfo').style.display = 'none';
+    
+    // Show relevant config based on method
+    let infoText = '';
+    
+    switch(method) {
+        case 'standard':
+            infoText = 'Usa la división de datos del Module 1. No aplica cross-validation.';
+            break;
+            
+        case 'kfold':
+            document.getElementById('kfoldConfig').style.display = 'block';
+            document.getElementById('kfoldShuffleDiv').style.display = 'block';
+            infoText = 'Divide los datos en K partes iguales. Entrena K veces usando K-1 partes para entrenar y 1 para validar.';
+            break;
+            
+        case 'stratified_kfold':
+            document.getElementById('kfoldConfig').style.display = 'block';
+            document.getElementById('kfoldShuffleDiv').style.display = 'block';
+            infoText = 'Similar a K-Fold pero mantiene la proporción de clases en cada fold.';
+            break;
+            
+        case 'time_series_split':
+            document.getElementById('timeSeriesConfig').style.display = 'block';
+            infoText = 'Para datos temporales. Cada fold usa más datos de entrenamiento que el anterior.';
+            break;
+            
+        case 'leave_one_out':
+            infoText = 'Entrena con todos los datos menos uno. Se repite para cada muestra. Muy costoso computacionalmente.';
+            break;
+            
+        case 'repeated_kfold':
+            document.getElementById('kfoldConfig').style.display = 'block';
+            document.getElementById('repeatedConfig').style.display = 'block';
+            document.getElementById('kfoldShuffleDiv').style.display = 'none';
+            infoText = 'Repite K-Fold múltiples veces con diferentes divisiones aleatorias.';
+            break;
+            
+        case 'repeated_stratified_kfold':
+            document.getElementById('kfoldConfig').style.display = 'block';
+            document.getElementById('repeatedConfig').style.display = 'block';
+            document.getElementById('kfoldShuffleDiv').style.display = 'none';
+            infoText = 'Repite Stratified K-Fold múltiples veces con diferentes divisiones aleatorias.';
+            break;
+    }
+    
+    if (infoText) {
+        document.getElementById('executionInfo').style.display = 'block';
+        document.getElementById('executionInfoText').textContent = infoText;
+    }
+}
+
+function getExecutionConfig() {
+    const method = document.getElementById('executionMethod').value;
+    const config = {
+        method: method,
+        config: {}
+    };
+    
+    // Get random state from Module 1
+    const randomStateValue = document.getElementById('globalRandomState').value;
+    const randomState = randomStateValue ? parseInt(randomStateValue) : null;
+    
+    if (randomState !== null) {
+        config.config.random_state = randomState;
+    }
+    
+    // Add method-specific configuration
+    if (method === 'kfold' || method === 'stratified_kfold') {
+        config.config.n_splits = parseInt(document.getElementById('kfoldSplits').value);
+        config.config.shuffle = document.getElementById('kfoldShuffle').checked;
+    }
+    
+    if (method === 'repeated_kfold' || method === 'repeated_stratified_kfold') {
+        config.config.n_splits = parseInt(document.getElementById('kfoldSplits').value);
+        config.config.n_repeats = parseInt(document.getElementById('nRepeats').value);
+    }
+    
+    if (method === 'time_series_split') {
+        config.config.n_splits = parseInt(document.getElementById('tsSplits').value);
+        config.config.gap = parseInt(document.getElementById('tsGap').value);
+    }
+    
+    return config;
 }
 
 // Función para cargar estadísticas de variables target en el modal (versión antigua, mantenida por compatibilidad)
