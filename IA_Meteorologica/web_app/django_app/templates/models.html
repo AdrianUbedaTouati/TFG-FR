@@ -5387,14 +5387,32 @@ function checkStratifiedCompatibility() {
 
 // Obtener la configuración de división de datos
 function getDataSplitConfig() {
+    // Obtener valores como porcentajes
+    const trainPct = parseInt(document.getElementById('trainSize').value) || 70;
+    const valPct = parseInt(document.getElementById('valSize').value) || 15;
+    const testPct = parseInt(document.getElementById('testSize').value) || 15;
+    
+    // Normalizar para que sumen exactamente 100
+    const total = trainPct + valPct + testPct;
+    
     const config = {
         split_method: document.getElementById('splitMethod').value,
-        train_split: parseFloat(document.getElementById('trainSize').value) / 100,
-        val_split: parseFloat(document.getElementById('valSize').value) / 100,
-        test_split: parseFloat(document.getElementById('testSize').value) / 100,
+        train_split: trainPct / total,
+        val_split: valPct / total,
+        test_split: testPct / total,
         random_state: document.getElementById('globalRandomState').value || null,
         split_config: {}
     };
+    
+    // Debug logging
+    console.log('Data Split Config Debug:');
+    console.log('Percentages:', { trainPct, valPct, testPct, total });
+    console.log('Normalized:', { 
+        train_split: config.train_split, 
+        val_split: config.val_split, 
+        test_split: config.test_split,
+        sum: config.train_split + config.val_split + config.test_split
+    });
     
     // Configuración específica según el método
     switch (config.split_method) {
@@ -5607,8 +5625,12 @@ async function loadDataPreview(splitType, datasetId) {
             preview_rows: 20
         };
         
-        // Llamar a la API para obtener vista previa (simulada por ahora)
-        const response = await simulateDataPreviewAPI(requestData);
+        // Debug logging
+        console.log('Preview request data:', requestData);
+        console.log('Split sizes sum:', requestData.train_size + requestData.val_size + requestData.test_size);
+        
+        // Llamar a la API real para obtener vista previa
+        const response = await fetchRealDataPreview(requestData);
         
         // Mostrar datos
         displayPreviewData(response);
@@ -5619,93 +5641,33 @@ async function loadDataPreview(splitType, datasetId) {
     }
 }
 
-// Simular API de vista previa (reemplazar con llamada real)
-async function simulateDataPreviewAPI(requestData) {
-    // Simular delay de API
-    await new Promise(resolve => setTimeout(resolve, 1000));
+// Llamar a la API real para obtener vista previa
+async function fetchRealDataPreview(requestData) {
+    const csrfToken = getCookie('csrftoken');
     
-    // Obtener datos del dataset original
-    const response = await fetch(`/api/datasets/${requestData.dataset_id}/`);
-    const dataset = await response.json();
+    const response = await fetch('/api/datasets/preview-split/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(requestData)
+    });
     
-    // Calcular índices según método de división
-    const totalRows = dataset.row_count;
-    const trainSize = Math.floor(totalRows * requestData.train_size);
-    const valSize = Math.floor(totalRows * requestData.val_size);
-    
-    let startIdx, endIdx, sampleData;
-    
-    switch (requestData.split_type) {
-        case 'train':
-            startIdx = 0;
-            endIdx = trainSize;
-            break;
-        case 'val':
-            startIdx = trainSize;
-            endIdx = trainSize + valSize;
-            break;
-        case 'test':
-            startIdx = trainSize + valSize;
-            endIdx = totalRows;
-            break;
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Error al obtener vista previa');
     }
     
-    // Simular datos de muestra
-    const columns = [...requestData.predictor_columns, ...requestData.target_columns];
-    sampleData = generateSampleData(columns, Math.min(requestData.preview_rows, endIdx - startIdx), startIdx);
+    const data = await response.json();
     
-    return {
-        split_type: requestData.split_type,
-        split_method: requestData.split_method,
-        total_rows: endIdx - startIdx,
-        start_index: startIdx,
-        end_index: endIdx,
-        columns: columns,
-        data: sampleData,
-        statistics: generateSampleStats(columns, sampleData)
-    };
-}
-
-// Generar datos de muestra simulados
-function generateSampleData(columns, numRows, startIdx) {
-    const data = [];
-    for (let i = 0; i < numRows; i++) {
-        const row = {};
-        columns.forEach(col => {
-            // Generar valores de ejemplo según el tipo de columna
-            if (col.toLowerCase().includes('temp')) {
-                row[col] = (Math.random() * 40 - 10).toFixed(2); // Temperatura -10 a 30
-            } else if (col.toLowerCase().includes('humid')) {
-                row[col] = (Math.random() * 100).toFixed(1); // Humedad 0-100%
-            } else if (col.toLowerCase().includes('pressure')) {
-                row[col] = (1000 + Math.random() * 100).toFixed(1); // Presión 1000-1100
-            } else {
-                row[col] = (Math.random() * 100).toFixed(2); // Valor genérico
-            }
-        });
-        row['_index'] = startIdx + i; // Índice original
-        data.push(row);
+    if (!data.success) {
+        throw new Error(data.error || 'Error desconocido');
     }
+    
     return data;
 }
 
-// Generar estadísticas de muestra
-function generateSampleStats(columns, data) {
-    const stats = {};
-    columns.forEach(col => {
-        const values = data.map(row => parseFloat(row[col])).filter(v => !isNaN(v));
-        if (values.length > 0) {
-            stats[col] = {
-                count: values.length,
-                mean: (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2),
-                min: Math.min(...values).toFixed(2),
-                max: Math.max(...values).toFixed(2),
-                std: Math.sqrt(values.map(x => Math.pow(x - stats[col]?.mean || 0, 2)).reduce((a, b) => a + b, 0) / values.length).toFixed(2)
-            };
-        }
-    });
-    return stats;
-}
 
 // Actualizar información de división
 function updateSplitInfo(splitConfig, targetColumns, predictorColumns) {
@@ -5758,7 +5720,9 @@ function displayPreviewData(response) {
         const tr = document.createElement('tr');
         tr.innerHTML = `<td><strong>${row._index}</strong></td>`;
         response.columns.forEach(col => {
-            tr.innerHTML += `<td>${row[col]}</td>`;
+            // Manejar valores nulos o undefined
+            const value = row[col] !== null && row[col] !== undefined ? row[col] : 'N/A';
+            tr.innerHTML += `<td>${value}</td>`;
         });
         tbody.appendChild(tr);
     });
@@ -5774,12 +5738,23 @@ function displayStatistics(stats) {
     container.innerHTML = '';
     
     Object.entries(stats).slice(0, 5).forEach(([col, stat]) => {
-        container.innerHTML += `
-            <div class="mb-2">
-                <strong>${col}:</strong><br>
-                <small>Promedio: ${stat.mean}, Min: ${stat.min}, Max: ${stat.max}</small>
-            </div>
-        `;
+        if (stat.mean !== undefined) {
+            // Columna numérica
+            container.innerHTML += `
+                <div class="mb-2">
+                    <strong>${col}:</strong><br>
+                    <small>Promedio: ${stat.mean.toFixed(4)}, Min: ${stat.min.toFixed(4)}, Max: ${stat.max.toFixed(4)}</small>
+                </div>
+            `;
+        } else if (stat.unique !== undefined) {
+            // Columna categórica
+            container.innerHTML += `
+                <div class="mb-2">
+                    <strong>${col}:</strong><br>
+                    <small>Valores únicos: ${stat.unique}, Más frecuente: ${stat.top}</small>
+                </div>
+            `;
+        }
     });
 }
 

@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from . import analysis_views
+from .views import preview_views
 
 urlpatterns = [
     # Dataset endpoints
@@ -19,6 +20,7 @@ urlpatterns = [
     path('datasets/<int:pk>/rename-column/', views.DatasetRenameColumnView.as_view(), name='dataset-rename-column'),
     path('datasets/<int:pk>/column-data/', views.DatasetColumnDataView.as_view(), name='dataset-column-data'),
     path('datasets/<int:pk>/filter-values/', views.DatasetFilterValuesView.as_view(), name='dataset-filter-values'),
+    path('datasets/preview-split/', preview_views.preview_split_data, name='dataset-preview-split'),
     path('datasets/<int:pk>/remove-nulls/', views.DatasetRemoveNullsView.as_view(), name='dataset-remove-nulls'),
     path('datasets/<int:pk>/remove-all-null-rows/', views.DatasetRemoveAllNullRowsView.as_view(), name='dataset-remove-all-null-rows'),
     path('datasets/<int:pk>/fill-nulls/', views.DatasetFillNullsView.as_view(), name='dataset-fill-nulls'),

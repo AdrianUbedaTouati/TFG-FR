@@ -45,8 +45,25 @@ class DataSplitStrategy(ABC):
         
         # Validar que las proporciones sumen 1
         total = train_size + val_size + test_size
-        if not (0.99 <= total <= 1.01):  # Permitir pequeño margen por precisión flotante
-            raise ValueError(f"Las proporciones deben sumar 1.0, actualmente suman {total}")
+        # Debug logging para ver qué valores estamos recibiendo
+        print(f"DEBUG DataSplitStrategy: train={train_size}, val={val_size}, test={test_size}, total={total}")
+        
+        # Permitir un margen más amplio para errores de precisión flotante
+        if not (0.98 <= total <= 1.02):  # Margen de ±2%
+            # Log detallado antes de lanzar el error
+            print(f"ERROR: Proporciones inválidas - train: {train_size} ({type(train_size)}), "
+                  f"val: {val_size} ({type(val_size)}), test: {test_size} ({type(test_size)})")
+            raise ValueError(f"Las proporciones deben sumar 1.0, actualmente suman {total:.4f}")
+        
+        # Normalizar las proporciones para que sumen exactamente 1.0
+        if total != 1.0:
+            self.train_size = train_size / total
+            self.val_size = val_size / total
+            self.test_size = test_size / total
+        else:
+            self.train_size = train_size
+            self.val_size = val_size
+            self.test_size = test_size
     
     @abstractmethod
     def split(self, X: np.ndarray, y: np.ndarray, **kwargs) -> Tuple[
@@ -434,8 +451,9 @@ class DataSplitter:
         test_size = config.get('test_size', 0.15)
         
         total = train_size + val_size + test_size
-        if not (0.99 <= total <= 1.01):
-            return False, f"Las proporciones deben sumar 1.0, actualmente suman {total}"
+        # Permitir un margen más amplio para errores de precisión flotante
+        if not (0.98 <= total <= 1.02):  # Margen de ±2%
+            return False, f"Las proporciones deben sumar 1.0, actualmente suman {total:.4f}"
         
         if any(size < 0 or size > 1 for size in [train_size, val_size, test_size]):
             return False, "Todas las proporciones deben estar entre 0 y 1"
