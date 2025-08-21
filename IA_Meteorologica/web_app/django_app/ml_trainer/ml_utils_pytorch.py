@@ -367,6 +367,13 @@ def build_pytorch_model(model_type, input_shape, output_shape, hyperparams, cust
 def train_pytorch_model(session, model, X_train, y_train, X_val, y_val, hyperparams):
     """Train PyTorch model"""
     
+    # Set random seeds for reproducibility
+    if hasattr(session, 'random_state') and session.random_state is not None:
+        torch.manual_seed(session.random_state)
+        torch.cuda.manual_seed_all(session.random_state)
+        np.random.seed(session.random_state)
+        print(f"[train_pytorch_model] Using global random_state: {session.random_state}")
+    
     # Convert to tensors
     X_train_tensor = torch.FloatTensor(X_train)
     y_train_tensor = torch.FloatTensor(y_train)

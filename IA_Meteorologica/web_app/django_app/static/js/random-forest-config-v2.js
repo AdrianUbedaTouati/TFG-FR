@@ -244,9 +244,7 @@ function applyRandomForestPreset() {
         
         // Performance
         document.getElementById('rfNJobs').value = config.n_jobs;
-        if (config.random_state) {
-            document.getElementById('rfRandomState').value = config.random_state;
-        }
+        // random_state ahora se maneja globalmente en el Módulo 1
         
         // Update dependent options
         toggleBootstrapOptions();
@@ -577,8 +575,7 @@ function getRandomForestConfig() {
         bootstrap: document.getElementById('rfBootstrap').checked,
         oob_score: document.getElementById('rfOobScore').checked,
         n_jobs: parseInt(document.getElementById('rfNJobs').value),
-        random_state: document.getElementById('rfRandomState').value ? 
-            parseInt(document.getElementById('rfRandomState').value) : null,
+        // random_state ahora se maneja globalmente en el Módulo 1
         
     };
     
@@ -642,9 +639,7 @@ function loadRandomForestConfiguration(hyperparams) {
     
     // Performance
     setValueWithRangeUpdate('rfNJobs', hyperparams.n_jobs || -1);
-    if (hyperparams.random_state !== null && hyperparams.random_state !== undefined) {
-        setValueWithRangeUpdate('rfRandomState', hyperparams.random_state);
-    }
+    // random_state ahora se maneja globalmente en el Módulo 1
     
     // Classification settings
     if (hyperparams.class_weight) {

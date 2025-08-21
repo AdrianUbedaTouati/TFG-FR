@@ -874,23 +874,112 @@
                                 </div>
                                 <small class="text-muted" id="predictorHelp">Cliquez pour sélectionner les variables d'entrée</small>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">Division des Données</label>
-                                <div class="row g-2">
-                                    <div class="col-md-4">
-                                        <label for="trainSize" class="form-label small">Entraînement (%)</label>
-                                        <input type="number" class="form-control" id="trainSize" min="40" max="80" value="70" required onchange="updateDataSplits()">
+                            <!-- MODULE 1: Division des Données -->
+                            <div class="card mb-3">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0">📊 Module 1: Division des Données</h6>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Méthode de division -->
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label for="splitMethod" class="form-label">
+                                                Méthode de Division
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Choisissez comment diviser vos données"></i>
+                                            </label>
+                                            <select class="form-select" id="splitMethod" onchange="updateSplitMethodOptions()">
+                                                <option value="random" selected>Aléatoire</option>
+                                                <option value="stratified">Stratifiée</option>
+                                                <option value="group">Par Groupes</option>
+                                                <option value="temporal">Temporelle</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="globalRandomState" class="form-label">
+                                                Semence Globale
+                                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Pour la reproductibilité de tous les modèles"></i>
+                                            </label>
+                                            <input type="number" class="form-control" id="globalRandomState" placeholder="Laisser vide pour aléatoire" min="0">
+                                        </div>
                                     </div>
-                                    <div class="col-md-4">
-                                        <label for="valSize" class="form-label small">Validation (%)</label>
-                                        <input type="number" class="form-control" id="valSize" min="10" max="30" value="15" required onchange="updateDataSplits()">
+                                    
+                                    <!-- Options spécifiques selon la méthode -->
+                                    <div id="splitMethodOptions">
+                                        <!-- Options Aléatoire (par défaut) -->
+                                        <div id="randomOptions" class="split-options">
+                                            <div class="alert alert-info">
+                                                <i class="bi bi-shuffle"></i> Division aléatoire simple avec mélange des données
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Options Stratifiée -->
+                                        <div id="stratifiedOptions" class="split-options" style="display: none;">
+                                            <div class="alert alert-warning">
+                                                <i class="bi bi-bar-chart"></i> Maintient les proportions de classes dans chaque ensemble (classification uniquement)
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Options Par Groupes -->
+                                        <div id="groupOptions" class="split-options" style="display: none;">
+                                            <div class="mb-3">
+                                                <label for="groupColumn" class="form-label">Colonne de Groupes</label>
+                                                <select class="form-select" id="groupColumn">
+                                                    <option value="">Sélectionner une colonne...</option>
+                                                </select>
+                                                <small class="text-muted">Les groupes ne seront pas mélangés entre train/val/test</small>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Options Temporelles -->
+                                        <div id="temporalOptions" class="split-options" style="display: none;">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <label for="temporalMethod" class="form-label">Méthode Temporelle</label>
+                                                    <select class="form-select" id="temporalMethod">
+                                                        <option value="holdout">Holdout (simple)</option>
+                                                        <option value="blocked">Blocs temporels</option>
+                                                        <option value="walk_forward">Walk-forward</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label for="temporalGap" class="form-label">Gap (périodes)</label>
+                                                    <input type="number" class="form-control" id="temporalGap" min="0" value="0">
+                                                    <small class="text-muted">Périodes de séparation entre ensembles</small>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="col-md-4">
-                                        <label for="testSize" class="form-label small">Test (%)</label>
-                                        <input type="number" class="form-control" id="testSize" min="10" max="30" value="15" readonly style="background-color: rgba(255,255,255,0.1);">
+                                    
+                                    <!-- Proportions -->
+                                    <div class="mt-3">
+                                        <label class="form-label">Proportions des Ensembles</label>
+                                        <div class="row g-2">
+                                            <div class="col-md-4">
+                                                <label for="trainSize" class="form-label small">Entraînement (%)</label>
+                                                <input type="number" class="form-control" id="trainSize" min="40" max="80" value="70" required onchange="updateDataSplits()">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="valSize" class="form-label small">Validation (%)</label>
+                                                <input type="number" class="form-control" id="valSize" min="10" max="30" value="15" required onchange="updateDataSplits()">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="testSize" class="form-label small">Test (%)</label>
+                                                <input type="number" class="form-control" id="testSize" min="10" max="30" value="15" readonly style="background-color: rgba(255,255,255,0.1);">
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">Les pourcentages doivent totaliser 100%</small>
                                     </div>
                                 </div>
-                                <small class="text-muted">Les pourcentages doivent totaliser 100%</small>
+                            </div>
+                            
+                            <!-- MODULE 2: (À définir) -->
+                            <div class="card mb-3">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0">🔧 Module 2: Configuration Avancée (En développement)</h6>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted">Ce module sera défini prochainement...</p>
+                                </div>
                             </div>
                             <div class="mb-3" id="epochsContainer">
                                 <label for="epochs" class="form-label">Époques (pour Deep Learning)</label>
@@ -1370,15 +1459,11 @@
                                     </div>
                                     
                                     <!-- Reproducibilité et exécution -->
-                                    <h6 class="text-info">Reproducibilité et exécution</h6>
+                                    <h6 class="text-info">Exécution</h6>
                                     <div class="row mb-3">
                                         <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label for="xgbRandomState" class="form-label">
-                                                    Random state / seed 
-                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Graine pour la reproductibilité."></i>
-                                                </label>
-                                                <input type="number" class="form-control" id="xgbRandomState" min="0" max="999999" placeholder="Laisser vide pour aléatoire">
+                                            <div class="alert alert-info p-2">
+                                                <small><i class="bi bi-info-circle"></i> La semilla aleatoria se configura globalmente en el <strong>Módulo 1: División de Datos</strong></small>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
@@ -1703,15 +1788,11 @@
                                     </div>
                                     
                                     <!-- Reproductibilité -->
-                                    <h6 class="text-info">Reproductibilité et verbosité</h6>
+                                    <h6 class="text-info">Reproductibilité</h6>
                                     <div class="row mb-3">
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label for="dtRandomState" class="form-label">
-                                                    Random state 
-                                                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Semilla (relevante si splitter='random')"></i>
-                                                </label>
-                                                <input type="number" class="form-control" id="dtRandomState" min="0" max="999999" placeholder="Laisser vide pour aléatoire">
+                                        <div class="col-md-12">
+                                            <div class="alert alert-info">
+                                                <i class="bi bi-info-circle"></i> La semilla aleatoria se configura globalmente en el <strong>Módulo 1: División de Datos</strong>
                                             </div>
                                         </div>
                                     </div>
@@ -3754,6 +3835,15 @@ function createModelOnly() {
         modelConfig.use_custom_architecture = false;
     }
     
+    // Obtener la configuración de división de datos
+    const dataSplitConfig = getDataSplitConfig();
+    
+    // Integrar la configuración de división en los hiperparámetros
+    modelConfig = {
+        ...modelConfig,
+        ...dataSplitConfig
+    };
+    
     const modelDefinitionData = {
         name: document.getElementById('modelName').value,
         description: `Modèle ${modelType.toUpperCase()} pour prédire ${targetColumns.join(', ')}`,
@@ -3764,7 +3854,10 @@ function createModelOnly() {
         default_config: modelConfig,
         hyperparameters: modelConfig,
         custom_architecture: expertMode && networkLayers.length > 0 ? networkLayers : null,
-        use_custom_architecture: expertMode && networkLayers.length > 0
+        use_custom_architecture: expertMode && networkLayers.length > 0,
+        // Agregar configuración de división de datos
+        default_split_method: dataSplitConfig.split_method,
+        default_split_config: dataSplitConfig.split_config
     };
     
     showLoading();
@@ -4586,8 +4679,7 @@ function getXGBoostConfig() {
             parseFloat(document.getElementById('xgbSkipDrop').value) : null,
         
         // Execution
-        random_state: document.getElementById('xgbRandomState').value ? 
-            parseInt(document.getElementById('xgbRandomState').value) : null,
+        // random_state ahora se maneja globalmente en el Módulo 1
         n_jobs: parseInt(document.getElementById('xgbNJobs').value),
         verbosity: parseInt(document.getElementById('xgbVerbosity').value)
     };
@@ -4931,8 +5023,7 @@ function getDecisionTreeConfig() {
             document.getElementById('dtOutputType').value : null,
         
         // Other
-        random_state: document.getElementById('dtRandomState').value ? 
-            parseInt(document.getElementById('dtRandomState').value) : null,
+        // random_state ahora se maneja globalmente en el Módulo 1
         validation_method: document.getElementById('dtValidationMethod').value
     };
     
@@ -5033,10 +5124,8 @@ function loadDecisionTreeConfiguration(hyperparams) {
         setValueWithRangeUpdate('dtOutputType', hyperparams.output_type);
     }
     
-    // Random state
-    if (hyperparams.random_state !== null && hyperparams.random_state !== undefined) {
-        setValueWithRangeUpdate('dtRandomState', hyperparams.random_state);
-    }
+    // Random state - ahora se maneja globalmente en el Módulo 1
+    // No necesitamos configurar random_state individual
     
     setValueWithRangeUpdate('dtValidationMethod', hyperparams.validation_method || 'holdout');
     
@@ -5099,6 +5188,118 @@ function updateDataSplitsConfig() {
     
     return true;
 }
+
+// Función para actualizar las opciones según el método de división seleccionado
+function updateSplitMethodOptions() {
+    const splitMethod = document.getElementById('splitMethod').value;
+    
+    // Ocultar todas las opciones
+    document.querySelectorAll('.split-options').forEach(el => {
+        el.style.display = 'none';
+    });
+    
+    // Mostrar las opciones correspondientes
+    const optionsId = splitMethod + 'Options';
+    const optionsElement = document.getElementById(optionsId);
+    if (optionsElement) {
+        optionsElement.style.display = 'block';
+    }
+    
+    // Si es por grupos, cargar las columnas disponibles
+    if (splitMethod === 'group') {
+        loadGroupColumns();
+    }
+    
+    // Si es estratificada, verificar si es un problema de clasificación
+    if (splitMethod === 'stratified') {
+        checkStratifiedCompatibility();
+    }
+}
+
+// Cargar columnas para división por grupos
+function loadGroupColumns() {
+    const dataset = document.getElementById('dataset').value;
+    const groupColumnSelect = document.getElementById('groupColumn');
+    
+    if (!dataset) {
+        groupColumnSelect.innerHTML = '<option value="">Seleccione primero un dataset</option>';
+        return;
+    }
+    
+    // Obtener las columnas del dataset
+    fetch(`/api/datasets/${dataset}/columns/`)
+        .then(response => response.json())
+        .then(columns => {
+            groupColumnSelect.innerHTML = '<option value="">Sélectionner une colonne...</option>';
+            columns.forEach(col => {
+                if (col.dtype === 'object' || col.dtype === 'int64') {
+                    const option = document.createElement('option');
+                    option.value = col.name;
+                    option.textContent = `${col.name} (${col.dtype})`;
+                    groupColumnSelect.appendChild(option);
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error al cargar columnas:', error);
+            showNotification('Error', 'No se pudieron cargar las columnas', 'error');
+        });
+}
+
+// Verificar compatibilidad con división estratificada
+function checkStratifiedCompatibility() {
+    const targetVariables = document.querySelectorAll('.target-checkbox:checked');
+    
+    if (targetVariables.length === 0) {
+        showNotification('Avertissement', 
+            'La división estratificada requiere al menos una variable objetivo de clasificación', 
+            'warning');
+        return;
+    }
+    
+    // Aquí podrías agregar más validaciones según el tipo de problema
+}
+
+// Obtener la configuración de división de datos
+function getDataSplitConfig() {
+    const config = {
+        split_method: document.getElementById('splitMethod').value,
+        train_split: parseFloat(document.getElementById('trainSize').value) / 100,
+        val_split: parseFloat(document.getElementById('valSize').value) / 100,
+        test_split: parseFloat(document.getElementById('testSize').value) / 100,
+        random_state: document.getElementById('globalRandomState').value || null,
+        split_config: {}
+    };
+    
+    // Configuración específica según el método
+    switch (config.split_method) {
+        case 'group':
+            config.split_config.group_column = document.getElementById('groupColumn').value;
+            break;
+        case 'temporal':
+            config.split_config.method = document.getElementById('temporalMethod').value;
+            config.split_config.gap = parseInt(document.getElementById('temporalGap').value) || 0;
+            break;
+    }
+    
+    return config;
+}
+
+// Actualizar la función createModelOnly para incluir la nueva configuración
+const originalCreateModelOnly = window.createModelOnly || function() {};
+window.createModelOnly = function() {
+    // Obtener la configuración de división de datos
+    const dataSplitConfig = getDataSplitConfig();
+    
+    // Aquí deberías integrar dataSplitConfig con el resto de la configuración del modelo
+    // Por ahora, lo guardamos en una variable global para uso posterior
+    window.currentDataSplitConfig = dataSplitConfig;
+    
+    // Llamar a la función original si existe
+    if (typeof originalCreateModelOnly === 'function') {
+        originalCreateModelOnly();
+    }
+};
 </script>
 
 <!-- Include Random Forest configuration script -->

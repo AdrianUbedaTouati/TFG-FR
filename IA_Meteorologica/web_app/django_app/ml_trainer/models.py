@@ -177,6 +177,24 @@ class ModelDefinition(models.Model):
     # Estado
     is_active = models.BooleanField(default=True)
     
+    # Default data split configuration
+    default_split_method = models.CharField(
+        max_length=20,
+        choices=[
+            ('random', 'División Aleatoria'),
+            ('stratified', 'División Estratificada'),
+            ('group', 'División por Grupos'),
+            ('temporal', 'División Temporal'),
+        ],
+        default='random',
+        help_text='Método de división de datos por defecto'
+    )
+    default_split_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Configuración de división por defecto'
+    )
+    
     def __str__(self):
         return f"{self.name} ({self.get_model_type_display()})"
     
@@ -252,6 +270,30 @@ class TrainingSession(models.Model):
     val_split = models.FloatField(default=0.15)
     test_split = models.FloatField(default=0.15)
     test_size = models.FloatField(default=0.2)  # For simpler train/test split
+    
+    # Data split configuration
+    SPLIT_METHOD_CHOICES = [
+        ('random', 'División Aleatoria'),
+        ('stratified', 'División Estratificada'),
+        ('group', 'División por Grupos'),
+        ('temporal', 'División Temporal'),
+    ]
+    split_method = models.CharField(
+        max_length=20,
+        choices=SPLIT_METHOD_CHOICES,
+        default='random',
+        help_text='Método de división de datos'
+    )
+    split_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Configuración específica del método de división'
+    )
+    random_state = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text='Semilla global para reproducibilidad'
+    )
     
     # Metrics
     selected_metrics = models.JSONField(default=list)

@@ -29,6 +29,9 @@ from .ml_utils_pytorch import (
 # Import training callbacks
 from .training_callbacks import SessionProgressCallback, SklearnProgressCallback
 
+# Import data splitter
+from .data_splitter import DataSplitter
+
 # Import sklearn preprocessor
 from .sklearn_preprocessor import SklearnPreprocessor
 from .sklearn_preprocessing_fix import SklearnPreprocessingPipeline
@@ -267,6 +270,8 @@ def prepare_data(session, is_neural_network=False):
     print(f"[prepare_data] Dataset shape: {df.shape}")
     print(f"[prepare_data] Predictor columns: {session.predictor_columns}")
     print(f"[prepare_data] Target columns: {session.target_columns}")
+    print(f"[prepare_data] Split method: {session.split_method}")
+    print(f"[prepare_data] Random state: {session.random_state}")
     
     # Check if target columns exist
     for col in session.target_columns:
@@ -321,6 +326,21 @@ def prepare_data(session, is_neural_network=False):
     if len(y.shape) == 1:
         y = y.reshape(-1, 1)
     
+    # Preparar configuración de división
+    split_config = session.split_config or {}
+    split_config.update({
+        'train_size': session.train_split,
+        'val_size': session.val_split,
+        'test_size': session.test_split,
+        'random_state': session.random_state
+    })
+    
+    # Crear el divisor de datos
+    data_splitter = DataSplitter.create_splitter(
+        strategy=session.split_method,
+        config=split_config
+    )
+    
     # Get sequence length for neural networks
     sequence_length = session.hyperparameters.get('sequence_length', 10) if is_neural_network else None
     
@@ -337,29 +357,34 @@ def prepare_data(session, is_neural_network=False):
         # Create sequences
         X, y = create_sequences(X, y, sequence_length)
         
-        # Split after creating sequences
-        n = len(X)
-        train_end = int(n * session.train_split)
-        val_end = int(n * (session.train_split + session.val_split))
-        
-        X_train = X[:train_end]
-        y_train = y[:train_end]
-        X_val = X[train_end:val_end]
-        y_val = y[train_end:val_end]
-        X_test = X[val_end:]
-        y_test = y[val_end:]
+        # Para series temporales con redes neuronales, usar división temporal por defecto
+        if session.split_method == 'random':
+            print("[prepare_data] Advertencia: Usando división temporal para modelo de series de tiempo")
+            temp_splitter = DataSplitter.create_splitter('temporal', split_config)
+            X_train, y_train, X_val, y_val, X_test, y_test = temp_splitter.split(X, y)
+        else:
+            # Dividir según el método configurado
+            if session.split_method == 'group':
+                group_col = split_config.get('group_column')
+                if group_col and group_col in df.columns:
+                    # Necesitamos ajustar los grupos después de crear secuencias
+                    groups = df[group_col].values[sequence_length:]
+                    X_train, y_train, X_val, y_val, X_test, y_test = data_splitter.split(X, y, groups=groups)
+                else:
+                    raise ValueError(f"Columna de grupo '{group_col}' no encontrada para división por grupos")
+            else:
+                X_train, y_train, X_val, y_val, X_test, y_test = data_splitter.split(X, y)
     else:
-        # Regular splitting for non-sequence models
-        n = len(X)
-        train_end = int(n * session.train_split)
-        val_end = int(n * (session.train_split + session.val_split))
-        
-        X_train = X[:train_end]
-        y_train = y[:train_end]
-        X_val = X[train_end:val_end]
-        y_val = y[train_end:val_end]
-        X_test = X[val_end:]
-        y_test = y[val_end:]
+        # División para modelos no secuenciales
+        if session.split_method == 'group':
+            group_col = split_config.get('group_column')
+            if group_col and group_col in df.columns:
+                groups = df[group_col].values
+                X_train, y_train, X_val, y_val, X_test, y_test = data_splitter.split(X, y, groups=groups)
+            else:
+                raise ValueError(f"Columna de grupo '{group_col}' no encontrada para división por grupos")
+        else:
+            X_train, y_train, X_val, y_val, X_test, y_test = data_splitter.split(X, y)
         
         # Normalize if needed
         scaler_X = get_scaler(session.normalization_method)
@@ -657,6 +682,12 @@ def build_custom_model(input_shape, output_shape, custom_architecture):
 
 def train_neural_network(session, model_type, hyperparams, X_train, y_train, X_val, y_val):
     """Train neural network models"""
+    # Set random seeds for reproducibility
+    if session.random_state is not None:
+        np.random.seed(session.random_state)
+        tf.random.set_seed(session.random_state)
+        print(f"[train_neural_network] Using global random_state: {session.random_state}")
+    
     # Get input and output shapes
     input_shape = X_train.shape[1:]
     output_shape = (y_train.shape[1] if len(y_train.shape) > 1 else 1,)
@@ -811,8 +842,11 @@ def _prepare_random_forest_params(hyperparams):
     for key in keys_to_check:
         value = clean_params[key]
         if value is None or value == 'None':
-            if key in ['max_depth', 'max_leaf_nodes', 'random_state', 'max_samples']:
+            if key in ['max_depth', 'max_leaf_nodes', 'max_samples']:
                 clean_params[key] = None
+            elif key == 'random_state':
+                # Keep random_state even if None (will use global later)
+                pass
             else:
                 clean_params.pop(key, None)
     
@@ -861,8 +895,12 @@ def _prepare_decision_tree_params(hyperparams):
     
     # Remove None values where appropriate
     for key in list(clean_params.keys()):
-        if clean_params[key] is None and key not in ['max_depth', 'max_leaf_nodes', 'random_state', 'max_features']:
-            clean_params.pop(key)
+        if clean_params[key] is None and key not in ['max_depth', 'max_leaf_nodes', 'max_features']:
+            if key == 'random_state':
+                # Keep random_state even if None (will use global later)
+                pass
+            else:
+                clean_params.pop(key)
     
     return clean_params
 
@@ -927,9 +965,8 @@ def _prepare_xgboost_params(hyperparams):
     # Remove None values
     clean_params = {k: v for k, v in clean_params.items() if v is not None}
     
-    # Handle random_state
-    if 'random_state' in clean_params and clean_params['random_state'] is None:
-        clean_params.pop('random_state', None)
+    # Handle random_state - keep it even if None (will use global later)
+    # No need to remove it
     
     return clean_params
 
@@ -939,6 +976,11 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
     print(f"[train_sklearn_model] Model type: {model_type}")
     print(f"[train_sklearn_model] Hyperparameters received: {hyperparams}")
     print(f"[train_sklearn_model] Input shapes - X_train: {X_train.shape}, y_train: {y_train.shape}")
+    
+    # Usar random_state global de la sesión si está disponible
+    if session.random_state is not None and 'random_state' not in hyperparams:
+        hyperparams['random_state'] = session.random_state
+        print(f"[train_sklearn_model] Using global random_state: {session.random_state}")
     
     # Create progress callback
     progress_callback = SklearnProgressCallback(session, model_type)

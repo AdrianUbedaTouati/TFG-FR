@@ -262,14 +262,11 @@
                             <option value="4">4 núcleos</option>
                         </select>
                     </div>
+                    <!-- Semilla aleatoria eliminada - ahora se usa la semilla global del Módulo 1 -->
                     <div class="col-md-4">
-                        <label for="rfRandomState" class="form-label">
-                            Semilla aleatoria
-                            <i class="bi bi-info-circle" data-bs-toggle="tooltip" 
-                               title="Para reproducibilidad. Dejar vacío para aleatorio"></i>
-                        </label>
-                        <input type="number" class="form-control" id="rfRandomState" 
-                               placeholder="Aleatorio" value="42">
+                        <div class="alert alert-info p-2">
+                            <small><i class="bi bi-info-circle"></i> La semilla aleatoria se configura globalmente en el Módulo 1: División de Datos</small>
+                        </div>
                     </div>
                 </div>
             </div>
