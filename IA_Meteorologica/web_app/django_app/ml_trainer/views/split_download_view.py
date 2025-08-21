@@ -29,7 +29,15 @@ def download_split_data(request):
         train_size = data.get('train_size', 0.7)
         val_size = data.get('val_size', 0.15)
         test_size = data.get('test_size', 0.15)
+        
+        # Asegurar que random_state sea entero o None
         random_state = data.get('random_state')
+        if random_state is not None:
+            try:
+                random_state = int(random_state)
+            except (ValueError, TypeError):
+                random_state = None
+                
         target_columns = data.get('target_columns', [])
         predictor_columns = data.get('predictor_columns', [])
         format_type = data.get('format', 'csv')  # 'csv' o 'excel'
@@ -100,7 +108,7 @@ def download_split_data(request):
                 indices = idx_test.flatten().tolist()
         
         # Obtener datos del conjunto seleccionado
-        split_data = df.iloc[indices][all_columns]
+        split_data = df.iloc[indices][all_columns].copy()  # Usar copy() para evitar problemas con vistas
         
         # Añadir columna de índice original
         split_data.insert(0, 'original_index', indices)
@@ -113,7 +121,10 @@ def download_split_data(request):
             output.seek(0)
             
             response = HttpResponse(output.getvalue(), content_type='text/csv')
-            filename = f"{dataset.name}_{split_type}_{split_method}.csv"
+            # Sanitize filename to avoid issues with special characters
+            safe_name = "".join(c for c in dataset.name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            safe_name = safe_name.replace(' ', '_')
+            filename = f"{safe_name}_{split_type}_{split_method}.csv"
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
             
         else:  # excel
@@ -141,10 +152,13 @@ def download_split_data(request):
             output.seek(0)
             
             response = HttpResponse(
-                output.getvalue(), 
+                output.getvalue(),
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             )
-            filename = f"{dataset.name}_{split_type}_{split_method}.xlsx"
+            # Sanitize filename to avoid issues with special characters
+            safe_name = "".join(c for c in dataset.name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            safe_name = safe_name.replace(' ', '_')
+            filename = f"{safe_name}_{split_type}_{split_method}.xlsx"
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
         
         return response
@@ -153,4 +167,7 @@ def download_split_data(request):
         return HttpResponse('Dataset no encontrado', status=404)
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error en download_split_data: {error_details}")  # Log para debugging
         return HttpResponse(f'Error al generar archivo: {str(e)}', status=500)
