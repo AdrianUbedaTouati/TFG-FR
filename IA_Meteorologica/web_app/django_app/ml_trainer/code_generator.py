@@ -1437,6 +1437,12 @@ def _generate_sklearn_header(model_def) -> List[str]:
     model_type = model_def.model_type
     hyperparams = model_def.hyperparameters or {}
     
+    # Get Module 1 and Module 2 configurations
+    split_method = model_def.default_split_method if hasattr(model_def, 'default_split_method') else 'random'
+    split_config = model_def.default_split_config if hasattr(model_def, 'default_split_config') else {}
+    execution_method = model_def.default_execution_method if hasattr(model_def, 'default_execution_method') else 'standard'
+    execution_config = model_def.default_execution_config if hasattr(model_def, 'default_execution_config') else {}
+    
     header_lines = [
         '"""',
         f'Auto-generated scikit-learn {model_type.upper()} model code',
@@ -1448,6 +1454,16 @@ def _generate_sklearn_header(model_def) -> List[str]:
         f'- Target columns: {model_def.target_columns}',
         f'- Predictor columns: {len(model_def.predictor_columns)} features',
         f'- Problem type: {hyperparams.get("problem_type", "auto-detect")}',
+        '',
+        'Module 1 - Data Split Configuration:',
+        f'- Split method: {split_method}',
+        f'- Train size: {split_config.get("train_size", 0.7)}',
+        f'- Validation size: {split_config.get("val_size", 0.15)}',
+        f'- Test size: {split_config.get("test_size", 0.15)}',
+        '',
+        'Module 2 - Execution Configuration:',
+        f'- Execution method: {execution_method}',
+        f'- Configuration: {json.dumps(execution_config)}' if execution_config else f'- Configuration: Default',
         '"""',
         '',
         'import numpy as np',
@@ -1457,6 +1473,7 @@ def _generate_sklearn_header(model_def) -> List[str]:
         'import warnings',
         'from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV',
         'from sklearn.model_selection import StratifiedKFold, KFold, TimeSeriesSplit',
+        'from sklearn.model_selection import LeaveOneOut, RepeatedKFold, RepeatedStratifiedKFold',
         'from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder',
         'from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score',
         'from sklearn.metrics import accuracy_score, classification_report, confusion_matrix',
@@ -1873,30 +1890,208 @@ def _generate_data_loading_function(model_def) -> List[str]:
     return lines
 
 
-def _generate_training_function() -> List[str]:
-    """Generate model training function"""
-    return [
-        'def train_model(model, X, y, test_size=0.2, cv_folds=None):',
-        '    """',
-        '    Train the model with optional cross-validation',
-        '    """',
-        '    # Split the data',
-        '    X_train, X_test, y_train, y_test = train_test_split(',
-        '        X, y, test_size=test_size, random_state=42',
-        '    )',
+def _generate_data_split_module(model_def) -> List[str]:
+    """Generate Module 1: Data Split implementation"""
+    split_method = model_def.default_split_method if hasattr(model_def, 'default_split_method') else 'random'
+    split_config = model_def.default_split_config if hasattr(model_def, 'default_split_config') else {}
+    
+    lines = [
+        '# =============================================================================',
+        '# MODULE 1: DATA SPLIT CONFIGURATION',
+        '# =============================================================================',
+        '',
+        'class DataSplitter:',
+        '    """Module 1: Handles data splitting according to configured strategy"""',
         '    ',
-        '    print(f"\\nTraining set size: {X_train.shape}")',
+        f'    def __init__(self, strategy="{split_method}", config=None):',
+        '        self.strategy = strategy',
+        '        self.config = config or {}',
+        '        ',
+        '    def split(self, X, y):',
+        '        """Split data according to configured strategy"""',
+        '        train_size = self.config.get("train_size", 0.7)',
+        '        val_size = self.config.get("val_size", 0.15)',
+        '        test_size = self.config.get("test_size", 0.15)',
+        '        random_state = self.config.get("random_state", 42)',
+        '        ',
+        '        if self.strategy == "random":',
+        '            # Random split with shuffling',
+        '            X_temp, X_test, y_temp, y_test = train_test_split(',
+        '                X, y, test_size=test_size, random_state=random_state, shuffle=True',
+        '            )',
+        '            val_proportion = val_size / (train_size + val_size)',
+        '            X_train, X_val, y_train, y_val = train_test_split(',
+        '                X_temp, y_temp, test_size=val_proportion, random_state=random_state, shuffle=True',
+        '            )',
+        '            ',
+        '        elif self.strategy == "stratified":',
+        '            # Stratified split for classification',
+        '            y_stratify = y if len(y.shape) == 1 else y[:, 0]',
+        '            X_temp, X_test, y_temp, y_test = train_test_split(',
+        '                X, y, test_size=test_size, random_state=random_state, stratify=y_stratify, shuffle=True',
+        '            )',
+        '            val_proportion = val_size / (train_size + val_size)',
+        '            y_temp_stratify = y_temp if len(y_temp.shape) == 1 else y_temp[:, 0]',
+        '            X_train, X_val, y_train, y_val = train_test_split(',
+        '                X_temp, y_temp, test_size=val_proportion, random_state=random_state, stratify=y_temp_stratify, shuffle=True',
+        '            )',
+        '            ',
+        '        elif self.strategy == "temporal":',
+        '            # Temporal split maintaining order',
+        '            n_samples = len(X)',
+        '            train_end = int(n_samples * train_size)',
+        '            val_end = int(n_samples * (train_size + val_size))',
+        '            ',
+        '            X_train = X[:train_end]',
+        '            y_train = y[:train_end]',
+        '            X_val = X[train_end:val_end]',
+        '            y_val = y[train_end:val_end]',
+        '            X_test = X[val_end:]',
+        '            y_test = y[val_end:]',
+        '            ',
+        '        elif self.strategy == "sequential":',
+        '            # Sequential split without shuffling',
+        '            n_samples = len(X)',
+        '            train_end = int(n_samples * train_size)',
+        '            val_end = int(n_samples * (train_size + val_size))',
+        '            ',
+        '            X_train = X.iloc[:train_end] if hasattr(X, "iloc") else X[:train_end]',
+        '            y_train = y.iloc[:train_end] if hasattr(y, "iloc") else y[:train_end]',
+        '            X_val = X.iloc[train_end:val_end] if hasattr(X, "iloc") else X[train_end:val_end]',
+        '            y_val = y.iloc[train_end:val_end] if hasattr(y, "iloc") else y[train_end:val_end]',
+        '            X_test = X.iloc[val_end:] if hasattr(X, "iloc") else X[val_end:]',
+        '            y_test = y.iloc[val_end:] if hasattr(y, "iloc") else y[val_end:]',
+        '            ',
+        '        else:',
+        '            # Default to random split',
+        '            X_temp, X_test, y_temp, y_test = train_test_split(',
+        '                X, y, test_size=test_size, random_state=random_state, shuffle=True',
+        '            )',
+        '            val_proportion = val_size / (train_size + val_size)',
+        '            X_train, X_val, y_train, y_val = train_test_split(',
+        '                X_temp, y_temp, test_size=val_proportion, random_state=random_state, shuffle=True',
+        '            )',
+        '            ',
+        '        return X_train, X_val, X_test, y_train, y_val, y_test',
+        '',
+        ''
+    ]
+    
+    return lines
+
+
+def _generate_execution_module(model_def) -> List[str]:
+    """Generate Module 2: Execution Configuration implementation"""
+    execution_method = model_def.default_execution_method if hasattr(model_def, 'default_execution_method') else 'standard'
+    execution_config = model_def.default_execution_config if hasattr(model_def, 'default_execution_config') else {}
+    
+    lines = [
+        '# =============================================================================',
+        '# MODULE 2: EXECUTION CONFIGURATION',
+        '# =============================================================================',
+        '',
+        'class ExecutionStrategy:',
+        '    """Module 2: Handles model execution strategy (cross-validation, etc.)"""',
+        '    ',
+        f'    def __init__(self, method="{execution_method}", config=None):',
+        '        self.method = method',
+        '        self.config = config or {}',
+        '        ',
+        '    def execute(self, model, X_train, y_train, X_val, y_val):',
+        '        """Execute training according to configured strategy"""',
+        '        ',
+        '        if self.method == "standard":',
+        '            # Standard training without cross-validation',
+        '            print("Executing standard training...")',
+        '            model.fit(X_train, y_train)',
+        '            train_score = model.score(X_train, y_train)',
+        '            val_score = model.score(X_val, y_val)',
+        '            print(f"Training score: {train_score:.4f}")',
+        '            print(f"Validation score: {val_score:.4f}")',
+        '            return {"train_score": train_score, "val_score": val_score}',
+        '            ',
+        '        elif self.method == "kfold":',
+        '            # K-Fold Cross Validation',
+        '            n_splits = self.config.get("n_splits", 5)',
+        '            print(f"Executing {n_splits}-fold cross validation...")',
+        '            from sklearn.model_selection import KFold, cross_val_score',
+        '            kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)',
+        '            scores = cross_val_score(model, X_train, y_train, cv=kf, scoring="neg_mean_squared_error")',
+        '            print(f"CV MSE: {-scores.mean():.4f} (+/- {scores.std() * 2:.4f})")',
+        '            # Train final model on full training data',
+        '            model.fit(X_train, y_train)',
+        '            return {"cv_scores": scores.tolist(), "cv_mean": -scores.mean(), "cv_std": scores.std()}',
+        '            ',
+        '        elif self.method == "stratified_kfold":',
+        '            # Stratified K-Fold for classification',
+        '            n_splits = self.config.get("n_splits", 5)',
+        '            print(f"Executing stratified {n_splits}-fold cross validation...")',
+        '            from sklearn.model_selection import StratifiedKFold, cross_val_score',
+        '            skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)',
+        '            y_stratify = y_train if len(y_train.shape) == 1 else y_train[:, 0]',
+        '            scores = cross_val_score(model, X_train, y_train, cv=skf, scoring="accuracy")',
+        '            print(f"CV Accuracy: {scores.mean():.4f} (+/- {scores.std() * 2:.4f})")',
+        '            model.fit(X_train, y_train)',
+        '            return {"cv_scores": scores.tolist(), "cv_mean": scores.mean(), "cv_std": scores.std()}',
+        '            ',
+        '        elif self.method == "time_series_split":',
+        '            # Time Series Split',
+        '            n_splits = self.config.get("n_splits", 5)',
+        '            print(f"Executing time series split with {n_splits} splits...")',
+        '            from sklearn.model_selection import TimeSeriesSplit, cross_val_score',
+        '            tss = TimeSeriesSplit(n_splits=n_splits)',
+        '            scores = cross_val_score(model, X_train, y_train, cv=tss, scoring="neg_mean_squared_error")',
+        '            print(f"CV MSE: {-scores.mean():.4f} (+/- {scores.std() * 2:.4f})")',
+        '            model.fit(X_train, y_train)',
+        '            return {"cv_scores": scores.tolist(), "cv_mean": -scores.mean(), "cv_std": scores.std()}',
+        '            ',
+        '        else:',
+        '            # Default to standard execution',
+        '            print("Executing standard training (default)...")',
+        '            model.fit(X_train, y_train)',
+        '            return {}',
+        '',
+        ''
+    ]
+    
+    return lines
+
+
+def _generate_training_function() -> List[str]:
+    """Generate model training function that uses Module 1 and Module 2"""
+    return [
+        'def train_model(model, X, y, data_splitter=None, execution_strategy=None):',
+        '    """',
+        '    Train the model using Module 1 (Data Split) and Module 2 (Execution)',
+        '    """',
+        '    # Use default modules if not provided',
+        '    if data_splitter is None:',
+        '        data_splitter = DataSplitter()',
+        '    if execution_strategy is None:',
+        '        execution_strategy = ExecutionStrategy()',
+        '    ',
+        '    # Module 1: Split the data',
+        '    print("\\n" + "="*50)',
+        '    print("MODULE 1: DATA SPLITTING")',
+        '    print("="*50)',
+        '    X_train, X_val, X_test, y_train, y_val, y_test = data_splitter.split(X, y)',
+        '    ',
+        '    print(f"Training set size: {X_train.shape}")',
+        '    print(f"Validation set size: {X_val.shape}")',
         '    print(f"Test set size: {X_test.shape}")',
-        '',
-        '    # Perform cross-validation if requested',
-        '    if cv_folds:',
-        '        print(f"\\nPerforming {cv_folds}-fold cross-validation...")',
-        '        cv_scores = cross_val_score(model, X_train, y_train, cv=cv_folds, scoring=\'neg_mean_squared_error\')',
-        '        print(f"CV MSE: {-cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")',
-        '',
-        '    # Train the model',
-        '    print("\\nTraining model...")',
-        '    model.fit(X_train, y_train)',
+        '    ',
+        '    # Module 2: Execute training strategy',
+        '    print("\\n" + "="*50)',
+        '    print("MODULE 2: EXECUTION STRATEGY")',
+        '    print("="*50)',
+        '    execution_results = execution_strategy.execute(model, X_train, y_train, X_val, y_val)',
+        '    ',
+        '    # Make predictions',
+        '    print("\\nMaking predictions...")',
+        '    y_pred_train = model.predict(X_train)',
+        '    y_pred_test = model.predict(X_test)',
+        '    ',
+        '    return X_train, X_test, y_train, y_test, y_pred_train, y_pred_test',
         '    ',
         '    # Make predictions',
         '    y_pred_train = model.predict(X_train)',
@@ -1994,8 +2189,11 @@ def _generate_evaluation_function(model_type, hyperparams) -> List[str]:
 
 def _generate_main_function(model_def, hyperparams) -> List[str]:
     """Generate main execution function"""
-    # Determine if CV is enabled
-    cv_value = "5" if hyperparams.get("validation_method") == "cv" else "None"
+    # Get Module 1 and Module 2 configurations
+    split_method = model_def.default_split_method if hasattr(model_def, 'default_split_method') else 'random'
+    split_config = model_def.default_split_config if hasattr(model_def, 'default_split_config') else {}
+    execution_method = model_def.default_execution_method if hasattr(model_def, 'default_execution_method') else 'standard'
+    execution_config = model_def.default_execution_config if hasattr(model_def, 'default_execution_config') else {}
     
     return [
         '# =============================================================================',
@@ -2005,8 +2203,14 @@ def _generate_main_function(model_def, hyperparams) -> List[str]:
         'if __name__ == "__main__":',
         '    # Configuration',
         '    DATA_FILE = "your_dataset.csv"  # UPDATE THIS PATH',
-        '    TEST_SIZE = 0.2',
-        f'    USE_CROSS_VALIDATION = {cv_value}',
+        '    ',
+        '    # Module 1 Configuration',
+        f'    split_config = {json.dumps(split_config, indent=8)}',
+        f'    data_splitter = DataSplitter(strategy="{split_method}", config=split_config)',
+        '    ',
+        '    # Module 2 Configuration',
+        f'    execution_config = {json.dumps(execution_config, indent=8)}',
+        f'    execution_strategy = ExecutionStrategy(method="{execution_method}", config=execution_config)',
         '    ',
         '    try:',
         '        # Step 1: Load and preprocess data',
@@ -2017,10 +2221,10 @@ def _generate_main_function(model_def, hyperparams) -> List[str]:
         '        print("\\nSTEP 2: Creating model...")',
         '        model = create_model()',
         '        ',
-        '        # Step 3: Train model',
-        '        print("\\nSTEP 3: Training model...")',
+        '        # Step 3: Train model using Module 1 and Module 2',
+        '        print("\\nSTEP 3: Training model with configured modules...")',
         '        X_train, X_test, y_train, y_test, y_pred_train, y_pred_test = train_model(',
-        '            model, X, y, test_size=TEST_SIZE, cv_folds=USE_CROSS_VALIDATION',
+        '            model, X, y, data_splitter=data_splitter, execution_strategy=execution_strategy',
         '        )',
         '        ',
         '        # Step 4: Evaluate model',
@@ -2078,6 +2282,11 @@ def generate_sklearn_code(model_def) -> str:
     # Generate header and imports
     code_lines.extend(_generate_sklearn_header(model_def))
     
+    # Add Module 1: Data Split Configuration
+    code_lines.extend(_generate_data_split_module(model_def))
+    
+    # Add Module 2: Execution Configuration
+    code_lines.extend(_generate_execution_module(model_def))
     
     # Create model function
     code_lines.extend([

@@ -32,6 +32,9 @@ from .training_callbacks import SessionProgressCallback, SklearnProgressCallback
 # Import data splitter
 from .data_splitter import DataSplitter
 
+# Import execution config manager
+from .execution_config import ExecutionConfigManager
+
 # Import sklearn preprocessor
 from .sklearn_preprocessor import SklearnPreprocessor
 from .sklearn_preprocessing_fix import SklearnPreprocessingPipeline
@@ -972,7 +975,7 @@ def _prepare_xgboost_params(hyperparams):
 
 
 def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_val, y_val, X_test=None, y_test=None):
-    """Train scikit-learn models with enhanced feature engineering"""
+    """Train scikit-learn models with enhanced feature engineering and Module 2 execution support"""
     print(f"[train_sklearn_model] Model type: {model_type}")
     print(f"[train_sklearn_model] Hyperparameters received: {hyperparams}")
     print(f"[train_sklearn_model] Input shapes - X_train: {X_train.shape}, y_train: {y_train.shape}")
@@ -984,6 +987,13 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
     
     # Create progress callback
     progress_callback = SklearnProgressCallback(session, model_type)
+    
+    # Get Module 2 configuration
+    execution_method = session.execution_method if hasattr(session, 'execution_method') else 'standard'
+    execution_config = session.execution_config if hasattr(session, 'execution_config') else {}
+    
+    print(f"[train_sklearn_model] Module 2 - Execution method: {execution_method}")
+    print(f"[train_sklearn_model] Module 2 - Execution config: {execution_config}")
     
     # Initialize preprocessing pipeline
     preprocessing_pipeline = None
@@ -1114,6 +1124,17 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
     progress_callback.on_train_begin()
     progress_callback.update_progress(0.1, f"Préparation de l'entraînement {model_type}...")
     
+    # Create execution strategy from Module 2
+    execution_strategy = ExecutionConfigManager.create_execution_strategy(execution_method, execution_config)
+    print(f"[train_sklearn_model] Using execution strategy: {execution_strategy.get_description()}")
+    
+    # Combine train and validation data for cross-validation strategies
+    if execution_method != 'standard':
+        # For CV strategies, we'll use all training data
+        X_full = np.vstack([X_train, X_val])
+        y_full = np.concatenate([y_train, y_val])
+        print(f"[train_sklearn_model] Combined data for CV - X: {X_full.shape}, y: {y_full.shape}")
+    
     # Train the model
     print(f"[train_sklearn_model] Training model...")
     print(f"[train_sklearn_model] Final data shapes before fit - X_train: {X_train.shape}, y_train: {y_train.shape}")
@@ -1121,8 +1142,77 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
     try:
         progress_callback.update_progress(0.3, f"Entraînement du modèle {model_type} en cours...")
         
-        # Handle early stopping for XGBoost
-        if model_type == 'xgboost' and hyperparams.get('early_stopping_enabled', True):
+        # Check if we're using cross-validation or standard training
+        if execution_method != 'standard':
+            # Use Module 2 execution strategy
+            print(f"[train_sklearn_model] Using Module 2 execution strategy: {execution_method}")
+            
+            # Get cross-validation splits
+            cv_results = {'train_scores': [], 'val_scores': []}
+            
+            # Determine scoring metric
+            if hyperparams.get('problem_type') == 'classification':
+                from sklearn.metrics import accuracy_score
+                scoring = 'accuracy'
+                score_func = accuracy_score
+            else:
+                from sklearn.metrics import mean_squared_error
+                scoring = 'neg_mean_squared_error'
+                score_func = lambda y_true, y_pred: -mean_squared_error(y_true, y_pred)
+            
+            # Perform cross-validation
+            n_splits = execution_strategy.get_n_splits() if execution_strategy.get_n_splits() > 0 else 5
+            fold = 0
+            
+            for train_idx, val_idx in execution_strategy.get_splits(X_full, y_full):
+                fold += 1
+                print(f"[train_sklearn_model] Training fold {fold}/{n_splits}")
+                
+                # Get fold data
+                X_fold_train = X_full[train_idx]
+                y_fold_train = y_full[train_idx]
+                X_fold_val = X_full[val_idx]
+                y_fold_val = y_full[val_idx]
+                
+                # Clone model for this fold
+                from sklearn.base import clone
+                fold_model = clone(model)
+                
+                # Train on fold
+                fold_model.fit(X_fold_train, y_fold_train)
+                
+                # Evaluate
+                train_pred = fold_model.predict(X_fold_train)
+                val_pred = fold_model.predict(X_fold_val)
+                
+                train_score = score_func(y_fold_train, train_pred)
+                val_score = score_func(y_fold_val, val_pred)
+                
+                cv_results['train_scores'].append(train_score)
+                cv_results['val_scores'].append(val_score)
+                
+                # Update progress
+                progress = 0.3 + (0.5 * (fold / n_splits))
+                progress_callback.update_progress(
+                    progress,
+                    f"Cross-validation - Fold {fold}/{n_splits} - Val score: {val_score:.4f}"
+                )
+            
+            # Train final model on all data
+            print(f"[train_sklearn_model] Training final model on full dataset...")
+            model.fit(X_full, y_full)
+            
+            # Store CV results
+            cv_mean_train = np.mean(cv_results['train_scores'])
+            cv_mean_val = np.mean(cv_results['val_scores'])
+            cv_std_val = np.std(cv_results['val_scores'])
+            
+            print(f"[train_sklearn_model] CV Results - Train: {cv_mean_train:.4f}, Val: {cv_mean_val:.4f} (+/- {cv_std_val:.4f})")
+            
+            progress_callback.update_progress(0.8, f"Cross-validation terminée - Score: {cv_mean_val:.4f} (+/- {cv_std_val:.4f})")
+            
+        # Standard training (no cross-validation)
+        elif model_type == 'xgboost' and hyperparams.get('early_stopping_enabled', True):
             early_stopping_rounds = hyperparams.get('early_stopping_rounds', 50)
             eval_set = [(X_val, y_val)]
             print(f"[train_sklearn_model] Training XGBoost with early stopping (rounds={early_stopping_rounds})")
@@ -1200,63 +1290,102 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
     print(f"[train_sklearn_model] Calculating validation metrics...")
     progress_callback.update_progress(0.9, "Calcul des métriques de validation...")
     
-    try:
-        val_pred = model.predict(X_val)
-        print(f"[train_sklearn_model] Validation predictions shape: {val_pred.shape}")
-    except Exception as e:
-        print(f"[train_sklearn_model] ERROR during validation prediction: {str(e)}")
-        # If predict fails, it might be due to data shape issues
-        if "Expected 2D array, got 1D array" in str(e):
-            print(f"[train_sklearn_model] Attempting to reshape validation data...")
-            if len(X_val.shape) == 1:
-                X_val = X_val.reshape(-1, 1)
-            val_pred = model.predict(X_val)
+    # Handle metrics differently for cross-validation vs standard training
+    if execution_method != 'standard' and 'cv_results' in locals():
+        # Use cross-validation results
+        print(f"[train_sklearn_model] Using cross-validation metrics")
+        if hyperparams.get('problem_type') == 'classification':
+            history = {
+                'train_accuracy': cv_results['train_scores'],
+                'val_accuracy': cv_results['val_scores'],
+                'cv_mean_train': cv_mean_train,
+                'cv_mean_val': cv_mean_val,
+                'cv_std_val': cv_std_val
+            }
         else:
-            raise
-    
-    # Choose appropriate metrics based on problem type
-    if (model_type in ['random_forest', 'xgboost', 'decision_tree'] and 
-        hyperparams.get('problem_type') == 'classification'):
-        from sklearn.metrics import accuracy_score, log_loss
-        try:
-            train_pred = model.predict(X_train)
             history = {
-                'train_accuracy': [accuracy_score(y_train, train_pred)],
-                'val_accuracy': [accuracy_score(y_val, val_pred)],
-                'train_loss': [log_loss(y_train, model.predict_proba(X_train))],
-                'val_loss': [log_loss(y_val, model.predict_proba(X_val))]
+                'train_loss': [-score for score in cv_results['train_scores']],  # Convert back from neg_mse
+                'val_loss': [-score for score in cv_results['val_scores']],
+                'cv_mean_train': -cv_mean_train,
+                'cv_mean_val': -cv_mean_val,
+                'cv_std_val': cv_std_val
             }
-        except Exception as e:
-            print(f"[train_sklearn_model] Warning: Could not calculate log_loss: {str(e)}")
-            # Fallback to basic accuracy if log_loss fails
-            train_pred = model.predict(X_train)
-            history = {
-                'train_accuracy': [accuracy_score(y_train, train_pred)],
-                'val_accuracy': [accuracy_score(y_val, val_pred)]
-            }
+        
+        # Update session with CV metrics
+        if hyperparams.get('problem_type') == 'classification':
+            session.train_accuracy = cv_mean_train
+            session.val_accuracy = cv_mean_val
+        else:
+            session.train_loss = -cv_mean_train
+            session.val_loss = -cv_mean_val
+            
     else:
-        # Regression metrics
-        print(f"[train_sklearn_model] Calculating regression metrics...")
+        # Standard validation metrics
         try:
-            train_pred = model.predict(X_train)
-            history = {
-                'train_loss': [mean_squared_error(y_train, train_pred)],
-                'val_loss': [mean_squared_error(y_val, val_pred)]
-            }
-            print(f"[train_sklearn_model] Metrics calculated successfully")
+            val_pred = model.predict(X_val)
+            print(f"[train_sklearn_model] Validation predictions shape: {val_pred.shape}")
         except Exception as e:
-            print(f"[train_sklearn_model] ERROR calculating metrics: {str(e)}")
-            raise
+            print(f"[train_sklearn_model] ERROR during validation prediction: {str(e)}")
+            # If predict fails, it might be due to data shape issues
+            if "Expected 2D array, got 1D array" in str(e):
+                print(f"[train_sklearn_model] Attempting to reshape validation data...")
+                if len(X_val.shape) == 1:
+                    X_val = X_val.reshape(-1, 1)
+                val_pred = model.predict(X_val)
+            else:
+                raise
     
-    # Update session with metrics
-    if 'train_loss' in history:
-        session.train_loss = history['train_loss'][0]
-        session.val_loss = history['val_loss'][0]
-    if 'train_accuracy' in history:
-        session.train_accuracy = history['train_accuracy'][0]
-        session.val_accuracy = history.get('val_accuracy', [0])[0]
+        # Choose appropriate metrics based on problem type
+        if (model_type in ['random_forest', 'xgboost', 'decision_tree'] and 
+            hyperparams.get('problem_type') == 'classification'):
+            from sklearn.metrics import accuracy_score, log_loss
+            try:
+                train_pred = model.predict(X_train)
+                history = {
+                    'train_accuracy': [accuracy_score(y_train, train_pred)],
+                    'val_accuracy': [accuracy_score(y_val, val_pred)],
+                    'train_loss': [log_loss(y_train, model.predict_proba(X_train))],
+                    'val_loss': [log_loss(y_val, model.predict_proba(X_val))]
+                }
+            except Exception as e:
+                print(f"[train_sklearn_model] Warning: Could not calculate log_loss: {str(e)}")
+                # Fallback to basic accuracy if log_loss fails
+                train_pred = model.predict(X_train)
+                history = {
+                    'train_accuracy': [accuracy_score(y_train, train_pred)],
+                    'val_accuracy': [accuracy_score(y_val, val_pred)]
+                }
+        else:
+            # Regression metrics
+            print(f"[train_sklearn_model] Calculating regression metrics...")
+            try:
+                train_pred = model.predict(X_train)
+                history = {
+                    'train_loss': [mean_squared_error(y_train, train_pred)],
+                    'val_loss': [mean_squared_error(y_val, val_pred)]
+                }
+                print(f"[train_sklearn_model] Metrics calculated successfully")
+            except Exception as e:
+                print(f"[train_sklearn_model] ERROR calculating metrics: {str(e)}")
+                raise
+        
+        # Update session with metrics
+        if 'train_loss' in history:
+            session.train_loss = history['train_loss'][0]
+            session.val_loss = history['val_loss'][0]
+        if 'train_accuracy' in history:
+            session.train_accuracy = history['train_accuracy'][0]
+            session.val_accuracy = history.get('val_accuracy', [0])[0]
     
     session.save()
+    
+    # Store execution method info in training history
+    if not hasattr(history, 'execution_info'):
+        history['execution_info'] = {
+            'method': execution_method,
+            'description': execution_strategy.get_description() if execution_method != 'standard' else 'Standard training',
+            'config': execution_config
+        }
     
     # Finish progress tracking
     progress_callback.on_train_end()
@@ -1268,7 +1397,8 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
         'preprocessing_pipeline': preprocessing_pipeline,
         'X_train_processed': X_train,
         'X_val_processed': X_val,
-        'X_test_processed': X_test if X_test is not None else None
+        'X_test_processed': X_test if X_test is not None else None,
+        'execution_method': execution_method
     }
 
 
@@ -1542,6 +1672,15 @@ def train_model(session):
         
         # Update session
         print(f"[Training] Saving session with test results: {test_results}")
+        
+        # Add execution info to history if available
+        if hasattr(result, 'get') and 'execution_method' in result:
+            if 'execution_info' not in history:
+                history['execution_info'] = {
+                    'method': result.get('execution_method', 'standard'),
+                    'description': f"Module 2: {result.get('execution_method', 'standard')}"
+                }
+        
         session.training_history = history
         session.test_results = test_results
         
