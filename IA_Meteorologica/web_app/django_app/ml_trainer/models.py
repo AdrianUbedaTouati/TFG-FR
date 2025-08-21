@@ -277,6 +277,7 @@ class TrainingSession(models.Model):
         ('stratified', 'División Estratificada'),
         ('group', 'División por Grupos'),
         ('temporal', 'División Temporal'),
+        ('sequential', 'División Secuencial'),
     ]
     split_method = models.CharField(
         max_length=20,

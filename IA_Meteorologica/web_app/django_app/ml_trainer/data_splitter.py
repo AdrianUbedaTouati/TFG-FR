@@ -9,6 +9,7 @@ Estrategias soportadas:
 - Estratificada: Mantiene proporciones de clases en clasificación
 - Por grupos: No mezcla grupos entre train/val/test
 - Temporal: Para series de tiempo (holdout, blocked, walk-forward)
+- Secuencial: Sin reordenamiento, mantiene orden original de entrada
 """
 
 import numpy as np
@@ -322,6 +323,42 @@ class TemporalSplitStrategy(DataSplitStrategy):
         return X_train, y_train, X_val, y_val, X_test, y_test
 
 
+class SequentialSplitStrategy(DataSplitStrategy):
+    """División secuencial que mantiene el orden original de los datos"""
+    
+    def split(self, X: np.ndarray, y: np.ndarray, **kwargs) -> Tuple[
+        np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray
+    ]:
+        """División secuencial sin reordenamiento de datos"""
+        
+        n_samples = len(X)
+        
+        # Calcular índices de corte basados en las proporciones
+        train_end = int(n_samples * self.train_size)
+        val_end = int(n_samples * (self.train_size + self.val_size))
+        
+        # Dividir según orden de entrada (sin shuffling)
+        X_train = X[:train_end]
+        y_train = y[:train_end]
+        X_val = X[train_end:val_end]
+        y_val = y[train_end:val_end]
+        X_test = X[val_end:]
+        y_test = y[val_end:]
+        
+        return X_train, y_train, X_val, y_val, X_test, y_test
+    
+    def get_indices(self, n_samples: int, **kwargs) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Obtiene índices secuenciales para la división"""
+        train_end = int(n_samples * self.train_size)
+        val_end = int(n_samples * (self.train_size + self.val_size))
+        
+        train_indices = np.arange(0, train_end)
+        val_indices = np.arange(train_end, val_end)
+        test_indices = np.arange(val_end, n_samples)
+        
+        return train_indices, val_indices, test_indices
+
+
 class DataSplitter:
     """Clase principal para manejar la división de datos"""
     
@@ -329,7 +366,8 @@ class DataSplitter:
         'random': RandomSplitStrategy,
         'stratified': StratifiedSplitStrategy,
         'group': GroupSplitStrategy,
-        'temporal': TemporalSplitStrategy
+        'temporal': TemporalSplitStrategy,
+        'sequential': SequentialSplitStrategy
     }
     
     @classmethod
@@ -447,6 +485,13 @@ class DataSplitter:
                     'blocked': 'División en bloques temporales',
                     'walk_forward': 'Validación walk-forward expanding window'
                 }
+            },
+            'sequential': {
+                'name': 'División Secuencial',
+                'description': 'Mantiene el orden original de entrada de los datos sin reordenamiento',
+                'use_cases': ['Datos ordenados por importancia', 'Datasets cronológicos simples', 'Cuando el orden original es significativo'],
+                'params': ['train_size', 'val_size', 'test_size'],
+                'note': 'No utiliza random_state ya que no hay aleatorización'
             }
         }
         

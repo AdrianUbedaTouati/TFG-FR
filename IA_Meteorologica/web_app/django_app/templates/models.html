@@ -892,6 +892,7 @@
                                                 <option value="stratified">Stratifiée</option>
                                                 <option value="group">Par Groupes</option>
                                                 <option value="temporal">Temporelle</option>
+                                                <option value="sequential">Séquentielle</option>
                                             </select>
                                         </div>
                                         <div class="col-md-6">
@@ -946,6 +947,17 @@
                                                     <input type="number" class="form-control" id="temporalGap" min="0" value="0">
                                                     <small class="text-muted">Périodes de séparation entre ensembles</small>
                                                 </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Options Séquentielles -->
+                                        <div id="sequentialOptions" class="split-options" style="display: none;">
+                                            <div class="alert alert-success">
+                                                <i class="bi bi-list-ol"></i> <strong>Division séquentielle :</strong> Les données sont divisées selon leur ordre d'entrée original, sans mélange ni réorganisation. 
+                                                Idéal pour les données ordonnées par importance ou temporellement.
+                                            </div>
+                                            <div class="alert alert-info">
+                                                <i class="bi bi-info-circle"></i> <strong>Note :</strong> Cette méthode n'utilise pas de semence aléatoire car il n'y a pas de randomisation.
                                             </div>
                                         </div>
                                     </div>
