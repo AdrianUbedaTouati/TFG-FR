@@ -641,6 +641,115 @@
     #dataPreviewModal .text-muted {
         color: #a0a0a0 !important;
     }
+    
+    /* Styles for Module Information Cards */
+    .module-info-card {
+        background: rgba(20, 25, 50, 0.8);
+        backdrop-filter: blur(10px);
+        border: 2px solid rgba(138, 43, 226, 0.3);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+    }
+    
+    .module-info-card:hover {
+        border-color: rgba(138, 43, 226, 0.6);
+        box-shadow: 0 5px 15px rgba(138, 43, 226, 0.2);
+        transform: translateY(-2px);
+    }
+    
+    .module-info-card .card-title {
+        color: #8a2be2;
+        font-weight: 600;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .module-info-card .card-title i {
+        font-size: 1.3rem;
+    }
+    
+    .module-detail {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .module-detail:last-child {
+        border-bottom: none;
+    }
+    
+    .module-detail-label {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9rem;
+    }
+    
+    .module-detail-value {
+        color: #ffffff;
+        font-weight: 500;
+        font-size: 0.95rem;
+    }
+    
+    .module-strategy-badge {
+        display: inline-block;
+        background: rgba(138, 43, 226, 0.2);
+        color: #8a2be2;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        border: 1px solid rgba(138, 43, 226, 0.4);
+    }
+    
+    .percentage-display {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: rgba(138, 43, 226, 0.1);
+        padding: 3px 10px;
+        border-radius: 15px;
+        font-size: 0.9rem;
+    }
+    
+    .percentage-display span {
+        color: #8a2be2;
+        font-weight: 600;
+    }
+    
+    /* Animation for module cards */
+    @keyframes moduleCardPulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(138, 43, 226, 0.4);
+        }
+        70% {
+            box-shadow: 0 0 0 10px rgba(138, 43, 226, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(138, 43, 226, 0);
+        }
+    }
+    
+    .module-info-card.highlight {
+        animation: moduleCardPulse 2s ease-in-out;
+    }
+    
+    /* Info icon styles */
+    .module-info-icon {
+        color: rgba(138, 43, 226, 0.6);
+        cursor: help;
+        font-size: 0.9rem;
+        margin-left: 5px;
+        transition: color 0.2s ease;
+    }
+    
+    .module-info-icon:hover {
+        color: #8a2be2;
+    }
 </style>
 {% endblock %}
 
@@ -806,26 +915,51 @@
                 <p id="trainModelInfo" class="text-info mb-3"></p>
                 
                 <div class="mb-4">
-                    <label class="form-label">Division des Données</label>
-                    <div class="row g-2">
-                        <div class="col-md-4">
-                            <label for="trainSizeConfig" class="form-label small">Entraînement (%)</label>
-                            <input type="number" class="form-control" id="trainSizeConfig" min="40" max="80" value="70" required onchange="updateDataSplitsConfig()">
+                    <h6 class="text-info"><i class="bi bi-pie-chart"></i> Configuration du Modèle</h6>
+                    
+                    <!-- Module 1: Division des Données -->
+                    <div class="module-info-card">
+                        <h6 class="card-title">
+                            <i class="bi bi-diagram-3"></i> Module 1: Division des Données
+                        </h6>
+                        <div id="splitMethodInfo" class="mb-3">
+                            <!-- Sera rempli dynamiquement -->
                         </div>
-                        <div class="col-md-4">
-                            <label for="valSizeConfig" class="form-label small">Validation (%)</label>
-                            <input type="number" class="form-control" id="valSizeConfig" min="10" max="30" value="15" required onchange="updateDataSplitsConfig()">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="testSizeConfig" class="form-label small">Test (%)</label>
-                            <input type="number" class="form-control" id="testSizeConfig" min="10" max="30" value="15" readonly style="background-color: rgba(255,255,255,0.1);">
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <div class="percentage-display">
+                                    <strong>Entraînement:</strong>
+                                    <span id="trainSizeInfo">70%</span>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="percentage-display">
+                                    <strong>Validation:</strong>
+                                    <span id="valSizeInfo">15%</span>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="percentage-display">
+                                    <strong>Test:</strong>
+                                    <span id="testSizeInfo">15%</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <small class="text-muted">Les pourcentages doivent totaliser 100%</small>
+                    
+                    <!-- Module 2: Configuration d'Exécution -->
+                    <div class="module-info-card">
+                        <h6 class="card-title">
+                            <i class="bi bi-gear"></i> Module 2: Configuration d'Exécution
+                        </h6>
+                        <div id="executionMethodInfo">
+                            <!-- Sera rempli dynamiquement -->
+                        </div>
+                    </div>
                 </div>
                 
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle"></i> Ces paramètres s'appliquent uniquement à cette session d'entraînement.
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> <strong>Note:</strong> Pour modifier ces paramètres, éditez le modèle dans la page des modèles.
                 </div>
             </div>
             <div class="modal-footer">
@@ -2834,6 +2968,122 @@ function trainModel(modelId) {
         <strong>Dataset:</strong> ${model.dataset_name || 'Dataset #' + model.dataset}
     `;
     
+    // Mettre à jour les informations du Module 1 (Division des Données)
+    const splitMethod = model.default_split_method || 'random';
+    const splitConfig = model.default_split_config || {};
+    const trainSize = (splitConfig.train_size || 0.7) * 100;
+    const valSize = (splitConfig.val_size || 0.15) * 100;
+    const testSize = (splitConfig.test_size || 0.15) * 100;
+    
+    document.getElementById('trainSizeInfo').textContent = `${trainSize}%`;
+    document.getElementById('valSizeInfo').textContent = `${valSize}%`;
+    document.getElementById('testSizeInfo').textContent = `${testSize}%`;
+    
+    // Méthode de division
+    const splitMethodNames = {
+        'random': 'Division Aléatoire',
+        'stratified': 'Division Stratifiée',
+        'group': 'Division par Groupes',
+        'temporal': 'Division Temporelle',
+        'sequential': 'Division Séquentielle'
+    };
+    
+    // Créer le contenu pour Module 1 avec le nouveau style
+    let splitMethodInfo = `
+        <div class="module-detail">
+            <span class="module-detail-label">Méthode de division</span>
+            <span class="module-strategy-badge">${splitMethodNames[splitMethod] || splitMethod}</span>
+        </div>
+    `;
+    
+    if (splitConfig.random_state) {
+        splitMethodInfo += `
+            <div class="module-detail">
+                <span class="module-detail-label">Semence aléatoire</span>
+                <span class="module-detail-value">${splitConfig.random_state}</span>
+            </div>
+        `;
+    }
+    
+    document.getElementById('splitMethodInfo').innerHTML = splitMethodInfo;
+    
+    // Mettre à jour les informations du Module 2 (Configuration d'Exécution)
+    const executionMethod = model.default_execution_method || 'standard';
+    const executionConfig = model.default_execution_config || {};
+    
+    const executionMethodNames = {
+        'standard': 'Exécution Standard (sans cross-validation)',
+        'kfold': 'K-Fold Cross Validation',
+        'stratified_kfold': 'Stratified K-Fold Cross Validation',
+        'time_series_split': 'Time Series Split',
+        'leave_one_out': 'Leave-One-Out Cross Validation',
+        'repeated_kfold': 'Repeated K-Fold Cross Validation',
+        'repeated_stratified_kfold': 'Repeated Stratified K-Fold Cross Validation'
+    };
+    
+    // Créer le contenu pour Module 2 avec le nouveau style
+    let executionInfo = `
+        <div class="module-detail">
+            <span class="module-detail-label">Stratégie d'exécution</span>
+            <span class="module-strategy-badge">${executionMethodNames[executionMethod] || executionMethod}</span>
+        </div>
+    `;
+    
+    // Ajouter des détails selon la méthode
+    if (executionMethod === 'kfold' || executionMethod === 'stratified_kfold') {
+        executionInfo += `
+            <div class="module-detail">
+                <span class="module-detail-label">Nombre de folds</span>
+                <span class="module-detail-value">${executionConfig.n_splits || 5}</span>
+            </div>
+        `;
+    } else if (executionMethod === 'repeated_kfold' || executionMethod === 'repeated_stratified_kfold') {
+        executionInfo += `
+            <div class="module-detail">
+                <span class="module-detail-label">Nombre de folds</span>
+                <span class="module-detail-value">${executionConfig.n_splits || 5}</span>
+            </div>
+            <div class="module-detail">
+                <span class="module-detail-label">Répétitions</span>
+                <span class="module-detail-value">${executionConfig.n_repeats || 10}</span>
+            </div>
+        `;
+    } else if (executionMethod === 'time_series_split') {
+        executionInfo += `
+            <div class="module-detail">
+                <span class="module-detail-label">Nombre de splits</span>
+                <span class="module-detail-value">${executionConfig.n_splits || 5}</span>
+            </div>
+        `;
+        if (executionConfig.gap) {
+            executionInfo += `
+                <div class="module-detail">
+                    <span class="module-detail-label">Gap temporel</span>
+                    <span class="module-detail-value">${executionConfig.gap}</span>
+                </div>
+            `;
+        }
+    }
+    
+    if (executionConfig.random_state) {
+        executionInfo += `
+            <div class="module-detail">
+                <span class="module-detail-label">Semence aléatoire</span>
+                <span class="module-detail-value">${executionConfig.random_state}</span>
+            </div>
+        `;
+    }
+    
+    document.getElementById('executionMethodInfo').innerHTML = executionInfo;
+    
+    // Ajouter une animation highlight aux cartes de modules
+    setTimeout(() => {
+        document.querySelectorAll('.module-info-card').forEach(card => {
+            card.classList.add('highlight');
+            setTimeout(() => card.classList.remove('highlight'), 2000);
+        });
+    }, 100);
+    
     // Afficher le modal de configuration
     const modal = new bootstrap.Modal(document.getElementById('trainConfigModal'));
     modal.show();
@@ -2842,17 +3092,13 @@ function trainModel(modelId) {
 function confirmTraining() {
     if (!currentTrainingModel) return;
     
-    // Valider les pourcentages
-    if (!updateDataSplitsConfig()) {
-        showNotification('Erreur', 'Les pourcentages de division des données doivent totaliser 100%', 'error');
-        return;
-    }
+    // Utiliser les valeurs de configuration du modèle (Module 1)
+    const splitConfig = currentTrainingModel.default_split_config || {};
+    const trainSize = splitConfig.train_size || 0.7;
+    const valSize = splitConfig.val_size || 0.15;
+    const testSize = splitConfig.test_size || 0.15;
     
-    const trainSize = parseInt(document.getElementById('trainSizeConfig').value);
-    const valSize = parseInt(document.getElementById('valSizeConfig').value);
-    const testSize = parseInt(document.getElementById('testSizeConfig').value);
-    
-    // Créer une nouvelle session d'entraînement avec les paramètres de division
+    // Créer une nouvelle session d'entraînement avec les paramètres du modèle
     const trainingData = {
         model_definition: currentTrainingModel.id,
         name: `${currentTrainingModel.name} - Training ${new Date().toISOString()}`,
@@ -2864,10 +3110,16 @@ function confirmTraining() {
         hyperparameters: currentTrainingModel.hyperparameters,
         custom_architecture: currentTrainingModel.custom_architecture,
         use_custom_architecture: currentTrainingModel.use_custom_architecture,
-        train_split: trainSize / 100,
-        val_split: valSize / 100,
-        test_split: testSize / 100,
-        test_size: testSize / 100  // Pour compatibilité
+        // Module 1: Division des données
+        split_method: currentTrainingModel.default_split_method || 'random',
+        split_config: splitConfig,
+        train_split: trainSize,
+        val_split: valSize,
+        test_split: testSize,
+        test_size: testSize,  // Pour compatibilité
+        // Module 2: Configuration d'exécution
+        execution_method: currentTrainingModel.default_execution_method || 'standard',
+        execution_config: currentTrainingModel.default_execution_config || {}
     };
     
     // Fermer le modal
@@ -2903,7 +3155,14 @@ function confirmTraining() {
 // Helper function to load model form data
 function loadModelFormData(model) {
     console.log('Loading model form data:', model);
-    console.log('Hyperparameters:', model.hyperparameters);
+    console.log('Module 1 config:', {
+        method: model.default_split_method,
+        config: model.default_split_config
+    });
+    console.log('Module 2 config:', {
+        method: model.default_execution_method,
+        config: model.default_execution_config
+    });
     
     document.getElementById('modelName').value = model.name;
     document.getElementById('modelType').value = model.model_type;
@@ -2912,6 +3171,67 @@ function loadModelFormData(model) {
     const testSize = model.hyperparameters?.test_size || 0.2;
     console.log('Loading test_size:', testSize, '-> UI value:', testSize * 100);
     document.getElementById('testSize').value = testSize * 100;
+    
+    // Load Module 1: Data Split Configuration
+    if (model.default_split_method) {
+        console.log('Setting split method to:', model.default_split_method);
+        document.getElementById('splitMethod').value = model.default_split_method;
+        updateSplitMethodOptions(); // Update the UI based on method
+    }
+    
+    if (model.default_split_config) {
+        const splitConfig = model.default_split_config;
+        console.log('Loading split config:', splitConfig);
+        document.getElementById('trainSize').value = (splitConfig.train_size || 0.7) * 100;
+        document.getElementById('valSize').value = (splitConfig.val_size || 0.15) * 100;
+        document.getElementById('testSize').value = (splitConfig.test_size || 0.15) * 100;
+        
+        if (splitConfig.random_state) {
+            document.getElementById('globalRandomState').value = splitConfig.random_state;
+        }
+    }
+    
+    // Load Module 2: Execution Configuration
+    if (model.default_execution_method) {
+        console.log('Setting execution method to:', model.default_execution_method);
+        document.getElementById('executionMethod').value = model.default_execution_method;
+        updateExecutionConfig(); // Update the UI based on method
+    }
+    
+    if (model.default_execution_config) {
+        const execConfig = model.default_execution_config;
+        console.log('Loading execution config:', execConfig);
+        
+        // Load K-Fold specific config
+        if (execConfig.n_splits) {
+            const kfoldSplitsEl = document.getElementById('kfoldSplits');
+            if (kfoldSplitsEl) kfoldSplitsEl.value = execConfig.n_splits;
+        }
+        
+        // Load Repeated K-Fold specific config
+        if (execConfig.n_repeats) {
+            const repeatsEl = document.getElementById('kfoldRepeats');
+            if (repeatsEl) repeatsEl.value = execConfig.n_repeats;
+        }
+        
+        // Load Time Series specific config
+        if (execConfig.gap !== undefined) {
+            const gapEl = document.getElementById('timeSeriesGap');
+            if (gapEl) gapEl.value = execConfig.gap;
+        }
+        
+        // Load random state for execution
+        if (execConfig.random_state) {
+            const execRandomEl = document.getElementById('executionRandomState');
+            if (execRandomEl) execRandomEl.value = execConfig.random_state;
+        }
+        
+        // Load shuffle option
+        if (execConfig.shuffle !== undefined) {
+            const shuffleEl = document.getElementById('kfoldShuffle');
+            if (shuffleEl) shuffleEl.checked = execConfig.shuffle;
+        }
+    }
 }
 
 // Helper function to load hyperparameters
@@ -3159,6 +3479,42 @@ function updateModel(modelId) {
         modelConfig.use_custom_architecture = false;
     }
     
+    // Get Module 1: Data Split Configuration
+    const trainSize = parseInt(document.getElementById('trainSize').value) / 100;
+    const valSize = parseInt(document.getElementById('valSize').value) / 100;
+    const testSizeModule = parseInt(document.getElementById('testSize').value) / 100;
+    const splitMethod = document.getElementById('splitMethod').value;
+    const globalRandomState = document.getElementById('globalRandomState').value;
+    
+    const splitConfig = {
+        train_size: trainSize,
+        val_size: valSize,
+        test_size: testSizeModule,
+        random_state: globalRandomState ? parseInt(globalRandomState) : null
+    };
+    
+    // Get Module 2: Execution Configuration
+    const executionMethod = document.getElementById('executionMethod').value;
+    let executionConfig = {};
+    
+    if (executionMethod === 'kfold' || executionMethod === 'stratified_kfold') {
+        executionConfig.n_splits = parseInt(document.getElementById('kfoldSplits').value || 5);
+        const shuffleEl = document.getElementById('kfoldShuffle');
+        if (shuffleEl) executionConfig.shuffle = shuffleEl.checked;
+    } else if (executionMethod === 'repeated_kfold' || executionMethod === 'repeated_stratified_kfold') {
+        executionConfig.n_splits = parseInt(document.getElementById('kfoldSplits').value || 5);
+        executionConfig.n_repeats = parseInt(document.getElementById('kfoldRepeats').value || 10);
+    } else if (executionMethod === 'time_series_split') {
+        executionConfig.n_splits = parseInt(document.getElementById('kfoldSplits').value || 5);
+        const gapEl = document.getElementById('timeSeriesGap');
+        if (gapEl && gapEl.value) executionConfig.gap = parseInt(gapEl.value);
+    }
+    
+    const execRandomEl = document.getElementById('executionRandomState');
+    if (execRandomEl && execRandomEl.value) {
+        executionConfig.random_state = parseInt(execRandomEl.value);
+    }
+    
     const modelData = {
         name: document.getElementById('modelName').value,
         description: `Modèle ${modelType.toUpperCase()} pour prédire ${targetColumns.join(', ')}`,
@@ -3169,8 +3525,20 @@ function updateModel(modelId) {
         default_config: modelConfig,
         hyperparameters: modelConfig,
         custom_architecture: expertMode && networkLayers.length > 0 ? networkLayers : null,
-        use_custom_architecture: expertMode && networkLayers.length > 0
+        use_custom_architecture: expertMode && networkLayers.length > 0,
+        // Add Module 1 and Module 2 configurations
+        default_split_method: splitMethod,
+        default_split_config: splitConfig,
+        default_execution_method: executionMethod,
+        default_execution_config: executionConfig
     };
+    
+    console.log('Saving model with Module 1 and 2 configs:', {
+        splitMethod: modelData.default_split_method,
+        splitConfig: modelData.default_split_config,
+        executionMethod: modelData.default_execution_method,
+        executionConfig: modelData.default_execution_config
+    });
     
     showLoading();
     
@@ -4052,14 +4420,7 @@ function createModelOnly() {
     // Obtener configuración de ejecución del Module 2
     const executionConfig = getExecutionConfig();
     
-    // Integrar la configuración de división en los hiperparámetros
-    modelConfig = {
-        ...modelConfig,
-        ...dataSplitConfig,
-        execution_method: executionConfig.method,
-        execution_config: executionConfig.config
-    };
-    
+    // Keep Module 1 and Module 2 separate from hyperparameters
     const modelDefinitionData = {
         name: document.getElementById('modelName').value,
         description: `Modèle ${modelType.toUpperCase()} pour prédire ${targetColumns.join(', ')}`,
@@ -4071,13 +4432,20 @@ function createModelOnly() {
         hyperparameters: modelConfig,
         custom_architecture: expertMode && networkLayers.length > 0 ? networkLayers : null,
         use_custom_architecture: expertMode && networkLayers.length > 0,
-        // Agregar configuración de división de datos
+        // Module 1: Data Split Configuration
         default_split_method: dataSplitConfig.split_method,
         default_split_config: dataSplitConfig.split_config,
-        // Agregar configuración de ejecución
+        // Module 2: Execution Configuration
         default_execution_method: executionConfig.method,
         default_execution_config: executionConfig.config
     };
+    
+    console.log('Creating model with Module 1 and 2 configs:', {
+        splitMethod: modelDefinitionData.default_split_method,
+        splitConfig: modelDefinitionData.default_split_config,
+        executionMethod: modelDefinitionData.default_execution_method,
+        executionConfig: modelDefinitionData.default_execution_config
+    });
     
     showLoading();
     
@@ -5505,11 +5873,16 @@ function getDataSplitConfig() {
     
     const config = {
         split_method: document.getElementById('splitMethod').value,
-        train_split: trainPct / total,
-        val_split: valPct / total,
-        test_split: testPct / total,
+        train_size: trainPct / total,
+        val_size: valPct / total,
+        test_size: testPct / total,
         random_state: randomState,
-        split_config: {}
+        split_config: {
+            train_size: trainPct / total,
+            val_size: valPct / total,
+            test_size: testPct / total,
+            random_state: randomState
+        }
     };
     
     // Configuración específica según el método

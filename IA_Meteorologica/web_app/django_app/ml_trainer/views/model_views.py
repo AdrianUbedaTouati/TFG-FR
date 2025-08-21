@@ -146,7 +146,12 @@ class CloneModelDefinitionView(APIView):
             custom_architecture=original.custom_architecture,
             use_custom_architecture=original.use_custom_architecture,
             framework=original.framework,
-            user=request.user
+            user=request.user,
+            # Include Module 1 and Module 2 fields
+            default_split_method=original.default_split_method,
+            default_split_config=original.default_split_config,
+            default_execution_method=original.default_execution_method,
+            default_execution_config=original.default_execution_config
         )
         
         serializer = ModelDefinitionSerializer(new_model)

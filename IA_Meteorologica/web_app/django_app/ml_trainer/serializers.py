@@ -90,7 +90,10 @@ class ModelDefinitionSerializer(serializers.ModelSerializer):
             'dataset', 'dataset_name', 'predictor_columns', 'target_columns',
             'default_config', 'hyperparameters', 'custom_architecture', 
             'use_custom_architecture', 'training_count', 'best_score', 
-            'last_trained', 'is_active', 'latest_training', 'success_rate', 'actual_training_count'
+            'last_trained', 'is_active', 'latest_training', 'success_rate', 'actual_training_count',
+            # Module 1 and Module 2 fields
+            'default_split_method', 'default_split_config',
+            'default_execution_method', 'default_execution_config'
         ]
     
     def get_latest_training(self, obj):
