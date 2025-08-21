@@ -9,6 +9,7 @@ import json
 import joblib
 import os
 import requests
+import time
 from datetime import datetime, timedelta
 from django.utils import timezone
 from django.core.files import File
@@ -988,12 +989,37 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
     # Create progress callback
     progress_callback = SklearnProgressCallback(session, model_type)
     
-    # Get Module 2 configuration
+    # Get Module 2 configuration - Debug extensively
+    print(f"[train_sklearn_model] DEBUG - Session object: {session}")
+    print(f"[train_sklearn_model] DEBUG - Session fields: {[field.name for field in session._meta.fields]}")
+    print(f"[train_sklearn_model] DEBUG - hasattr execution_method: {hasattr(session, 'execution_method')}")
+    print(f"[train_sklearn_model] DEBUG - hasattr execution_config: {hasattr(session, 'execution_config')}")
+    
+    if hasattr(session, 'execution_method'):
+        print(f"[train_sklearn_model] DEBUG - session.execution_method value: '{session.execution_method}'")
+    if hasattr(session, 'execution_config'):
+        print(f"[train_sklearn_model] DEBUG - session.execution_config value: {session.execution_config}")
+        
+    # Also check if the model_definition has Module 2 config
+    if hasattr(session, 'model_definition') and session.model_definition:
+        model_def = session.model_definition
+        print(f"[train_sklearn_model] DEBUG - Model definition execution_method: {getattr(model_def, 'default_execution_method', 'Not set')}")
+        print(f"[train_sklearn_model] DEBUG - Model definition execution_config: {getattr(model_def, 'default_execution_config', 'Not set')}")
+    
     execution_method = session.execution_method if hasattr(session, 'execution_method') else 'standard'
     execution_config = session.execution_config if hasattr(session, 'execution_config') else {}
     
-    print(f"[train_sklearn_model] Module 2 - Execution method: {execution_method}")
-    print(f"[train_sklearn_model] Module 2 - Execution config: {execution_config}")
+    # Fallback: if session doesn't have Module 2 config but model definition does, use model's config
+    if execution_method == 'standard' and hasattr(session, 'model_definition') and session.model_definition:
+        model_def = session.model_definition
+        if hasattr(model_def, 'default_execution_method') and model_def.default_execution_method != 'standard':
+            print(f"[train_sklearn_model] FALLBACK: Using model definition execution config")
+            execution_method = model_def.default_execution_method
+            execution_config = getattr(model_def, 'default_execution_config', {}) or {}
+            print(f"[train_sklearn_model] FALLBACK: execution_method = {execution_method}, execution_config = {execution_config}")
+    
+    print(f"[train_sklearn_model] Module 2 - Final execution method: {execution_method}")
+    print(f"[train_sklearn_model] Module 2 - Final execution config: {execution_config}")
     
     # Log Module 2 configuration to training session
     progress_callback.log_message(f"🔧 Module 2: Configuration d'Exécution")
@@ -1185,8 +1211,9 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
             
             for train_idx, val_idx in execution_strategy.get_splits(X_full, y_full):
                 fold += 1
+                fold_start_time = time.time()
                 print(f"[train_sklearn_model] Training fold {fold}/{n_splits}")
-                progress_callback.log_message(f"🔄 Fold {fold}/{n_splits} - Entraînement en cours...")
+                progress_callback.log_message(f"🔄 Fold {fold}/{n_splits} - Démarrage de l'entraînement...")
                 
                 # Get fold data
                 X_fold_train = X_full[train_idx]
@@ -1194,19 +1221,26 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                 X_fold_val = X_full[val_idx]
                 y_fold_val = y_full[val_idx]
                 
-                progress_callback.log_message(f"   Données d'entraînement: {X_fold_train.shape[0]} échantillons")
-                progress_callback.log_message(f"   Données de validation: {X_fold_val.shape[0]} échantillons")
+                progress_callback.log_message(f"   📊 Données d'entraînement: {X_fold_train.shape[0]} échantillons ({X_fold_train.shape[0]/X_full.shape[0]*100:.1f}%)")
+                progress_callback.log_message(f"   📋 Données de validation: {X_fold_val.shape[0]} échantillons ({X_fold_val.shape[0]/X_full.shape[0]*100:.1f}%)")
+                progress_callback.log_message(f"   🔧 Entraînement du modèle en cours...")
                 
                 # Clone model for this fold
                 from sklearn.base import clone
                 fold_model = clone(model)
                 
-                # Train on fold
+                # Train on fold with timing
+                train_start = time.time()
                 fold_model.fit(X_fold_train, y_fold_train)
+                train_time = time.time() - train_start
                 
-                # Evaluate
+                progress_callback.log_message(f"   ⏱️  Temps d'entraînement: {train_time:.2f}s")
+                
+                # Evaluate with detailed timing
+                eval_start = time.time()
                 train_pred = fold_model.predict(X_fold_train)
                 val_pred = fold_model.predict(X_fold_val)
+                eval_time = time.time() - eval_start
                 
                 train_score = score_func(y_fold_train, train_pred)
                 val_score = score_func(y_fold_val, val_pred)
@@ -1214,17 +1248,26 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                 cv_results['train_scores'].append(train_score)
                 cv_results['val_scores'].append(val_score)
                 
-                progress_callback.log_message(f"   Score d'entraînement: {train_score:.4f}")
-                progress_callback.log_message(f"   Score de validation: {val_score:.4f}")
+                # More detailed progress messages
+                fold_total_time = time.time() - fold_start_time
+                progress_callback.log_message(f"   ✅ Score d'entraînement: {train_score:.4f}")
+                progress_callback.log_message(f"   📈 Score de validation: {val_score:.4f}")
+                progress_callback.log_message(f"   ⏰ Temps total fold: {fold_total_time:.2f}s (train: {train_time:.2f}s, eval: {eval_time:.2f}s)")
+                
+                # Show running average
+                current_avg = sum(cv_results['val_scores']) / len(cv_results['val_scores'])
+                progress_callback.log_message(f"   📊 Score moyen jusqu'ici: {current_avg:.4f}")
                 
                 # Save progress after each fold
                 progress_callback.session.save()
                 
-                # Update progress
+                # Update progress with more context
+                remaining_folds = n_splits - fold
+                estimated_time_remaining = fold_total_time * remaining_folds
                 progress = 0.3 + (0.5 * (fold / n_splits))
                 progress_callback.update_progress(
                     progress,
-                    f"Cross-validation - Fold {fold}/{n_splits} - Val score: {val_score:.4f}"
+                    f"Fold {fold}/{n_splits} terminé - Score: {val_score:.4f} - ETA: {estimated_time_remaining:.0f}s"
                 )
             
             # Train final model on all data
@@ -1235,15 +1278,27 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
             cv_mean_train = np.mean(cv_results['train_scores'])
             cv_mean_val = np.mean(cv_results['val_scores'])
             cv_std_val = np.std(cv_results['val_scores'])
+            cv_best_val = np.max(cv_results['val_scores'])
+            cv_worst_val = np.min(cv_results['val_scores'])
+            
+            # Store cross-validation metrics in the session
+            progress_callback.session.cv_scores = cv_results['val_scores']
+            progress_callback.session.cv_mean_score = float(cv_mean_val)
+            progress_callback.session.cv_best_score = float(cv_best_val)
+            progress_callback.session.cv_worst_score = float(cv_worst_val)
+            progress_callback.session.cv_std_score = float(cv_std_val)
             
             print(f"[train_sklearn_model] CV Results - Train: {cv_mean_train:.4f}, Val: {cv_mean_val:.4f} (+/- {cv_std_val:.4f})")
+            print(f"[train_sklearn_model] CV Best: {cv_best_val:.4f}, Worst: {cv_worst_val:.4f}")
             
             progress_callback.update_progress(0.8, f"Cross-validation terminée - Score: {cv_mean_val:.4f} (+/- {cv_std_val:.4f})")
             progress_callback.log_message(f"✅ Cross-validation complétée:")
-            progress_callback.log_message(f"   Score moyen de validation: {cv_mean_val:.4f} (+/- {cv_std_val:.4f})")
-            progress_callback.log_message(f"   Score moyen d'entraînement: {cv_mean_train:.4f}")
+            progress_callback.log_message(f"   📊 Meilleur score: {cv_best_val:.4f}")
+            progress_callback.log_message(f"   📈 Score moyen: {cv_mean_val:.4f} (+/- {cv_std_val:.4f})")
+            progress_callback.log_message(f"   📉 Score le plus bas: {cv_worst_val:.4f}")
+            progress_callback.log_message(f"   🏃 Score d'entraînement: {cv_mean_train:.4f}")
             
-            # Save all the CV logs to the session
+            # Save all the CV logs and metrics to the session
             progress_callback.session.save()
             
         # Standard training (no cross-validation)

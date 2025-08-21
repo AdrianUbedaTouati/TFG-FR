@@ -3122,6 +3122,13 @@ function confirmTraining() {
         execution_config: currentTrainingModel.default_execution_config || {}
     };
     
+    console.log('=== DEBUG TRAINING DATA ===');
+    console.log('Model execution method:', currentTrainingModel.default_execution_method);
+    console.log('Model execution config:', currentTrainingModel.default_execution_config);
+    console.log('Training data execution method:', trainingData.execution_method);
+    console.log('Training data execution config:', trainingData.execution_config);
+    console.log('Full training data:', trainingData);
+    
     // Fermer le modal
     const modal = bootstrap.Modal.getInstance(document.getElementById('trainConfigModal'));
     modal.hide();

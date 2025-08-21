@@ -134,7 +134,12 @@ class TrainingSessionSerializer(serializers.ModelSerializer):
             'hyperparameters', 'config', 'train_split', 'val_split', 'test_split', 'test_size',
             'selected_metrics', 'training_history', 'test_results',
             'status', 'error_message', 'custom_architecture', 'use_custom_architecture',
-            'model_definition'  # Added model_definition field
+            'model_definition',  # Added model_definition field
+            # Module 1 and Module 2 fields
+            'split_method', 'split_config', 'random_state',
+            'execution_method', 'execution_config',
+            # Cross-validation metrics fields
+            'cv_scores', 'cv_best_score', 'cv_mean_score', 'cv_worst_score', 'cv_std_score'
         ]
         read_only_fields = ['created_at', 'training_history', 'test_results', 'status', 'error_message']
 

@@ -289,6 +289,29 @@
         color: #94a3b8;
         font-size: 1.1rem;
     }
+    
+    .cv-stat {
+        padding: 15px;
+        margin: 10px 0;
+    }
+    
+    .cv-stat-value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin: 8px 0;
+        text-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    }
+    
+    .cv-stat-label {
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .cv-summary {
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
 </style>
 {% endblock %}
 
@@ -342,6 +365,49 @@
         <h3 class="text-white mb-4"><i class="bi bi-clipboard-data"></i> Métriques de Test</h3>
         <div class="metric-grid" id="test-metrics">
             <!-- Metrics will be dynamically added here -->
+        </div>
+    </div>
+    
+    <!-- Cross-Validation Metrics -->
+    <div class="results-container" id="cv-metrics-section" style="display: none;">
+        <h3 class="text-white mb-4"><i class="bi bi-graph-up-arrow"></i> Résultats de Validation Croisée</h3>
+        <div class="cv-summary mb-4" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1)); border: 2px solid rgba(99, 102, 241, 0.3); border-radius: 15px; padding: 25px;">
+            <div class="row text-center">
+                <div class="col-md-3">
+                    <div class="cv-stat">
+                        <i class="bi bi-trophy text-warning" style="font-size: 2rem;"></i>
+                        <div class="cv-stat-value text-warning" id="cv-best-score">--</div>
+                        <div class="cv-stat-label text-muted">Meilleur Score</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="cv-stat">
+                        <i class="bi bi-bar-chart text-info" style="font-size: 2rem;"></i>
+                        <div class="cv-stat-value text-info" id="cv-mean-score">--</div>
+                        <div class="cv-stat-label text-muted">Score Moyen</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="cv-stat">
+                        <i class="bi bi-arrow-down text-danger" style="font-size: 2rem;"></i>
+                        <div class="cv-stat-value text-danger" id="cv-worst-score">--</div>
+                        <div class="cv-stat-label text-muted">Score le Plus Bas</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="cv-stat">
+                        <i class="bi bi-graph-up text-success" style="font-size: 2rem;"></i>
+                        <div class="cv-stat-value text-success" id="cv-std-score">--</div>
+                        <div class="cv-stat-label text-muted">Écart-Type</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="chart-container">
+            <h4 class="chart-title">Distribution des Scores CV</h4>
+            <div class="chart-wrapper">
+                <canvas id="cv-scores-chart"></canvas>
+            </div>
         </div>
     </div>
     
@@ -592,6 +658,9 @@ function displayResults(data) {
         document.getElementById('test-metrics').innerHTML = 
             '<p class="text-muted">Aucune métrique de test disponible.</p>';
     }
+    
+    // Display cross-validation metrics if available
+    displayCVMetrics(data);
     
     // Create charts
     if (data.training_history) {
@@ -1094,6 +1163,110 @@ function exportResults() {
     a.download = `results_${sessionId}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+}
+
+// Display cross-validation metrics
+function displayCVMetrics(data) {
+    // Check if CV metrics are available
+    if (data.cv_best_score !== null && data.cv_best_score !== undefined) {
+        console.log('Displaying CV metrics:', {
+            best: data.cv_best_score,
+            mean: data.cv_mean_score, 
+            worst: data.cv_worst_score,
+            std: data.cv_std_score,
+            scores: data.cv_scores
+        });
+        
+        // Show the CV metrics section
+        document.getElementById('cv-metrics-section').style.display = 'block';
+        
+        // Update the CV statistics
+        document.getElementById('cv-best-score').textContent = data.cv_best_score.toFixed(4);
+        document.getElementById('cv-mean-score').textContent = data.cv_mean_score.toFixed(4);
+        document.getElementById('cv-worst-score').textContent = data.cv_worst_score.toFixed(4);
+        document.getElementById('cv-std-score').textContent = data.cv_std_score.toFixed(4);
+        
+        // Create CV scores distribution chart
+        if (data.cv_scores && data.cv_scores.length > 0) {
+            createCVScoresChart(data.cv_scores);
+        }
+    } else {
+        console.log('No CV metrics available');
+        // Hide the CV metrics section
+        document.getElementById('cv-metrics-section').style.display = 'none';
+    }
+}
+
+// Create CV scores distribution chart
+function createCVScoresChart(cvScores) {
+    const ctx = document.getElementById('cv-scores-chart').getContext('2d');
+    
+    const foldLabels = cvScores.map((_, i) => `Fold ${i + 1}`);
+    
+    charts.cvScores = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: foldLabels,
+            datasets: [{
+                label: 'Score de Validation',
+                data: cvScores,
+                backgroundColor: cvScores.map((score, i) => {
+                    const maxScore = Math.max(...cvScores);
+                    const minScore = Math.min(...cvScores);
+                    if (score === maxScore) return 'rgba(34, 197, 94, 0.8)'; // Green for best
+                    if (score === minScore) return 'rgba(239, 68, 68, 0.8)'; // Red for worst
+                    return 'rgba(99, 102, 241, 0.6)'; // Blue for others
+                }),
+                borderColor: cvScores.map((score, i) => {
+                    const maxScore = Math.max(...cvScores);
+                    const minScore = Math.min(...cvScores);
+                    if (score === maxScore) return 'rgba(34, 197, 94, 1)';
+                    if (score === minScore) return 'rgba(239, 68, 68, 1)';
+                    return 'rgba(99, 102, 241, 1)';
+                }),
+                borderWidth: 2
+            }]
+        },
+        options: {
+            ...commonChartOptions,
+            plugins: {
+                ...commonChartOptions.plugins,
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: `Distribution des Scores par Fold (${cvScores.length} folds)`,
+                    color: '#f0f9ff'
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Folds',
+                        color: '#94a3b8'
+                    },
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Score',
+                        color: '#94a3b8'
+                    },
+                    ticks: { 
+                        color: '#94a3b8',
+                        callback: function(value) {
+                            return value.toFixed(4);
+                        }
+                    },
+                    grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                }
+            }
+        }
+    });
 }
 
 function showError(message) {

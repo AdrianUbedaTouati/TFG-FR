@@ -368,6 +368,13 @@ class TrainingSession(models.Model):
     progress = models.FloatField(default=0.0)  # Overall progress 0-1
     training_logs = models.JSONField(default=list)  # Store training logs
     
+    # Cross-validation metrics storage
+    cv_scores = models.JSONField(null=True, blank=True, help_text='All fold scores from cross-validation')
+    cv_best_score = models.FloatField(null=True, blank=True, help_text='Best score from cross-validation')
+    cv_mean_score = models.FloatField(null=True, blank=True, help_text='Average score from cross-validation')
+    cv_worst_score = models.FloatField(null=True, blank=True, help_text='Lowest score from cross-validation')
+    cv_std_score = models.FloatField(null=True, blank=True, help_text='Standard deviation of CV scores')
+    
     def __str__(self):
         return f"{self.model_type} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
     
