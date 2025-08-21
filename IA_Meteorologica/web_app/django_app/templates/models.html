@@ -1078,6 +1078,7 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        
                                     </div>
                                 </div>
                             </div>
@@ -5507,6 +5508,151 @@ function updateVariableVisualization() {
     updateDataSplitVisualization();
 }
 
+// Función para cargar estadísticas de variables target en el modal
+async function loadTargetStatisticsForModal(datasetId, targetColumns) {
+    try {
+        // Mostrar sección de estadísticas en el modal
+        document.getElementById('targetStatisticsModalSection').style.display = 'block';
+        const contentDiv = document.getElementById('targetStatisticsModalContent');
+        
+        // Mostrar indicador de carga
+        contentDiv.innerHTML = '<p class="text-muted text-center"><i class="bi bi-hourglass-split"></i> Chargement des statistiques...</p>';
+        
+        // Crear contenedor para las estadísticas
+        let statisticsHTML = '<div class="row">';
+        
+        // Para cada columna target, obtener estadísticas
+        for (const column of targetColumns) {
+            try {
+                const response = await fetch(`/api/datasets/${datasetId}/columns/${encodeURIComponent(column)}/`);
+                if (!response.ok) throw new Error('Error al cargar estadísticas');
+                
+                const data = await response.json();
+                
+                // Definir totalRows al principio para evitar errores de referencia
+                const totalRows = data.total_rows || data.stats?.count || 0;
+                const uniqueCount = data.unique_count || 0;
+                const dtype = data.stats?.dtype || data.dtype || 'unknown';
+                const isCategoric = dtype === 'object' || dtype === 'category' || uniqueCount <= 20;
+                const nullCount = data.stats?.null_count || 0;
+                
+                // Crear tarjeta para esta variable
+                statisticsHTML += `
+                    <div class="col-lg-6 mb-3">
+                        <div class="card h-100 border-secondary">
+                            <div class="card-header bg-secondary text-white py-2">
+                                <h6 class="mb-0 small"><i class="bi bi-target"></i> ${column}</h6>
+                                <small class="text-white-50">Type: ${dtype}</small>
+                            </div>
+                            <div class="card-body py-2 small">
+                `;
+                
+                if (uniqueCount > 0) {
+                    
+                    statisticsHTML += `
+                        <div class="mb-2">
+                            <strong>Valeurs uniques:</strong> ${uniqueCount}
+                        </div>
+                    `;
+                    
+                    if (isCategoric && data.value_counts) {
+                        // Mostrar distribución de valores
+                        statisticsHTML += '<div class="mt-3"><strong>Distribution:</strong></div>';
+                        statisticsHTML += '<div class="small">';
+                        
+                        // Limitar a los primeros 10 valores más frecuentes
+                        const sortedValues = Object.entries(data.value_counts)
+                            .sort((a, b) => b[1] - a[1])
+                            .slice(0, 10);
+                        
+                        for (const [value, count] of sortedValues) {
+                            const percentage = ((count / totalRows) * 100).toFixed(1);
+                            statisticsHTML += `
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="text-truncate" style="max-width: 50%;" title="${value}">${value}:</span>
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress" style="width: 50px; height: 8px; margin-right: 5px;">
+                                            <div class="progress-bar bg-info" style="width: ${percentage}%"></div>
+                                        </div>
+                                        <small>${count} (${percentage}%)</small>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        
+                        if (uniqueCount > 10) {
+                            statisticsHTML += `<div class="text-muted mt-2">... et ${uniqueCount - 10} autres valeurs</div>`;
+                        }
+                        
+                        statisticsHTML += '</div>';
+                    }
+                }
+                
+                // Si es numérico, agregar estadísticas
+                if (data.stats && (data.stats.dtype === 'float64' || data.stats.dtype === 'int64' || data.stats.dtype === 'float32' || data.stats.dtype === 'int32')) {
+                    statisticsHTML += `
+                        <div class="mb-2 mt-3">
+                            <strong>Statistiques numériques:</strong>
+                        </div>
+                        <div class="small">
+                            <div><strong>Min:</strong> ${data.stats.min?.toFixed(4) || 'N/A'}</div>
+                            <div><strong>Max:</strong> ${data.stats.max?.toFixed(4) || 'N/A'}</div>
+                            <div><strong>Moyenne:</strong> ${data.stats.mean?.toFixed(4) || 'N/A'}</div>
+                            <div><strong>Écart-type:</strong> ${data.stats.std?.toFixed(4) || 'N/A'}</div>
+                        </div>
+                    `;
+                }
+                
+                // Información adicional
+                if (nullCount > 0 && totalRows > 0) {
+                    const nullPercentage = ((nullCount / totalRows) * 100).toFixed(1);
+                    statisticsHTML += `
+                        <div class="alert alert-warning mt-2 mb-0 py-1 px-2 small">
+                            <i class="bi bi-exclamation-triangle"></i> ${nullCount} valeurs nulles (${nullPercentage}%)
+                        </div>
+                    `;
+                }
+                
+                statisticsHTML += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error(`Error cargando estadísticas para ${column}:`, error);
+                statisticsHTML += `
+                    <div class="col-lg-6 mb-3">
+                        <div class="card h-100 border-danger">
+                            <div class="card-header bg-danger text-white py-2">
+                                <h6 class="mb-0 small">${column}</h6>
+                            </div>
+                            <div class="card-body py-2">
+                                <small class="text-danger">Erreur lors du chargement</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        statisticsHTML += '</div>';
+        
+        // Si no hay variables target, mostrar mensaje
+        if (targetColumns.length === 0) {
+            statisticsHTML = '<p class="text-muted text-center">Aucune variable cible sélectionnée</p>';
+        }
+        
+        // Actualizar contenido
+        contentDiv.innerHTML = statisticsHTML;
+        
+    } catch (error) {
+        console.error('Error general cargando estadísticas:', error);
+        document.getElementById('targetStatisticsModalContent').innerHTML = 
+            '<p class="text-danger text-center">Erreur lors du chargement des statistiques</p>';
+    }
+}
+
 // Actualizar la función createModelOnly para incluir la nueva configuración
 const originalCreateModelOnly = window.createModelOnly || function() {};
 window.createModelOnly = function() {
@@ -5634,6 +5780,13 @@ async function loadDataPreview(splitType, datasetId) {
         
         // Mostrar datos
         displayPreviewData(response);
+        
+        // Cargar estadísticas de variables target si hay alguna seleccionada
+        if (targetColumns.length > 0) {
+            loadTargetStatisticsForModal(datasetId, targetColumns);
+        } else {
+            document.getElementById('targetStatisticsModalSection').style.display = 'none';
+        }
         
     } catch (error) {
         console.error('Error cargando vista previa:', error);
@@ -5897,6 +6050,16 @@ function exportPreviewData(format) {
                                 <h6>Información de Columnas</h6>
                                 <div id="dataPreviewColumnInfo">
                                     <!-- Column info will be populated dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Estadísticas de Variables Target -->
+                        <div class="row mt-4" id="targetStatisticsModalSection" style="display: none;">
+                            <div class="col-12">
+                                <h6><i class="bi bi-bar-chart"></i> Statistiques des Variables Cibles</h6>
+                                <div id="targetStatisticsModalContent">
+                                    <!-- Target statistics will be populated dynamically -->
                                 </div>
                             </div>
                         </div>
