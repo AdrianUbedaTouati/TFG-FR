@@ -995,6 +995,21 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
     print(f"[train_sklearn_model] Module 2 - Execution method: {execution_method}")
     print(f"[train_sklearn_model] Module 2 - Execution config: {execution_config}")
     
+    # Log Module 2 configuration to training session
+    progress_callback.log_message(f"🔧 Module 2: Configuration d'Exécution")
+    progress_callback.log_message(f"   Méthode: {execution_method}")
+    if execution_method != 'standard':
+        if execution_config.get('n_splits'):
+            progress_callback.log_message(f"   Nombre de folds: {execution_config.get('n_splits')}")
+        if execution_config.get('n_repeats'):
+            progress_callback.log_message(f"   Répétitions: {execution_config.get('n_repeats')}")
+        if execution_config.get('shuffle') is not None:
+            progress_callback.log_message(f"   Mélange: {'Oui' if execution_config.get('shuffle') else 'Non'}")
+        if execution_config.get('random_state'):
+            progress_callback.log_message(f"   Random state: {execution_config.get('random_state')}")
+    else:
+        progress_callback.log_message(f"   Aucune cross-validation - Entraînement direct sur les données")
+    
     # Initialize preprocessing pipeline
     preprocessing_pipeline = None
     
@@ -1127,6 +1142,10 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
     # Create execution strategy from Module 2
     execution_strategy = ExecutionConfigManager.create_execution_strategy(execution_method, execution_config)
     print(f"[train_sklearn_model] Using execution strategy: {execution_strategy.get_description()}")
+    progress_callback.log_message(f"📊 Stratégie d'exécution: {execution_strategy.get_description()}")
+    
+    # Save the logged configuration
+    progress_callback.session.save()
     
     # Combine train and validation data for cross-validation strategies
     if execution_method != 'standard':
@@ -1167,12 +1186,16 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
             for train_idx, val_idx in execution_strategy.get_splits(X_full, y_full):
                 fold += 1
                 print(f"[train_sklearn_model] Training fold {fold}/{n_splits}")
+                progress_callback.log_message(f"🔄 Fold {fold}/{n_splits} - Entraînement en cours...")
                 
                 # Get fold data
                 X_fold_train = X_full[train_idx]
                 y_fold_train = y_full[train_idx]
                 X_fold_val = X_full[val_idx]
                 y_fold_val = y_full[val_idx]
+                
+                progress_callback.log_message(f"   Données d'entraînement: {X_fold_train.shape[0]} échantillons")
+                progress_callback.log_message(f"   Données de validation: {X_fold_val.shape[0]} échantillons")
                 
                 # Clone model for this fold
                 from sklearn.base import clone
@@ -1190,6 +1213,12 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                 
                 cv_results['train_scores'].append(train_score)
                 cv_results['val_scores'].append(val_score)
+                
+                progress_callback.log_message(f"   Score d'entraînement: {train_score:.4f}")
+                progress_callback.log_message(f"   Score de validation: {val_score:.4f}")
+                
+                # Save progress after each fold
+                progress_callback.session.save()
                 
                 # Update progress
                 progress = 0.3 + (0.5 * (fold / n_splits))
@@ -1210,6 +1239,12 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
             print(f"[train_sklearn_model] CV Results - Train: {cv_mean_train:.4f}, Val: {cv_mean_val:.4f} (+/- {cv_std_val:.4f})")
             
             progress_callback.update_progress(0.8, f"Cross-validation terminée - Score: {cv_mean_val:.4f} (+/- {cv_std_val:.4f})")
+            progress_callback.log_message(f"✅ Cross-validation complétée:")
+            progress_callback.log_message(f"   Score moyen de validation: {cv_mean_val:.4f} (+/- {cv_std_val:.4f})")
+            progress_callback.log_message(f"   Score moyen d'entraînement: {cv_mean_train:.4f}")
+            
+            # Save all the CV logs to the session
+            progress_callback.session.save()
             
         # Standard training (no cross-validation)
         elif model_type == 'xgboost' and hyperparams.get('early_stopping_enabled', True):

@@ -148,6 +148,10 @@ class SklearnProgressCallback:
         self._add_log(message)
         self.session.save()
     
+    def log_message(self, message):
+        """Add a log message without updating progress or saving immediately"""
+        self._add_log(message)
+    
     def _add_log(self, message):
         """Add a log entry to the session"""
         if not isinstance(self.session.training_logs, list):
