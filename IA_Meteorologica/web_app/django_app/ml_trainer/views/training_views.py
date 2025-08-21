@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404, render
 from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import FileResponse, Http404
 import threading
 
 from ..models import TrainingSession, ModelDefinition
@@ -766,4 +767,78 @@ class TrainingAnalysisTestView(APIView):
             print(f"Error in test view: {e}")
             import traceback
             traceback.print_exc()
-            return Response({'error': str(e)}, status=500)
+
+
+class DownloadModelView(APIView):
+    """Download trained model file"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, pk):
+        """Download the model file for a training session"""
+        # Get the training session
+        if request.user.is_staff:
+            session = get_object_or_404(TrainingSession, pk=pk)
+        else:
+            session = get_object_or_404(TrainingSession, pk=pk, user=request.user)
+        
+        # Check if session is completed and has a model file
+        if session.status != 'completed':
+            raise Http404("Training session is not completed")
+            
+        if not session.model_file:
+            raise Http404("No model file available")
+        
+        # Get the model file path
+        if hasattr(session.model_file, 'path'):
+            model_path = session.model_file.path
+        else:
+            # If model_file is stored as a string path
+            from django.conf import settings
+            model_path = os.path.join(settings.MEDIA_ROOT, str(session.model_file))
+        
+        # Check if file/directory exists
+        if not os.path.exists(model_path):
+            raise Http404("Model file not found on disk")
+        
+        # Handle different model types
+        if os.path.isdir(model_path):
+            # TensorFlow models are saved as directories, create a zip file
+            import zipfile
+            import tempfile
+            
+            # Create temporary zip file
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+            with zipfile.ZipFile(temp_file.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for root, dirs, files in os.walk(model_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, os.path.dirname(model_path))
+                        zipf.write(file_path, arcname)
+            
+            filename = f"model_{session.model_type}_{session.id}.zip"
+            response = FileResponse(
+                open(temp_file.name, 'rb'),
+                as_attachment=True,
+                filename=filename
+            )
+            # Clean up temp file after response
+            os.unlink(temp_file.name)
+            return response
+        else:
+            # Regular file (RandomForest, PyTorch, etc.)
+            if session.model_type == 'random_forest':
+                extension = '.pkl'
+            elif session.framework == 'pytorch':
+                extension = '.pth'
+            else:
+                extension = os.path.splitext(model_path)[1]
+            
+            filename = f"model_{session.model_type}_{session.id}{extension}"
+            
+            # Return file response
+            response = FileResponse(
+                open(model_path, 'rb'),
+                as_attachment=True,
+                filename=filename
+            )
+            return response

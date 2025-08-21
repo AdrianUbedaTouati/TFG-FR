@@ -1060,8 +1060,8 @@ function displayVariables(data) {
 
 // Action functions
 function downloadModel() {
-    if (sessionData && sessionData.model_file) {
-        window.location.href = sessionData.model_file;
+    if (sessionData && sessionData.status === 'completed') {
+        window.location.href = `/api/training-sessions/${sessionId}/download-model/`;
     } else {
         showNotification('Erreur', 'Aucun fichier de modèle disponible.', 'error');
     }

@@ -183,6 +183,31 @@ class ModelDefinition(models.Model):
     def get_latest_training(self):
         """Get the most recent training session for this model"""
         return self.trainingsession_set.order_by('-created_at').first()
+    
+    def calculate_best_score(self):
+        """Calculate the best score from all completed training sessions"""
+        completed_trainings = self.trainingsession_set.filter(status='completed')
+        best_score = None
+        
+        for training in completed_trainings:
+            if training.test_results:
+                # For classification models, use accuracy as the primary metric
+                if self.model_type in ['random_forest', 'neural_network', 'decision_tree', 'xgboost'] and training.hyperparameters.get('problem_type') == 'classification':
+                    score = training.test_results.get('accuracy', training.test_results.get('f1_score'))
+                # For regression models, use R² as the primary metric (higher is better)
+                else:
+                    score = training.test_results.get('r2')
+                
+                if score is not None:
+                    if best_score is None or score > best_score:
+                        best_score = score
+        
+        return best_score
+    
+    def update_best_score(self):
+        """Update the best_score field based on existing trainings"""
+        self.best_score = self.calculate_best_score()
+        self.save(update_fields=['best_score'])
 
 
 class TrainingSession(models.Model):
@@ -259,6 +284,15 @@ class TrainingSession(models.Model):
     
     def __str__(self):
         return f"{self.model_type} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+    
+    def delete(self, *args, **kwargs):
+        """Override delete to update model definition's best score"""
+        model_def = self.model_definition
+        super().delete(*args, **kwargs)
+        
+        # Update best score after deletion
+        if model_def:
+            model_def.update_best_score()
 
 
 class WeatherPrediction(models.Model):

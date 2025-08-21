@@ -11,6 +11,7 @@ import os
 import requests
 from datetime import datetime, timedelta
 from django.utils import timezone
+from django.core.files import File
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, models, callbacks
@@ -1501,7 +1502,25 @@ def train_model(session):
         print(f"[Training] Saving session with test results: {test_results}")
         session.training_history = history
         session.test_results = test_results
-        session.model_file = model_path
+        
+        # Save model file as Django File object
+        if os.path.exists(model_path_abs):
+            with open(model_path_abs, 'rb') as f:
+                session.model_file.save(f"model_{session.id}.pkl", File(f), save=False)
+        else:
+            # For TensorFlow models saved as directories, create a zip file
+            import zipfile
+            zip_path = f"{model_path_abs}.zip"
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for root, dirs, files in os.walk(model_path_abs):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, os.path.dirname(model_path_abs))
+                        zipf.write(file_path, arcname)
+            with open(zip_path, 'rb') as f:
+                session.model_file.save(f"model_{session.id}.zip", File(f), save=False)
+            os.remove(zip_path)  # Clean up temp zip file
+        
         session.status = 'completed'
         session.save()
         
@@ -1513,10 +1532,8 @@ def train_model(session):
             model_def.training_count += 1
             model_def.last_trained = timezone.now()
             
-            # Update best score if this is better
-            primary_metric = test_results.get('mae', float('inf'))
-            if model_def.best_score is None or primary_metric < model_def.best_score:
-                model_def.best_score = primary_metric
+            # Update best score based on all completed trainings
+            model_def.update_best_score()
             
             model_def.save()
         

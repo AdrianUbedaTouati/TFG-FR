@@ -2091,10 +2091,6 @@ function createModelCard(model) {
                     <div class="text-muted small">Entraînements</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-value">${model.success_rate || 0}%</div>
-                    <div class="text-muted small">Succès</div>
-                </div>
-                <div class="stat-item">
                     <div class="stat-value">${model.best_score ? (model.best_score * 100).toFixed(1) : '-'}%</div>
                     <div class="text-muted small">Meilleur</div>
                 </div>
@@ -2337,55 +2333,65 @@ function displayTrainingHistory(trainings) {
                         <div class="col-md-4">
                             ${training.status === 'completed' && Object.keys(metrics).length > 0 ? `
                                 <div class="metrics-summary">
-                                    ${metrics.accuracy !== undefined ? `
-                                        <div class="metric-item">
-                                            <i class="bi bi-bullseye"></i>
-                                            <span class="metric-label">Précision:</span>
-                                            <span class="metric-value">${(metrics.accuracy * 100).toFixed(2)}%</span>
-                                        </div>
-                                    ` : ''}
-                                    ${metrics.precision !== undefined ? `
-                                        <div class="metric-item">
-                                            <i class="bi bi-check-circle"></i>
-                                            <span class="metric-label">Précision:</span>
-                                            <span class="metric-value">${(metrics.precision * 100).toFixed(2)}%</span>
-                                        </div>
-                                    ` : ''}
-                                    ${metrics.recall !== undefined ? `
-                                        <div class="metric-item">
-                                            <i class="bi bi-search"></i>
-                                            <span class="metric-label">Rappel:</span>
-                                            <span class="metric-value">${(metrics.recall * 100).toFixed(2)}%</span>
-                                        </div>
-                                    ` : ''}
-                                    ${metrics.f1_score !== undefined ? `
-                                        <div class="metric-item">
-                                            <i class="bi bi-award"></i>
-                                            <span class="metric-label">Score F1:</span>
-                                            <span class="metric-value">${(metrics.f1_score * 100).toFixed(2)}%</span>
-                                        </div>
-                                    ` : ''}
-                                    ${metrics.mae !== undefined ? `
-                                        <div class="metric-item">
-                                            <i class="bi bi-graph-down"></i>
-                                            <span class="metric-label">MAE:</span>
-                                            <span class="metric-value">${metrics.mae.toFixed(4)}</span>
-                                        </div>
-                                    ` : ''}
-                                    ${metrics.rmse !== undefined ? `
-                                        <div class="metric-item">
-                                            <i class="bi bi-activity"></i>
-                                            <span class="metric-label">RMSE:</span>
-                                            <span class="metric-value">${metrics.rmse.toFixed(4)}</span>
-                                        </div>
-                                    ` : ''}
-                                    ${metrics.r2 !== undefined ? `
-                                        <div class="metric-item">
-                                            <i class="bi bi-graph-up"></i>
-                                            <span class="metric-label">R²:</span>
-                                            <span class="metric-value">${metrics.r2.toFixed(4)}</span>
-                                        </div>
-                                    ` : ''}
+                                    ${(() => {
+                                        // Determine problem type
+                                        let isClassification = false;
+                                        let problemType = 'Régression';
+                                        if (training.hyperparameters && training.hyperparameters.problem_type) {
+                                            isClassification = training.hyperparameters.problem_type === 'classification';
+                                            problemType = isClassification ? 'Classification' : 'Régression';
+                                        } else {
+                                            // Fallback: determine from available metrics
+                                            isClassification = metrics.accuracy !== undefined || metrics.precision !== undefined || metrics.f1_score !== undefined;
+                                            problemType = isClassification ? 'Classification' : 'Régression';
+                                        }
+                                        
+                                        return `
+                                            <div class="metric-item">
+                                                <i class="bi bi-diagram-3"></i>
+                                                <span class="metric-label">Type:</span>
+                                                <span class="metric-value">${problemType}</span>
+                                            </div>
+                                            ${training.model_type === 'random_forest' && training.hyperparameters && training.hyperparameters.n_estimators ? `
+                                                <div class="metric-item">
+                                                    <i class="bi bi-tree"></i>
+                                                    <span class="metric-label">Arbres:</span>
+                                                    <span class="metric-value">${training.hyperparameters.n_estimators}</span>
+                                                </div>
+                                            ` : ''}
+                                            ${isClassification ? `
+                                                ${metrics.accuracy !== undefined ? `
+                                                    <div class="metric-item">
+                                                        <i class="bi bi-bullseye"></i>
+                                                        <span class="metric-label">Précision:</span>
+                                                        <span class="metric-value">${(metrics.accuracy * 100).toFixed(2)}%</span>
+                                                    </div>
+                                                ` : ''}
+                                                ${metrics.f1_score !== undefined ? `
+                                                    <div class="metric-item">
+                                                        <i class="bi bi-award"></i>
+                                                        <span class="metric-label">Score F1:</span>
+                                                        <span class="metric-value">${(metrics.f1_score * 100).toFixed(2)}%</span>
+                                                    </div>
+                                                ` : ''}
+                                            ` : `
+                                                ${metrics.r2 !== undefined ? `
+                                                    <div class="metric-item">
+                                                        <i class="bi bi-graph-up"></i>
+                                                        <span class="metric-label">R²:</span>
+                                                        <span class="metric-value">${metrics.r2.toFixed(4)}</span>
+                                                    </div>
+                                                ` : ''}
+                                                ${metrics.mae !== undefined ? `
+                                                    <div class="metric-item">
+                                                        <i class="bi bi-graph-down"></i>
+                                                        <span class="metric-label">MAE:</span>
+                                                        <span class="metric-value">${metrics.mae.toFixed(4)}</span>
+                                                    </div>
+                                                ` : ''}
+                                            `}
+                                        `;
+                                    })()}
                                 </div>
                             ` : training.status === 'failed' ? `
                                 <div class="text-danger">
@@ -2431,6 +2437,11 @@ function displayTrainingHistory(trainings) {
                                         <i class="bi bi-arrow-clockwise"></i> Réessayer
                                     </button>
                                 ` : ''}
+                                <button class="btn btn-sm btn-danger" 
+                                        onclick="deleteTraining(${training.id})"
+                                        title="Supprimer cet entraînement">
+                                    <i class="bi bi-trash"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -2442,27 +2453,8 @@ function displayTrainingHistory(trainings) {
 
 // Download model file
 function downloadModel(sessionId) {
-    // Check if the session has a model file
-    fetch(`/api/training-sessions/${sessionId}/`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.model_file) {
-                // Create a download link
-                const link = document.createElement('a');
-                link.href = data.model_file;
-                link.download = `model_session_${sessionId}.pkl`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                showNotification('Succès', 'Le téléchargement du modèle a commencé', 'success');
-            } else {
-                showNotification('Erreur', 'Aucun fichier de modèle disponible', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showNotification('Erreur', 'Impossible de télécharger le modèle', 'error');
-        });
+    // Use the new download endpoint
+    window.location.href = `/api/training-sessions/${sessionId}/download-model/`;
 }
 
 // Retry training for a failed session
@@ -2525,6 +2517,33 @@ function retryTraining(sessionId) {
                 console.error('Error:', error);
                 showNotification('Erreur', 'Impossible de récupérer les données de la session', 'error');
             });
+    }
+}
+
+// Delete a training session
+function deleteTraining(sessionId) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer cet entraînement ? Cette action est irréversible.')) {
+        fetch(`/api/training-sessions/${sessionId}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                showNotification('Succès', 'L\'entraînement a été supprimé', 'success');
+                // Refresh the training history
+                if (selectedModel && selectedModel.id) {
+                    showTrainingHistory(selectedModel.id);
+                }
+            } else {
+                throw new Error('Erreur lors de la suppression');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showNotification('Erreur', 'Impossible de supprimer l\'entraînement', 'error');
+        });
     }
 }
 

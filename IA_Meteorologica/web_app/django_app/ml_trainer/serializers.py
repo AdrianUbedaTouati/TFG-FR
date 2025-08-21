@@ -81,6 +81,7 @@ class ModelDefinitionSerializer(serializers.ModelSerializer):
     latest_training = serializers.SerializerMethodField()
     success_rate = serializers.SerializerMethodField()
     actual_training_count = serializers.SerializerMethodField()
+    best_score = serializers.SerializerMethodField()
     
     class Meta:
         model = ModelDefinition
@@ -113,6 +114,10 @@ class ModelDefinitionSerializer(serializers.ModelSerializer):
             return 0
         completed = obj.trainingsession_set.filter(status='completed').count()
         return round((completed / total) * 100, 1)
+    
+    def get_best_score(self, obj):
+        """Get the best score from all completed trainings"""
+        return obj.calculate_best_score()
 
 
 class TrainingSessionSerializer(serializers.ModelSerializer):
