@@ -981,6 +981,91 @@
                                         </div>
                                         <small class="text-muted">Les pourcentages doivent totaliser 100%</small>
                                     </div>
+                                    
+                                    <!-- Visualisation de la Division des Données -->
+                                    <div class="mt-4" id="dataSplitVisualization" style="display: none;">
+                                        <h6 class="text-info mb-3"><i class="bi bi-pie-chart"></i> Répartition des Données</h6>
+                                        <div class="row g-3">
+                                            <!-- Zone Entraînement -->
+                                            <div class="col-md-4">
+                                                <div class="card border-primary">
+                                                    <div class="card-header bg-primary text-white text-center">
+                                                        <h6 class="mb-0"><i class="bi bi-play-fill"></i> Entraînement</h6>
+                                                    </div>
+                                                    <div class="card-body text-center">
+                                                        <div class="display-6 text-primary" id="trainCount">--</div>
+                                                        <small class="text-muted">échantillons</small>
+                                                        <div class="mt-2">
+                                                            <span class="badge bg-primary" id="trainPercentage">--%</span>
+                                                        </div>
+                                                        <div class="progress mt-2" style="height: 8px;">
+                                                            <div class="progress-bar bg-primary" role="progressbar" id="trainProgressBar" style="width: 0%"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Zone Validation -->
+                                            <div class="col-md-4">
+                                                <div class="card border-warning">
+                                                    <div class="card-header bg-warning text-dark text-center">
+                                                        <h6 class="mb-0"><i class="bi bi-check-circle"></i> Validation</h6>
+                                                    </div>
+                                                    <div class="card-body text-center">
+                                                        <div class="display-6 text-warning" id="valCount">--</div>
+                                                        <small class="text-muted">échantillons</small>
+                                                        <div class="mt-2">
+                                                            <span class="badge bg-warning text-dark" id="valPercentage">--%</span>
+                                                        </div>
+                                                        <div class="progress mt-2" style="height: 8px;">
+                                                            <div class="progress-bar bg-warning" role="progressbar" id="valProgressBar" style="width: 0%"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Zone Test -->
+                                            <div class="col-md-4">
+                                                <div class="card border-success">
+                                                    <div class="card-header bg-success text-white text-center">
+                                                        <h6 class="mb-0"><i class="bi bi-clipboard-check"></i> Test</h6>
+                                                    </div>
+                                                    <div class="card-body text-center">
+                                                        <div class="display-6 text-success" id="testCount">--</div>
+                                                        <small class="text-muted">échantillons</small>
+                                                        <div class="mt-2">
+                                                            <span class="badge bg-success" id="testPercentage">--%</span>
+                                                        </div>
+                                                        <div class="progress mt-2" style="height: 8px;">
+                                                            <div class="progress-bar bg-success" role="progressbar" id="testProgressBar" style="width: 0%"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Información adicional -->
+                                        <div class="row mt-3">
+                                            <div class="col-12">
+                                                <div class="alert alert-info">
+                                                    <div class="row text-center">
+                                                        <div class="col-md-3">
+                                                            <strong>Total Dataset:</strong> <span id="totalDatasetCount">--</span> échantillons
+                                                        </div>
+                                                        <div class="col-md-3">
+                                                            <strong>Après Filtres:</strong> <span id="filteredDatasetCount">--</span> échantillons
+                                                        </div>
+                                                        <div class="col-md-3">
+                                                            <strong>Variables Prédictives:</strong> <span id="predictorCount">--</span>
+                                                        </div>
+                                                        <div class="col-md-3">
+                                                            <strong>Variables Cibles:</strong> <span id="targetCount">--</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -3495,6 +3580,11 @@ function loadDatasetColumns() {
             
             showNotification('Erreur', errorMessage, 'error');
         });
+    
+    // Actualizar visualización cuando se carguen las columnas del dataset
+    setTimeout(() => {
+        updateDataSplitVisualization();
+    }, 100);
 }
 
 // Appliquer les règles du modèle sélectionné
@@ -4018,8 +4108,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Listener pour les changements de variables cibles
     document.addEventListener('change', function(e) {
-        if (e.target.classList.contains('target-checkbox')) {
+        if (e.target.classList.contains('target-checkbox') || e.target.classList.contains('predictor-checkbox')) {
             updateVariableRestrictions();
+            
+            // Actualizar visualización cuando cambian las variables
+            updateDataSplitVisualization();
+            
             // Mettre à jour automatiquement le nombre d'unités de sortie
             const targetCount = document.querySelectorAll('.target-checkbox:checked').length;
             const outputUnitsInput = document.getElementById('outputUnits');
@@ -5170,6 +5264,9 @@ function updateDataSplits() {
         return false;
     }
     
+    // Actualizar la visualización si hay un dataset seleccionado
+    updateDataSplitVisualization();
+    
     return true;
 }
 
@@ -5226,6 +5323,9 @@ function updateSplitMethodOptions() {
     if (splitMethod === 'stratified') {
         checkStratifiedCompatibility();
     }
+    
+    // Actualizar la visualización cuando cambie el método de división
+    updateDataSplitVisualization();
 }
 
 // Cargar columnas para división por grupos
@@ -5295,6 +5395,85 @@ function getDataSplitConfig() {
     }
     
     return config;
+}
+
+// Función para actualizar la visualización de división de datos
+function updateDataSplitVisualization() {
+    const datasetId = document.getElementById('dataset').value;
+    
+    if (!datasetId) {
+        // Ocultar visualización si no hay dataset
+        document.getElementById('dataSplitVisualization').style.display = 'none';
+        return;
+    }
+    
+    // Obtener información del dataset
+    fetch(`/api/datasets/${datasetId}/`)
+        .then(response => response.json())
+        .then(dataset => {
+            // Contar variables seleccionadas
+            const targetCheckboxes = document.querySelectorAll('.target-checkbox:checked');
+            const predictorCheckboxes = document.querySelectorAll('.predictor-checkbox:checked');
+            
+            const targetCount = targetCheckboxes.length;
+            const predictorCount = predictorCheckboxes.length;
+            
+            // Obtener porcentajes actuales
+            const trainPct = parseInt(document.getElementById('trainSize').value) || 70;
+            const valPct = parseInt(document.getElementById('valSize').value) || 15;
+            const testPct = parseInt(document.getElementById('testSize').value) || 15;
+            
+            // Calcular número de muestras (asumiendo que no hay filtros por ahora)
+            const totalSamples = dataset.row_count || 0;
+            const filteredSamples = totalSamples; // TODO: aplicar filtros reales
+            
+            const trainSamples = Math.floor(filteredSamples * trainPct / 100);
+            const valSamples = Math.floor(filteredSamples * valPct / 100);
+            const testSamples = filteredSamples - trainSamples - valSamples;
+            
+            // Actualizar elementos de la visualización
+            updateSplitVisualizationElements(trainSamples, valSamples, testSamples, trainPct, valPct, testPct);
+            updateDatasetInfoElements(totalSamples, filteredSamples, predictorCount, targetCount);
+            
+            // Mostrar la visualización
+            document.getElementById('dataSplitVisualization').style.display = 'block';
+        })
+        .catch(error => {
+            console.error('Error obteniendo información del dataset:', error);
+            document.getElementById('dataSplitVisualization').style.display = 'none';
+        });
+}
+
+// Función para actualizar los elementos de visualización de splits
+function updateSplitVisualizationElements(trainSamples, valSamples, testSamples, trainPct, valPct, testPct) {
+    // Actualizar contadores
+    document.getElementById('trainCount').textContent = trainSamples.toLocaleString();
+    document.getElementById('valCount').textContent = valSamples.toLocaleString();
+    document.getElementById('testCount').textContent = testSamples.toLocaleString();
+    
+    // Actualizar porcentajes
+    document.getElementById('trainPercentage').textContent = `${trainPct}%`;
+    document.getElementById('valPercentage').textContent = `${valPct}%`;
+    document.getElementById('testPercentage').textContent = `${testPct}%`;
+    
+    // Actualizar barras de progreso
+    document.getElementById('trainProgressBar').style.width = `${trainPct}%`;
+    document.getElementById('valProgressBar').style.width = `${valPct}%`;
+    document.getElementById('testProgressBar').style.width = `${testPct}%`;
+}
+
+// Función para actualizar información del dataset
+function updateDatasetInfoElements(totalSamples, filteredSamples, predictorCount, targetCount) {
+    document.getElementById('totalDatasetCount').textContent = totalSamples.toLocaleString();
+    document.getElementById('filteredDatasetCount').textContent = filteredSamples.toLocaleString();
+    document.getElementById('predictorCount').textContent = predictorCount;
+    document.getElementById('targetCount').textContent = targetCount;
+}
+
+// Función para actualizar la visualización cuando cambian las variables
+function updateVariableVisualization() {
+    // Esta función se puede llamar cuando se seleccionan/deseleccionan variables
+    updateDataSplitVisualization();
 }
 
 // Actualizar la función createModelOnly para incluir la nueva configuración
