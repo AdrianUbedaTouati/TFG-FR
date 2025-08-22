@@ -5950,9 +5950,9 @@ function updateDataSplitVisualization() {
                     dataset_id: datasetId,
                     split_method: splitConfig.split_method,
                     split_config: splitConfig.split_config,
-                    train_size: splitConfig.train_split,
-                    val_size: splitConfig.val_split,
-                    test_size: splitConfig.test_split,
+                    train_size: trainPct / 100,  // Enviar como decimal
+                    val_size: valPct / 100,      // Enviar como decimal
+                    test_size: testPct / 100,    // Enviar como decimal
                     random_state: splitConfig.random_state
                 })
             })
@@ -6004,39 +6004,13 @@ function updateSplitVisualizationElements(trainSamples, valSamples, testSamples,
     document.getElementById('valCount').textContent = valSamples.toLocaleString();
     document.getElementById('testCount').textContent = testSamples.toLocaleString();
     
-    // Recalcular porcentajes basados en las muestras reales para asegurar que sumen 100%
-    const totalSamples = trainSamples + valSamples + testSamples;
-    if (totalSamples > 0) {
-        // Calcular porcentajes reales
-        let realTrainPct = Math.round((trainSamples / totalSamples) * 100);
-        let realValPct = Math.round((valSamples / totalSamples) * 100);
-        let realTestPct = Math.round((testSamples / totalSamples) * 100);
-        
-        // Ajustar para que sume exactamente 100%
-        const sum = realTrainPct + realValPct + realTestPct;
-        if (sum !== 100) {
-            // Ajustar el conjunto más grande
-            if (trainSamples >= valSamples && trainSamples >= testSamples) {
-                realTrainPct += (100 - sum);
-            } else if (testSamples >= valSamples) {
-                realTestPct += (100 - sum);
-            } else {
-                realValPct += (100 - sum);
-            }
-        }
-        
-        // Usar los porcentajes recalculados
-        trainPct = realTrainPct;
-        valPct = realValPct;
-        testPct = realTestPct;
-    }
-    
-    // Actualizar porcentajes
+    // Usar los porcentajes configurados directamente sin recalcular
+    // Esto asegura que se muestren los porcentajes que el usuario configuró
     document.getElementById('trainPercentage').textContent = `${trainPct}%`;
     document.getElementById('valPercentage').textContent = `${valPct}%`;
     document.getElementById('testPercentage').textContent = `${testPct}%`;
     
-    // Actualizar barras de progreso
+    // Actualizar barras de progreso con los porcentajes configurados
     document.getElementById('trainProgressBar').style.width = `${trainPct}%`;
     document.getElementById('valProgressBar').style.width = `${valPct}%`;
     document.getElementById('testProgressBar').style.width = `${testPct}%`;

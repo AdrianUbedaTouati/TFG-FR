@@ -86,10 +86,17 @@ def get_split_counts(request):
             val_count = len(idx_val)
             test_count = len(idx_test)
         
-        # Calcular porcentajes reales
-        train_pct = round((train_count / n_samples) * 100)
-        val_pct = round((val_count / n_samples) * 100)
-        test_pct = round((test_count / n_samples) * 100)
+        # Usar los porcentajes configurados por el usuario
+        # Convertir a porcentajes si vienen como decimales
+        train_pct = int(train_size * 100) if train_size <= 1 else int(train_size)
+        val_pct = int(val_size * 100) if val_size <= 1 else int(val_size)
+        test_pct = int(test_size * 100) if test_size <= 1 else int(test_size)
+        
+        # Asegurar que los porcentajes sumen 100
+        total_pct = train_pct + val_pct + test_pct
+        if total_pct != 100:
+            # Ajustar el test_pct para que sume 100
+            test_pct = 100 - train_pct - val_pct
         
         # Preparar respuesta
         response_data = {
