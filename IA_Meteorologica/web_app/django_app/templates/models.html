@@ -1122,18 +1122,33 @@
                                     <!-- Proportions -->
                                     <div class="mt-3">
                                         <label class="form-label">Proportions des Ensembles</label>
+                                        
+                                        <!-- Checkbox para activar/desactivar validación -->
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="useValidation" checked onchange="toggleValidation()">
+                                            <label class="form-check-label" for="useValidation">
+                                                Utiliser un ensemble de validation
+                                            </label>
+                                        </div>
+                                        
+                                        <!-- Alerta para cross-validation -->
+                                        <div class="alert alert-warning" id="crossValidationWarning" style="display: none;">
+                                            <i class="bi bi-exclamation-triangle"></i> <strong>Attention:</strong> Lors de l'utilisation de la cross-validation, l'ensemble de validation n'est pas utilisé. 
+                                            Il est recommandé de désactiver la validation et d'utiliser 80% train / 20% test.
+                                        </div>
+                                        
                                         <div class="row g-2">
                                             <div class="col-md-4">
                                                 <label for="trainSize" class="form-label small">Entraînement (%)</label>
-                                                <input type="number" class="form-control" id="trainSize" min="40" max="80" value="70" required onchange="updateDataSplits()">
+                                                <input type="number" class="form-control" id="trainSize" min="40" max="90" value="70" required onchange="updateDataSplits()">
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-4" id="valSizeContainer">
                                                 <label for="valSize" class="form-label small">Validation (%)</label>
                                                 <input type="number" class="form-control" id="valSize" min="10" max="30" value="15" required onchange="updateDataSplits()">
                                             </div>
                                             <div class="col-md-4">
                                                 <label for="testSize" class="form-label small">Test (%)</label>
-                                                <input type="number" class="form-control" id="testSize" min="10" max="30" value="15" readonly style="background-color: rgba(255,255,255,0.1);">
+                                                <input type="number" class="form-control" id="testSize" min="10" max="40" value="15" readonly style="background-color: rgba(255,255,255,0.1);">
                                             </div>
                                         </div>
                                         <small class="text-muted">Les pourcentages doivent totaliser 100%</small>
@@ -3189,6 +3204,15 @@ function loadModelFormData(model) {
     if (model.default_split_config) {
         const splitConfig = model.default_split_config;
         console.log('Loading split config:', splitConfig);
+        
+        // Load use_validation state
+        if (splitConfig.use_validation !== undefined) {
+            document.getElementById('useValidation').checked = splitConfig.use_validation;
+        } else {
+            // Default to true if not specified (backward compatibility)
+            document.getElementById('useValidation').checked = true;
+        }
+        
         document.getElementById('trainSize').value = (splitConfig.train_size || 0.7) * 100;
         document.getElementById('valSize').value = (splitConfig.val_size || 0.15) * 100;
         document.getElementById('testSize').value = (splitConfig.test_size || 0.15) * 100;
@@ -3196,6 +3220,9 @@ function loadModelFormData(model) {
         if (splitConfig.random_state) {
             document.getElementById('globalRandomState').value = splitConfig.random_state;
         }
+        
+        // Trigger validation toggle to update UI (preserve loaded values)
+        toggleValidation(true);
     }
     
     // Load Module 2: Execution Configuration
@@ -3487,8 +3514,9 @@ function updateModel(modelId) {
     }
     
     // Get Module 1: Data Split Configuration
+    const useValidation = document.getElementById('useValidation').checked;
     const trainSize = parseInt(document.getElementById('trainSize').value) / 100;
-    const valSize = parseInt(document.getElementById('valSize').value) / 100;
+    const valSize = useValidation ? parseInt(document.getElementById('valSize').value) / 100 : 0;
     const testSizeModule = parseInt(document.getElementById('testSize').value) / 100;
     const splitMethod = document.getElementById('splitMethod').value;
     const globalRandomState = document.getElementById('globalRandomState').value;
@@ -3497,7 +3525,8 @@ function updateModel(modelId) {
         train_size: trainSize,
         val_size: valSize,
         test_size: testSizeModule,
-        random_state: globalRandomState ? parseInt(globalRandomState) : null
+        random_state: globalRandomState ? parseInt(globalRandomState) : null,
+        use_validation: useValidation
     };
     
     // Get Module 2: Execution Configuration
@@ -5732,9 +5761,63 @@ function loadDecisionTreeConfiguration(hyperparams) {
 }
 
 // Función para actualizar los porcentajes de división de datos
+// Función para activar/desactivar el conjunto de validación
+function toggleValidation(preserveValues = false) {
+    const useValidation = document.getElementById('useValidation').checked;
+    const valSizeContainer = document.getElementById('valSizeContainer');
+    const valSizeInput = document.getElementById('valSize');
+    const trainSizeInput = document.getElementById('trainSize');
+    const valCard = document.querySelector('.card.border-warning'); // Card de validación
+    
+    if (useValidation) {
+        // Mostrar validación
+        valSizeContainer.style.display = 'block';
+        if (valCard) valCard.parentElement.style.display = 'block';
+        
+        // Solo cambiar valores si no se están preservando (nuevo modelo)
+        if (!preserveValues) {
+            valSizeInput.value = 15;
+            trainSizeInput.value = 70;
+        }
+        trainSizeInput.setAttribute('max', '80');
+    } else {
+        // Ocultar validación
+        valSizeContainer.style.display = 'none';
+        if (valCard) valCard.parentElement.style.display = 'none';
+        valSizeInput.value = 0;
+        
+        // Solo cambiar el train size si no se están preservando valores
+        if (!preserveValues) {
+            trainSizeInput.value = 80;
+        }
+        trainSizeInput.setAttribute('max', '90');
+    }
+    
+    // Actualizar los splits
+    updateDataSplits();
+    
+    // Verificar si se debe mostrar la advertencia de cross-validation
+    checkCrossValidationWarning();
+}
+
+// Función para verificar y mostrar advertencia de cross-validation
+function checkCrossValidationWarning() {
+    const useValidation = document.getElementById('useValidation').checked;
+    const executionMethod = document.getElementById('executionMethod').value;
+    const warningDiv = document.getElementById('crossValidationWarning');
+    
+    // Mostrar advertencia si hay validación Y se usa cross-validation
+    if (useValidation && executionMethod !== 'standard') {
+        warningDiv.style.display = 'block';
+    } else {
+        warningDiv.style.display = 'none';
+    }
+}
+
 function updateDataSplits() {
+    const useValidation = document.getElementById('useValidation').checked;
     const trainSize = parseInt(document.getElementById('trainSize').value) || 0;
-    const valSize = parseInt(document.getElementById('valSize').value) || 0;
+    const valSize = useValidation ? (parseInt(document.getElementById('valSize').value) || 0) : 0;
     const testSizeInput = document.getElementById('testSize');
     
     // Calcular el porcentaje de test restante
@@ -5866,9 +5949,12 @@ function checkStratifiedCompatibility() {
 
 // Obtener la configuración de división de datos
 function getDataSplitConfig() {
+    // Verificar si se usa validación
+    const useValidation = document.getElementById('useValidation').checked;
+    
     // Obtener valores como porcentajes
     const trainPct = parseInt(document.getElementById('trainSize').value) || 70;
-    const valPct = parseInt(document.getElementById('valSize').value) || 15;
+    const valPct = useValidation ? (parseInt(document.getElementById('valSize').value) || 15) : 0;
     const testPct = parseInt(document.getElementById('testSize').value) || 15;
     
     // Normalizar para que sumen exactamente 100
@@ -5884,11 +5970,13 @@ function getDataSplitConfig() {
         val_size: valPct / total,
         test_size: testPct / total,
         random_state: randomState,
+        use_validation: useValidation,
         split_config: {
             train_size: trainPct / total,
             val_size: valPct / total,
             test_size: testPct / total,
-            random_state: randomState
+            random_state: randomState,
+            use_validation: useValidation
         }
     };
     
@@ -5928,8 +6016,9 @@ function updateDataSplitVisualization() {
             const predictorCount = predictorCheckboxes.length;
             
             // Obtener porcentajes actuales
+            const useValidation = document.getElementById('useValidation').checked;
             const trainPct = parseInt(document.getElementById('trainSize').value) || 70;
-            const valPct = parseInt(document.getElementById('valSize').value) || 15;
+            const valPct = useValidation ? (parseInt(document.getElementById('valSize').value) || 15) : 0;
             const testPct = parseInt(document.getElementById('testSize').value) || 15;
             
             // Calcular número de muestras usando el nuevo endpoint para obtener conteos exactos
@@ -5999,6 +6088,8 @@ function updateDataSplitVisualization() {
 
 // Función para actualizar los elementos de visualización de splits
 function updateSplitVisualizationElements(trainSamples, valSamples, testSamples, trainPct, valPct, testPct) {
+    const useValidation = document.getElementById('useValidation').checked;
+    
     // Actualizar contadores
     document.getElementById('trainCount').textContent = trainSamples.toLocaleString();
     document.getElementById('valCount').textContent = valSamples.toLocaleString();
@@ -6014,6 +6105,24 @@ function updateSplitVisualizationElements(trainSamples, valSamples, testSamples,
     document.getElementById('trainProgressBar').style.width = `${trainPct}%`;
     document.getElementById('valProgressBar').style.width = `${valPct}%`;
     document.getElementById('testProgressBar').style.width = `${testPct}%`;
+    
+    // Mostrar u ocultar la tarjeta de validación
+    const valCard = document.querySelector('.card.border-warning');
+    if (valCard && valCard.parentElement) {
+        valCard.parentElement.style.display = useValidation ? 'block' : 'none';
+        
+        // Ajustar el ancho de las columnas según si hay validación o no
+        const trainCol = document.querySelector('.card.border-primary').parentElement;
+        const testCol = document.querySelector('.card.border-success').parentElement;
+        
+        if (useValidation) {
+            trainCol.className = 'col-md-4';
+            testCol.className = 'col-md-4';
+        } else {
+            trainCol.className = 'col-md-6';
+            testCol.className = 'col-md-6';
+        }
+    }
 }
 
 // Función para actualizar información del dataset
@@ -6208,6 +6317,9 @@ function updateExecutionConfig() {
         document.getElementById('executionInfo').style.display = 'block';
         document.getElementById('executionInfoText').textContent = infoText;
     }
+    
+    // Verificar si se debe mostrar la advertencia de cross-validation
+    checkCrossValidationWarning();
 }
 
 function getExecutionConfig() {
