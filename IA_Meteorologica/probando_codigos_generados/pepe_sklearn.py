@@ -2,7 +2,7 @@
 Auto-generated scikit-learn RANDOM_FOREST model code
 Model: pepe
 Type: RANDOM_FOREST
-Generated at: 2025-08-22 02:12:55.212115+00:00
+Generated at: 2025-08-22 02:59:07.954527+00:00
 
 Configuration:
 - Target columns: ['Summary']
@@ -146,26 +146,145 @@ class ExecutionStrategy:
         elif self.method == "kfold":
             # K-Fold Cross Validation
             n_splits = self.config.get("n_splits", 5)
-            print(f"Executing {n_splits}-fold cross validation...")
-            from sklearn.model_selection import KFold, cross_val_score
-            kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-            scores = cross_val_score(model, X_train, y_train, cv=kf, scoring="neg_mean_squared_error")
-            print(f"CV MSE: {-scores.mean():.4f} (+/- {scores.std() * 2:.4f})")
+            shuffle = self.config.get("shuffle", True)
+            random_state = self.config.get("random_state", 42)
+            print(f"\n🔧 Module 2: Configuration d'Exécution")
+            print(f"   Méthode: {self.method}")
+            print(f"   Nombre de folds: {n_splits}")
+            print(f"   Mélange: {'Oui' if shuffle else 'Non'}")
+            print(f"   Random state: {random_state}")
+            print(f"\nExecuting {n_splits}-fold cross validation...")
+            
+            from sklearn.model_selection import KFold
+            from sklearn.base import clone
+            import time
+            
+            # Only set random_state if shuffle is True
+            if shuffle:
+                kf = KFold(n_splits=n_splits, shuffle=shuffle, random_state=random_state)
+            else:
+                kf = KFold(n_splits=n_splits, shuffle=shuffle)
+            cv_scores = []
+            fold = 0
+            
+            # Combine train and validation for CV
+            X_full = np.vstack([X_train, X_val])
+            y_full = np.concatenate([y_train, y_val])
+            
+            for train_idx, val_idx in kf.split(X_full, y_full):
+                fold += 1
+                fold_start_time = time.time()
+                print(f"\n🔄 Fold {fold}/{n_splits} - Démarrage de l'entraînement...")
+                
+                X_fold_train = X_full[train_idx]
+                y_fold_train = y_full[train_idx]
+                X_fold_val = X_full[val_idx]
+                y_fold_val = y_full[val_idx]
+                
+                print(f"   📊 Données d'entraînement du fold: {X_fold_train.shape[0]} échantillons ({X_fold_train.shape[0]/X_full.shape[0]*100:.1f}% du total)")
+                print(f"   📋 Données de validation du fold: {X_fold_val.shape[0]} échantillons ({X_fold_val.shape[0]/X_full.shape[0]*100:.1f}% du total)")
+                print(f"   💡 Note: Ces pourcentages sont pour la cross-validation, pas la division train/val/test configurée")
+                print(f"   🔧 Entraînement du modèle en cours...")
+                
+                # Clone and train model for this fold
+                fold_model = clone(model)
+                train_start = time.time()
+                fold_model.fit(X_fold_train, y_fold_train)
+                train_time = time.time() - train_start
+                
+                print(f"   ⏱️  Temps d'entraînement: {train_time:.2f}s")
+                
+                # Evaluate on fold
+                train_score = fold_model.score(X_fold_train, y_fold_train)
+                val_score = fold_model.score(X_fold_val, y_fold_val)
+                cv_scores.append(val_score)
+                
+                fold_total_time = time.time() - fold_start_time
+                print(f"   ✅ Score d'entraînement: {train_score:.4f}")
+                print(f"   📈 Score de validation: {val_score:.4f}")
+                print(f"   ⏰ Temps total fold: {fold_total_time:.2f}s")
+                print(f"   📊 Score moyen jusqu'ici: {np.mean(cv_scores):.4f}")
+            
             # Train final model on full training data
+            print(f"\n✅ Cross-validation complétée:")
+            print(f"   📊 Meilleur score: {max(cv_scores):.4f}")
+            print(f"   📈 Score moyen: {np.mean(cv_scores):.4f} (+/- {np.std(cv_scores):.4f})")
+            print(f"   📉 Score le plus bas: {min(cv_scores):.4f}")
+            print(f"\nEntraînement du modèle final sur toutes les données d'entraînement...")
             model.fit(X_train, y_train)
-            return {"cv_scores": scores.tolist(), "cv_mean": -scores.mean(), "cv_std": scores.std()}
+            return {"cv_scores": cv_scores, "cv_mean": np.mean(cv_scores), "cv_std": np.std(cv_scores)}
             
         elif self.method == "stratified_kfold":
             # Stratified K-Fold for classification
             n_splits = self.config.get("n_splits", 5)
-            print(f"Executing stratified {n_splits}-fold cross validation...")
-            from sklearn.model_selection import StratifiedKFold, cross_val_score
-            skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
-            y_stratify = y_train if len(y_train.shape) == 1 else y_train[:, 0]
-            scores = cross_val_score(model, X_train, y_train, cv=skf, scoring="accuracy")
-            print(f"CV Accuracy: {scores.mean():.4f} (+/- {scores.std() * 2:.4f})")
+            shuffle = self.config.get("shuffle", True)
+            random_state = self.config.get("random_state", 42)
+            print(f"\n🔧 Module 2: Configuration d'Exécution")
+            print(f"   Méthode: {self.method}")
+            print(f"   Nombre de folds: {n_splits}")
+            print(f"   Mélange: {'Oui' if shuffle else 'Non'}")
+            print(f"   Random state: {random_state}")
+            print(f"\nExecuting stratified {n_splits}-fold cross validation...")
+            
+            from sklearn.model_selection import StratifiedKFold
+            from sklearn.base import clone
+            import time
+            
+            # Only set random_state if shuffle is True
+            if shuffle:
+                skf = StratifiedKFold(n_splits=n_splits, shuffle=shuffle, random_state=random_state)
+            else:
+                skf = StratifiedKFold(n_splits=n_splits, shuffle=shuffle)
+            cv_scores = []
+            fold = 0
+            
+            # Combine train and validation for CV
+            X_full = np.vstack([X_train, X_val])
+            y_full = np.concatenate([y_train, y_val])
+            y_stratify = y_full if len(y_full.shape) == 1 else y_full[:, 0]
+            
+            for train_idx, val_idx in skf.split(X_full, y_stratify):
+                fold += 1
+                fold_start_time = time.time()
+                print(f"\n🔄 Fold {fold}/{n_splits} - Démarrage de l'entraînement...")
+                
+                X_fold_train = X_full[train_idx]
+                y_fold_train = y_full[train_idx]
+                X_fold_val = X_full[val_idx]
+                y_fold_val = y_full[val_idx]
+                
+                print(f"   📊 Données d'entraînement du fold: {X_fold_train.shape[0]} échantillons ({X_fold_train.shape[0]/X_full.shape[0]*100:.1f}% du total)")
+                print(f"   📋 Données de validation du fold: {X_fold_val.shape[0]} échantillons ({X_fold_val.shape[0]/X_full.shape[0]*100:.1f}% du total)")
+                print(f"   💡 Note: Ces pourcentages sont pour la cross-validation, pas la division train/val/test configurée")
+                print(f"   🔧 Entraînement du modèle en cours...")
+                
+                # Clone and train model for this fold
+                fold_model = clone(model)
+                train_start = time.time()
+                fold_model.fit(X_fold_train, y_fold_train)
+                train_time = time.time() - train_start
+                
+                print(f"   ⏱️  Temps d'entraînement: {train_time:.2f}s")
+                
+                # Evaluate on fold
+                train_score = fold_model.score(X_fold_train, y_fold_train)
+                val_score = fold_model.score(X_fold_val, y_fold_val)
+                cv_scores.append(val_score)
+                
+                fold_total_time = time.time() - fold_start_time
+                print(f"   ✅ Score d'entraînement: {train_score:.4f}")
+                print(f"   📈 Score de validation: {val_score:.4f}")
+                print(f"   ⏰ Temps total fold: {fold_total_time:.2f}s")
+                print(f"   📊 Score moyen jusqu'ici: {np.mean(cv_scores):.4f}")
+            
+            # Train final model on full training data
+            print(f"\n✅ Cross-validation complétée:")
+            print(f"   📊 Meilleur score: {max(cv_scores):.4f}")
+            print(f"   📈 Score moyen: {np.mean(cv_scores):.4f} (+/- {np.std(cv_scores):.4f})")
+            print(f"   📉 Score le plus bas: {min(cv_scores):.4f}")
+            print(f"\nEntraînement du modèle final sur toutes les données d'entraînement...")
             model.fit(X_train, y_train)
-            return {"cv_scores": scores.tolist(), "cv_mean": scores.mean(), "cv_std": scores.std()}
+            return {"cv_scores": cv_scores, "cv_mean": np.mean(cv_scores), "cv_std": np.std(cv_scores)}
             
         elif self.method == "time_series_split":
             # Time Series Split
@@ -281,12 +400,6 @@ def train_model(model, X, y, data_splitter=None, execution_strategy=None):
     
     # Make predictions
     print("\nMaking predictions...")
-    y_pred_train = model.predict(X_train)
-    y_pred_test = model.predict(X_test)
-    
-    return X_train, X_test, y_train, y_test, y_pred_train, y_pred_test
-    
-    # Make predictions
     y_pred_train = model.predict(X_train)
     y_pred_test = model.predict(X_test)
     
@@ -501,6 +614,12 @@ def analyze_model_performance(model, X_test, y_test, target_columns,
     y_pred = model.predict(X_test)
     
     # Ensure predictions are properly shaped
+    # Handle both numpy arrays and pandas Series/DataFrames
+    if hasattr(y_pred, 'values'):
+        y_pred = y_pred.values
+    if hasattr(y_test, 'values'):
+        y_test = y_test.values
+    
     if len(y_pred.shape) == 1:
         y_pred = y_pred.reshape(-1, 1)
     if len(y_test.shape) == 1:
@@ -598,22 +717,14 @@ def analyze_model_performance(model, X_test, y_test, target_columns,
 
 if __name__ == "__main__":
     # Configuration
-    DATA_FILE = "your_dataset.csv"  # UPDATE THIS PATH
+    DATA_FILE = "db.csv"  # UPDATE THIS PATH
     
     # Module 1 Configuration
-    split_config = {
-        "train_size": 0.8,
-        "val_size": 0.1,
-        "test_size": 0.1,
-        "random_state": 42
-}
+    split_config = {"train_size": 0.8, "val_size": 0.1, "test_size": 0.1, "random_state": 42}
     data_splitter = DataSplitter(strategy="random", config=split_config)
     
     # Module 2 Configuration
-    execution_config = {
-        "n_splits": 5,
-        "shuffle": false
-}
+    execution_config = {"n_splits": 5, "shuffle": False}
     execution_strategy = ExecutionStrategy(method="kfold", config=execution_config)
     
     try:
@@ -656,7 +767,7 @@ if __name__ == "__main__":
             "predictor_columns": predictor_cols,
             "target_columns": target_cols,
             "hyperparameters": model.get_params(),
-            "generated_at": "2025-08-22 02:12:55.212115+00:00"
+            "generated_at": "2025-08-22 02:59:07.954527+00:00"
         }
         
         with open("model_info.json", "w") as f:

@@ -1,0 +1,44 @@
+{
+  "model_name": "pepe",
+  "model_type": "random_forest",
+  "predictor_columns": [
+    "Precip Type",
+    "Temperature (C)",
+    "Humidity",
+    "Wind Speed (km/h)",
+    "Wind Bearing (degrees)",
+    "Visibility (km)",
+    "Pressure (millibars)",
+    "h_sin",
+    "h_cos",
+    "dow_sin",
+    "dow_cos",
+    "doy_sin",
+    "doy_cos"
+  ],
+  "target_columns": [
+    "Summary"
+  ],
+  "hyperparameters": {
+    "bootstrap": true,
+    "ccp_alpha": 0.0,
+    "class_weight": "balanced",
+    "criterion": "gini",
+    "max_depth": null,
+    "max_features": "sqrt",
+    "max_leaf_nodes": null,
+    "max_samples": null,
+    "min_impurity_decrease": 0.0,
+    "min_samples_leaf": 1,
+    "min_samples_split": 2,
+    "min_weight_fraction_leaf": 0.0,
+    "monotonic_cst": null,
+    "n_estimators": 300,
+    "n_jobs": -1,
+    "oob_score": true,
+    "random_state": null,
+    "verbose": 0,
+    "warm_start": false
+  },
+  "generated_at": "2025-08-22 02:59:07.954527+00:00"
+}
