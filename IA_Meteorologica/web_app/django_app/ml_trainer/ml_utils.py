@@ -1976,13 +1976,28 @@ def train_model(session):
         model_dir_rel = 'models'
         
         if model_format == 'tensorflow':
+            # Generate filename with model name and training number
+            if session.model_definition and session.model_definition.name:
+                model_name = session.model_definition.name
+            else:
+                model_name = "model"
+            
+            # Clean model name for filename (keep it simple)
+            clean_model_name = "".join(c for c in model_name if c.isalnum() or c in ('_')).strip()
+            if not clean_model_name:
+                clean_model_name = "model"
+            
+            # Get training number
+            training_number = session.id  # Use session ID as the unique number
+            
             # Save TensorFlow model
-            model_path_abs = f"{model_dir_abs}/model_{session.id}"
+            filename = f"{clean_model_name}_{training_number}"
+            model_path_abs = f"{model_dir_abs}/{filename}"
             model.save(model_path_abs)
-            model_path = f"{model_dir_rel}/model_{session.id}"
+            model_path = f"{model_dir_rel}/{filename}"
             
             # Save scalers and metadata separately
-            metadata_path_abs = f"{model_dir_abs}/model_{session.id}_metadata.pkl"
+            metadata_path_abs = f"{model_dir_abs}/{filename}_metadata.pkl"
             joblib.dump({
                 'scaler_X': scaler_X,
                 'scaler_y': scaler_y,
@@ -1993,13 +2008,28 @@ def train_model(session):
                 'framework': 'keras'
             }, metadata_path_abs)
         elif model_format == 'pytorch':
+            # Generate filename with model name and training number
+            if session.model_definition and session.model_definition.name:
+                model_name = session.model_definition.name
+            else:
+                model_name = "model"
+            
+            # Clean model name for filename (keep it simple)
+            clean_model_name = "".join(c for c in model_name if c.isalnum() or c in ('_')).strip()
+            if not clean_model_name:
+                clean_model_name = "model"
+            
+            # Get training number
+            training_number = session.id  # Use session ID as the unique number
+            
             # Save PyTorch model
-            model_path_abs = f"{model_dir_abs}/model_{session.id}.pth"
+            filename = f"{clean_model_name}_{training_number}"
+            model_path_abs = f"{model_dir_abs}/{filename}.pth"
             save_pytorch_model(model, model_path_abs)
-            model_path = f"{model_dir_rel}/model_{session.id}.pth"
+            model_path = f"{model_dir_rel}/{filename}.pth"
             
             # Save scalers and metadata separately
-            metadata_path_abs = f"{model_dir_abs}/model_{session.id}_metadata.pkl"
+            metadata_path_abs = f"{model_dir_abs}/{filename}_metadata.pkl"
             joblib.dump({
                 'scaler_X': scaler_X,
                 'scaler_y': scaler_y,
@@ -2012,9 +2042,24 @@ def train_model(session):
                 'output_shape': (y_train.shape[1] if len(y_train.shape) > 1 else 1,)
             }, metadata_path_abs)
         else:
+            # Generate filename with model name and training number
+            if session.model_definition and session.model_definition.name:
+                model_name = session.model_definition.name
+            else:
+                model_name = "model"
+            
+            # Clean model name for filename (keep it simple)
+            clean_model_name = "".join(c for c in model_name if c.isalnum() or c in ('_')).strip()
+            if not clean_model_name:
+                clean_model_name = "model"
+            
+            # Get training number
+            training_number = session.id  # Use session ID as the unique number
+            
             # Save sklearn model
-            model_path_abs = f"{model_dir_abs}/model_{session.id}.pkl"
-            model_path = f"{model_dir_rel}/model_{session.id}.pkl"
+            filename = f"{clean_model_name}_{training_number}"
+            model_path_abs = f"{model_dir_abs}/{filename}.pkl"
+            model_path = f"{model_dir_rel}/{filename}.pkl"
             
             # Load preprocessing pipeline if it exists
             preprocessing_pipeline = None
@@ -2052,8 +2097,10 @@ def train_model(session):
         
         # Save model file as Django File object
         if os.path.exists(model_path_abs):
+            # Get the file extension from the model path
+            file_extension = os.path.splitext(model_path_abs)[1]
             with open(model_path_abs, 'rb') as f:
-                session.model_file.save(f"model_{session.id}.pkl", File(f), save=False)
+                session.model_file.save(f"{filename}{file_extension}", File(f), save=False)
         else:
             # For TensorFlow models saved as directories, create a zip file
             import zipfile
@@ -2065,7 +2112,7 @@ def train_model(session):
                         arcname = os.path.relpath(file_path, os.path.dirname(model_path_abs))
                         zipf.write(file_path, arcname)
             with open(zip_path, 'rb') as f:
-                session.model_file.save(f"model_{session.id}.zip", File(f), save=False)
+                session.model_file.save(f"{filename}.zip", File(f), save=False)
             os.remove(zip_path)  # Clean up temp zip file
         
         session.status = 'completed'

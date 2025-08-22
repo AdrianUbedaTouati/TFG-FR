@@ -1131,12 +1131,6 @@
                                             </label>
                                         </div>
                                         
-                                        <!-- Alerta para cross-validation -->
-                                        <div class="alert alert-warning" id="crossValidationWarning" style="display: none;">
-                                            <i class="bi bi-exclamation-triangle"></i> <strong>Attention:</strong> Lors de l'utilisation de la cross-validation, l'ensemble de validation n'est pas utilisé. 
-                                            Il est recommandé de désactiver la validation et d'utiliser 80% train / 20% test.
-                                        </div>
-                                        
                                         <div class="row g-2">
                                             <div class="col-md-4">
                                                 <label for="trainSize" class="form-label small">Entraînement (%)</label>
@@ -5953,23 +5947,6 @@ function toggleValidation(preserveValues = false) {
     
     // Actualizar los splits
     updateDataSplits();
-    
-    // Verificar si se debe mostrar la advertencia de cross-validation
-    checkCrossValidationWarning();
-}
-
-// Función para verificar y mostrar advertencia de cross-validation
-function checkCrossValidationWarning() {
-    const useValidation = document.getElementById('useValidation').checked;
-    const executionMethod = document.getElementById('executionMethod').value;
-    const warningDiv = document.getElementById('crossValidationWarning');
-    
-    // Mostrar advertencia si hay validación Y se usa cross-validation
-    if (useValidation && executionMethod !== 'standard') {
-        warningDiv.style.display = 'block';
-    } else {
-        warningDiv.style.display = 'none';
-    }
 }
 
 function updateDataSplits() {
@@ -6483,9 +6460,6 @@ function updateExecutionConfig() {
         document.getElementById('executionInfo').style.display = 'block';
         document.getElementById('executionInfoText').textContent = infoText;
     }
-    
-    // Verificar si se debe mostrar la advertencia de cross-validation
-    checkCrossValidationWarning();
 }
 
 function getExecutionConfig() {
