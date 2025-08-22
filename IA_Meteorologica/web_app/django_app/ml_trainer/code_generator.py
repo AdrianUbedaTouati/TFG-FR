@@ -2187,6 +2187,28 @@ def _generate_evaluation_function(model_type, hyperparams) -> List[str]:
     return lines
 
 
+def _json_to_python_str(obj):
+    """Convert JSON object to Python code string"""
+    if isinstance(obj, bool):
+        return 'True' if obj else 'False'
+    elif obj is None:
+        return 'None'
+    elif isinstance(obj, str):
+        return repr(obj)  # This will add quotes properly
+    elif isinstance(obj, (int, float)):
+        return str(obj)
+    elif isinstance(obj, dict):
+        items = []
+        for k, v in obj.items():
+            items.append(f'"{k}": {_json_to_python_str(v)}')
+        return '{' + ', '.join(items) + '}'
+    elif isinstance(obj, list):
+        items = [_json_to_python_str(item) for item in obj]
+        return '[' + ', '.join(items) + ']'
+    else:
+        return repr(obj)
+
+
 def _generate_main_function(model_def, hyperparams) -> List[str]:
     """Generate main execution function"""
     # Get Module 1 and Module 2 configurations
@@ -2194,6 +2216,10 @@ def _generate_main_function(model_def, hyperparams) -> List[str]:
     split_config = model_def.default_split_config if hasattr(model_def, 'default_split_config') else {}
     execution_method = model_def.default_execution_method if hasattr(model_def, 'default_execution_method') else 'standard'
     execution_config = model_def.default_execution_config if hasattr(model_def, 'default_execution_config') else {}
+    
+    # Convert configs to Python format
+    split_config_str = _json_to_python_str(split_config)
+    execution_config_str = _json_to_python_str(execution_config)
     
     return [
         '# =============================================================================',
@@ -2205,11 +2231,11 @@ def _generate_main_function(model_def, hyperparams) -> List[str]:
         '    DATA_FILE = "your_dataset.csv"  # UPDATE THIS PATH',
         '    ',
         '    # Module 1 Configuration',
-        f'    split_config = {json.dumps(split_config, indent=8)}',
+        f'    split_config = {split_config_str}',
         f'    data_splitter = DataSplitter(strategy="{split_method}", config=split_config)',
         '    ',
         '    # Module 2 Configuration',
-        f'    execution_config = {json.dumps(execution_config, indent=8)}',
+        f'    execution_config = {execution_config_str}',
         f'    execution_strategy = ExecutionStrategy(method="{execution_method}", config=execution_config)',
         '    ',
         '    try:',
