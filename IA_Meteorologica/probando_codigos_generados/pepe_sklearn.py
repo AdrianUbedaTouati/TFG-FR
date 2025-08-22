@@ -2,23 +2,23 @@
 Auto-generated scikit-learn RANDOM_FOREST model code
 Model: pepe
 Type: RANDOM_FOREST
-Generated at: 2025-08-22 15:32:44.971604+00:00
+Generated at: 2025-08-22 17:20:04.989584+00:00
 
 Configuration:
 - Target columns: ['Summary']
-- Predictor columns: 15 features
+- Predictor columns: 14 features
 - Problem type: classification
 
 Module 1 - Data Split Configuration:
-- Split method: random
-- Train size: 0.85
-- Validation size: 0 (disabled)
+- Split method: stratified
+- Train size: 0.7
+- Validation size: 0.15
 - Test size: 0.15
-- Use validation: False
+- Use validation: True
 
 Module 2 - Execution Configuration:
 - Execution method: kfold
-- Configuration: {"n_splits": 2, "shuffle": false, "cv_train_size": 0.85, "cv_val_size": 0.15}
+- Configuration: {"n_splits": 5, "shuffle": true, "cv_train_size": 0.85, "cv_val_size": 0.15}
 """
 
 import numpy as np
@@ -48,7 +48,7 @@ from sklearn.ensemble import RandomForestClassifier
 class DataSplitter:
     """Module 1: Handles data splitting according to configured strategy"""
     
-    def __init__(self, strategy="random", config=None):
+    def __init__(self, strategy="stratified", config=None):
         self.strategy = strategy
         self.config = config or {}
         
@@ -347,8 +347,8 @@ def create_model():
 
     # Model parameters
     params = {
-        "n_estimators": 300,
-        "max_depth": None,
+        "n_estimators": 200,
+        "max_depth": 20,
         "max_features": "sqrt",
         "criterion": "gini",
         "min_samples_split": 2,
@@ -378,7 +378,7 @@ def load_and_preprocess_data(file_path):
     print(f"Columns: {list(df.columns)})")
 
     # Define columns
-    predictor_columns = ['Precip Type', 'Temperature (C)', 'Humidity', 'Wind Speed (km/h)', 'Wind Bearing (degrees)', 'Visibility (km)', 'Pressure (millibars)', 'trend', 'h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos', 'tz_offset_hours']
+    predictor_columns = ['Precip Type', 'Temperature (C)', 'Humidity', 'Wind Speed (km/h)', 'Wind Bearing (degrees)', 'Visibility (km)', 'Pressure (millibars)', 'h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos', 'tz_offset_hours']
     target_columns = ['Summary']
 
     # Validate columns
@@ -392,19 +392,42 @@ def load_and_preprocess_data(file_path):
 
     # Extract features and target
     X = df[predictor_columns].copy()
-    y = df[target_columns[0]] if len(target_columns) == 1 else df[target_columns]
+    y_raw = df[target_columns]
+    
+    # Handle categorical targets for classification
+    target_encoders = {}
+    y = y_raw.values.copy()
+    
+    # Check if targets need encoding
+    for i, col in enumerate(target_columns):
+        col_data = y_raw[col]
+        if col_data.dtype == 'object' or col_data.dtype.name == 'category':
+            print(f"Encoding categorical target column: {col}")
+            encoder = LabelEncoder()
+            y[:, i] = encoder.fit_transform(col_data)
+            target_encoders[col] = encoder
+            print(f"Classes in {col}: {encoder.classes_.tolist()}")
+    
+    # Convert to proper format
+    if len(target_columns) == 1:
+        y = y.ravel()
 
     # Handle missing values
     print("\nHandling missing values...")
     print(f"Missing values in features: {X.isnull().sum().sum()}")
-    print(f"Missing values in target: {y.isnull().sum() if hasattr(y, 'isnull') else 0}")
+    print(f"Missing values in target: {pd.DataFrame(y).isnull().sum().sum() if len(y.shape) > 1 else pd.Series(y).isnull().sum()}")
 
     # Fill missing values with mean
     X = X.fillna(X.mean())
-    if hasattr(y, 'fillna'):
-        y = y.fillna(y.mean() if y.dtype in [np.float64, np.float32] else y.mode()[0])
+    
+    # Handle missing values in y (if any)
+    if pd.DataFrame(y).isnull().sum().sum() > 0:
+        if len(y.shape) == 1:
+            y = pd.Series(y).fillna(pd.Series(y).mode()[0]).values
+        else:
+            y = pd.DataFrame(y).fillna(pd.DataFrame(y).mode().iloc[0]).values
 
-    return X, y, predictor_columns, target_columns
+    return X, y, predictor_columns, target_columns, target_encoders
 
 
 def train_model(model, X, y, data_splitter=None, execution_strategy=None):
@@ -494,21 +517,42 @@ def evaluate_multi_output(y_true, y_pred, target_names=None):
 
 
 
-def save_model(model, filename="model.pkl"):
+def save_model(model, filename="model.pkl", target_encoders=None):
     """
-    Save the trained model
+    Save the trained model with metadata
     """
-    joblib.dump(model, filename)
+    model_data = {
+        "model": model,
+        "target_encoders": target_encoders
+    }
+    joblib.dump(model_data, filename)
     print(f"\nModel saved to: {filename}")
+    
+    # Save class names for reference
+    if target_encoders:
+        for col, encoder in target_encoders.items():
+            print(f"Target column '{col}' classes: {encoder.classes_.tolist()}")
 
 
 def load_model(filename="model.pkl"):
     """
-    Load a saved model
+    Load a saved model with metadata
     """
-    model = joblib.load(filename)
-    print(f"Model loaded from: {filename}")
-    return model
+    model_data = joblib.load(filename)
+    
+    # Handle both old and new formats
+    if isinstance(model_data, dict):
+        model = model_data["model"]
+        target_encoders = model_data.get("target_encoders", {})
+        print(f"Model loaded from: {filename}")
+        if target_encoders:
+            for col, encoder in target_encoders.items():
+                print(f"Target column '{col}' classes: {encoder.classes_.tolist()}")
+        return model, target_encoders
+    else:
+        # Old format - just the model
+        print(f"Model loaded from: {filename} (legacy format)")
+        return model_data, {}
 
 
 def create_confusion_matrix(y_true, y_pred, labels=None, title='Confusion Matrix', save_path=None):
@@ -528,7 +572,9 @@ def create_confusion_matrix(y_true, y_pred, labels=None, title='Confusion Matrix
     
     # Use seaborn heatmap for better visualization
     if labels is None:
-        labels = [f'Class_{i}' for i in range(len(cm))]
+        # Extract unique labels from the data
+        unique_labels = np.unique(np.concatenate([y_true, y_pred]))
+        labels = [str(label) for label in unique_labels]
     
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                 xticklabels=labels, yticklabels=labels,
@@ -638,7 +684,7 @@ def create_residuals_plot(y_true, y_pred, title='Residuals Analysis', save_path=
 
 
 def analyze_model_performance(model, X_test, y_test, target_columns, 
-                             model_name='Model', save_plots=True):
+                             model_name='Model', save_plots=True, target_encoders=None):
     """
     Comprehensive model performance analysis with visualizations
     """
@@ -680,17 +726,41 @@ def analyze_model_performance(model, X_test, y_test, target_columns,
             # Classification metrics
             from sklearn.metrics import accuracy_score, classification_report
             
-            # Round predictions for classification
-            y_pred_rounded = np.round(y_pred_col).astype(int)
-            y_true_int = y_true_col.astype(int)
+            # For Random Forest classification, predictions are already class labels
+            # No need to round - work with predictions directly
+            if hasattr(model, 'predict_proba'):
+                # If model supports probability predictions, use regular predict for labels
+                y_pred_labels = y_pred_col
+            else:
+                # For other models, ensure integer labels
+                y_pred_labels = y_pred_col.astype(int)
             
-            accuracy = accuracy_score(y_true_int, y_pred_rounded)
+            y_true_labels = y_true_col.astype(int)
+            
+            accuracy = accuracy_score(y_true_labels, y_pred_labels)
             print(f'Accuracy: {accuracy:.4f}')
             
-            # Create confusion matrix
+            # Get class names from target encoders if available
+            if target_encoders and target_col in target_encoders:
+                encoder = target_encoders[target_col]
+                # Map numeric labels back to original class names
+                unique_labels = np.unique(np.concatenate([y_true_labels, y_pred_labels]))
+                class_names = []
+                for label in unique_labels:
+                    if label < len(encoder.classes_):
+                        class_names.append(str(encoder.classes_[label]))
+                    else:
+                        class_names.append(f'Class_{label}')
+            else:
+                # Fallback to numeric labels
+                unique_labels = np.unique(np.concatenate([y_true_labels, y_pred_labels]))
+                class_names = [f'{int(label)}' for label in unique_labels]
+            
+            # Create confusion matrix with actual class labels
             save_path = f'{model_name}_{target_col}_confusion_matrix.png' if save_plots else None
             cm = create_confusion_matrix(
-                y_true_int, y_pred_rounded,
+                y_true_labels, y_pred_labels,
+                labels=class_names,
                 title=f'Confusion Matrix - {target_col}',
                 save_path=save_path
             )
@@ -755,17 +825,17 @@ if __name__ == "__main__":
     DATA_FILE = "db.csv"  # UPDATE THIS PATH
     
     # Module 1 Configuration
-    split_config = {"train_size": 0.85, "val_size": 0, "test_size": 0.15, "random_state": 42, "use_validation": False}
-    data_splitter = DataSplitter(strategy="random", config=split_config)
+    split_config = {"train_size": 0.7, "val_size": 0.15, "test_size": 0.15, "random_state": 42, "use_validation": True}
+    data_splitter = DataSplitter(strategy="stratified", config=split_config)
     
     # Module 2 Configuration
-    execution_config = {"n_splits": 2, "shuffle": False, "cv_train_size": 0.85, "cv_val_size": 0.15}
+    execution_config = {"n_splits": 5, "shuffle": True, "cv_train_size": 0.85, "cv_val_size": 0.15}
     execution_strategy = ExecutionStrategy(method="kfold", config=execution_config)
     
     try:
         # Step 1: Load and preprocess data
         print("STEP 1: Loading and preprocessing data...")
-        X, y, predictor_cols, target_cols = load_and_preprocess_data(DATA_FILE)
+        X, y, predictor_cols, target_cols, target_encoders = load_and_preprocess_data(DATA_FILE)
         
         # Step 2: Create model
         print("\nSTEP 2: Creating model...")
@@ -787,13 +857,14 @@ if __name__ == "__main__":
         analysis_results = analyze_model_performance(
             model, X_test, y_test, target_cols,
             model_name="pepe",
-            save_plots=True
+            save_plots=True,
+            target_encoders=target_encoders
         )
         
         # Step 6: Save model
         print("\nSTEP 6: Saving model...")
         model_filename = "pepe_model.pkl"
-        save_model(model, model_filename)
+        save_model(model, model_filename, target_encoders)
         
         # Optional: Save model info
         model_info = {
@@ -802,7 +873,7 @@ if __name__ == "__main__":
             "predictor_columns": predictor_cols,
             "target_columns": target_cols,
             "hyperparameters": model.get_params(),
-            "generated_at": "2025-08-22 15:32:44.971604+00:00"
+            "generated_at": "2025-08-22 17:20:04.989584+00:00"
         }
         
         with open("model_info.json", "w") as f:
@@ -824,7 +895,7 @@ if __name__ == "__main__":
 # =============================================================================
 # 1. Update DATA_FILE with your CSV file path
 # 2. Ensure your dataset contains these columns:
-#    - Predictors: ['Precip Type', 'Temperature (C)', 'Humidity', 'Wind Speed (km/h)', 'Wind Bearing (degrees)', 'Visibility (km)', 'Pressure (millibars)', 'trend', 'h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos', 'tz_offset_hours']
+#    - Predictors: ['Precip Type', 'Temperature (C)', 'Humidity', 'Wind Speed (km/h)', 'Wind Bearing (degrees)', 'Visibility (km)', 'Pressure (millibars)', 'h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos', 'tz_offset_hours']
 #    - Targets: ['Summary']
 # 3. Run: python this_script.py
 # =============================================================================

@@ -141,16 +141,21 @@ class SklearnProgressCallback:
         self.session.progress = progress
         if message:
             self._add_log(message)
-        self.session.save()
+        # Save specific fields to avoid overwriting concurrent updates
+        fields_to_update = ['progress', 'training_logs'] if message else ['progress']
+        self.session.save(update_fields=fields_to_update)
     
     def update_message(self, message):
         """Update only the message without changing progress"""
         self._add_log(message)
-        self.session.save()
+        # Save without updating modified timestamp to avoid race conditions
+        self.session.save(update_fields=['training_logs'])
     
-    def log_message(self, message):
-        """Add a log message without updating progress or saving immediately"""
+    def log_message(self, message, save_immediately=True):
+        """Add a log message without updating progress"""
         self._add_log(message)
+        if save_immediately:
+            self.session.save()
     
     def _add_log(self, message):
         """Add a log entry to the session"""

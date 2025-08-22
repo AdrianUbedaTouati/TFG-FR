@@ -1332,7 +1332,10 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                         # Log the CV train/validation split info
                         progress_callback.log_message(f"   📊 Données d'entraînement du fold: {X_fold_train.shape[0]} échantillons ({X_fold_train.shape[0]/X_full.shape[0]*100:.1f}% du total)")
                         progress_callback.log_message(f"   📋 Données de test du fold (pour évaluation): {X_fold_val.shape[0]} échantillons ({X_fold_val.shape[0]/X_full.shape[0]*100:.1f}% du total)")
-                        progress_callback.log_message(f"   🔄 Division train/val dans le fold: {cv_train_size*100:.0f}% / {cv_val_size*100:.0f}%")
+                        # Get the actual train/val proportions used
+                        actual_train_pct = int(cv_train_size * 100)
+                        actual_val_pct = int(cv_val_size * 100)
+                        progress_callback.log_message(f"   🔄 Division train/val dans le fold: {actual_train_pct}% / {actual_val_pct}%")
                         progress_callback.log_message(f"      → Train: {X_fold_train_split.shape[0]} échantillons")
                         progress_callback.log_message(f"      → Validation: {X_fold_val_split.shape[0]} échantillons")
                         progress_callback.log_message(f"   💡 Note: La validation intra-fold est utilisée pour l'entraînement (early stopping, etc.)")
@@ -1400,8 +1403,10 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                         
                         # Update overall progress
                         overall_progress = 0.3 + (0.5 * ((fold - 1 + fold_progress) / n_splits))
+                        # Update progress but keep it under 0.8 to avoid premature completion
+                        safe_progress = min(overall_progress, 0.79)
                         progress_callback.update_progress(
-                            overall_progress,
+                            safe_progress,
                             f"Fold {fold}/{n_splits} - {trees_trained}/{n_estimators} arbres - Score: {current_score:.4f}"
                         )
                 elif model_type == 'xgboost':
@@ -1478,8 +1483,7 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                 current_avg = sum(cv_results['val_scores']) / len(cv_results['val_scores'])
                 progress_callback.log_message(f"   📊 Score moyen jusqu'ici: {current_avg:.4f}")
                 
-                # Save progress after each fold
-                progress_callback.session.save()
+                # Progress is already saved by callbacks, no need to save again
                 
                 # Update progress with more context
                 remaining_folds = n_splits - fold
