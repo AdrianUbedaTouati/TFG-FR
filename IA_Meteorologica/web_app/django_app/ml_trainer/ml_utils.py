@@ -1021,6 +1021,11 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
     print(f"[train_sklearn_model] Module 2 - Final execution method: {execution_method}")
     print(f"[train_sklearn_model] Module 2 - Final execution config: {execution_config}")
     
+    # Log Module 1 configuration (data split) first
+    progress_callback.log_message(f"📊 Module 1: Division des Données")
+    progress_callback.log_message(f"   Division configurée: Train {session.train_split*100:.0f}% / Val {session.val_split*100:.0f}% / Test {session.test_split*100:.0f}%")
+    progress_callback.log_message(f"   Méthode de division: {session.split_method}")
+    
     # Log Module 2 configuration to training session
     progress_callback.log_message(f"🔧 Module 2: Configuration d'Exécution")
     progress_callback.log_message(f"   Méthode: {execution_method}")
@@ -1221,17 +1226,102 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                 X_fold_val = X_full[val_idx]
                 y_fold_val = y_full[val_idx]
                 
-                progress_callback.log_message(f"   📊 Données d'entraînement: {X_fold_train.shape[0]} échantillons ({X_fold_train.shape[0]/X_full.shape[0]*100:.1f}%)")
-                progress_callback.log_message(f"   📋 Données de validation: {X_fold_val.shape[0]} échantillons ({X_fold_val.shape[0]/X_full.shape[0]*100:.1f}%)")
+                # Log data split info - showing CV fold splits, not session splits
+                progress_callback.log_message(f"   📊 Données d'entraînement du fold: {X_fold_train.shape[0]} échantillons ({X_fold_train.shape[0]/X_full.shape[0]*100:.1f}% du total)")
+                progress_callback.log_message(f"   📋 Données de validation du fold: {X_fold_val.shape[0]} échantillons ({X_fold_val.shape[0]/X_full.shape[0]*100:.1f}% du total)")
+                progress_callback.log_message(f"   💡 Note: Ces pourcentages sont pour la cross-validation, pas la division train/val/test configurée")
                 progress_callback.log_message(f"   🔧 Entraînement du modèle en cours...")
                 
                 # Clone model for this fold
                 from sklearn.base import clone
                 fold_model = clone(model)
                 
-                # Train on fold with timing
+                # Train on fold with timing and progress tracking for Random Forest
                 train_start = time.time()
-                fold_model.fit(X_fold_train, y_fold_train)
+                
+                if model_type == 'random_forest':
+                    # Track progress for Random Forest
+                    n_estimators = fold_model.n_estimators
+                    progress_callback.log_message(f"   🌳 Entraînement de {n_estimators} arbres...")
+                    
+                    # Use warm_start to track progress
+                    fold_model.set_params(warm_start=True)
+                    batch_size = max(10, n_estimators // 10)
+                    trees_trained = 0
+                    
+                    for i in range(0, n_estimators, batch_size):
+                        current_batch = min(batch_size, n_estimators - i)
+                        fold_model.set_params(n_estimators=trees_trained + current_batch)
+                        fold_model.fit(X_fold_train, y_fold_train)
+                        trees_trained += current_batch
+                        
+                        # Calculate current performance on validation set
+                        val_pred = fold_model.predict(X_fold_val)
+                        current_score = score_func(y_fold_val, val_pred)
+                        
+                        # Also calculate OOB score if available
+                        oob_score_str = ""
+                        if hasattr(fold_model, 'oob_score_') and fold_model.oob_score_:
+                            oob_score_str = f" | OOB: {fold_model.oob_score_:.4f}"
+                        
+                        # Update progress within the fold
+                        fold_progress = trees_trained / n_estimators
+                        progress_callback.log_message(f"      🌲 {trees_trained}/{n_estimators} arbres entraînés ({fold_progress*100:.0f}%) | Score: {current_score:.4f}{oob_score_str}")
+                        
+                        # Update overall progress
+                        overall_progress = 0.3 + (0.5 * ((fold - 1 + fold_progress) / n_splits))
+                        progress_callback.update_progress(
+                            overall_progress,
+                            f"Fold {fold}/{n_splits} - {trees_trained}/{n_estimators} arbres - Score: {current_score:.4f}"
+                        )
+                elif model_type == 'xgboost':
+                    # Track progress for XGBoost
+                    n_estimators = hyperparams.get('n_estimators', 100)
+                    progress_callback.log_message(f"   🚀 Entraînement XGBoost - {n_estimators} rounds...")
+                    
+                    # Custom callback for XGBoost progress tracking
+                    class CVXGBProgressCallback(xgb.callback.TrainingCallback):
+                        def __init__(self, fold_num, total_folds, n_splits, progress_cb, X_val, y_val, score_func):
+                            self.fold_num = fold_num
+                            self.total_folds = total_folds
+                            self.n_splits = n_splits
+                            self.progress_cb = progress_cb
+                            self.X_val = X_val
+                            self.y_val = y_val
+                            self.score_func = score_func
+                            
+                        def after_iteration(self, model, epoch, evals_log):
+                            # Get current validation score if available
+                            score_str = ""
+                            if hasattr(model, '_Booster'):
+                                try:
+                                    # Make prediction with current model
+                                    val_pred = model.predict(self.X_val)
+                                    val_score = self.score_func(self.y_val, val_pred)
+                                    score_str = f" | Score: {val_score:.4f}"
+                                except:
+                                    pass
+                            
+                            # Update progress within the fold
+                            round_progress = (epoch + 1) / self.total_folds
+                            self.progress_cb.log_message(f"      📈 Round {epoch + 1}/{self.total_folds} terminé{score_str}")
+                            
+                            # Update overall progress
+                            overall_progress = 0.3 + (0.5 * ((self.fold_num - 1 + round_progress) / self.n_splits))
+                            self.progress_cb.update_progress(
+                                overall_progress,
+                                f"Fold {self.fold_num}/{self.n_splits} - Round {epoch + 1}/{self.total_folds}{score_str}"
+                            )
+                            return False
+                    
+                    # Train XGBoost with progress callback
+                    xgb_callback = CVXGBProgressCallback(fold, n_estimators, n_splits, progress_callback, X_fold_val, y_fold_val, score_func)
+                    fold_model.set_params(callbacks=[xgb_callback])
+                    fold_model.fit(X_fold_train, y_fold_train)
+                else:
+                    # Standard training for other models
+                    fold_model.fit(X_fold_train, y_fold_train)
+                
                 train_time = time.time() - train_start
                 
                 progress_callback.log_message(f"   ⏱️  Temps d'entraînement: {train_time:.2f}s")
@@ -1313,9 +1403,22 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                     # Update progress based on number of boosting rounds
                     n_estimators = hyperparams.get('n_estimators', 100)
                     progress = 0.3 + (0.5 * (epoch / n_estimators))
+                    
+                    # Get validation score from evals_log
+                    score_str = ""
+                    if evals_log:
+                        # Get the last validation metric
+                        for dataset, metrics in evals_log.items():
+                            if 'validation' in dataset or 'eval' in dataset:
+                                for metric, values in metrics.items():
+                                    if values:
+                                        score_str = f" | {metric}: {values[-1]:.4f}"
+                                        break
+                                break
+                    
                     progress_callback.update_progress(
                         progress, 
-                        f"XGBoost - Round {epoch + 1}/{n_estimators}"
+                        f"XGBoost - Round {epoch + 1}/{n_estimators}{score_str}"
                     )
                     return False
             
@@ -1339,25 +1442,37 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                 batch_size = max(10, n_estimators // 10)  # Train in 10 steps minimum
                 trees_trained = 0
                 
+                # Determine scoring function for validation
+                if problem_type == 'classification':
+                    from sklearn.metrics import accuracy_score
+                    val_score_func = accuracy_score
+                else:
+                    from sklearn.metrics import r2_score
+                    val_score_func = r2_score
+                
                 for i in range(0, n_estimators, batch_size):
                     current_batch = min(batch_size, n_estimators - i)
                     model.set_params(n_estimators=trees_trained + current_batch)
                     model.fit(X_train, y_train)
                     trees_trained += current_batch
                     
-                    # Update progress
+                    # Calculate validation score
+                    val_pred = model.predict(X_val)
+                    val_score = val_score_func(y_val, val_pred)
+                    
+                    # Get OOB score if available
+                    oob_score_str = ""
+                    if hasattr(model, 'oob_score_') and model.oob_score_:
+                        oob_score_str = f" | OOB: {model.oob_score_:.4f}"
+                        print(f"[train_sklearn_model] OOB Score after {trees_trained} trees: {model.oob_score_:.4f}")
+                    
+                    # Update progress with score
                     progress = 0.3 + (0.5 * (trees_trained / n_estimators))
+                    progress_percent = (trees_trained / n_estimators) * 100
                     progress_callback.update_progress(
                         progress, 
-                        f"Random Forest - {trees_trained}/{n_estimators} arbres entraînés"
+                        f"Random Forest - {trees_trained}/{n_estimators} arbres ({progress_percent:.0f}%) | Score Val: {val_score:.4f}{oob_score_str}"
                     )
-                    
-                    # Log OOB score if available
-                    if hasattr(model, 'oob_score_') and model.oob_score_:
-                        print(f"[train_sklearn_model] OOB Score after {trees_trained} trees: {model.oob_score_:.4f}")
-                        progress_callback.update_message(
-                            f"Score OOB actuel: {model.oob_score_:.4f}"
-                        )
                 
                 # Disable warm_start after training
                 model.set_params(warm_start=False)

@@ -60,9 +60,12 @@ function addDetailedLogEntry(message, level = 'info') {
         'progress': 'text-primary'
     };
     
+    // Enhance the message with progress indicators
+    const enhancedMessage = enhanceLogMessage(message);
+    
     const entry = document.createElement('div');
     entry.className = `log-entry ${levelClasses[level] || 'text-muted'}`;
-    entry.innerHTML = `[${timestamp}] ${message}`;
+    entry.innerHTML = `[${timestamp}] ${enhancedMessage}`;
     
     logContainer.appendChild(entry);
     logContainer.scrollTop = logContainer.scrollHeight;
@@ -140,6 +143,34 @@ function updateSklearnProgress(data) {
             addDetailedLogEntry(`${details.eval_metric}: ${details.eval_value?.toFixed(6)}`, 'info');
         }
     }
+}
+
+// Function to parse and enhance log messages
+function enhanceLogMessage(message) {
+    // Look for fold progress patterns
+    const foldPattern = /Fold (\d+)\/(\d+) - (\d+)\/(\d+) arbres/;
+    const foldMatch = message.match(foldPattern);
+    
+    if (foldMatch) {
+        const [_, currentFold, totalFolds, currentTrees, totalTrees] = foldMatch;
+        // Add visual progress indicator
+        const foldProgress = parseInt(currentFold) / parseInt(totalFolds) * 100;
+        const treeProgress = parseInt(currentTrees) / parseInt(totalTrees) * 100;
+        
+        return `${message} | Fold: ${foldProgress.toFixed(0)}% | Arbres: ${treeProgress.toFixed(0)}%`;
+    }
+    
+    // Look for epoch patterns for neural networks
+    const epochPattern = /[Éé]poque (\d+)\/(\d+)/i;
+    const epochMatch = message.match(epochPattern);
+    
+    if (epochMatch) {
+        const [_, currentEpoch, totalEpochs] = epochMatch;
+        const epochProgress = parseInt(currentEpoch) / parseInt(totalEpochs) * 100;
+        return `${message} | Progression: ${epochProgress.toFixed(0)}%`;
+    }
+    
+    return message;
 }
 
 // Override the original updateTrainingStatus function
