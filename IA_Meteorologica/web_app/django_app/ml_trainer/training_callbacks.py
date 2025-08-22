@@ -106,9 +106,9 @@ class SessionProgressCallback(keras.callbacks.Callback):
         }
         self.session.training_logs.append(log_entry)
         
-        # Keep only last 100 logs to avoid too much data
-        if len(self.session.training_logs) > 100:
-            self.session.training_logs = self.session.training_logs[-100:]
+        # Keep only last 500 logs to allow for more complete training logs
+        if len(self.session.training_logs) > 500:
+            self.session.training_logs = self.session.training_logs[-500:]
 
 
 class SklearnProgressCallback:
@@ -168,6 +168,6 @@ class SklearnProgressCallback:
         }
         self.session.training_logs.append(log_entry)
         
-        # Keep only last 100 logs
-        if len(self.session.training_logs) > 100:
-            self.session.training_logs = self.session.training_logs[-100:]
+        # Keep only last 500 logs to allow for more complete training logs
+        if len(self.session.training_logs) > 500:
+            self.session.training_logs = self.session.training_logs[-500:]

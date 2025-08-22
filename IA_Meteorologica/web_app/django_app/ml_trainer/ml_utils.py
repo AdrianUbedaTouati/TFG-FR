@@ -1330,14 +1330,16 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                         )
                         
                         # Log the CV train/validation split info
-                        progress_callback.log_message(f"   📊 Données d'entraînement du fold: {X_fold_train.shape[0]} échantillons ({X_fold_train.shape[0]/X_full.shape[0]*100:.1f}% du total)")
-                        progress_callback.log_message(f"   📋 Données de test du fold (pour évaluation): {X_fold_val.shape[0]} échantillons ({X_fold_val.shape[0]/X_full.shape[0]*100:.1f}% du total)")
-                        # Get the actual train/val proportions used
+                        # Calculate the actual percentages based on the fold size
+                        fold_size = X_fold_train.shape[0]
                         actual_train_pct = int(cv_train_size * 100)
                         actual_val_pct = int(cv_val_size * 100)
+                        
+                        progress_callback.log_message(f"   📊 Données du fold complet: {fold_size} échantillons ({fold_size/X_full.shape[0]*100:.1f}% du total)")
+                        progress_callback.log_message(f"   📋 Données de test du fold (pour évaluation): {X_fold_val.shape[0]} échantillons ({X_fold_val.shape[0]/X_full.shape[0]*100:.1f}% du total)")
                         progress_callback.log_message(f"   🔄 Division train/val dans le fold: {actual_train_pct}% / {actual_val_pct}%")
-                        progress_callback.log_message(f"      → Train: {X_fold_train_split.shape[0]} échantillons")
-                        progress_callback.log_message(f"      → Validation: {X_fold_val_split.shape[0]} échantillons")
+                        progress_callback.log_message(f"      → Train: {X_fold_train_split.shape[0]} échantillons ({actual_train_pct}% du fold)")
+                        progress_callback.log_message(f"      → Validation: {X_fold_val_split.shape[0]} échantillons ({actual_val_pct}% du fold)")
                         progress_callback.log_message(f"   💡 Note: La validation intra-fold est utilisée pour l'entraînement (early stopping, etc.)")
                         
                         # Use the split data for training
