@@ -1426,10 +1426,17 @@ function createAdvancedAnalysisCharts(analysisData) {
             document.getElementById('confusion-matrix-section').style.display = 'block';
         }
     } else if (analysisData.model_type && ['random_forest', 'decision_tree', 'xgboost'].includes(analysisData.model_type)) {
-        // Create synthetic confusion matrix for now
-        console.log('Creating synthetic confusion matrix');
-        createSyntheticConfusionMatrix();
-        document.getElementById('confusion-matrix-section').style.display = 'block';
+        // Log warning that confusion matrix data is missing
+        console.warn('Confusion matrix data not found in analysis response');
+        console.warn('Expected structure: analysisData.predictions_analysis.target_0_[name].confusion_matrix');
+        console.warn('Actual predictions_analysis:', analysisData.predictions_analysis);
+        
+        // Only create synthetic matrix if we absolutely have no data
+        if (!analysisData.predictions_analysis || typeof analysisData.predictions_analysis === 'string') {
+            console.log('Creating synthetic confusion matrix as fallback');
+            createSyntheticConfusionMatrix();
+            document.getElementById('confusion-matrix-section').style.display = 'block';
+        }
     }
 }
 

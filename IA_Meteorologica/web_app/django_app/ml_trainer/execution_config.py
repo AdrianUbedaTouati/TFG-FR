@@ -53,6 +53,8 @@ class KFoldExecution(ExecutionStrategy):
         self.n_splits = config.get('n_splits', 5)
         self.shuffle = config.get('shuffle', True)
         self.random_state = config.get('random_state', None)
+        self.cv_train_size = config.get('cv_train_size', 0.8)
+        self.cv_val_size = config.get('cv_val_size', 0.2)
         
         self.kfold = KFold(
             n_splits=self.n_splits,
@@ -78,6 +80,8 @@ class StratifiedKFoldExecution(ExecutionStrategy):
         self.n_splits = config.get('n_splits', 5)
         self.shuffle = config.get('shuffle', True)
         self.random_state = config.get('random_state', None)
+        self.cv_train_size = config.get('cv_train_size', 0.8)
+        self.cv_val_size = config.get('cv_val_size', 0.2)
         
         self.kfold = StratifiedKFold(
             n_splits=self.n_splits,
@@ -149,6 +153,8 @@ class RepeatedKFoldExecution(ExecutionStrategy):
         self.n_splits = config.get('n_splits', 5)
         self.n_repeats = config.get('n_repeats', 10)
         self.random_state = config.get('random_state', None)
+        self.cv_train_size = config.get('cv_train_size', 0.8)
+        self.cv_val_size = config.get('cv_val_size', 0.2)
         
         self.rkf = RepeatedKFold(
             n_splits=self.n_splits,
@@ -174,6 +180,8 @@ class RepeatedStratifiedKFoldExecution(ExecutionStrategy):
         self.n_splits = config.get('n_splits', 5)
         self.n_repeats = config.get('n_repeats', 10)
         self.random_state = config.get('random_state', None)
+        self.cv_train_size = config.get('cv_train_size', 0.8)
+        self.cv_val_size = config.get('cv_val_size', 0.2)
         
         self.rskf = RepeatedStratifiedKFold(
             n_splits=self.n_splits,

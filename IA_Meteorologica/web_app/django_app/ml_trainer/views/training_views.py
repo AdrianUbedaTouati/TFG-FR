@@ -309,8 +309,18 @@ class TrainingAnalysisView(APIView):
             val_split = session.val_split if session.val_split is not None else 0.15
             test_split = session.test_split if session.test_split is not None else 0.15
             
+            # Check if validation was actually used during training
+            split_config = getattr(session, 'split_config', {})
+            use_validation = split_config.get('use_validation', True)
+            
+            # If validation was disabled, set val_split to 0
+            if not use_validation:
+                val_split = 0.0
+                print(f"Validation was disabled during training, setting val_split to 0")
+            
             print(f"Session splits - train: {session.train_split}, val: {session.val_split}, test: {session.test_split}")
             print(f"Using splits - train: {train_split}, val: {val_split}, test: {test_split}")
+            print(f"Use validation: {use_validation}")
             
             train_end = int(n * train_split)
             val_end = int(n * (train_split + val_split))

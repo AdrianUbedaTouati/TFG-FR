@@ -429,7 +429,9 @@ def prepare_data(session, is_neural_network=False):
             print(f"[prepare_data] Shapes before normalization - X_train: {X_train.shape}, y_train: {y_train.shape}")
             
             X_train = scaler_X.fit_transform(X_train)
-            X_val = scaler_X.transform(X_val)
+            # Only transform validation set if it has samples
+            if len(X_val) > 0:
+                X_val = scaler_X.transform(X_val)
             X_test = scaler_X.transform(X_test)
             
             # For classification problems, we typically don't normalize y
@@ -441,7 +443,9 @@ def prepare_data(session, is_neural_network=False):
                 scaler_y = None  # Set to None for classification
             else:
                 y_train = scaler_y.fit_transform(y_train)
-                y_val = scaler_y.transform(y_val)
+                # Only transform validation set if it has samples
+                if len(y_val) > 0:
+                    y_val = scaler_y.transform(y_val)
                 y_test = scaler_y.transform(y_test)
             
             print(f"[prepare_data] Shapes after normalization - X_train: {X_train.shape}, y_train: {y_train.shape}")
@@ -775,28 +779,40 @@ def train_neural_network(session, model_type, hyperparams, X_train, y_train, X_v
     )
     
     # Other callbacks
-    early_stopping = callbacks.EarlyStopping(
-        monitor='val_loss',
-        patience=10,
-        restore_best_weights=True
-    )
+    callback_list = [progress_callback]
     
-    reduce_lr = callbacks.ReduceLROnPlateau(
-        monitor='val_loss',
-        factor=0.5,
-        patience=5,
-        min_lr=1e-7
-    )
+    # Only add validation-based callbacks if validation set exists
+    if len(X_val) > 0:
+        early_stopping = callbacks.EarlyStopping(
+            monitor='val_loss',
+            patience=10,
+            restore_best_weights=True
+        )
+        
+        reduce_lr = callbacks.ReduceLROnPlateau(
+            monitor='val_loss',
+            factor=0.5,
+            patience=5,
+            min_lr=1e-7
+        )
+        
+        callback_list.extend([early_stopping, reduce_lr])
     
     # Train model
-    history = model.fit(
-        X_train, y_train,
-        validation_data=(X_val, y_val),
-        epochs=total_epochs,
-        batch_size=batch_size,
-        callbacks=[progress_callback, early_stopping, reduce_lr],
-        verbose=1
-    )
+    fit_params = {
+        'x': X_train,
+        'y': y_train,
+        'epochs': total_epochs,
+        'batch_size': batch_size,
+        'callbacks': callback_list,
+        'verbose': 1
+    }
+    
+    # Only add validation_data if validation set is not empty
+    if len(X_val) > 0:
+        fit_params['validation_data'] = (X_val, y_val)
+    
+    history = model.fit(**fit_params)
     
     return model, history.history
 
@@ -1062,8 +1078,20 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
     
     # Log Module 1 configuration (data split) first
     progress_callback.log_message(f"📊 Module 1: Division des Données")
-    progress_callback.log_message(f"   Division configurée: Train {session.train_split*100:.0f}% / Val {session.val_split*100:.0f}% / Test {session.test_split*100:.0f}%")
+    # Check if validation is actually being used
+    use_validation = len(y_val) > 0
+    if use_validation:
+        progress_callback.log_message(f"   Division configurée: Train {session.train_split*100:.0f}% / Val {session.val_split*100:.0f}% / Test {session.test_split*100:.0f}%")
+    else:
+        # Recalculate percentages without validation
+        train_pct = session.train_split * 100
+        test_pct = session.test_split * 100
+        # If percentages don't add up to 100, adjust
+        if train_pct + test_pct < 99:
+            test_pct = 100 - train_pct
+        progress_callback.log_message(f"   Division configurée: Train {train_pct:.0f}% / Test {test_pct:.0f}% (Sans validation)")
     progress_callback.log_message(f"   Méthode de division: {session.split_method}")
+    progress_callback.log_message(f"   Utilisation de validation: {'Oui' if use_validation else 'Non'}")
     
     # Log Module 2 configuration to training session
     progress_callback.log_message(f"🔧 Module 2: Configuration d'Exécution")
@@ -1089,7 +1117,12 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
         import pandas as pd
         predictor_columns = session.predictor_columns
         X_train_df = pd.DataFrame(X_train, columns=predictor_columns)
-        X_val_df = pd.DataFrame(X_val, columns=predictor_columns)
+        # Create validation DataFrame only if it has data
+        if len(X_val) > 0:
+            X_val_df = pd.DataFrame(X_val, columns=predictor_columns)
+        else:
+            # Create empty DataFrame with correct columns
+            X_val_df = pd.DataFrame(columns=predictor_columns)
         
         # Auto-detect problem type if needed
         if hyperparams.get('problem_type', 'auto') == 'auto':
@@ -1130,7 +1163,14 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
         print(f"[train_sklearn_model] Cyclic columns: {cyclic_columns}")
         
         X_train = preprocessing_pipeline.fit_transform(X_train_df, y_train)
-        X_val = preprocessing_pipeline.transform(X_val_df)
+        
+        # Only transform validation set if it has samples
+        if len(X_val_df) > 0:
+            X_val = preprocessing_pipeline.transform(X_val_df)
+        else:
+            # Keep empty array with correct number of features
+            n_features_after = X_train.shape[1]
+            X_val = np.array([]).reshape(0, n_features_after)
         
         # Process test data if provided
         if X_test is not None:
@@ -1220,8 +1260,18 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
     # Combine train and validation data for cross-validation strategies
     if execution_method != 'standard':
         # For CV strategies, we'll use all training data
-        X_full = np.vstack([X_train, X_val])
-        y_full = np.concatenate([y_train, y_val])
+        if len(X_val) > 0 and len(y_val) > 0:
+            X_full = np.vstack([X_train, X_val])
+            # Ensure y arrays have same dimensions before concatenating
+            if len(y_train.shape) == 1 and len(y_val.shape) == 2:
+                y_val = y_val.ravel()
+            elif len(y_train.shape) == 2 and len(y_val.shape) == 1:
+                y_val = y_val.reshape(-1, 1)
+            y_full = np.concatenate([y_train, y_val])
+        else:
+            # No validation data, just use training data
+            X_full = X_train
+            y_full = y_train
         print(f"[train_sklearn_model] Combined data for CV - X: {X_full.shape}, y: {y_full.shape}")
     
     # Train the model
@@ -1265,10 +1315,51 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                 X_fold_val = X_full[val_idx]
                 y_fold_val = y_full[val_idx]
                 
-                # Log data split info - showing CV fold splits, not session splits
-                progress_callback.log_message(f"   📊 Données d'entraînement du fold: {X_fold_train.shape[0]} échantillons ({X_fold_train.shape[0]/X_full.shape[0]*100:.1f}% du total)")
-                progress_callback.log_message(f"   📋 Données de validation du fold: {X_fold_val.shape[0]} échantillons ({X_fold_val.shape[0]/X_full.shape[0]*100:.1f}% du total)")
-                progress_callback.log_message(f"   💡 Note: Ces pourcentages sont pour la cross-validation, pas la division train/val/test configurée")
+                # Apply CV train/validation split within the fold if configured
+                cv_train_size = getattr(execution_strategy, 'cv_train_size', 1.0)
+                cv_val_size = getattr(execution_strategy, 'cv_val_size', 0.0)
+                
+                if cv_val_size > 0 and cv_train_size < 1.0:
+                    # Split the training fold into train/validation
+                    from sklearn.model_selection import train_test_split
+                    try:
+                        X_fold_train_split, X_fold_val_split, y_fold_train_split, y_fold_val_split = train_test_split(
+                            X_fold_train, y_fold_train, 
+                            test_size=cv_val_size,
+                            random_state=execution_config.get('random_state', None)
+                        )
+                        
+                        # Log the CV train/validation split info
+                        progress_callback.log_message(f"   📊 Données d'entraînement du fold: {X_fold_train.shape[0]} échantillons ({X_fold_train.shape[0]/X_full.shape[0]*100:.1f}% du total)")
+                        progress_callback.log_message(f"   📋 Données de test du fold (pour évaluation): {X_fold_val.shape[0]} échantillons ({X_fold_val.shape[0]/X_full.shape[0]*100:.1f}% du total)")
+                        progress_callback.log_message(f"   🔄 Division train/val dans le fold: {cv_train_size*100:.0f}% / {cv_val_size*100:.0f}%")
+                        progress_callback.log_message(f"      → Train: {X_fold_train_split.shape[0]} échantillons")
+                        progress_callback.log_message(f"      → Validation: {X_fold_val_split.shape[0]} échantillons")
+                        progress_callback.log_message(f"   💡 Note: La validation intra-fold est utilisée pour l'entraînement (early stopping, etc.)")
+                        
+                        # Use the split data for training
+                        X_fold_train_actual = X_fold_train_split
+                        y_fold_train_actual = y_fold_train_split
+                        X_fold_val_actual = X_fold_val_split
+                        y_fold_val_actual = y_fold_val_split
+                    except Exception as e:
+                        # If splitting fails, fall back to using full fold data
+                        progress_callback.log_message(f"   ⚠️ Impossible de diviser le fold: {str(e)}")
+                        progress_callback.log_message(f"   📊 Utilisation de tout le fold pour l'entraînement")
+                        X_fold_train_actual = X_fold_train
+                        y_fold_train_actual = y_fold_train
+                        X_fold_val_actual = None
+                        y_fold_val_actual = None
+                else:
+                    # No CV train/validation split, use full fold data
+                    progress_callback.log_message(f"   📊 Données d'entraînement du fold: {X_fold_train.shape[0]} échantillons ({X_fold_train.shape[0]/X_full.shape[0]*100:.1f}% du total)")
+                    progress_callback.log_message(f"   📋 Données de validation du fold: {X_fold_val.shape[0]} échantillons ({X_fold_val.shape[0]/X_full.shape[0]*100:.1f}% du total)")
+                    progress_callback.log_message(f"   💡 Note: Ces pourcentages sont pour la cross-validation, pas la division train/val/test configurée")
+                    X_fold_train_actual = X_fold_train
+                    y_fold_train_actual = y_fold_train
+                    X_fold_val_actual = None
+                    y_fold_val_actual = None
+                
                 progress_callback.log_message(f"   🔧 Entraînement du modèle en cours...")
                 
                 # Clone model for this fold
@@ -1291,7 +1382,7 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                     for i in range(0, n_estimators, batch_size):
                         current_batch = min(batch_size, n_estimators - i)
                         fold_model.set_params(n_estimators=trees_trained + current_batch)
-                        fold_model.fit(X_fold_train, y_fold_train)
+                        fold_model.fit(X_fold_train_actual, y_fold_train_actual)
                         trees_trained += current_batch
                         
                         # Calculate current performance on validation set
@@ -1356,10 +1447,10 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                     # Train XGBoost with progress callback
                     xgb_callback = CVXGBProgressCallback(fold, n_estimators, n_splits, progress_callback, X_fold_val, y_fold_val, score_func)
                     fold_model.set_params(callbacks=[xgb_callback])
-                    fold_model.fit(X_fold_train, y_fold_train)
+                    fold_model.fit(X_fold_train_actual, y_fold_train_actual)
                 else:
                     # Standard training for other models
-                    fold_model.fit(X_fold_train, y_fold_train)
+                    fold_model.fit(X_fold_train_actual, y_fold_train_actual)
                 
                 train_time = time.time() - train_start
                 
@@ -1367,11 +1458,11 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                 
                 # Evaluate with detailed timing
                 eval_start = time.time()
-                train_pred = fold_model.predict(X_fold_train)
+                train_pred = fold_model.predict(X_fold_train_actual)
                 val_pred = fold_model.predict(X_fold_val)
                 eval_time = time.time() - eval_start
                 
-                train_score = score_func(y_fold_train, train_pred)
+                train_score = score_func(y_fold_train_actual, train_pred)
                 val_score = score_func(y_fold_val, val_pred)
                 
                 cv_results['train_scores'].append(train_score)
@@ -1431,7 +1522,7 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
             progress_callback.session.save()
             
         # Standard training (no cross-validation)
-        elif model_type == 'xgboost' and hyperparams.get('early_stopping_enabled', True):
+        elif model_type == 'xgboost' and hyperparams.get('early_stopping_enabled', True) and len(X_val) > 0:
             early_stopping_rounds = hyperparams.get('early_stopping_rounds', 50)
             eval_set = [(X_val, y_val)]
             print(f"[train_sklearn_model] Training XGBoost with early stopping (rounds={early_stopping_rounds})")
@@ -1495,9 +1586,12 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                     model.fit(X_train, y_train)
                     trees_trained += current_batch
                     
-                    # Calculate validation score
-                    val_pred = model.predict(X_val)
-                    val_score = val_score_func(y_val, val_pred)
+                    # Calculate validation score if validation set exists
+                    val_score_str = ""
+                    if len(X_val) > 0:
+                        val_pred = model.predict(X_val)
+                        val_score = val_score_func(y_val, val_pred)
+                        val_score_str = f" | Score Val: {val_score:.4f}"
                     
                     # Get OOB score if available
                     oob_score_str = ""
@@ -1510,7 +1604,7 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                     progress_percent = (trees_trained / n_estimators) * 100
                     progress_callback.update_progress(
                         progress, 
-                        f"Random Forest - {trees_trained}/{n_estimators} arbres ({progress_percent:.0f}%) | Score Val: {val_score:.4f}{oob_score_str}"
+                        f"Random Forest - {trees_trained}/{n_estimators} arbres ({progress_percent:.0f}%){val_score_str}{oob_score_str}"
                     )
                 
                 # Disable warm_start after training
@@ -1719,7 +1813,9 @@ def train_model(session):
             if y_train.shape[1] == 1:
                 print(f"[Training] Converting y data to 1D for sklearn model")
                 y_train = y_train.ravel()
-                y_val = y_val.ravel()
+                # Only ravel validation set if it has samples
+                if len(y_val) > 0:
+                    y_val = y_val.ravel()
                 y_test = y_test.ravel()
                 print(f"[Training] New y shapes - train: {y_train.shape}, val: {y_val.shape}, test: {y_test.shape}")
         

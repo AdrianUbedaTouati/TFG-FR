@@ -377,16 +377,19 @@ def train_pytorch_model(session, model, X_train, y_train, X_val, y_val, hyperpar
     # Convert to tensors
     X_train_tensor = torch.FloatTensor(X_train)
     y_train_tensor = torch.FloatTensor(y_train)
-    X_val_tensor = torch.FloatTensor(X_val)
-    y_val_tensor = torch.FloatTensor(y_val)
     
     # Create data loaders
     train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
-    val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
-    
     batch_size = hyperparams.get('batch_size', 32)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size)
+    
+    # Only create validation tensors and loader if validation data exists
+    has_validation = len(X_val) > 0
+    if has_validation:
+        X_val_tensor = torch.FloatTensor(X_val)
+        y_val_tensor = torch.FloatTensor(y_val)
+        val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size)
     
     # Setup optimizer and loss
     optimizer = get_optimizer_pytorch(
@@ -407,6 +410,7 @@ def train_pytorch_model(session, model, X_train, y_train, X_val, y_val, hyperpar
     best_val_loss = float('inf')
     patience = 10
     patience_counter = 0
+    best_model_state = model.state_dict()  # Initialize with current state
     
     for epoch in range(epochs):
         # Training phase
@@ -423,39 +427,44 @@ def train_pytorch_model(session, model, X_train, y_train, X_val, y_val, hyperpar
             
             train_loss += loss.item()
         
-        # Validation phase
-        model.eval()
-        val_loss = 0
-        with torch.no_grad():
-            for batch_X, batch_y in val_loader:
-                batch_X, batch_y = batch_X.to(device), batch_y.to(device)
-                outputs = model(batch_X)
-                loss = criterion(outputs, batch_y)
-                val_loss += loss.item()
-        
         avg_train_loss = train_loss / len(train_loader)
-        avg_val_loss = val_loss / len(val_loader)
-        
         history['train_loss'].append(avg_train_loss)
-        history['val_loss'].append(avg_val_loss)
         
-        # Early stopping
-        if avg_val_loss < best_val_loss:
-            best_val_loss = avg_val_loss
-            patience_counter = 0
-            # Save best model
-            best_model_state = model.state_dict()
-        else:
-            patience_counter += 1
+        # Validation phase only if validation data exists
+        if has_validation:
+            model.eval()
+            val_loss = 0
+            with torch.no_grad():
+                for batch_X, batch_y in val_loader:
+                    batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+                    outputs = model(batch_X)
+                    loss = criterion(outputs, batch_y)
+                    val_loss += loss.item()
             
-        if patience_counter >= patience:
-            print(f"Early stopping at epoch {epoch+1}")
-            # Restore best model
-            model.load_state_dict(best_model_state)
-            break
-        
-        if (epoch + 1) % 10 == 0:
-            print(f"Epoch {epoch+1}/{epochs}, Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}")
+            avg_val_loss = val_loss / len(val_loader)
+            history['val_loss'].append(avg_val_loss)
+            
+            # Early stopping
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+                patience_counter = 0
+                # Save best model
+                best_model_state = model.state_dict()
+            else:
+                patience_counter += 1
+                
+            if patience_counter >= patience:
+                print(f"Early stopping at epoch {epoch+1}")
+                # Restore best model
+                model.load_state_dict(best_model_state)
+                break
+            
+            if (epoch + 1) % 10 == 0:
+                print(f"Epoch {epoch+1}/{epochs}, Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}")
+        else:
+            # No validation, just print training loss
+            if (epoch + 1) % 10 == 0:
+                print(f"Epoch {epoch+1}/{epochs}, Train Loss: {avg_train_loss:.4f}")
     
     return model, history
 

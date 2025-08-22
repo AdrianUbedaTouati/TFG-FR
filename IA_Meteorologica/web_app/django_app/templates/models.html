@@ -1268,7 +1268,7 @@
                                                 <div class="form-group">
                                                     <label for="kfoldSplits">Número de Folds (K)</label>
                                                     <input type="number" class="form-control" id="kfoldSplits" min="2" max="20" value="5">
-                                                    <small class="form-text text-muted">Número de divisiones para cross-validation</small>
+                                                    <small class="form-text text-muted">Número de divisiones para cross-validation (mínimo 2)</small>
                                                 </div>
                                             </div>
                                             <div class="col-md-6" id="kfoldShuffleDiv">
@@ -1278,6 +1278,42 @@
                                                         <label class="form-check-label" for="kfoldShuffle">
                                                             Mezclar datos antes de dividir
                                                         </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- División Train/Validation para cada fold -->
+                                        <div class="row mt-3">
+                                            <div class="col-12">
+                                                <h6>División Train/Validation dentro de cada fold</h6>
+                                                <small class="text-muted">En cada fold, los datos de entrenamiento se dividirán según estos porcentajes</small>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label for="cvTrainSize">Entrenamiento (%)</label>
+                                                    <input type="number" class="form-control" id="cvTrainSize" min="50" max="90" value="80" onchange="updateCVSplitDisplay()">
+                                                    <small class="form-text text-muted">Porcentaje para entrenamiento dentro del fold</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label for="cvValSize">Validación (%)</label>
+                                                    <input type="number" class="form-control" id="cvValSize" value="20" readonly>
+                                                    <small class="form-text text-muted">Porcentaje para validación dentro del fold</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Visual representation -->
+                                        <div class="row mt-2">
+                                            <div class="col-12">
+                                                <div class="progress" style="height: 30px;">
+                                                    <div class="progress-bar bg-primary" role="progressbar" id="cvTrainBar" style="width: 80%;">
+                                                        Train 80%
+                                                    </div>
+                                                    <div class="progress-bar bg-warning" role="progressbar" id="cvValBar" style="width: 20%;">
+                                                        Val 20%
                                                     </div>
                                                 </div>
                                             </div>
@@ -3061,6 +3097,10 @@ function trainModel(modelId) {
                 <span class="module-detail-label">Nombre de folds</span>
                 <span class="module-detail-value">${executionConfig.n_splits || 5}</span>
             </div>
+            <div class="module-detail">
+                <span class="module-detail-label">División por fold</span>
+                <span class="module-detail-value">Train ${(executionConfig.cv_train_size || 0.8) * 100}% / Val ${(executionConfig.cv_val_size || 0.2) * 100}%</span>
+            </div>
         `;
     } else if (executionMethod === 'repeated_kfold' || executionMethod === 'repeated_stratified_kfold') {
         executionInfo += `
@@ -3071,6 +3111,10 @@ function trainModel(modelId) {
             <div class="module-detail">
                 <span class="module-detail-label">Répétitions</span>
                 <span class="module-detail-value">${executionConfig.n_repeats || 10}</span>
+            </div>
+            <div class="module-detail">
+                <span class="module-detail-label">División por fold</span>
+                <span class="module-detail-value">Train ${(executionConfig.cv_train_size || 0.8) * 100}% / Val ${(executionConfig.cv_val_size || 0.2) * 100}%</span>
             </div>
         `;
     } else if (executionMethod === 'time_series_split') {
@@ -3249,7 +3293,20 @@ function loadModelFormData(model) {
         // Load K-Fold specific config
         if (execConfig.n_splits) {
             const kfoldSplitsEl = document.getElementById('kfoldSplits');
-            if (kfoldSplitsEl) kfoldSplitsEl.value = execConfig.n_splits;
+            if (kfoldSplitsEl) {
+                kfoldSplitsEl.value = execConfig.n_splits;
+                // Validate the loaded value
+                validateKFoldSplits();
+            }
+        }
+        
+        // Load CV train/validation split
+        if (execConfig.cv_train_size !== undefined) {
+            const cvTrainSizeEl = document.getElementById('cvTrainSize');
+            if (cvTrainSizeEl) {
+                cvTrainSizeEl.value = execConfig.cv_train_size * 100;
+                updateCVSplitDisplay();
+            }
         }
         
         // Load Repeated K-Fold specific config
@@ -3547,9 +3604,15 @@ function updateModel(modelId) {
         executionConfig.n_splits = parseInt(document.getElementById('kfoldSplits').value || 5);
         const shuffleEl = document.getElementById('kfoldShuffle');
         if (shuffleEl) executionConfig.shuffle = shuffleEl.checked;
+        // Add CV train/validation split
+        executionConfig.cv_train_size = parseInt(document.getElementById('cvTrainSize').value) / 100;
+        executionConfig.cv_val_size = parseInt(document.getElementById('cvValSize').value) / 100;
     } else if (executionMethod === 'repeated_kfold' || executionMethod === 'repeated_stratified_kfold') {
         executionConfig.n_splits = parseInt(document.getElementById('kfoldSplits').value || 5);
         executionConfig.n_repeats = parseInt(document.getElementById('kfoldRepeats').value || 10);
+        // Add CV train/validation split
+        executionConfig.cv_train_size = parseInt(document.getElementById('cvTrainSize').value) / 100;
+        executionConfig.cv_val_size = parseInt(document.getElementById('cvValSize').value) / 100;
     } else if (executionMethod === 'time_series_split') {
         executionConfig.n_splits = parseInt(document.getElementById('kfoldSplits').value || 5);
         const gapEl = document.getElementById('timeSeriesGap');
@@ -4466,6 +4529,14 @@ function createModelOnly() {
     // Obtener configuración de ejecución del Module 2
     const executionConfig = getExecutionConfig();
     
+    // Validate k-fold splits if using k-fold methods
+    if ((executionConfig.method === 'kfold' || executionConfig.method === 'stratified_kfold' || 
+         executionConfig.method === 'repeated_kfold' || executionConfig.method === 'repeated_stratified_kfold') && 
+         executionConfig.config && executionConfig.config.n_splits < 2) {
+        showNotification('Erreur', 'Le nombre de folds doit être au minimum 2', 'error');
+        return;
+    }
+    
     // Keep Module 1 and Module 2 separate from hyperparameters
     const modelDefinitionData = {
         name: document.getElementById('modelName').value,
@@ -4669,6 +4740,18 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Actualiser toutes les 30 secondes
     setInterval(loadModels, 30000);
+    
+    // Add real-time validation for k-fold splits
+    const kfoldSplitsInput = document.getElementById('kfoldSplits');
+    if (kfoldSplitsInput) {
+        kfoldSplitsInput.addEventListener('input', function() {
+            validateKFoldSplits();
+        });
+        
+        kfoldSplitsInput.addEventListener('blur', function() {
+            validateKFoldSplits();
+        });
+    }
 });
 
 // Load implemented model types from backend
@@ -5772,6 +5855,71 @@ function loadDecisionTreeConfiguration(hyperparams) {
 
 // Función para actualizar los porcentajes de división de datos
 // Función para activar/desactivar el conjunto de validación
+// Update cross-validation train/validation split display
+function updateCVSplitDisplay() {
+    const trainSize = parseInt(document.getElementById('cvTrainSize').value) || 80;
+    const valSize = 100 - trainSize;
+    
+    // Update validation input
+    document.getElementById('cvValSize').value = valSize;
+    
+    // Update progress bars
+    const trainBar = document.getElementById('cvTrainBar');
+    const valBar = document.getElementById('cvValBar');
+    
+    trainBar.style.width = trainSize + '%';
+    trainBar.textContent = `Train ${trainSize}%`;
+    
+    valBar.style.width = valSize + '%';
+    valBar.textContent = `Val ${valSize}%`;
+}
+
+// Validate k-fold splits input
+function validateKFoldSplits() {
+    const kfoldSplitsInput = document.getElementById('kfoldSplits');
+    const value = parseInt(kfoldSplitsInput.value) || 0;
+    
+    // Remove any existing validation messages
+    const existingFeedback = kfoldSplitsInput.parentElement.querySelector('.invalid-feedback');
+    if (existingFeedback) {
+        existingFeedback.remove();
+    }
+    
+    // Remove validation classes
+    kfoldSplitsInput.classList.remove('is-invalid', 'is-valid');
+    
+    if (value < 2) {
+        // Add invalid class
+        kfoldSplitsInput.classList.add('is-invalid');
+        
+        // Create and add error message
+        const feedback = document.createElement('div');
+        feedback.className = 'invalid-feedback';
+        feedback.textContent = 'El número de folds debe ser al menos 2';
+        kfoldSplitsInput.parentElement.appendChild(feedback);
+        
+        // Set value to minimum if below
+        if (value < 2 && kfoldSplitsInput.value !== '') {
+            kfoldSplitsInput.value = 2;
+        }
+    } else if (value > 20) {
+        // Add invalid class
+        kfoldSplitsInput.classList.add('is-invalid');
+        
+        // Create and add error message
+        const feedback = document.createElement('div');
+        feedback.className = 'invalid-feedback';
+        feedback.textContent = 'El número de folds no puede exceder 20';
+        kfoldSplitsInput.parentElement.appendChild(feedback);
+        
+        // Set value to maximum if above
+        kfoldSplitsInput.value = 20;
+    } else {
+        // Valid input
+        kfoldSplitsInput.classList.add('is-valid');
+    }
+}
+
 function toggleValidation(preserveValues = false) {
     const useValidation = document.getElementById('useValidation').checked;
     const valSizeContainer = document.getElementById('valSizeContainer');
@@ -6291,12 +6439,16 @@ function updateExecutionConfig() {
             document.getElementById('kfoldConfig').style.display = 'block';
             document.getElementById('kfoldShuffleDiv').style.display = 'block';
             infoText = 'Divide los datos en K partes iguales. Entrena K veces usando K-1 partes para entrenar y 1 para validar.';
+            // Validate k-fold splits when showing config
+            validateKFoldSplits();
             break;
             
         case 'stratified_kfold':
             document.getElementById('kfoldConfig').style.display = 'block';
             document.getElementById('kfoldShuffleDiv').style.display = 'block';
             infoText = 'Similar a K-Fold pero mantiene la proporción de clases en cada fold.';
+            // Validate k-fold splits when showing config
+            validateKFoldSplits();
             break;
             
         case 'time_series_split':
@@ -6313,6 +6465,8 @@ function updateExecutionConfig() {
             document.getElementById('repeatedConfig').style.display = 'block';
             document.getElementById('kfoldShuffleDiv').style.display = 'none';
             infoText = 'Repite K-Fold múltiples veces con diferentes divisiones aleatorias.';
+            // Validate k-fold splits when showing config
+            validateKFoldSplits();
             break;
             
         case 'repeated_stratified_kfold':
@@ -6320,6 +6474,8 @@ function updateExecutionConfig() {
             document.getElementById('repeatedConfig').style.display = 'block';
             document.getElementById('kfoldShuffleDiv').style.display = 'none';
             infoText = 'Repite Stratified K-Fold múltiples veces con diferentes divisiones aleatorias.';
+            // Validate k-fold splits when showing config
+            validateKFoldSplits();
             break;
     }
     
@@ -6351,11 +6507,17 @@ function getExecutionConfig() {
     if (method === 'kfold' || method === 'stratified_kfold') {
         config.config.n_splits = parseInt(document.getElementById('kfoldSplits').value);
         config.config.shuffle = document.getElementById('kfoldShuffle').checked;
+        // Add CV train/validation split
+        config.config.cv_train_size = parseInt(document.getElementById('cvTrainSize').value) / 100;
+        config.config.cv_val_size = parseInt(document.getElementById('cvValSize').value) / 100;
     }
     
     if (method === 'repeated_kfold' || method === 'repeated_stratified_kfold') {
         config.config.n_splits = parseInt(document.getElementById('kfoldSplits').value);
         config.config.n_repeats = parseInt(document.getElementById('nRepeats').value);
+        // Add CV train/validation split
+        config.config.cv_train_size = parseInt(document.getElementById('cvTrainSize').value) / 100;
+        config.config.cv_val_size = parseInt(document.getElementById('cvValSize').value) / 100;
     }
     
     if (method === 'time_series_split') {
