@@ -9,12 +9,14 @@
     "Wind Bearing (degrees)",
     "Visibility (km)",
     "Pressure (millibars)",
+    "trend",
     "h_sin",
     "h_cos",
     "dow_sin",
     "dow_cos",
     "doy_sin",
-    "doy_cos"
+    "doy_cos",
+    "tz_offset_hours"
   ],
   "target_columns": [
     "Summary"
@@ -40,5 +42,5 @@
     "verbose": 0,
     "warm_start": false
   },
-  "generated_at": "2025-08-22 02:59:07.954527+00:00"
+  "generated_at": "2025-08-22 15:32:44.971604+00:00"
 }

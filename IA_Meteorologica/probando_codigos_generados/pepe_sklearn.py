@@ -2,22 +2,23 @@
 Auto-generated scikit-learn RANDOM_FOREST model code
 Model: pepe
 Type: RANDOM_FOREST
-Generated at: 2025-08-22 02:59:07.954527+00:00
+Generated at: 2025-08-22 15:32:44.971604+00:00
 
 Configuration:
 - Target columns: ['Summary']
-- Predictor columns: 13 features
+- Predictor columns: 15 features
 - Problem type: classification
 
 Module 1 - Data Split Configuration:
 - Split method: random
-- Train size: 0.8
-- Validation size: 0.1
-- Test size: 0.1
+- Train size: 0.85
+- Validation size: 0 (disabled)
+- Test size: 0.15
+- Use validation: False
 
 Module 2 - Execution Configuration:
 - Execution method: kfold
-- Configuration: {"n_splits": 5, "shuffle": false}
+- Configuration: {"n_splits": 2, "shuffle": false, "cv_train_size": 0.85, "cv_val_size": 0.15}
 """
 
 import numpy as np
@@ -57,54 +58,88 @@ class DataSplitter:
         val_size = self.config.get("val_size", 0.15)
         test_size = self.config.get("test_size", 0.15)
         random_state = self.config.get("random_state", 42)
+        use_validation = self.config.get("use_validation", True)
         
         if self.strategy == "random":
             # Random split with shuffling
-            X_temp, X_test, y_temp, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=random_state, shuffle=True
-            )
-            val_proportion = val_size / (train_size + val_size)
-            X_train, X_val, y_train, y_val = train_test_split(
-                X_temp, y_temp, test_size=val_proportion, random_state=random_state, shuffle=True
-            )
+            if use_validation and val_size > 0:
+                # Split with validation set
+                X_temp, X_test, y_temp, y_test = train_test_split(
+                    X, y, test_size=test_size, random_state=random_state, shuffle=True
+                )
+                val_proportion = val_size / (train_size + val_size)
+                X_train, X_val, y_train, y_val = train_test_split(
+                    X_temp, y_temp, test_size=val_proportion, random_state=random_state, shuffle=True
+                )
+            else:
+                # Split without validation set
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=test_size, random_state=random_state, shuffle=True
+                )
+                # Create empty validation sets
+                X_val = np.array([]).reshape(0, X.shape[1]) if len(X.shape) > 1 else np.array([])
+                y_val = np.array([]).reshape(0, y.shape[1]) if len(y.shape) > 1 else np.array([])
             
         elif self.strategy == "stratified":
             # Stratified split for classification
             y_stratify = y if len(y.shape) == 1 else y[:, 0]
-            X_temp, X_test, y_temp, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=random_state, stratify=y_stratify, shuffle=True
-            )
-            val_proportion = val_size / (train_size + val_size)
-            y_temp_stratify = y_temp if len(y_temp.shape) == 1 else y_temp[:, 0]
-            X_train, X_val, y_train, y_val = train_test_split(
-                X_temp, y_temp, test_size=val_proportion, random_state=random_state, stratify=y_temp_stratify, shuffle=True
-            )
+            if use_validation and val_size > 0:
+                X_temp, X_test, y_temp, y_test = train_test_split(
+                    X, y, test_size=test_size, random_state=random_state, stratify=y_stratify, shuffle=True
+                )
+                val_proportion = val_size / (train_size + val_size)
+                y_temp_stratify = y_temp if len(y_temp.shape) == 1 else y_temp[:, 0]
+                X_train, X_val, y_train, y_val = train_test_split(
+                    X_temp, y_temp, test_size=val_proportion, random_state=random_state, stratify=y_temp_stratify, shuffle=True
+                )
+            else:
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=test_size, random_state=random_state, stratify=y_stratify, shuffle=True
+                )
+                X_val = np.array([]).reshape(0, X.shape[1]) if len(X.shape) > 1 else np.array([])
+                y_val = np.array([]).reshape(0, y.shape[1]) if len(y.shape) > 1 else np.array([])
             
         elif self.strategy == "temporal":
             # Temporal split maintaining order
             n_samples = len(X)
-            train_end = int(n_samples * train_size)
-            val_end = int(n_samples * (train_size + val_size))
-            
-            X_train = X[:train_end]
-            y_train = y[:train_end]
-            X_val = X[train_end:val_end]
-            y_val = y[train_end:val_end]
-            X_test = X[val_end:]
-            y_test = y[val_end:]
+            if use_validation and val_size > 0:
+                train_end = int(n_samples * train_size)
+                val_end = int(n_samples * (train_size + val_size))
+                X_train = X[:train_end]
+                y_train = y[:train_end]
+                X_val = X[train_end:val_end]
+                y_val = y[train_end:val_end]
+                X_test = X[val_end:]
+                y_test = y[val_end:]
+            else:
+                train_end = int(n_samples * train_size)
+                X_train = X[:train_end]
+                y_train = y[:train_end]
+                X_test = X[train_end:]
+                y_test = y[train_end:]
+                X_val = np.array([]).reshape(0, X.shape[1]) if len(X.shape) > 1 else np.array([])
+                y_val = np.array([]).reshape(0, y.shape[1]) if len(y.shape) > 1 else np.array([])
             
         elif self.strategy == "sequential":
             # Sequential split without shuffling
             n_samples = len(X)
-            train_end = int(n_samples * train_size)
-            val_end = int(n_samples * (train_size + val_size))
-            
-            X_train = X.iloc[:train_end] if hasattr(X, "iloc") else X[:train_end]
-            y_train = y.iloc[:train_end] if hasattr(y, "iloc") else y[:train_end]
-            X_val = X.iloc[train_end:val_end] if hasattr(X, "iloc") else X[train_end:val_end]
-            y_val = y.iloc[train_end:val_end] if hasattr(y, "iloc") else y[train_end:val_end]
-            X_test = X.iloc[val_end:] if hasattr(X, "iloc") else X[val_end:]
-            y_test = y.iloc[val_end:] if hasattr(y, "iloc") else y[val_end:]
+            if use_validation and val_size > 0:
+                train_end = int(n_samples * train_size)
+                val_end = int(n_samples * (train_size + val_size))
+                X_train = X.iloc[:train_end] if hasattr(X, "iloc") else X[:train_end]
+                y_train = y.iloc[:train_end] if hasattr(y, "iloc") else y[:train_end]
+                X_val = X.iloc[train_end:val_end] if hasattr(X, "iloc") else X[train_end:val_end]
+                y_val = y.iloc[train_end:val_end] if hasattr(y, "iloc") else y[train_end:val_end]
+                X_test = X.iloc[val_end:] if hasattr(X, "iloc") else X[val_end:]
+                y_test = y.iloc[val_end:] if hasattr(y, "iloc") else y[val_end:]
+            else:
+                train_end = int(n_samples * train_size)
+                X_train = X.iloc[:train_end] if hasattr(X, "iloc") else X[:train_end]
+                y_train = y.iloc[:train_end] if hasattr(y, "iloc") else y[:train_end]
+                X_test = X.iloc[train_end:] if hasattr(X, "iloc") else X[train_end:]
+                y_test = y.iloc[train_end:] if hasattr(y, "iloc") else y[train_end:]
+                X_val = np.array([]).reshape(0, X.shape[1]) if len(X.shape) > 1 else np.array([])
+                y_val = np.array([]).reshape(0, y.shape[1]) if len(y.shape) > 1 else np.array([])
             
         else:
             # Default to random split
@@ -343,7 +378,7 @@ def load_and_preprocess_data(file_path):
     print(f"Columns: {list(df.columns)})")
 
     # Define columns
-    predictor_columns = ['Precip Type', 'Temperature (C)', 'Humidity', 'Wind Speed (km/h)', 'Wind Bearing (degrees)', 'Visibility (km)', 'Pressure (millibars)', 'h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos']
+    predictor_columns = ['Precip Type', 'Temperature (C)', 'Humidity', 'Wind Speed (km/h)', 'Wind Bearing (degrees)', 'Visibility (km)', 'Pressure (millibars)', 'trend', 'h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos', 'tz_offset_hours']
     target_columns = ['Summary']
 
     # Validate columns
@@ -720,11 +755,11 @@ if __name__ == "__main__":
     DATA_FILE = "db.csv"  # UPDATE THIS PATH
     
     # Module 1 Configuration
-    split_config = {"train_size": 0.8, "val_size": 0.1, "test_size": 0.1, "random_state": 42}
+    split_config = {"train_size": 0.85, "val_size": 0, "test_size": 0.15, "random_state": 42, "use_validation": False}
     data_splitter = DataSplitter(strategy="random", config=split_config)
     
     # Module 2 Configuration
-    execution_config = {"n_splits": 5, "shuffle": False}
+    execution_config = {"n_splits": 2, "shuffle": False, "cv_train_size": 0.85, "cv_val_size": 0.15}
     execution_strategy = ExecutionStrategy(method="kfold", config=execution_config)
     
     try:
@@ -767,7 +802,7 @@ if __name__ == "__main__":
             "predictor_columns": predictor_cols,
             "target_columns": target_cols,
             "hyperparameters": model.get_params(),
-            "generated_at": "2025-08-22 02:59:07.954527+00:00"
+            "generated_at": "2025-08-22 15:32:44.971604+00:00"
         }
         
         with open("model_info.json", "w") as f:
@@ -789,7 +824,7 @@ if __name__ == "__main__":
 # =============================================================================
 # 1. Update DATA_FILE with your CSV file path
 # 2. Ensure your dataset contains these columns:
-#    - Predictors: ['Precip Type', 'Temperature (C)', 'Humidity', 'Wind Speed (km/h)', 'Wind Bearing (degrees)', 'Visibility (km)', 'Pressure (millibars)', 'h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos']
+#    - Predictors: ['Precip Type', 'Temperature (C)', 'Humidity', 'Wind Speed (km/h)', 'Wind Bearing (degrees)', 'Visibility (km)', 'Pressure (millibars)', 'trend', 'h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos', 'tz_offset_hours']
 #    - Targets: ['Summary']
 # 3. Run: python this_script.py
 # =============================================================================
