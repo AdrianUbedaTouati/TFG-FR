@@ -1315,6 +1315,10 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                 X_fold_val = X_full[val_idx]
                 y_fold_val = y_full[val_idx]
                 
+                # Log fold information without misleading percentages
+                progress_callback.log_message(f"   📊 Fold {fold}: {X_fold_train.shape[0]} échantillons pour l'entraînement")
+                progress_callback.log_message(f"   📋 Fold {fold}: {X_fold_val.shape[0]} échantillons pour l'évaluation")
+                
                 # Apply CV train/validation split within the fold if configured
                 cv_train_size = getattr(execution_strategy, 'cv_train_size', 1.0)
                 cv_val_size = getattr(execution_strategy, 'cv_val_size', 0.0)
@@ -1335,8 +1339,6 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                         actual_train_pct = int(cv_train_size * 100)
                         actual_val_pct = int(cv_val_size * 100)
                         
-                        progress_callback.log_message(f"   📊 Données du fold complet: {fold_size} échantillons ({fold_size/X_full.shape[0]*100:.1f}% du total)")
-                        progress_callback.log_message(f"   📋 Données de test du fold (pour évaluation): {X_fold_val.shape[0]} échantillons ({X_fold_val.shape[0]/X_full.shape[0]*100:.1f}% du total)")
                         progress_callback.log_message(f"   🔄 Division train/val dans le fold: {actual_train_pct}% / {actual_val_pct}%")
                         progress_callback.log_message(f"      → Train: {X_fold_train_split.shape[0]} échantillons ({actual_train_pct}% du fold)")
                         progress_callback.log_message(f"      → Validation: {X_fold_val_split.shape[0]} échantillons ({actual_val_pct}% du fold)")
@@ -1357,9 +1359,11 @@ def train_sklearn_model(session, model_type, hyperparams, X_train, y_train, X_va
                         y_fold_val_actual = None
                 else:
                     # No CV train/validation split, use full fold data
-                    progress_callback.log_message(f"   📊 Données d'entraînement du fold: {X_fold_train.shape[0]} échantillons ({X_fold_train.shape[0]/X_full.shape[0]*100:.1f}% du total)")
-                    progress_callback.log_message(f"   📋 Données de validation du fold: {X_fold_val.shape[0]} échantillons ({X_fold_val.shape[0]/X_full.shape[0]*100:.1f}% du total)")
-                    progress_callback.log_message(f"   💡 Note: Ces pourcentages sont pour la cross-validation, pas la division train/val/test configurée")
+                    # Calculate the fold percentages
+                    fold_train_pct = X_fold_train.shape[0] / X_full.shape[0] * 100
+                    fold_val_pct = X_fold_val.shape[0] / X_full.shape[0] * 100
+                    
+                    progress_callback.log_message(f"   💡 Utilisation de tout le fold pour l'entraînement (pas de division train/val intra-fold)")
                     X_fold_train_actual = X_fold_train
                     y_fold_train_actual = y_fold_train
                     X_fold_val_actual = None

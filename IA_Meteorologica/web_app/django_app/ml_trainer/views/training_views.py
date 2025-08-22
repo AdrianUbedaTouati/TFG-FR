@@ -852,3 +852,30 @@ class DownloadModelView(APIView):
                 filename=filename
             )
             return response
+
+
+class StopTrainingView(APIView):
+    """Stop a training session"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        """Stop training session"""
+        # Verificar permisos
+        if request.user.is_staff:
+            session = get_object_or_404(TrainingSession, pk=pk)
+        else:
+            session = get_object_or_404(TrainingSession, pk=pk, user=request.user)
+        
+        # Check if training
+        if session.status != STATUS_TRAINING:
+            return error_response("Model is not currently training")
+        
+        # Update status
+        session.status = 'failed'
+        session.error_message = 'Training stopped by user'
+        session.save()
+        
+        return success_response(
+            {'session_id': session.id},
+            message='Training stopped successfully'
+        )
