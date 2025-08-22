@@ -113,14 +113,21 @@ class RandomSplitStrategy(DataSplitStrategy):
             shuffle=True
         )
         
-        # Luego separar train de val
-        val_proportion = self.val_size / (self.train_size + self.val_size)
-        X_train, X_val, y_train, y_val = train_test_split(
-            X_temp, y_temp,
-            test_size=val_proportion,
-            random_state=self.random_state,
-            shuffle=True
-        )
+        # Si no hay validación (val_size = 0), no hacer segunda división
+        if self.val_size == 0:
+            X_train, y_train = X_temp, y_temp
+            # Crear arrays vacíos para validación manteniendo las dimensiones correctas
+            X_val = np.array([]).reshape(0, X.shape[1]) if len(X.shape) > 1 else np.array([])
+            y_val = np.array([]).reshape(0, y.shape[1]) if len(y.shape) > 1 else np.array([])
+        else:
+            # Luego separar train de val
+            val_proportion = self.val_size / (self.train_size + self.val_size)
+            X_train, X_val, y_train, y_val = train_test_split(
+                X_temp, y_temp,
+                test_size=val_proportion,
+                random_state=self.random_state,
+                shuffle=True
+            )
         
         return X_train, y_train, X_val, y_val, X_test, y_test
     
@@ -156,17 +163,24 @@ class StratifiedSplitStrategy(DataSplitStrategy):
                 shuffle=True
             )
             
-            # Luego separar train de val
-            val_proportion = self.val_size / (self.train_size + self.val_size)
-            y_temp_stratify = y_temp if len(y_temp.shape) == 1 else y_temp[:, 0]
-            
-            X_train, X_val, y_train, y_val = train_test_split(
-                X_temp, y_temp,
-                test_size=val_proportion,
-                random_state=self.random_state,
-                stratify=y_temp_stratify,
-                shuffle=True
-            )
+            # Si no hay validación (val_size = 0), no hacer segunda división
+            if self.val_size == 0:
+                X_train, y_train = X_temp, y_temp
+                # Crear arrays vacíos para validación manteniendo las dimensiones correctas
+                X_val = np.array([]).reshape(0, X.shape[1]) if len(X.shape) > 1 else np.array([])
+                y_val = np.array([]).reshape(0, y.shape[1]) if len(y.shape) > 1 else np.array([])
+            else:
+                # Luego separar train de val
+                val_proportion = self.val_size / (self.train_size + self.val_size)
+                y_temp_stratify = y_temp if len(y_temp.shape) == 1 else y_temp[:, 0]
+                
+                X_train, X_val, y_train, y_val = train_test_split(
+                    X_temp, y_temp,
+                    test_size=val_proportion,
+                    random_state=self.random_state,
+                    stratify=y_temp_stratify,
+                    shuffle=True
+                )
         except ValueError as e:
             # Si la estratificación falla (ej: muy pocas muestras por clase), 
             # usar división aleatoria como fallback

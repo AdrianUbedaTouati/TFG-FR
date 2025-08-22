@@ -271,11 +271,33 @@ def prepare_data(session, is_neural_network=False):
     """Prepare data for training"""
     df = pd.read_csv(session.dataset.file.path)
     
+    print(f"\n[prepare_data] === Preparing Data ===")
     print(f"[prepare_data] Dataset shape: {df.shape}")
-    print(f"[prepare_data] Predictor columns: {session.predictor_columns}")
-    print(f"[prepare_data] Target columns: {session.target_columns}")
+    print(f"[prepare_data] Total samples: {len(df):,}")
+    print(f"[prepare_data] Predictor columns ({len(session.predictor_columns)}): {session.predictor_columns}")
+    print(f"[prepare_data] Target columns ({len(session.target_columns)}): {session.target_columns}")
+    
+    # Log split configuration from Module 1
+    train_pct = int(session.train_split * 100) if session.train_split <= 1 else int(session.train_split)
+    val_pct = int(session.val_split * 100) if session.val_split <= 1 else int(session.val_split)
+    test_pct = int(session.test_split * 100) if session.test_split <= 1 else int(session.test_split)
+    
+    print(f"\n[prepare_data] 📊 Using Module 1 Configuration:")
     print(f"[prepare_data] Split method: {session.split_method}")
-    print(f"[prepare_data] Random state: {session.random_state}")
+    print(f"[prepare_data] Split percentages: Train {train_pct}% / Val {val_pct}% / Test {test_pct}%")
+    
+    # Calculate expected sample counts
+    total_samples = len(df)
+    expected_train = int(total_samples * session.train_split)
+    expected_val = int(total_samples * session.val_split)
+    expected_test = total_samples - expected_train - expected_val
+    
+    print(f"[prepare_data] Expected sample distribution:")
+    print(f"[prepare_data]   - Train: ~{expected_train:,} samples ({train_pct}%)")
+    if val_pct > 0:
+        print(f"[prepare_data]   - Validation: ~{expected_val:,} samples ({val_pct}%)")
+    print(f"[prepare_data]   - Test: ~{expected_test:,} samples ({test_pct}%)")
+    print(f"[prepare_data] Random state: {session.random_state if session.random_state else 'None (random)'}")
     
     # Check if target columns exist
     for col in session.target_columns:
@@ -332,11 +354,19 @@ def prepare_data(session, is_neural_network=False):
     
     # Preparar configuración de división
     split_config = session.split_config or {}
+    
+    # Verificar si se debe usar validación
+    use_validation = split_config.get('use_validation', True)
+    
+    # Si no se usa validación, establecer val_size en 0
+    val_size = session.val_split if use_validation else 0.0
+    
     split_config.update({
         'train_size': session.train_split,
-        'val_size': session.val_split,
+        'val_size': val_size,
         'test_size': session.test_split,
-        'random_state': session.random_state
+        'random_state': session.random_state,
+        'use_validation': use_validation
     })
     
     # Crear el divisor de datos
@@ -415,6 +445,15 @@ def prepare_data(session, is_neural_network=False):
                 y_test = scaler_y.transform(y_test)
             
             print(f"[prepare_data] Shapes after normalization - X_train: {X_train.shape}, y_train: {y_train.shape}")
+    
+    # Log final data split results
+    print(f"\n[prepare_data] === Final Data Split Results ===")
+    print(f"[prepare_data] Actual sample distribution:")
+    print(f"[prepare_data]   - Train: {len(X_train):,} samples ({len(X_train)/len(df)*100:.1f}%)")
+    if len(X_val) > 0:
+        print(f"[prepare_data]   - Validation: {len(X_val):,} samples ({len(X_val)/len(df)*100:.1f}%)")
+    print(f"[prepare_data]   - Test: {len(X_test):,} samples ({len(X_test)/len(df)*100:.1f}%)")
+    print(f"[prepare_data] Total: {len(X_train) + len(X_val) + len(X_test):,} samples")
     
     return (X_train, y_train, X_val, y_val, X_test, y_test), (scaler_X, scaler_y), target_encoders
 
@@ -1618,6 +1657,32 @@ def train_model(session):
         print(f"[Training] Dataset: {session.dataset.name}")
         print(f"[Training] Predictor columns: {session.predictor_columns}")
         print(f"[Training] Target columns: {session.target_columns}")
+        
+        # Log Module 1: Data Split Configuration
+        print(f"\n[Training] 📊 Module 1: Division des Données")
+        print(f"[Training] Split method: {session.split_method}")
+        
+        # Convertir a porcentajes para mostrar
+        train_pct = int(session.train_split * 100) if session.train_split <= 1 else int(session.train_split)
+        val_pct = int(session.val_split * 100) if session.val_split <= 1 else int(session.val_split)
+        test_pct = int(session.test_split * 100) if session.test_split <= 1 else int(session.test_split)
+        
+        # Verificar si se usa validación
+        use_validation = val_pct > 0
+        
+        if use_validation:
+            print(f"[Training] Data split: Train {train_pct}% / Validation {val_pct}% / Test {test_pct}%")
+        else:
+            print(f"[Training] Data split: Train {train_pct}% / Test {test_pct}% (No validation set)")
+        
+        print(f"[Training] Random state: {session.random_state if session.random_state else 'None (random)'}")
+        
+        # Log Module 2: Execution Configuration
+        if hasattr(session, 'execution_method') and session.execution_method:
+            print(f"\n[Training] 🔧 Module 2: Configuration d'Exécution")
+            print(f"[Training] Execution method: {session.execution_method}")
+            if session.execution_method != 'standard':
+                print(f"[Training] Note: Cross-validation will be used, validation set percentages are indicative only")
         
         # Validate columns
         if len(session.predictor_columns) == 0:

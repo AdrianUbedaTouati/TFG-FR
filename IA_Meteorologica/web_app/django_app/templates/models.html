@@ -2989,9 +2989,19 @@ function trainModel(modelId) {
     const trainSize = (splitConfig.train_size || 0.7) * 100;
     const valSize = (splitConfig.val_size || 0.15) * 100;
     const testSize = (splitConfig.test_size || 0.15) * 100;
+    const useValidation = splitConfig.use_validation !== false; // Default true si non défini
     
+    // Afficher les pourcentages selon si la validation est utilisée
     document.getElementById('trainSizeInfo').textContent = `${trainSize}%`;
-    document.getElementById('valSizeInfo').textContent = `${valSize}%`;
+    
+    if (useValidation && valSize > 0) {
+        document.getElementById('valSizeInfo').textContent = `${valSize}%`;
+        document.getElementById('valSizeInfo').parentElement.style.display = 'flex';
+    } else {
+        document.getElementById('valSizeInfo').textContent = '0%';
+        document.getElementById('valSizeInfo').parentElement.style.display = 'none';
+    }
+    
     document.getElementById('testSizeInfo').textContent = `${testSize}%`;
     
     // Méthode de division
