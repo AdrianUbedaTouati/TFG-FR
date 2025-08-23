@@ -229,6 +229,12 @@
         box-shadow: 0 0 20px rgba(16, 185, 129, 0.8);
     }
     
+    .quick-actions button[data-action="duplicate"]:hover {
+        background: rgba(147, 51, 234, 0.8);
+        border-color: #9333ea;
+        box-shadow: 0 0 20px rgba(147, 51, 234, 0.8);
+    }
+    
     .quick-actions button[data-action="delete"]:hover {
         background: rgba(239, 68, 68, 0.8);
         border-color: #ef4444;
@@ -2236,6 +2242,15 @@ function createDatasetCard(dataset, type = 'original') {
     btnDownload.title = 'Descargar';
     btnDownload.innerHTML = '<i class="bi bi-download"></i>';
     
+    // Botón Duplicar
+    const btnDuplicate = document.createElement('button');
+    btnDuplicate.type = 'button';
+    btnDuplicate.className = 'action-btn';
+    btnDuplicate.setAttribute('data-action', 'duplicate');
+    btnDuplicate.setAttribute('data-dataset-id', dataset.id);
+    btnDuplicate.title = 'Duplicar';
+    btnDuplicate.innerHTML = '<i class="bi bi-copy"></i>';
+    
     // Botón Eliminar
     const btnDelete = document.createElement('button');
     btnDelete.type = 'button';
@@ -2248,6 +2263,7 @@ function createDatasetCard(dataset, type = 'original') {
     quickActions.appendChild(btnNormalize);
     quickActions.appendChild(btnAnalyze);
     quickActions.appendChild(btnDownload);
+    quickActions.appendChild(btnDuplicate);
     quickActions.appendChild(btnDelete);
     
     // Crear el cuerpo de la tarjeta
@@ -2333,6 +2349,11 @@ function createDatasetCard(dataset, type = 'original') {
     btnDownload.addEventListener('click', function(e) {
         e.stopPropagation();
         downloadDataset(dataset.id);
+    });
+    
+    btnDuplicate.addEventListener('click', function(e) {
+        e.stopPropagation();
+        duplicateDataset(dataset.id, dataset.name);
     });
     
     btnDelete.addEventListener('click', function(e) {
@@ -5578,6 +5599,70 @@ function deleteDataset(datasetId) {
                 hideLoading();
                 console.error('Erreur de suppression:', error);
                 showNotification('Erreur', 'Erreur lors de la suppression: ' + error.message, 'error');
+            });
+        }
+    });
+}
+
+// Duplicar un dataset
+function duplicateDataset(datasetId, originalName) {
+    const dataset = datasetId ? datasets.find(d => d.id === datasetId) : selectedDataset;
+    if (!dataset) return;
+    
+    Swal.fire({
+        title: 'Duplicar Dataset',
+        text: `Ingrese el nombre para la copia del dataset "${dataset.name}"`,
+        input: 'text',
+        inputLabel: 'Nombre del nuevo dataset:',
+        inputValue: `${dataset.name}_copia`,
+        inputPlaceholder: 'Nombre del dataset duplicado',
+        showCancelButton: true,
+        confirmButtonColor: '#9333ea',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Duplicar',
+        cancelButtonText: 'Cancelar',
+        background: '#0a0e27',
+        color: '#f0f9ff',
+        inputValidator: (value) => {
+            if (!value || !value.trim()) {
+                return 'Por favor ingrese un nombre para el dataset';
+            }
+            // Check if name already exists
+            const exists = datasets.some(d => d.name === value.trim());
+            if (exists) {
+                return 'Ya existe un dataset con ese nombre';
+            }
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const newName = result.value.trim();
+            showLoading('Duplicando dataset...', 'Creando una copia del dataset');
+            
+            fetch(`/api/datasets/${dataset.id}/duplicate/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    name: newName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    showNotification('Éxito!', data.message || 'Dataset duplicado con éxito', 'success');
+                    // Recargar la lista de datasets
+                    loadDatasets();
+                } else {
+                    showNotification('Error', data.error || 'Error al duplicar el dataset', 'error');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                showNotification('Error', 'Error al duplicar el dataset: ' + error.message, 'error');
             });
         }
     });

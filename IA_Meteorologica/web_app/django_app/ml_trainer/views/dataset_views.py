@@ -2143,3 +2143,70 @@ class DatasetColumnInfoView(APIView):
             
         except Exception as e:
             return error_response(f"Error getting column info: {str(e)}")
+
+
+class DatasetDuplicateView(APIView):
+    """Duplicate an existing dataset with a new name"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        try:
+            # Verificar permisos
+            if request.user.is_staff:
+                original_dataset = get_object_or_404(Dataset, pk=pk)
+            else:
+                original_dataset = get_object_or_404(Dataset, pk=pk, user=request.user)
+            
+            # Get new name from request
+            new_name = request.data.get('name', '')
+            if not new_name:
+                return error_response('El nombre del dataset es obligatorio')
+            
+            # Check if a dataset with this name already exists for this user
+            existing = Dataset.objects.filter(name=new_name, user=request.user).exists()
+            if existing:
+                return error_response(f'Ya existe un dataset con el nombre "{new_name}"')
+            
+            # Create temporary file for the copy
+            import uuid
+            temp_filename = f"{uuid.uuid4().hex}_{os.path.basename(original_dataset.file.name)}"
+            
+            # Copy the original file
+            source_path = original_dataset.file.path
+            
+            # Create a new dataset instance
+            new_dataset = Dataset.objects.create(
+                name=new_name,
+                short_description=original_dataset.short_description,
+                long_description=original_dataset.long_description,
+                user=request.user,
+                is_normalized=original_dataset.is_normalized,
+                parent_dataset=original_dataset.parent_dataset,
+                parent_dataset_name=original_dataset.parent_dataset_name,
+                root_dataset_id=original_dataset.root_dataset_id,
+                normalization_method=original_dataset.normalization_method
+            )
+            
+            # Read the original file and save as new file
+            with open(source_path, 'rb') as source_file:
+                file_content = source_file.read()
+                new_dataset.file.save(temp_filename, ContentFile(file_content))
+            
+            # Update file statistics
+            df = load_dataset(new_dataset.file.path)
+            if df is not None:
+                new_dataset.row_count = len(df)
+                new_dataset.column_count = len(df.columns)
+                new_dataset.file_size = os.path.getsize(new_dataset.file.path)
+                new_dataset.save()
+            
+            # Return serialized dataset
+            serializer = DatasetSerializer(new_dataset)
+            return Response({
+                'success': True,
+                'dataset': serializer.data,
+                'message': f'Dataset duplicado exitosamente como "{new_name}"'
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return error_response(f'Error al duplicar el dataset: {str(e)}')

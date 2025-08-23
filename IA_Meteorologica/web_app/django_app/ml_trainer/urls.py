@@ -13,6 +13,7 @@ urlpatterns = [
     path('datasets/<int:pk>/columns/<path:column_name>/', views.DatasetColumnDetailsView.as_view(), name='dataset-column-details'),
     path('datasets/<int:pk>/analysis/', analysis_views.dataset_analysis, name='dataset-general-analysis'),
     path('datasets/<int:pk>/download/', views.DatasetDownloadView.as_view(), name='dataset-download'),
+    path('datasets/<int:pk>/duplicate/', views.DatasetDuplicateView.as_view(), name='dataset-duplicate'),
     path('datasets/<int:pk>/report/', views.DatasetReportView.as_view(), name='dataset-report'),
     path('datasets/<int:pk>/normalization/', views.DatasetNormalizationView.as_view(), name='dataset-normalization'),
     path('datasets/<int:pk>/normalization/preview/', views.DatasetNormalizationPreviewView.as_view(), name='dataset-normalization-preview'),
