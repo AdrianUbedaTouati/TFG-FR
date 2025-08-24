@@ -1,0 +1,120 @@
+Quitamos Apparent Temperature porque la correlación era casi del 100, por 100, no aporta información a la red
+
+Quitamos Loud Cover, porque es solo 1 valor
+
+Quitamos Daily Summary, porque relamente la información ya esta recogida en Sumarry
+
+Se nos quedarían las variables:
+
+Summary	Precip Type	Temperature (C)	Humidity	Wind Speed (km/h)	Wind Bearing (degrees)	Visibility (km)	Pressure (millibars)	trend	h_sin	h_cos	dow_sin	dow_cos	doy_sin	doy_cos	tz_offset_hours
+
+Todo normalizado o con One hot, o con Mini-max + la función de fecha
+
+Funcion normalizar fecha:
+
+from datetime import datetime, timezone
+import math
+
+def normalize(
+    x,
+    *,
+    trend_unit="day",          # 'second'|'minute'|'hour'|'day'|'week'
+    ref_epoch=datetime(1970,1,1,tzinfo=timezone.utc),
+    cycle_tz="local",          # 'local' o 'utc' (por defecto 'local')
+    trend_timebase="local",    # 'local' o 'utc' (por defecto 'local')
+    return_array=False
+):
+    """
+    Convierte una fecha a features numéricos para ML sin modificar la fecha de entrada.
+    Por defecto TODO se calcula en hora local del dato (sin pasar por UTC).
+    """
+
+    # --- parseo robusto a datetime aware ---
+    if isinstance(x, datetime):
+        orig = x if x.tzinfo else x.replace(tzinfo=timezone.utc)
+    elif isinstance(x, (int, float)):
+        orig = datetime.fromtimestamp(x, tz=timezone.utc)
+    elif isinstance(x, str):
+        s = x.strip()
+        dt = None
+        for fmt in [
+            "%Y-%m-%d %H:%M:%S.%f %z",
+            "%Y-%m-%d %H:%M:%S %z",
+            "%Y-%m-%dT%H:%M:%S.%f%z",
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%d %H:%M:%S.%f",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d",
+        ]:
+            try:
+                dt = datetime.strptime(s, fmt)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                break
+            except ValueError:
+                continue
+        if dt is None:
+            try:
+                dt = datetime.fromisoformat(s)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+            except Exception as e:
+                raise ValueError(f"No pude parsear la fecha: {x!r}") from e
+        orig = dt
+    else:
+        raise TypeError(f"Tipo no soportado: {type(x)}")
+
+    # --- offset original (se conserva) ---
+    tz_offset_hours = float(orig.utcoffset().total_seconds()/3600) if (orig.tzinfo and orig.utcoffset()) else 0.0
+
+    # --- tendencia (en base de tiempo elegida; por defecto, LOCAL) ---
+    if trend_timebase.lower() == "utc":
+        trend_dt = orig.astimezone(timezone.utc)
+        ref_for_trend = ref_epoch.astimezone(timezone.utc)
+    else:  # 'local'
+        trend_dt = orig
+        ref_for_trend = ref_epoch.astimezone(orig.tzinfo or timezone.utc)
+
+    unit_seconds = {"second":1.0, "minute":60.0, "hour":3600.0, "day":86400.0, "week":604800.0}[trend_unit]
+    trend = (trend_dt - ref_for_trend).total_seconds() / unit_seconds
+
+    # --- cíclicos (por defecto, LOCAL) ---
+    cyc_dt = orig if cycle_tz.lower() == "local" else orig.astimezone(timezone.utc)
+
+    hour = cyc_dt.hour + cyc_dt.minute/60 + cyc_dt.second/3600 + cyc_dt.microsecond/3.6e9
+    h_sin = math.sin(2*math.pi*hour/24); h_cos = math.cos(2*math.pi*hour/24)
+
+    dow = cyc_dt.weekday()
+    dow_sin = math.sin(2*math.pi*dow/7);  dow_cos = math.cos(2*math.pi*dow/7)
+
+    doy = cyc_dt.timetuple().tm_yday - 1
+    doy_sin = math.sin(2*math.pi*doy/365.2425); doy_cos = math.cos(2*math.pi*doy/365.2425)
+
+    result = {
+        "trend": trend,                    # calculada en LOCAL por defecto
+        "h_sin": h_sin, "h_cos": h_cos,    # cíclicos en LOCAL por defecto
+        "dow_sin": dow_sin, "dow_cos": dow_cos,
+        "doy_sin": doy_sin, "doy_cos": doy_cos,
+        "tz_offset_hours": tz_offset_hours # conserva +02:00 -> 2.0
+    }
+
+    if return_array:
+        keys = ["trend","h_sin","h_cos","dow_sin","dow_cos","doy_sin","doy_cos","tz_offset_hours"]
+        return [result[k] for k in keys]
+    return result
+
+
+Vemos que summary , solo hay un 0.5 porciento en 18 valores. lo quitamos, nos quedamos con el top 9:
+Valor	Cantidad	%
+1 Partly Cloudy	31733	32.9%
+2 Mostly Cloudy	28094	29.1%
+3 Overcast	16597	17.2%
+4 Clear	10890	11.3%
+5 Foggy	7148	7.4%
+6 Breezy and Overcast	528	0.5%
+7 Breezy and Mostly Cl...	516	0.5%
+8 Breezy and Partly Cl...	386	0.4%
+9 Dry and Partly Cloud...	86	0.1%
+10 Otros	475	0.5%
+
+Despues se coge trend y se pasa a z-score 

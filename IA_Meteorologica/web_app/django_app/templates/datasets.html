@@ -577,6 +577,134 @@
         display: block !important;
     }
     
+    /* Estilos para select en SweetAlert2 */
+    .swal2-popup select.form-select {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border: 1px solid #2d3561 !important;
+        padding: 8px 12px !important;
+        font-size: 1rem !important;
+        cursor: pointer !important;
+    }
+    
+    .swal2-popup select.form-select:focus {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border-color: #00d4ff !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 212, 255, 0.25) !important;
+        outline: none !important;
+    }
+    
+    .swal2-popup select.form-select option {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        padding: 5px !important;
+    }
+    
+    /* Asegurar que los inputs personalizados en SweetAlert2 sean editables */
+    .swal2-popup input[type="text"]:not(:disabled),
+    .swal2-popup input[type="number"]:not(:disabled) {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border: 1px solid #2d3561 !important;
+        cursor: text !important;
+        pointer-events: auto !important;
+        -webkit-user-select: text !important;
+        -moz-user-select: text !important;
+        -ms-user-select: text !important;
+        user-select: text !important;
+    }
+    
+    .swal2-popup input[type="text"]:not(:disabled):focus,
+    .swal2-popup input[type="number"]:not(:disabled):focus {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border-color: #00d4ff !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 212, 255, 0.25) !important;
+        outline: none !important;
+    }
+    
+    /* Estilos específicos para el input customValue */
+    .swal2-popup #customValue,
+    .swal-dark-theme #customValue,
+    #customValue {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border: 1px solid #2d3561 !important;
+        cursor: text !important;
+        pointer-events: auto !important;
+        -webkit-user-select: text !important;
+        -moz-user-select: text !important;
+        -ms-user-select: text !important;
+        user-select: text !important;
+        opacity: 1 !important;
+        display: block !important;
+        width: 100% !important;
+        padding: 0.375rem 0.75rem !important;
+        font-size: 1rem !important;
+        line-height: 1.5 !important;
+        border-radius: 0.25rem !important;
+        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+        min-height: 38px !important;
+        box-sizing: border-box !important;
+        position: relative !important;
+        z-index: 9999 !important;
+    }
+    
+    /* Fix para el contenedor del modal */
+    .swal2-container {
+        z-index: 10000 !important;
+    }
+    
+    .swal2-popup {
+        z-index: 10001 !important;
+    }
+    
+    /* Asegurar que no haya overlays bloqueando */
+    .swal2-html-container * {
+        pointer-events: auto !important;
+    }
+    
+    .swal2-popup #customValue:focus,
+    .swal-dark-theme #customValue:focus {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border-color: #00d4ff !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 212, 255, 0.25) !important;
+        outline: none !important;
+    }
+    
+    .swal2-popup #customValue::placeholder,
+    .swal-dark-theme #customValue::placeholder {
+        color: #6b7280 !important;
+        opacity: 0.8 !important;
+    }
+    
+    /* Estilos para el tema oscuro de SweetAlert2 */
+    .swal-dark-theme {
+        background-color: #0a0e27 !important;
+        color: #f0f9ff !important;
+    }
+    
+    .swal-dark-content {
+        color: #f0f9ff !important;
+    }
+    
+    .swal-dark-theme .alert {
+        background-color: #1a1e3a !important;
+        border-color: #2d3561 !important;
+        color: #f0f9ff !important;
+    }
+    
+    .swal-dark-theme .alert-info {
+        background-color: #1a1e3a !important;
+        border-color: #00d4ff !important;
+        color: #00d4ff !important;
+    }
+    
     /* Estilos para el modal de edición de dataset */
     #datasetEditorModal .modal-content {
         background-color: #0a0e27;
@@ -8614,6 +8742,7 @@ function fillNullValues() {
     const stats = window.currentDatasetData.stats[selectedEditorColumn];
     const isNumeric = stats?.is_numeric;
     
+    // Primero mostrar el modal para seleccionar el método
     Swal.fire({
         title: 'Rellenar valores nulos',
         html: `
@@ -8639,13 +8768,6 @@ function fillNullValues() {
                     <option value="custom">Valor personalizado</option>
                 </select>
                 
-                <div id="customValueContainer" style="display: none;">
-                    <label class="form-label">Valor personalizado:</label>
-                    <input type="text" class="form-control" id="customValue" 
-                           placeholder="${isNumeric ? 'Ej: 0, -1, 999' : 'Ej: N/A, Sin datos, etc.'}">
-                    ${isNumeric ? '<small class="text-muted">Ingresa un valor numérico</small>' : ''}
-                </div>
-                
                 <div class="alert alert-info mt-3" style="font-size: 0.875rem;">
                     <i class="bi bi-info-circle"></i>
                     <strong>Nota:</strong> ${stats.null_count || 0} valores nulos serán reemplazados en esta columna.
@@ -8653,30 +8775,62 @@ function fillNullValues() {
             </div>
         `,
         showCancelButton: true,
-        confirmButtonText: 'Rellenar',
+        confirmButtonText: 'Continuar',
         cancelButtonText: 'Cancelar',
         background: '#0a0e27',
         color: '#f0f9ff',
-        didOpen: () => {
-            document.getElementById('fillMethod').addEventListener('change', (e) => {
-                document.getElementById('customValueContainer').style.display = 
-                    e.target.value === 'custom' ? 'block' : 'none';
-            });
+        customClass: {
+            popup: 'swal-dark-theme',
+            htmlContainer: 'swal-dark-content'
         },
         preConfirm: () => {
-            const method = document.getElementById('fillMethod').value;
-            const customValue = document.getElementById('customValue').value;
-            
-            if (method === 'custom' && !customValue) {
-                Swal.showValidationMessage('Por favor ingresa un valor personalizado');
-                return false;
-            }
-            
-            return { method, customValue };
+            return document.getElementById('fillMethod').value;
         }
     }).then(async (result) => {
         if (result.isConfirmed) {
-            await fillNullsInColumn(selectedEditorColumn, result.value.method, result.value.customValue);
+            const method = result.value;
+            
+            if (method === 'custom') {
+                // Si es personalizado, mostrar un segundo modal para el valor
+                const { value: customValue } = await Swal.fire({
+                    title: 'Valor personalizado',
+                    input: 'text',
+                    inputLabel: `Ingresa el valor para reemplazar los nulos en "${selectedEditorColumn}"`,
+                    inputPlaceholder: isNumeric ? 'Ej: 0, -1, 999' : 'Ej: N/A, Sin datos, etc.',
+                    inputAttributes: {
+                        style: 'background-color: #1a1e3a; color: #f0f9ff; border: 1px solid #2d3561;'
+                    },
+                    showCancelButton: true,
+                    confirmButtonText: 'Rellenar',
+                    cancelButtonText: 'Cancelar',
+                    background: '#0a0e27',
+                    color: '#f0f9ff',
+                    customClass: {
+                        popup: 'swal-dark-theme',
+                        htmlContainer: 'swal-dark-content',
+                        input: 'swal2-input-custom'
+                    },
+                    inputValidator: (value) => {
+                        if (!value) {
+                            return 'Por favor ingresa un valor personalizado';
+                        }
+                    },
+                    didOpen: () => {
+                        // Asegurar que el input nativo de SweetAlert2 funcione
+                        const swalInput = Swal.getInput();
+                        if (swalInput) {
+                            swalInput.focus();
+                        }
+                    }
+                });
+                
+                if (customValue) {
+                    await fillNullsInColumn(selectedEditorColumn, 'custom', customValue);
+                }
+            } else {
+                // Si no es custom, proceder directamente
+                await fillNullsInColumn(selectedEditorColumn, method, null);
+            }
         }
     });
 }
