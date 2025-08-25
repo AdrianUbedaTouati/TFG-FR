@@ -954,6 +954,17 @@ class DatasetNormalizationView(APIView):
                 import _strptime  # Pre-import to avoid issues with datetime.strptime
                 import time
                 
+                # Try to import zoneinfo (available in Python 3.9+)
+                try:
+                    from zoneinfo import ZoneInfo
+                    import zoneinfo
+                    zoneinfo_available = True
+                except ImportError:
+                    # Fallback for older Python versions or if zoneinfo is not available
+                    ZoneInfo = None
+                    zoneinfo = None
+                    zoneinfo_available = False
+                
                 ALLOWED_MODULES = {
                     'math': math,
                     'datetime': datetime,
@@ -978,6 +989,11 @@ class DatasetNormalizationView(APIView):
                     'functools': functools,
                 }
                 
+                # Add zoneinfo if available
+                if zoneinfo_available:
+                    ALLOWED_MODULES['zoneinfo'] = zoneinfo
+                    ALLOWED_MODULES['ZoneInfo'] = ZoneInfo
+                
                 # Create datetime module object for 'from datetime import ...'
                 import types
                 datetime_module = types.ModuleType('datetime')
@@ -999,11 +1015,19 @@ class DatasetNormalizationView(APIView):
                 collections_module.Counter = Counter
                 collections_module.defaultdict = defaultdict
                 
+                # Create zoneinfo module object if available
+                if zoneinfo_available:
+                    zoneinfo_module = types.ModuleType('zoneinfo')
+                    zoneinfo_module.ZoneInfo = ZoneInfo
+                
                 # Update ALLOWED_MODULES to use the module objects
                 ALLOWED_MODULES['datetime'] = datetime_module
                 ALLOWED_MODULES['scipy'] = scipy_module
                 ALLOWED_MODULES['sklearn'] = sklearn_module
                 ALLOWED_MODULES['collections'] = collections_module
+                
+                if zoneinfo_available:
+                    ALLOWED_MODULES['zoneinfo'] = zoneinfo_module
                 
                 # Create a safe import function
                 def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -1067,10 +1091,22 @@ class DatasetNormalizationView(APIView):
                 safe_globals['timezone'] = timezone
                 safe_globals['timedelta'] = timedelta
                 
+                # Add zoneinfo to safe_globals if available
+                if zoneinfo_available:
+                    safe_globals['zoneinfo'] = zoneinfo
+                    safe_globals['ZoneInfo'] = ZoneInfo
+                
                 # Add pandas and numpy for numeric functions
                 if custom_func.function_type == 'numeric':
                     safe_globals['pd'] = pd
                     safe_globals['np'] = np
+                
+                # Execute initialization code first if present
+                if hasattr(custom_func, 'initialization_code') and custom_func.initialization_code:
+                    print(f"Executing initialization code for function {custom_func.name}")
+                    # Provide column_data for initialization code
+                    safe_globals['column_data'] = df[column]
+                    exec(custom_func.initialization_code, safe_globals)
                 
                 # Execute the custom function code
                 exec(custom_func.code, safe_globals)
@@ -1092,7 +1128,12 @@ class DatasetNormalizationView(APIView):
                         if total_rows > 0:
                             try:
                                 sample_value = df[column].iloc[0]
-                                if custom_func.function_type == 'numeric':
+                                # Check function signature to see if it accepts series parameter
+                                import inspect
+                                func_signature = inspect.signature(normalize_func)
+                                has_series_param = 'series' in func_signature.parameters
+                                
+                                if custom_func.function_type == 'numeric' and has_series_param:
                                     sample_result = normalize_func(sample_value, series=None)
                                 else:
                                     sample_result = normalize_func(sample_value)
@@ -1140,8 +1181,15 @@ class DatasetNormalizationView(APIView):
                                     try:
                                         # Apply timeout for each value processing
                                         with time_limit(5):  # 5 second timeout per value
-                                            # DO NOT pass entire series - it causes memory/performance issues
-                                            result = normalize_func(value, series=None)
+                                            # Check function signature to see if it accepts series parameter
+                                            import inspect
+                                            func_signature = inspect.signature(normalize_func)
+                                            if 'series' in func_signature.parameters:
+                                                # Function expects series parameter
+                                                result = normalize_func(value, series=None)
+                                            else:
+                                                # Function doesn't expect series parameter
+                                                result = normalize_func(value)
                                         
                                         if isinstance(result, dict):
                                             # If the result has different keys than expected, adapt
