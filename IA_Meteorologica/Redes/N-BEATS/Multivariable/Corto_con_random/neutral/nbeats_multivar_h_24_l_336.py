@@ -53,7 +53,7 @@ L: int = 24
 # Hiperparámetros del modelo/entrenamiento
 SEED: int = 1337
 BATCH_SIZE: int = 128
-EPOCHS: int = 120
+EPOCHS: int = 30
 LR: float = 1e-3
 WEIGHT_DECAY: float = 1e-6
 PATIENCE: int = 12          # early stopping
@@ -65,8 +65,8 @@ CHECKPOINT_DIR: str = "checkpoints"
 
 # Denormalización
 DENORMALIZE_OUTPUTS: bool = True
-Z_MEAN: Optional[float] = None
-Z_STD: Optional[float]  = None
+Z_MEAN: Optional[float] = 0.74
+Z_STD: Optional[float]  = 1.42
 
 # Búsqueda de hiperparámetros (opcional)
 HP_SEARCH_ENABLED: bool = False
