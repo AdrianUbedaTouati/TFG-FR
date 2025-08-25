@@ -1422,11 +1422,15 @@
                         <ul style="margin: 10px 0 0 20px; font-size: 0.9em;">
                             <li>Úsalo para calcular estadísticas, crear variables globales, etc.</li>
                             <li>Tienes acceso a toda la columna mediante la variable <code style="background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 3px;">column_data</code></li>
+                            <li>El nombre de la columna está disponible en la variable <code style="background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 3px;">column_name</code></li>
                             <li>Las variables que definas aquí estarán disponibles en la función principal</li>
                         </ul>
                         <div style="margin-top: 10px; padding: 8px; background: rgba(0, 0, 0, 0.2); border-radius: 5px;">
                             <strong>Ejemplo:</strong>
-                            <pre style="margin: 0; font-size: 0.8em;"><code># Calcular estadísticas globales
+                            <pre style="margin: 0; font-size: 0.8em;"><code># Nombre de la columna actual
+print(f"Procesando columna: {column_name}")
+
+# Calcular estadísticas globales
 global_mean = column_data.mean()
 global_std = column_data.std()
 global_min = column_data.min()
@@ -1452,6 +1456,12 @@ category_map = {cat: i for i, cat in enumerate(unique_categories)}</code></pre>
                     <div class="alert alert-info" style="background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
                         <i class="bi bi-info-circle"></i> La función debe recibir un parámetro 'value' y retornar el valor normalizado.
                         Para funciones numéricas, también puede recibir 'series' con toda la columna.
+                        <br><br>
+                        <strong>Variables globales disponibles:</strong>
+                        <ul style="margin: 5px 0 0 20px; font-size: 0.9em;">
+                            <li><code style="background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 3px;">column_name</code> - El nombre de la columna actual siendo procesada</li>
+                            <li>Cualquier variable definida en el código de inicialización</li>
+                        </ul>
                         
                         <div id="columnStatsInfo" style="margin: 15px 0; display: none;">
                             <strong style="color: #00d4ff;">Estadísticas de columnas disponibles:</strong>
@@ -1507,6 +1517,8 @@ def normalize(value, series=None):
                     </div>
                     <textarea class="code-editor" id="functionCode" placeholder="def normalize(value):
     # Tu código aquí
+    # Puedes usar la variable global 'column_name' para saber qué columna estás procesando
+    # print(f'Procesando valor de la columna: {column_name}')
     return normalized_value"></textarea>
                 </div>
                 

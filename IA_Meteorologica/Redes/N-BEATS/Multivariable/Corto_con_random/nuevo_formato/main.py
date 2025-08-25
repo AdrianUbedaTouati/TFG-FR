@@ -20,11 +20,7 @@ class Config:
     TARGET_COL_NORM: Optional[str] = "Temperature (C)_normalized"
     ORIG_TARGET_COL: Optional[str] = "Temperature (C)"
     FEATURE_COLS: Optional[List[str]] = field(default_factory=lambda: [
-        "h_sin","h_cos","dow_sin","dow_cos","doy_sin","doy_cos",
-        "Precip Type_normalized","Temperature (C)_normalized",
-        "wind_bearing_sin","wind_bearing_cos",
-        "Summary_Clear","Summary_Foggy","Summary_Mostly Cloudy",
-        "Summary_Overcast","Summary_Partly Cloudy"
+       "h_sin","h_cos","dow_sin","dow_cos","doy_sin","doy_cos","Precip Type_normalized","Temperature (C)_normalized","Apparent Temperature (C)_normalized","Humidity_normalized","Wind Speed (km/h)_normalized","wind_bearing_sin","wind_bearing_cos","Visibility (km)_normalized","Pressure (millibars)_normalized","trend_normalized","Summary_Clear","Summary_Foggy","Summary_Mostly Cloudy","Summary_Overcast","Summary_Partly Cloudy"
     ])
     INCLUDE_TARGET_AS_FEATURE: bool = True
 
@@ -47,8 +43,8 @@ class Config:
 
     # Denormalización
     DENORMALIZE_OUTPUTS: bool = True
-    Z_MEAN: Optional[float] = 0.74
-    Z_STD: Optional[float]  = 1.42
+    Z_MEAN: Optional[float] = 0.02
+    Z_STD: Optional[float]  = 0.96
 
     # HP search (opcional)
     HP_SEARCH_ENABLED: bool = False

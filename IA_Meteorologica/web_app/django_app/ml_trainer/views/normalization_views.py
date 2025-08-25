@@ -1101,6 +1101,9 @@ class DatasetNormalizationView(APIView):
                     safe_globals['pd'] = pd
                     safe_globals['np'] = np
                 
+                # Add column name as a global variable
+                safe_globals['column_name'] = column
+                
                 # Execute initialization code first if present
                 if hasattr(custom_func, 'initialization_code') and custom_func.initialization_code:
                     print(f"Executing initialization code for function {custom_func.name}")
@@ -2875,6 +2878,9 @@ class CustomNormalizationFunctionTestView(APIView):
         if function_type == 'numeric':
             import pandas as pd
             safe_globals['pd'] = pd
+        
+        # Add column name as a global variable (use "test_column" for testing)
+        safe_globals['column_name'] = 'test_column'
             
         try:
             # Execute initialization code first if provided
