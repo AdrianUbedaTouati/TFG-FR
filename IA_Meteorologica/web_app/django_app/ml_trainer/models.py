@@ -42,6 +42,7 @@ class CustomNormalizationFunction(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField()
     function_type = models.CharField(max_length=20, choices=[('numeric', 'Numérica'), ('text', 'Texto')])
+    initialization_code = models.TextField(blank=True, null=True, help_text="Código Python de inicialización que se ejecuta una sola vez para crear variables globales")
     code = models.TextField(help_text="Código Python de la función de normalización")
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='custom_functions')
     created_at = models.DateTimeField(auto_now_add=True)

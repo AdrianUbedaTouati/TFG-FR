@@ -2657,9 +2657,16 @@ class CustomNormalizationFunctionTestView(APIView):
     
     def post(self, request):
         """Test a custom normalization function with a sample value"""
+        initialization_code = request.data.get('initialization_code', '')
         code = request.data.get('code', '')
         test_value = request.data.get('test_value', '')
         function_type = request.data.get('function_type', 'numeric')
+        column_data = request.data.get('column_data', [])
+        
+        # Debug: Log the received column_data type and content
+        print(f"DEBUG: Received column_data type: {type(column_data)}")
+        print(f"DEBUG: Received column_data content: {column_data}")
+        print(f"DEBUG: column_data length: {len(column_data) if hasattr(column_data, '__len__') else 'No length'}")
         
         if not code or test_value is None:
             return error_response("Code and test_value are required")
@@ -2792,7 +2799,63 @@ class CustomNormalizationFunctionTestView(APIView):
             safe_globals['pd'] = pd
             
         try:
-            # Compile and execute the code
+            # Execute initialization code first if provided
+            if initialization_code and initialization_code.strip():
+                # Create column_data from provided data or mock data
+                import pandas as pd
+                safe_globals['pd'] = pd  # Ensure pd is available for initialization
+                
+                if column_data:
+                    # Use provided column data
+                    print(f"DEBUG: Processing column_data: {type(column_data)} - {column_data}")
+                    
+                    # Ensure column_data is a proper list
+                    if isinstance(column_data, str):
+                        # If it's a string, try to parse it or split it
+                        print("WARNING: column_data is a string, this shouldn't happen!")
+                        print(f"String content: {repr(column_data)}")
+                        # Try to detect if it's a concatenated numeric string
+                        try:
+                            # This is a fallback - we shouldn't reach this point
+                            column_data = list(map(float, column_data.split()))
+                            print(f"DEBUG: Converted string to float list: {column_data}")
+                        except:
+                            # If that fails, treat as text data
+                            column_data = [column_data]
+                            print(f"DEBUG: Treating as single text value: {column_data}")
+                    elif not isinstance(column_data, list):
+                        column_data = list(column_data) if hasattr(column_data, '__iter__') else [column_data]
+                        print(f"DEBUG: Converted to list: {column_data}")
+                    
+                    safe_globals['column_data'] = pd.Series(column_data)
+                else:
+                    # Create mock column data for testing - generate sample data based on function type
+                    if function_type == 'numeric':
+                        # Generate numeric sample data
+                        import numpy as np
+                        mock_data = np.random.normal(10, 2, 100).tolist()  # mean=10, std=2, 100 samples
+                        # Include the test value
+                        try:
+                            mock_data.append(float(test_value))
+                        except:
+                            pass
+                        safe_globals['column_data'] = pd.Series(mock_data)
+                    else:
+                        # Generate text sample data
+                        mock_data = ['apple', 'banana', 'cherry', 'date', 'elderberry'] * 20
+                        # Include the test value
+                        mock_data.append(str(test_value))
+                        safe_globals['column_data'] = pd.Series(mock_data)
+                
+                print(f"Executing initialization code with column_data of length {len(safe_globals['column_data'])}")
+                
+                # Execute initialization code
+                compiled_init_code = compile(initialization_code, '<initialization>', 'exec')
+                exec(compiled_init_code, safe_globals)
+                
+                print(f"Initialization code executed successfully")
+            
+            # Compile and execute the main function code
             compiled_code = compile(code, '<string>', 'exec')
             exec(compiled_code, safe_globals)
             

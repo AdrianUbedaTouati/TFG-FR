@@ -1412,9 +1412,43 @@
                     </div>
                 </div>
                 
+                <!-- Código de inicialización -->
+                <div class="mb-3">
+                    <label class="form-label" style="color: var(--light-color);">
+                        <i class="bi bi-gear-fill"></i> Código de inicialización (opcional):
+                    </label>
+                    <div class="alert alert-warning" style="background: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.3); color: var(--light-color);">
+                        <i class="bi bi-lightning-fill"></i> <strong>Este código se ejecuta UNA SOLA VEZ</strong> antes de procesar cualquier valor.
+                        <ul style="margin: 10px 0 0 20px; font-size: 0.9em;">
+                            <li>Úsalo para calcular estadísticas, crear variables globales, etc.</li>
+                            <li>Tienes acceso a toda la columna mediante la variable <code style="background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 3px;">column_data</code></li>
+                            <li>Las variables que definas aquí estarán disponibles en la función principal</li>
+                        </ul>
+                        <div style="margin-top: 10px; padding: 8px; background: rgba(0, 0, 0, 0.2); border-radius: 5px;">
+                            <strong>Ejemplo:</strong>
+                            <pre style="margin: 0; font-size: 0.8em;"><code># Calcular estadísticas globales
+global_mean = column_data.mean()
+global_std = column_data.std()
+global_min = column_data.min()
+global_max = column_data.max()
+
+# Crear mapeo de categorías
+unique_categories = column_data.unique()
+category_map = {cat: i for i, cat in enumerate(unique_categories)}</code></pre>
+                        </div>
+                    </div>
+                    <textarea class="code-editor" id="initializationCode" placeholder="# Código de inicialización (opcional)
+# Este código se ejecuta una sola vez antes de procesar los valores
+# Ejemplo:
+# global_mean = column_data.mean()
+# global_std = column_data.std()"></textarea>
+                </div>
+                
                 <!-- Editor de código -->
                 <div class="mb-3">
-                    <label class="form-label" style="color: var(--light-color);">Código de la función:</label>
+                    <label class="form-label" style="color: var(--light-color);">
+                        <i class="bi bi-code-slash"></i> Código de la función:
+                    </label>
                     <div class="alert alert-info" style="background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--light-color);">
                         <i class="bi bi-info-circle"></i> La función debe recibir un parámetro 'value' y retornar el valor normalizado.
                         Para funciones numéricas, también puede recibir 'series' con toda la columna.
@@ -6523,9 +6557,19 @@ def normalize(value, series=None):
     
     async function testMultipleValues(values) {
         const functionCode = document.getElementById('functionCode').value;
+        const initializationCode = document.getElementById('initializationCode').value;
         const results = [];
         
-        for (const value of values) {
+        // Ensure values is an array and convert to numbers if function type is numeric
+        let cleanValues = Array.isArray(values) ? values : [values];
+        if (selectedFunctionType === 'numeric') {
+            cleanValues = cleanValues.map(v => {
+                const num = parseFloat(v);
+                return isNaN(num) ? v : num;
+            });
+        }
+        
+        for (const value of cleanValues) {
             try {
                 const response = await fetch('/api/custom-normalization-functions/test/', {
                     method: 'POST',
@@ -6534,9 +6578,11 @@ def normalize(value, series=None):
                         'X-CSRFToken': getCookie('csrftoken')
                     },
                     body: JSON.stringify({
+                        initialization_code: initializationCode,
                         code: functionCode,
                         test_value: value,
-                        function_type: selectedFunctionType
+                        function_type: selectedFunctionType,
+                        column_data: cleanValues  // Pass cleaned array as column_data for initialization
                     })
                 });
                 
@@ -6630,9 +6676,11 @@ def normalize(value, series=None):
                     'X-CSRFToken': getCookie('csrftoken')
                 },
                 body: JSON.stringify({
+                    initialization_code: document.getElementById('initializationCode').value,
                     code: functionCode,
                     test_value: testValue,
-                    function_type: selectedFunctionType
+                    function_type: selectedFunctionType,
+                    column_data: []  // Empty array - backend will generate mock data if needed
                 })
             });
             

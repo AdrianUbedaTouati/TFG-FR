@@ -155,6 +155,6 @@ class WeatherPredictionSerializer(serializers.ModelSerializer):
 class CustomNormalizationFunctionSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomNormalizationFunction
-        fields = ['id', 'name', 'description', 'function_type', 'code', 
+        fields = ['id', 'name', 'description', 'function_type', 'initialization_code', 'code', 
                   'created_at', 'updated_at', 'user', 'new_columns']
         read_only_fields = ['created_at', 'updated_at', 'user']
