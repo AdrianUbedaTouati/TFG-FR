@@ -1,0 +1,4 @@
+Val best MSE: 0.165566
+Test MSE: 0.195133
+Test MAE: 0.350667
+Test RMSE: 0.441739

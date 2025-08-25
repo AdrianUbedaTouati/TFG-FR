@@ -1,68 +1,38 @@
-(.venv) PS C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Redes\N-BEATS\Multivariable\Corto_con_random\random> python .\nbeats_multivar_h_24_l_336.py
-Denormalización: mean=None, std=None
-Dataset: data/weatherHistory_normalized_general.csv
+(venv) PS C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Redes\N-BEATS\Multivariable\Corto_con_random\random> python .\main.py
+Denormalización: mean=0.02, std=0.96
+Dataset: data/weatherHistory_normalize.csv
 Tiempo: Formatted Date | Objetivo: Temperature (C)_normalized
-Features (15): ['Humidity', 'trend', 'h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos', 'tz_offset_hours', 'Summary_normalized', 'Precip Type_normalized', 'Temperature (C)_normalized', 'wind_bearing_sin', 'wind_bearing_cos', 'Daily Summary_normalized']
-Total puntos: 95165 — Train: 66615, Val: 14275, Test: 14275
-Ventana H=336, L=24 → input_size=5040
-Ventanas => Train: 66256, Val: 14252, Test: 14252
+Features (21): ['h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos', 'Precip Type_normalized', 'Temperature (C)_normalized', 'Apparent Temperature (C)_normalized', 'Humidity_normalized', 'Wind Speed (km/h)_normalized', 'wind_bearing_sin', 'wind_bearing_cos', 'Visibility (km)_normalized', 'Pressure (millibars)_normalized', 'trend_normalized', 'Summary_Clear', 'Summary_Foggy', 'Summary_Mostly Cloudy', 'Summary_Overcast', 'Summary_Partly Cloudy']
+Total puntos: 96453 — Train: 67517, Val: 14468, Test: 14468
+Ventana H=336, L=24 → input_size=7056
+Ventanas => Train: 67158, Val: 14445, Test: 14445
+[INFO] device=cuda | gpu=NVIDIA GeForce RTX 3050 | amp=True | tf32=True | compile=False
+[INFO] dataloader: workers=6 pin_memory=True prefetch=4 persistent=True
 Iniciando HP search: random ...
-Mejores HP → width=128, depth=3, blocks=4, lr=0.001, wd=1e-05, val=0.077208
-Epoch 001 | train_loss=0.610563 | val_loss=0.109925 | val_MAE=0.2594 | val_RMSE=0.3315
-Epoch 002 | train_loss=0.126555 | val_loss=0.085691 | val_MAE=0.2288 | val_RMSE=0.2927
-Epoch 003 | train_loss=0.119712 | val_loss=0.104724 | val_MAE=0.2490 | val_RMSE=0.3236
-Epoch 004 | train_loss=0.109873 | val_loss=0.078383 | val_MAE=0.2217 | val_RMSE=0.2800
-Epoch 005 | train_loss=0.103331 | val_loss=0.078878 | val_MAE=0.2192 | val_RMSE=0.2809
-Epoch 006 | train_loss=0.105963 | val_loss=0.084202 | val_MAE=0.2267 | val_RMSE=0.2902
-Epoch 007 | train_loss=0.101927 | val_loss=0.085854 | val_MAE=0.2313 | val_RMSE=0.2930
-Epoch 008 | train_loss=0.099221 | val_loss=0.086102 | val_MAE=0.2262 | val_RMSE=0.2934
-Epoch 009 | train_loss=0.095516 | val_loss=0.077470 | val_MAE=0.2187 | val_RMSE=0.2783
-Epoch 010 | train_loss=0.094284 | val_loss=0.083199 | val_MAE=0.2252 | val_RMSE=0.2884
-Epoch 011 | train_loss=0.097845 | val_loss=0.080516 | val_MAE=0.2213 | val_RMSE=0.2838
-Epoch 012 | train_loss=0.097581 | val_loss=0.081362 | val_MAE=0.2215 | val_RMSE=0.2852
-Epoch 013 | train_loss=0.090747 | val_loss=0.088743 | val_MAE=0.2302 | val_RMSE=0.2979
-Epoch 014 | train_loss=0.088694 | val_loss=0.080915 | val_MAE=0.2234 | val_RMSE=0.2845
-Epoch 015 | train_loss=0.079690 | val_loss=0.071443 | val_MAE=0.2083 | val_RMSE=0.2673
-Epoch 016 | train_loss=0.079355 | val_loss=0.073152 | val_MAE=0.2099 | val_RMSE=0.2705
-Epoch 017 | train_loss=0.079156 | val_loss=0.078538 | val_MAE=0.2186 | val_RMSE=0.2802
-Epoch 018 | train_loss=0.079180 | val_loss=0.073531 | val_MAE=0.2102 | val_RMSE=0.2712
-Epoch 019 | train_loss=0.077848 | val_loss=0.069772 | val_MAE=0.2046 | val_RMSE=0.2641
-Epoch 020 | train_loss=0.076752 | val_loss=0.069535 | val_MAE=0.2041 | val_RMSE=0.2637
-Epoch 021 | train_loss=0.078330 | val_loss=0.073893 | val_MAE=0.2089 | val_RMSE=0.2718
-Epoch 022 | train_loss=0.076331 | val_loss=0.079871 | val_MAE=0.2147 | val_RMSE=0.2826
-Epoch 023 | train_loss=0.076599 | val_loss=0.079208 | val_MAE=0.2182 | val_RMSE=0.2814
-Epoch 024 | train_loss=0.075953 | val_loss=0.080252 | val_MAE=0.2164 | val_RMSE=0.2833
-Epoch 025 | train_loss=0.076770 | val_loss=0.070598 | val_MAE=0.2042 | val_RMSE=0.2657
-Epoch 026 | train_loss=0.071518 | val_loss=0.069562 | val_MAE=0.2022 | val_RMSE=0.2637
-Epoch 027 | train_loss=0.070341 | val_loss=0.071435 | val_MAE=0.2064 | val_RMSE=0.2673
-Epoch 028 | train_loss=0.070025 | val_loss=0.071199 | val_MAE=0.2041 | val_RMSE=0.2668
-Epoch 029 | train_loss=0.070033 | val_loss=0.072681 | val_MAE=0.2089 | val_RMSE=0.2696
-Epoch 030 | train_loss=0.069336 | val_loss=0.069476 | val_MAE=0.2040 | val_RMSE=0.2636
-Epoch 031 | train_loss=0.069478 | val_loss=0.070018 | val_MAE=0.2016 | val_RMSE=0.2646
-Epoch 032 | train_loss=0.069535 | val_loss=0.069365 | val_MAE=0.2022 | val_RMSE=0.2634
-Epoch 033 | train_loss=0.069071 | val_loss=0.070906 | val_MAE=0.2061 | val_RMSE=0.2663
-Epoch 034 | train_loss=0.069214 | val_loss=0.079451 | val_MAE=0.2165 | val_RMSE=0.2819
-Epoch 035 | train_loss=0.068988 | val_loss=0.069881 | val_MAE=0.2039 | val_RMSE=0.2644
-Epoch 036 | train_loss=0.068801 | val_loss=0.069199 | val_MAE=0.2021 | val_RMSE=0.2631
-Epoch 037 | train_loss=0.068271 | val_loss=0.070774 | val_MAE=0.2030 | val_RMSE=0.2660
-Epoch 038 | train_loss=0.069208 | val_loss=0.070887 | val_MAE=0.2048 | val_RMSE=0.2662
-Epoch 039 | train_loss=0.068214 | val_loss=0.067986 | val_MAE=0.2009 | val_RMSE=0.2607
-Epoch 040 | train_loss=0.067827 | val_loss=0.071650 | val_MAE=0.2077 | val_RMSE=0.2677
-Epoch 041 | train_loss=0.067997 | val_loss=0.071328 | val_MAE=0.2050 | val_RMSE=0.2671
-Epoch 042 | train_loss=0.067340 | val_loss=0.073821 | val_MAE=0.2118 | val_RMSE=0.2717
-Epoch 043 | train_loss=0.068617 | val_loss=0.070670 | val_MAE=0.2020 | val_RMSE=0.2658
-Epoch 044 | train_loss=0.068101 | val_loss=0.070909 | val_MAE=0.2030 | val_RMSE=0.2663
-Epoch 045 | train_loss=0.064750 | val_loss=0.069037 | val_MAE=0.2024 | val_RMSE=0.2627
-Epoch 046 | train_loss=0.064902 | val_loss=0.068439 | val_MAE=0.1994 | val_RMSE=0.2616
-Epoch 047 | train_loss=0.064645 | val_loss=0.069099 | val_MAE=0.2014 | val_RMSE=0.2629
-Epoch 048 | train_loss=0.064538 | val_loss=0.069603 | val_MAE=0.2018 | val_RMSE=0.2638
-Epoch 049 | train_loss=0.064223 | val_loss=0.068960 | val_MAE=0.2019 | val_RMSE=0.2626
-Epoch 050 | train_loss=0.062716 | val_loss=0.069085 | val_MAE=0.2013 | val_RMSE=0.2628
-Epoch 051 | train_loss=0.062712 | val_loss=0.069189 | val_MAE=0.2027 | val_RMSE=0.2630
+Mejores HP → width=128, depth=2, blocks=4, lr=0.001, wd=1e-06, val=0.071488
+Epoch 001 | train_loss=0.070681 | val_loss=0.076862 | val_MAE=0.2179 | val_RMSE=0.2772
+Epoch 002 | train_loss=0.031077 | val_loss=0.074859 | val_MAE=0.2126 | val_RMSE=0.2736
+Epoch 003 | train_loss=0.020593 | val_loss=0.079317 | val_MAE=0.2174 | val_RMSE=0.2816
+Epoch 004 | train_loss=0.016662 | val_loss=0.076043 | val_MAE=0.2137 | val_RMSE=0.2758
+Epoch 005 | train_loss=0.014537 | val_loss=0.074542 | val_MAE=0.2109 | val_RMSE=0.2730
+Epoch 006 | train_loss=0.013870 | val_loss=0.074886 | val_MAE=0.2124 | val_RMSE=0.2737
+Epoch 007 | train_loss=0.013052 | val_loss=0.078528 | val_MAE=0.2167 | val_RMSE=0.2802
+Epoch 008 | train_loss=0.012853 | val_loss=0.076984 | val_MAE=0.2147 | val_RMSE=0.2775
+Epoch 009 | train_loss=0.011916 | val_loss=0.077312 | val_MAE=0.2154 | val_RMSE=0.2781
+Epoch 010 | train_loss=0.012232 | val_loss=0.076772 | val_MAE=0.2153 | val_RMSE=0.2771
+Epoch 011 | train_loss=0.008329 | val_loss=0.074909 | val_MAE=0.2124 | val_RMSE=0.2737
+Epoch 012 | train_loss=0.007333 | val_loss=0.076024 | val_MAE=0.2150 | val_RMSE=0.2757
+Epoch 013 | train_loss=0.007257 | val_loss=0.076289 | val_MAE=0.2147 | val_RMSE=0.2762
+Epoch 014 | train_loss=0.007608 | val_loss=0.075462 | val_MAE=0.2138 | val_RMSE=0.2747
+Epoch 015 | train_loss=0.007726 | val_loss=0.075493 | val_MAE=0.2133 | val_RMSE=0.2748
+Epoch 016 | train_loss=0.006181 | val_loss=0.076894 | val_MAE=0.2154 | val_RMSE=0.2773
+Epoch 017 | train_loss=0.005793 | val_loss=0.075857 | val_MAE=0.2139 | val_RMSE=0.2754
 Early stopping (patience=12).
-Cargado mejor checkpoint: checkpoints\nbeats_MULTI_H336_L24_Temperature_(C)_normalized_D15.pth
-Test: loss=0.068826 | MAE=0.2026 | RMSE=0.2623
-Guardado TorchScript en: checkpoints\nbeats_MULTI_H336_L24_Temperature_(C)_normalized_D15_torchscript.pt
-Listo. Model checkpoint: checkpoints\nbeats_MULTI_H336_L24_Temperature_(C)_normalized_D15.pth
-Resultados en: outputs/ (gráficas individuales, PDF, métricas, importancia de variables)
-Para cambiar variables de entrada, ajusta FEATURE_COLS o deja la selección automática.
+C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Redes\N-BEATS\Multivariable\Corto_con_random\random\train_nbeats.py:488: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  ckpt = torch.load(best_path, map_location=device)
+Cargado mejor checkpoint: checkpoints\nbeats_MULTI_H336_L24_Temperature_(C)_normalized_D21.pth
+Test: loss=0.088093 | MAE=0.2297 | RMSE=0.2968
+Guardado TorchScript en: checkpoints\nbeats_MULTI_H336_L24_Temperature_(C)_normalized_D21_torchscript.pt
+>>> Dispositivo usado: cuda
+PDF guardado en: outputs\analysis_MULTI_H336_L24_Temperature_(C)_normalized_D21.pdf
+Listo. Resultados en: outputs
