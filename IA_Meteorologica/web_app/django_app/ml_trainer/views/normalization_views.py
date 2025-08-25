@@ -2663,10 +2663,11 @@ class CustomNormalizationFunctionTestView(APIView):
         function_type = request.data.get('function_type', 'numeric')
         column_data = request.data.get('column_data', [])
         
-        # Debug: Log the received column_data type and content
-        print(f"DEBUG: Received column_data type: {type(column_data)}")
-        print(f"DEBUG: Received column_data content: {column_data}")
-        print(f"DEBUG: column_data length: {len(column_data) if hasattr(column_data, '__len__') else 'No length'}")
+        # Debug: Log the received column_data type and content (only if it's unexpected)
+        if isinstance(column_data, str) and column_data:
+            print(f"WARNING: column_data received as string: {type(column_data)} - {repr(column_data[:100])}")
+        elif column_data and len(column_data) > 0:
+            print(f"DEBUG: column_data received: {len(column_data)} items, type: {type(column_data)}")
         
         if not code or test_value is None:
             return error_response("Code and test_value are required")
@@ -2689,6 +2690,17 @@ class CustomNormalizationFunctionTestView(APIView):
         # Define allowed modules for import
         import _strptime  # Pre-import to avoid issues with datetime.strptime
         import time
+        
+        # Try to import zoneinfo (available in Python 3.9+)
+        try:
+            from zoneinfo import ZoneInfo
+            import zoneinfo
+            zoneinfo_available = True
+        except ImportError:
+            # Fallback for older Python versions or if zoneinfo is not available
+            ZoneInfo = None
+            zoneinfo = None
+            zoneinfo_available = False
         
         ALLOWED_MODULES = {
             'math': math,
@@ -2714,6 +2726,11 @@ class CustomNormalizationFunctionTestView(APIView):
             'functools': functools,
         }
         
+        # Add zoneinfo if available
+        if zoneinfo_available:
+            ALLOWED_MODULES['zoneinfo'] = zoneinfo
+            ALLOWED_MODULES['ZoneInfo'] = ZoneInfo
+        
         # Create datetime module object for 'from datetime import ...'
         import types
         datetime_module = types.ModuleType('datetime')
@@ -2735,11 +2752,19 @@ class CustomNormalizationFunctionTestView(APIView):
         collections_module.Counter = Counter
         collections_module.defaultdict = defaultdict
         
+        # Create zoneinfo module object if available
+        if zoneinfo_available:
+            zoneinfo_module = types.ModuleType('zoneinfo')
+            zoneinfo_module.ZoneInfo = ZoneInfo
+        
         # Update ALLOWED_MODULES to use the module objects
         ALLOWED_MODULES['datetime'] = datetime_module
         ALLOWED_MODULES['scipy'] = scipy_module
         ALLOWED_MODULES['sklearn'] = sklearn_module
         ALLOWED_MODULES['collections'] = collections_module
+        
+        if zoneinfo_available:
+            ALLOWED_MODULES['zoneinfo'] = zoneinfo_module
         
         # Create a safe import function
         def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -2793,6 +2818,11 @@ class CustomNormalizationFunctionTestView(APIView):
             'timedelta': timedelta,
         }
         
+        # Add zoneinfo to safe_globals if available
+        if zoneinfo_available:
+            safe_globals['zoneinfo'] = zoneinfo
+            safe_globals['ZoneInfo'] = ZoneInfo
+        
         # Add pandas series methods for numeric functions
         if function_type == 'numeric':
             import pandas as pd
@@ -2807,25 +2837,21 @@ class CustomNormalizationFunctionTestView(APIView):
                 
                 if column_data:
                     # Use provided column data
-                    print(f"DEBUG: Processing column_data: {type(column_data)} - {column_data}")
-                    
                     # Ensure column_data is a proper list
                     if isinstance(column_data, str):
                         # If it's a string, try to parse it or split it
-                        print("WARNING: column_data is a string, this shouldn't happen!")
-                        print(f"String content: {repr(column_data)}")
+                        print("WARNING: column_data is a string, attempting to recover")
                         # Try to detect if it's a concatenated numeric string
                         try:
                             # This is a fallback - we shouldn't reach this point
                             column_data = list(map(float, column_data.split()))
-                            print(f"DEBUG: Converted string to float list: {column_data}")
+                            print(f"DEBUG: Recovered {len(column_data)} float values from string")
                         except:
                             # If that fails, treat as text data
                             column_data = [column_data]
-                            print(f"DEBUG: Treating as single text value: {column_data}")
+                            print("DEBUG: Treating as single text value")
                     elif not isinstance(column_data, list):
                         column_data = list(column_data) if hasattr(column_data, '__iter__') else [column_data]
-                        print(f"DEBUG: Converted to list: {column_data}")
                     
                     safe_globals['column_data'] = pd.Series(column_data)
                 else:

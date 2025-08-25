@@ -1477,7 +1477,7 @@ category_map = {cat: i for i, cat in enumerate(unique_categories)}</code></pre>
                                 <ul style="margin-bottom: 0; margin-top: 5px; font-size: 0.9em;">
                                     <li><code>pandas</code> (o <code>pd</code>) - DataFrames y Series</li>
                                     <li><code>sklearn.preprocessing</code> - Normalizadores ML</li>
-                                    <li><code>datetime</code>, <code>timezone</code>, <code>timedelta</code> - Fechas</li>
+                                    <li><code>datetime</code>, <code>timezone</code>, <code>timedelta</code>, <code>zoneinfo</code> - Fechas y zonas horarias</li>
                                     <li><code>re</code> - Expresiones regulares</li>
                                     <li><code>json</code> - Manejo de JSON</li>
                                     <li><code>unicodedata</code> - Normalización Unicode</li>
@@ -1600,25 +1600,31 @@ def normalize(value, series=None):
         console.log('window.editFunction:', typeof window.editFunction);
         console.log('window.deleteFunction:', typeof window.deleteFunction);
         
-        // Añadir soporte para Tab en el editor de código
-        const codeEditor = document.getElementById('functionCode');
-        if (codeEditor) {
-            codeEditor.addEventListener('keydown', function(e) {
-                if (e.key === 'Tab') {
-                    e.preventDefault();
-                    
-                    const start = this.selectionStart;
-                    const end = this.selectionEnd;
-                    const value = this.value;
-                    
-                    // Insertar 4 espacios donde está el cursor
-                    this.value = value.substring(0, start) + '    ' + value.substring(end);
-                    
-                    // Mover el cursor después de los espacios insertados
-                    this.selectionStart = this.selectionEnd = start + 4;
-                }
-            });
+        // Añadir soporte para Tab en los editores de código
+        function addTabSupport(elementId) {
+            const codeEditor = document.getElementById(elementId);
+            if (codeEditor) {
+                codeEditor.addEventListener('keydown', function(e) {
+                    if (e.key === 'Tab') {
+                        e.preventDefault();
+                        
+                        const start = this.selectionStart;
+                        const end = this.selectionEnd;
+                        const value = this.value;
+                        
+                        // Insertar 4 espacios donde está el cursor
+                        this.value = value.substring(0, start) + '    ' + value.substring(end);
+                        
+                        // Mover el cursor después de los espacios insertados
+                        this.selectionStart = this.selectionEnd = start + 4;
+                    }
+                });
+            }
         }
+        
+        // Agregar soporte para Tab en ambos editores
+        addTabSupport('functionCode');
+        addTabSupport('initializationCode');
     });
 
     async function loadDatasetInfo() {
@@ -6062,6 +6068,15 @@ ${response.details}
             
             // Establecer el código después de un pequeño delay para asegurar que no se sobrescriba
             setTimeout(() => {
+                // Cargar código de inicialización
+                if (functionData.initialization_code) {
+                    document.getElementById('initializationCode').value = functionData.initialization_code;
+                    console.log('Initialization code loaded:', functionData.initialization_code.substring(0, 100) + '...');
+                } else {
+                    document.getElementById('initializationCode').value = '';
+                }
+                
+                // Cargar código principal
                 document.getElementById('functionCode').value = functionData.code;
                 
                 // Verificar que el código se cargó correctamente
@@ -6082,6 +6097,7 @@ ${response.details}
             modalTitle.innerHTML = '<i class="bi bi-code-slash"></i> Crear Función de Normalización Personalizada';
             document.getElementById('functionName').value = '';
             document.getElementById('functionDescription').value = '';
+            document.getElementById('initializationCode').value = '';  // Limpiar código de inicialización
             document.getElementById('numNewColumns').value = '1';
             updateNewColumnsInputs();
             updateCodeExample();
@@ -6807,9 +6823,12 @@ def normalize(value, series=None):
                 }
             }
             
+            const initializationCode = document.getElementById('initializationCode').value;
+            
             const requestData = {
                 name: name,
                 description: description,
+                initialization_code: initializationCode,
                 code: code,
                 function_type: selectedFunctionType,
                 new_columns: newColumns
@@ -6880,6 +6899,7 @@ def normalize(value, series=None):
                 // Limpiar formulario
                 document.getElementById('functionName').value = '';
                 document.getElementById('functionDescription').value = '';
+                document.getElementById('initializationCode').value = '';  // Limpiar código de inicialización
                 updateCodeExample();
                 
                 // Eliminar el ID de edición
