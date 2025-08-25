@@ -5713,13 +5713,33 @@ function deleteDataset(datasetId) {
             .then(response => {
                 hideLoading();
                 if (response.ok) {
+                    console.log(`Dataset ${dataset.id} eliminado exitosamente del servidor`);
                     showNotification('Succès!', 'Dataset supprimé avec succès', 'success');
+                    
+                    // Cerrar modal si está abierto
                     if (!datasetId) {
                         const modal = bootstrap.Modal.getInstance(document.getElementById('datasetDetailModal'));
                         if (modal) modal.hide();
                     }
-                    loadDatasets();
+                    
+                    // Remover inmediatamente del array local para feedback instantáneo
+                    datasets = datasets.filter(d => d.id !== dataset.id);
+                    displayDatasets(datasets);
+                    updateStats(datasets);
+                    
+                    // Luego recargar desde el servidor para asegurar consistencia
+                    setTimeout(() => {
+                        loadDatasets().then(() => {
+                            console.log('Datasets recargados después de eliminación');
+                        }).catch(error => {
+                            console.error('Error recargando datasets:', error);
+                        });
+                    }, 500);
                 } else {
+                    console.error(`Error eliminando dataset: ${response.status}`);
+                    response.text().then(text => {
+                        console.error('Response text:', text);
+                    });
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
             })

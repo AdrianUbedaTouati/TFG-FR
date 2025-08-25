@@ -64,6 +64,42 @@ class DatasetDetailView(generics.RetrieveDestroyAPIView):
         if self.request.user.is_staff:
             return Dataset.objects.all()
         return Dataset.objects.filter(user=self.request.user)
+    
+    def perform_destroy(self, instance):
+        """Custom deletion logic"""
+        dataset_id = instance.id
+        dataset_name = instance.name
+        file_path = instance.file.path if instance.file else None
+        
+        print(f"Attempting to delete dataset {dataset_id}: {dataset_name}")
+        print(f"File path: {file_path}")
+        print(f"User: {self.request.user}")
+        
+        try:
+            # Delete the physical file if it exists
+            if instance.file:
+                if os.path.exists(instance.file.path):
+                    os.remove(instance.file.path)
+                    print(f"Physical file deleted: {instance.file.path}")
+                else:
+                    print(f"Physical file not found: {instance.file.path}")
+            
+            # Clear any cache related to this dataset
+            from django.core.cache import cache
+            cache.delete(f'dataset_{file_path}')
+            cache.delete(f'dataset_preview_{dataset_id}')
+            cache.delete(f'dataset_columns_{dataset_id}')
+            print(f"Cache cleared for dataset {dataset_id}")
+            
+            # Delete the database record
+            instance.delete()
+            print(f"Database record deleted for dataset {dataset_id}: {dataset_name}")
+            
+        except Exception as e:
+            print(f"Error during dataset deletion: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
 
 
 class DatasetUpdateInfoView(APIView):
