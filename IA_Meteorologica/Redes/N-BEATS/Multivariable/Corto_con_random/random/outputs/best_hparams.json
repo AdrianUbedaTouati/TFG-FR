@@ -1,0 +1,9 @@
+{
+  "iter": 1,
+  "HIDDEN_WIDTH": 128,
+  "DEPTH_PER_BLOCK": 3,
+  "NUM_BLOCKS": 4,
+  "LR": 0.001,
+  "WEIGHT_DECAY": 1e-05,
+  "best_val": 0.07720789737913704
+}

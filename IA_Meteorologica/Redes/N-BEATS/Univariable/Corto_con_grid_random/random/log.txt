@@ -1,0 +1,32 @@
+(.venv) PS C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Redes\N-BEATS\Univariable\random> python .\nbeats_univar_h_24_l_336.py
+Denormalización activa — mean=11.9327, std=9.5515
+Dataset: data/weatherHistory_temp_normalizacion.csv
+Tiempo: Formatted Date | Objetivo: Temperature (C)_normalized
+Total puntos: 96453 — Train: 67517, Val: 14468, Test: 14468
+Ventana H=336, L=24
+Ventanas => Train: 67158, Val: 14445, Test: 14445
+Iniciando HP search: random ...
+Mejores HP → width=256, depth=4, blocks=4, lr=0.001, wd=1e-06, val=0.065503
+Epoch 001 | train_loss=0.134955 | val_loss=0.076658 | val_MAE=0.2169 | val_RMSE=0.2769
+Epoch 002 | train_loss=0.075759 | val_loss=0.068031 | val_MAE=0.2012 | val_RMSE=0.2608
+Epoch 003 | train_loss=0.070121 | val_loss=0.069300 | val_MAE=0.2017 | val_RMSE=0.2632
+Epoch 004 | train_loss=0.065667 | val_loss=0.066346 | val_MAE=0.1988 | val_RMSE=0.2576
+Epoch 005 | train_loss=0.061210 | val_loss=0.069409 | val_MAE=0.2003 | val_RMSE=0.2635
+Epoch 006 | train_loss=0.056663 | val_loss=0.069974 | val_MAE=0.2009 | val_RMSE=0.2645
+Epoch 007 | train_loss=0.049914 | val_loss=0.071849 | val_MAE=0.2048 | val_RMSE=0.2680
+Epoch 008 | train_loss=0.042843 | val_loss=0.077443 | val_MAE=0.2112 | val_RMSE=0.2783
+Epoch 009 | train_loss=0.037549 | val_loss=0.080759 | val_MAE=0.2156 | val_RMSE=0.2842
+Epoch 010 | train_loss=0.028874 | val_loss=0.079373 | val_MAE=0.2135 | val_RMSE=0.2817
+Epoch 011 | train_loss=0.025126 | val_loss=0.080700 | val_MAE=0.2142 | val_RMSE=0.2841
+Epoch 012 | train_loss=0.022756 | val_loss=0.084581 | val_MAE=0.2199 | val_RMSE=0.2908
+Epoch 013 | train_loss=0.020775 | val_loss=0.083069 | val_MAE=0.2180 | val_RMSE=0.2882
+Epoch 014 | train_loss=0.019225 | val_loss=0.084540 | val_MAE=0.2195 | val_RMSE=0.2908
+Epoch 015 | train_loss=0.016674 | val_loss=0.085782 | val_MAE=0.2212 | val_RMSE=0.2929
+Epoch 016 | train_loss=0.015622 | val_loss=0.085884 | val_MAE=0.2213 | val_RMSE=0.2931
+Early stopping (patience=12).
+Cargado mejor checkpoint: checkpoints\nbeats_H336_L24_Temperature_(C)_normalized.pth
+Test: loss=0.066614 | MAE=0.1907 | RMSE=0.2581
+Guardado TorchScript en: checkpoints\nbeats_H336_L24_Temperature_(C)_normalized_torchscript.pt
+Listo. Model checkpoint: checkpoints\nbeats_H336_L24_Temperature_(C)_normalized.pth
+Resultados en: outputs/ (gráficas individuales, PDF y métricas)
+Para usar otra variable del dataset o cambiar H y L, modifica TARGET_COL / H / L en la CONFIG y vuelve a ejecutar. 

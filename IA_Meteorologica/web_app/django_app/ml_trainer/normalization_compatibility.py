@@ -63,20 +63,20 @@ NORMALIZATION_IO_TYPES = {
         'output_columns': 'single',
         'description': 'Elimina espacios al inicio y final del texto'
     },
-    'ONE_HOT': {
+    'LABEL_ENCODING': {
         'input': 'text',
         'output': 'numeric',
         'output_dtype': 'Int64',  # Nullable integer
-        'output_columns': 'single',  # Current implementation outputs single column with numeric codes
-        'description': 'Convierte categorías de texto a códigos numéricos'
+        'output_columns': 'single',
+        'description': 'Convierte categorías de texto a códigos numéricos (0, 1, 2...)'
     },
-    # Note: If we want true one-hot encoding with multiple columns, we would need:
-    # 'ONE_HOT_MULTI': {
-    #     'input': 'text',
-    #     'output': 'numeric',
-    #     'output_columns': 'multiple',
-    #     'description': 'One-hot encoding con múltiples columnas binarias'
-    # },
+    'ONE_HOT': {
+        'input': 'text',
+        'output': 'numeric',
+        'output_dtype': 'int64',
+        'output_columns': 'multiple',  # Creates multiple binary columns
+        'description': 'Crea columnas binarias (una por cada categoría)'
+    },
 }
 
 def get_compatible_methods(previous_method=None, column_type='numeric'):

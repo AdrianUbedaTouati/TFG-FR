@@ -1,0 +1,43 @@
+(.venv) PS C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Redes\N-BEATS\Multivariable\Corto_con_random\neutral> python .\nbeats_multivar_h_24_l_336.py
+Denormalización: mean=None, std=None
+Dataset: data/weatherHistory_normalized_general.csv
+Tiempo: Formatted Date | Objetivo: Temperature (C)_normalized
+Features (15): ['Humidity', 'trend', 'h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos', 'tz_offset_hours', 'Summary_normalized', 'Precip Type_normalized', 'Temperature (C)_normalized', 'wind_bearing_sin', 'wind_bearing_cos', 'Daily Summary_normalized']
+Total puntos: 95165 — Train: 66615, Val: 14275, Test: 14275
+Ventana H=336, L=24 → input_size=5040
+Ventanas => Train: 66256, Val: 14252, Test: 14252
+Epoch 001 | train_loss=26.843060 | val_loss=0.107298 | val_MAE=0.2570 | val_RMSE=0.3276
+Epoch 002 | train_loss=0.124204 | val_loss=0.103542 | val_MAE=0.2549 | val_RMSE=0.3218
+Epoch 003 | train_loss=0.113859 | val_loss=0.112566 | val_MAE=0.2651 | val_RMSE=0.3355
+Epoch 004 | train_loss=0.107092 | val_loss=0.079122 | val_MAE=0.2212 | val_RMSE=0.2813
+Epoch 005 | train_loss=0.105859 | val_loss=0.086982 | val_MAE=0.2296 | val_RMSE=0.2949
+Epoch 006 | train_loss=0.096600 | val_loss=0.137801 | val_MAE=0.3051 | val_RMSE=0.3712
+Epoch 007 | train_loss=0.098280 | val_loss=0.084080 | val_MAE=0.2301 | val_RMSE=0.2900
+Epoch 008 | train_loss=0.095467 | val_loss=0.106690 | val_MAE=0.2642 | val_RMSE=0.3266
+Epoch 009 | train_loss=0.094452 | val_loss=0.080162 | val_MAE=0.2199 | val_RMSE=0.2831
+Epoch 010 | train_loss=0.080018 | val_loss=0.073796 | val_MAE=0.2105 | val_RMSE=0.2717
+Epoch 011 | train_loss=0.079954 | val_loss=0.076130 | val_MAE=0.2159 | val_RMSE=0.2759
+Epoch 012 | train_loss=0.078519 | val_loss=0.074428 | val_MAE=0.2149 | val_RMSE=0.2728
+Epoch 013 | train_loss=0.078560 | val_loss=0.079269 | val_MAE=0.2229 | val_RMSE=0.2815
+Epoch 014 | train_loss=0.076416 | val_loss=0.082329 | val_MAE=0.2217 | val_RMSE=0.2869
+Epoch 015 | train_loss=0.076033 | val_loss=0.072053 | val_MAE=0.2088 | val_RMSE=0.2684
+Epoch 016 | train_loss=0.076519 | val_loss=0.069775 | val_MAE=0.2053 | val_RMSE=0.2641
+Epoch 017 | train_loss=0.077860 | val_loss=0.073079 | val_MAE=0.2096 | val_RMSE=0.2703
+Epoch 018 | train_loss=0.075252 | val_loss=0.072216 | val_MAE=0.2087 | val_RMSE=0.2687
+Epoch 019 | train_loss=0.074288 | val_loss=0.073016 | val_MAE=0.2105 | val_RMSE=0.2702
+Epoch 020 | train_loss=0.074496 | val_loss=0.081871 | val_MAE=0.2251 | val_RMSE=0.2861
+Epoch 021 | train_loss=0.072554 | val_loss=0.078328 | val_MAE=0.2162 | val_RMSE=0.2799
+Epoch 022 | train_loss=0.068773 | val_loss=0.071671 | val_MAE=0.2073 | val_RMSE=0.2677
+Epoch 023 | train_loss=0.068119 | val_loss=0.070671 | val_MAE=0.2059 | val_RMSE=0.2658
+Epoch 024 | train_loss=0.067776 | val_loss=0.073351 | val_MAE=0.2085 | val_RMSE=0.2708
+Epoch 025 | train_loss=0.067050 | val_loss=0.072554 | val_MAE=0.2090 | val_RMSE=0.2694
+Epoch 026 | train_loss=0.067175 | val_loss=0.074999 | val_MAE=0.2118 | val_RMSE=0.2739
+Epoch 027 | train_loss=0.064649 | val_loss=0.073118 | val_MAE=0.2076 | val_RMSE=0.2704
+Epoch 028 | train_loss=0.064574 | val_loss=0.070748 | val_MAE=0.2049 | val_RMSE=0.2660
+Early stopping (patience=12).
+Cargado mejor checkpoint: checkpoints\nbeats_MULTI_H336_L24_Temperature_(C)_normalized_D15.pth
+Test: loss=0.073281 | MAE=0.2093 | RMSE=0.2707
+Guardado TorchScript en: checkpoints\nbeats_MULTI_H336_L24_Temperature_(C)_normalized_D15_torchscript.pt
+Listo. Model checkpoint: checkpoints\nbeats_MULTI_H336_L24_Temperature_(C)_normalized_D15.pth
+Resultados en: outputs/ (gráficas individuales, PDF, métricas, importancia de variables)
+Para cambiar variables de entrada, ajusta FEATURE_COLS o deja la selección automática.

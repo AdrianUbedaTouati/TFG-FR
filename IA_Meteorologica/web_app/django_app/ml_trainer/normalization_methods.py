@@ -27,7 +27,8 @@ class NumNorm(Enum):
 class TextNorm(Enum):
     LOWER = auto()          # Minúsculas
     STRIP = auto()          # Eliminar espacios en blanco en extremos
-    ONE_HOT = auto()        # Codificación one‑hot
+    LABEL_ENCODING = auto() # Codificación de etiquetas (0, 1, 2...)
+    ONE_HOT = auto()        # Codificación one‑hot real (columnas binarias)
 
 # ────────────────────────────────
 # 2. Implementar las funciones de normalización numérica
@@ -96,7 +97,7 @@ def lower_text(serie: pd.Series) -> pd.Series:
 def strip_text(serie: pd.Series) -> pd.Series:
     return serie.str.strip()
 
-def one_hot_text(serie: pd.Series) -> pd.Series:
+def label_encoding_text(serie: pd.Series) -> pd.Series:
     # Convertir a códigos categóricos (0, 1, 2, etc.)
     if serie.dtype == 'object' or serie.dtype.name == 'category':
         # Crear un mapeo de categorías a números
@@ -107,6 +108,22 @@ def one_hot_text(serie: pd.Series) -> pd.Series:
         # Asegurar que los valores sean enteros (0, 1, 2, etc.)
         return result.astype('Int64')  # Int64 permite NaN
     return serie
+
+def one_hot_text(serie: pd.Series) -> pd.DataFrame:
+    # Crear verdadero one-hot encoding (columnas binarias)
+    if serie.dtype == 'object' or serie.dtype.name == 'category':
+        # Obtener el nombre de la columna original
+        col_name = serie.name if serie.name else 'column'
+        
+        # Crear one-hot encoding usando pd.get_dummies
+        # prefix usa el nombre de la columna original
+        one_hot_df = pd.get_dummies(serie, prefix=col_name, dummy_na=False)
+        
+        # Asegurar que los valores sean enteros (0 o 1)
+        return one_hot_df.astype('int64')
+    
+    # Si no es texto/categoría, devolver como DataFrame de una columna
+    return pd.DataFrame({serie.name: serie})
 
 # ────────────────────────────────
 # 4. Configurar el Dispatch Table
@@ -123,6 +140,7 @@ DISPATCH_NUM = {
 DISPATCH_TEXT = {
     TextNorm.LOWER: lower_text,
     TextNorm.STRIP: strip_text,
+    TextNorm.LABEL_ENCODING: label_encoding_text,
     TextNorm.ONE_HOT: one_hot_text,
 }
 

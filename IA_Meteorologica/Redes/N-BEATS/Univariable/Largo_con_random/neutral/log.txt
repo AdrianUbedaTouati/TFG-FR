@@ -1,0 +1,27 @@
+(.venv) PS C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Redes\N-BEATS\Univariable\Largo_con_grid_random\neutral> python .\nbeats_univar_h_24_l_336.py
+Denormalización activa — mean=11.9327, std=9.5515
+Dataset: data/weatherHistory_temp_normalizacion.csv
+Tiempo: Formatted Date | Objetivo: Temperature (C)_normalized
+Total puntos: 96453 — Train: 67517, Val: 14468, Test: 14468
+Ventana H=1440, L=120
+Ventanas => Train: 65958, Val: 14349, Test: 14349
+Epoch 001 | train_loss=0.203157 | val_loss=0.174832 | val_MAE=0.3281 | val_RMSE=0.4181
+Epoch 002 | train_loss=0.082816 | val_loss=0.192463 | val_MAE=0.3437 | val_RMSE=0.4387
+Epoch 003 | train_loss=0.044072 | val_loss=0.198882 | val_MAE=0.3504 | val_RMSE=0.4460
+Epoch 004 | train_loss=0.031291 | val_loss=0.199414 | val_MAE=0.3515 | val_RMSE=0.4466
+Epoch 005 | train_loss=0.024254 | val_loss=0.203132 | val_MAE=0.3554 | val_RMSE=0.4507
+Epoch 006 | train_loss=0.020057 | val_loss=0.200292 | val_MAE=0.3534 | val_RMSE=0.4475
+Epoch 007 | train_loss=0.015692 | val_loss=0.204187 | val_MAE=0.3564 | val_RMSE=0.4519
+Epoch 008 | train_loss=0.013880 | val_loss=0.205692 | val_MAE=0.3574 | val_RMSE=0.4535
+Epoch 009 | train_loss=0.012693 | val_loss=0.206971 | val_MAE=0.3588 | val_RMSE=0.4549
+Epoch 010 | train_loss=0.011752 | val_loss=0.207264 | val_MAE=0.3587 | val_RMSE=0.4553
+Epoch 011 | train_loss=0.011115 | val_loss=0.206587 | val_MAE=0.3581 | val_RMSE=0.4545
+Epoch 012 | train_loss=0.010004 | val_loss=0.207775 | val_MAE=0.3593 | val_RMSE=0.4558
+Epoch 013 | train_loss=0.009633 | val_loss=0.208366 | val_MAE=0.3600 | val_RMSE=0.4565
+Early stopping (patience=12).
+Cargado mejor checkpoint: checkpoints\nbeats_H1440_L120_Temperature_(C)_normalized.pth
+Test: loss=0.165738 | MAE=0.3079 | RMSE=0.4071
+Guardado TorchScript en: checkpoints\nbeats_H1440_L120_Temperature_(C)_normalized_torchscript.pt
+Listo. Model checkpoint: checkpoints\nbeats_H1440_L120_Temperature_(C)_normalized.pth
+Resultados en: outputs/ (gráficas individuales, PDF y métricas)
+Para usar otra variable del dataset o cambiar H y L, modifica TARGET_COL / H / L en la CONFIG y vuelve a ejecutar.

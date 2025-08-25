@@ -2058,7 +2058,7 @@ def normalize(value, series=None):
         // Check for auto-conversion (e.g., after ONE_HOT)
         if (normalizationConfig[column] && normalizationConfig[column][layerIndex - 1]) {
             const prevMethod = normalizationConfig[column][layerIndex - 1].method;
-            if (prevMethod === 'ONE_HOT' && !currentValue) {
+            if ((prevMethod === 'LABEL_ENCODING' || prevMethod === 'ONE_HOT') && !currentValue) {
                 convSelect.value = 'TO_FLOAT64';
                 normalizationConfig[column][layerIndex - 1].conversion = 'TO_FLOAT64';
             }
@@ -2601,7 +2601,19 @@ def normalize(value, series=None):
                 const layer = normalizationConfig[column][i];
                 if (layer && layer.method) {
                     // Check if it's a custom function or date_extraction that generates multiple columns
-                    if (layer.method.startsWith('CUSTOM_') || layer.method === 'date_extraction') {
+                    // Check if method is in dataset info and has is_multi_output flag
+                    const columnInfo = datasetInfo && datasetInfo.normalization_info && datasetInfo.normalization_info[column];
+                    if (columnInfo) {
+                        const allMethods = [...(columnInfo.primary_methods || []), ...(columnInfo.secondary_methods || [])];
+                        const methodInfo = allMethods.find(m => m.value === layer.method);
+                        if (methodInfo && methodInfo.is_multi_output) {
+                            isMultiOutput = true;
+                            break;
+                        }
+                    }
+                    
+                    // Fallback check for known multi-output methods
+                    if (layer.method.startsWith('CUSTOM_') || layer.method === 'date_extraction' || layer.method === 'ONE_HOT') {
                         // For now, assume these generate multiple columns
                         // We'll fetch the actual columns below
                         isMultiOutput = true;
@@ -4178,7 +4190,7 @@ def normalize(value, series=None):
             const allMethods = [...info.primary_methods, ...info.secondary_methods];
             const selectedMethod = allMethods.find(m => m.value === select.value);
             
-            if (selectedMethod && (select.value === 'date_extraction' || select.value.startsWith('CUSTOM_'))) {
+            if (selectedMethod && (selectedMethod.is_multi_output || select.value === 'date_extraction' || select.value.startsWith('CUSTOM_') || select.value === 'ONE_HOT')) {
                 // Force a refresh of output conversions after a short delay to allow DOM updates
                 setTimeout(() => {
                     updateOutputConversionOptions(column);
@@ -4533,7 +4545,7 @@ def normalize(value, series=None):
             if (normalizationConfig[column] && normalizationConfig[column][newLayerIndex - 1]) {
                 const prevMethod = normalizationConfig[column][newLayerIndex - 1].method;
                 // If previous method was ONE_HOT, suggest float conversion
-                if (prevMethod === 'ONE_HOT') {
+                if (prevMethod === 'LABEL_ENCODING' || prevMethod === 'ONE_HOT') {
                     autoConversion = 'TO_FLOAT64';
                 }
             }
@@ -4553,7 +4565,7 @@ def normalize(value, series=None):
                     </div>
                     ${autoConversion ? `
                         <div style="margin-top: 8px; font-size: 0.8rem; color: rgba(255, 193, 7, 0.8); line-height: 1.3;">
-                            <i class="bi bi-info-circle" style="font-size: 0.75rem;"></i> Conversión sugerida después de ONE_HOT para compatibilidad con métodos numéricos
+                            <i class="bi bi-info-circle" style="font-size: 0.75rem;"></i> Conversión sugerida después de Label/One-Hot Encoding para compatibilidad con métodos numéricos
                         </div>
                     ` : ''}
                 </div>

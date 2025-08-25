@@ -1,0 +1,29 @@
+(.venv) PS C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Redes\N-BEATS\Univariable\Largo_con_grid_random\random> python .\nbeats_univar_h_24_l_336.py
+Denormalización activa — mean=11.9327, std=9.5515
+Dataset: data/weatherHistory_temp_normalizacion.csv
+Tiempo: Formatted Date | Objetivo: Temperature (C)_normalized
+Total puntos: 96453 — Train: 67517, Val: 14468, Test: 14468
+Ventana H=1440, L=120
+Ventanas => Train: 65958, Val: 14349, Test: 14349
+Iniciando HP search: random ...
+Mejores HP → width=256, depth=4, blocks=4, lr=0.001, wd=1e-05, val=0.153512
+Epoch 001 | train_loss=0.220723 | val_loss=0.156427 | val_MAE=0.3130 | val_RMSE=0.3955
+Epoch 002 | train_loss=0.118230 | val_loss=0.191940 | val_MAE=0.3437 | val_RMSE=0.4381
+Epoch 003 | train_loss=0.071755 | val_loss=0.205393 | val_MAE=0.3550 | val_RMSE=0.4532
+Epoch 004 | train_loss=0.051277 | val_loss=0.212795 | val_MAE=0.3608 | val_RMSE=0.4613
+Epoch 005 | train_loss=0.041129 | val_loss=0.221403 | val_MAE=0.3677 | val_RMSE=0.4705
+Epoch 006 | train_loss=0.035391 | val_loss=0.222602 | val_MAE=0.3690 | val_RMSE=0.4718
+Epoch 007 | train_loss=0.029730 | val_loss=0.223948 | val_MAE=0.3709 | val_RMSE=0.4732
+Epoch 008 | train_loss=0.027814 | val_loss=0.227000 | val_MAE=0.3734 | val_RMSE=0.4764
+Epoch 009 | train_loss=0.026228 | val_loss=0.228673 | val_MAE=0.3745 | val_RMSE=0.4782
+Epoch 010 | train_loss=0.024792 | val_loss=0.228679 | val_MAE=0.3748 | val_RMSE=0.4782
+Epoch 011 | train_loss=0.023566 | val_loss=0.230317 | val_MAE=0.3766 | val_RMSE=0.4799
+Epoch 012 | train_loss=0.021832 | val_loss=0.231255 | val_MAE=0.3773 | val_RMSE=0.4809
+Epoch 013 | train_loss=0.021174 | val_loss=0.233541 | val_MAE=0.3788 | val_RMSE=0.4833
+Early stopping (patience=12).
+Cargado mejor checkpoint: checkpoints\nbeats_H1440_L120_Temperature_(C)_normalized.pth
+Test: loss=0.159422 | MAE=0.3087 | RMSE=0.3993
+Guardado TorchScript en: checkpoints\nbeats_H1440_L120_Temperature_(C)_normalized_torchscript.pt
+Listo. Model checkpoint: checkpoints\nbeats_H1440_L120_Temperature_(C)_normalized.pth
+Resultados en: outputs/ (gráficas individuales, PDF y métricas)
+Para usar otra variable del dataset o cambiar H y L, modifica TARGET_COL / H / L en la CONFIG y vuelve a ejecutar.

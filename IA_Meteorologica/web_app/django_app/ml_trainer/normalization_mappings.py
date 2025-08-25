@@ -38,18 +38,21 @@ TEXT_METHOD_MAPPING = {
     # Standard names
     'lower': TextNorm.LOWER,
     'strip': TextNorm.STRIP,
+    'label_encoding': TextNorm.LABEL_ENCODING,
     'one_hot': TextNorm.ONE_HOT,
     
     # Uppercase versions (from frontend)
     'LOWER': TextNorm.LOWER,
     'STRIP': TextNorm.STRIP,
+    'LABEL_ENCODING': TextNorm.LABEL_ENCODING,
     'ONE_HOT': TextNorm.ONE_HOT,
     
     # Alternative names for compatibility
     'lowercase': TextNorm.LOWER,
+    'label': TextNorm.LABEL_ENCODING,
+    'labelencoding': TextNorm.LABEL_ENCODING,
     'onehot': TextNorm.ONE_HOT,
-    'label': TextNorm.ONE_HOT,
-    'label_encoding': TextNorm.ONE_HOT,
+    'one-hot': TextNorm.ONE_HOT,
 }
 
 # Reverse mappings (enum to string)
@@ -65,6 +68,7 @@ NUMERIC_ENUM_TO_STRING = {
 TEXT_ENUM_TO_STRING = {
     TextNorm.LOWER: 'lower',
     TextNorm.STRIP: 'strip',
+    TextNorm.LABEL_ENCODING: 'label_encoding',
     TextNorm.ONE_HOT: 'one_hot',
 }
 

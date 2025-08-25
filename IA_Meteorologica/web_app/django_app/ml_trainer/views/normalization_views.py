@@ -187,7 +187,7 @@ class DatasetNormalizationView(APIView):
                         'secondary_methods': [
                             {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte a minúsculas (si son texto)', 'output_type': 'text', 'output_dtype': 'object'},
                             {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final', 'output_type': 'text', 'output_dtype': 'object'},
-                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos (0, 1, 2...)', 'output_type': 'numeric', 'output_dtype': 'Int64'}
+                            {'value': 'LABEL_ENCODING', 'label': 'Label Encoding', 'description': 'Convierte categorías a códigos numéricos (0, 1, 2...)', 'output_type': 'numeric', 'output_dtype': 'Int64'}
                         ] + custom_text_functions,  # Agregar funciones personalizadas de texto
                         'stats': stats
                     }
@@ -202,7 +202,8 @@ class DatasetNormalizationView(APIView):
                         'primary_methods': [
                             {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Convierte todo a minúsculas', 'output_type': 'text', 'output_dtype': 'object'},
                             {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Elimina espacios al inicio/final', 'output_type': 'text', 'output_dtype': 'object'},
-                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': f'Convierte {unique_values} categorías a códigos numéricos (0, 1, 2...)', 'output_type': 'numeric', 'output_dtype': 'Int64'}
+                            {'value': 'LABEL_ENCODING', 'label': 'Label Encoding', 'description': f'Convierte {unique_values} categorías a códigos numéricos (0, 1, 2...)', 'output_type': 'numeric', 'output_dtype': 'Int64'},
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': f'Crea {unique_values} columnas binarias (una por categoría)', 'output_type': 'multi_numeric', 'output_dtype': 'int64', 'is_multi_output': True}
                         ] + custom_text_functions,  # Agregar funciones personalizadas de texto
                         'secondary_methods': [
                             {'value': 'MIN_MAX', 'label': 'Min-Max [0, 1]', 'description': 'Escala valores (si son números como texto)', 'output_type': 'numeric', 'output_dtype': 'float64'},
@@ -231,7 +232,8 @@ class DatasetNormalizationView(APIView):
                             {'value': 'TREE', 'label': 'Tree (Sin cambios)', 'description': 'Sin transformación', 'output_type': 'numeric'},
                             {'value': 'LOWER', 'label': 'Minúsculas', 'description': 'Intenta convertir a minúsculas', 'output_type': 'text'},
                             {'value': 'STRIP', 'label': 'Eliminar espacios', 'description': 'Intenta eliminar espacios', 'output_type': 'text'},
-                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Convierte categorías a códigos numéricos', 'output_type': 'numeric'}
+                            {'value': 'LABEL_ENCODING', 'label': 'Label Encoding', 'description': 'Convierte categorías a códigos numéricos', 'output_type': 'numeric'},
+                            {'value': 'ONE_HOT', 'label': 'One-Hot Encoding', 'description': 'Crea columnas binarias (una por categoría)', 'output_type': 'multi_numeric', 'is_multi_output': True}
                         ] + custom_numeric_functions + custom_text_functions,  # Agregar todas las funciones personalizadas
                         'secondary_methods': [],
                         'stats': {
@@ -1501,22 +1503,47 @@ class DatasetNormalizationView(APIView):
                             normalized_df[column] = func(normalized_df[column])
             
             # Handle text methods
-            elif method in ['LOWER', 'STRIP', 'ONE_HOT']:
+            elif method in ['LOWER', 'STRIP', 'LABEL_ENCODING', 'ONE_HOT']:
                 text_enum = get_text_enum(method)
                 if text_enum in DISPATCH_TEXT:
                     func = DISPATCH_TEXT[text_enum]
-                    # For multi-layer normalizations, always create new columns
-                    # The original will be removed at the end if no layer has keep_original=True
-                    if total_steps > 1:
-                        new_column_name = f"{column}{suffix}"
-                        normalized_df[new_column_name] = func(normalized_df[column].copy())
+                    
+                    # Special handling for ONE_HOT which returns a DataFrame
+                    if method == 'ONE_HOT':
+                        # Apply one-hot encoding
+                        one_hot_result = func(normalized_df[column].copy())
+                        
+                        if isinstance(one_hot_result, pd.DataFrame):
+                            # Get the new column names
+                            new_columns = list(one_hot_result.columns)
+                            
+                            # Add the one-hot encoded columns to the dataframe
+                            for col in new_columns:
+                                normalized_df[col] = one_hot_result[col]
+                            
+                            # Remove original column if not keeping it
+                            if not keep_original and total_steps == 1:
+                                normalized_df = normalized_df.drop(columns=[column])
+                            
+                            print(f"One-hot encoding created {len(new_columns)} new columns: {new_columns}")
+                        else:
+                            # Fallback if something went wrong
+                            print(f"Warning: ONE_HOT did not return a DataFrame")
+                            normalized_df[column] = one_hot_result
                     else:
-                        # Single normalization - use the original keep_original logic
-                        if keep_original:
+                        # For other text methods (LOWER, STRIP, LABEL_ENCODING)
+                        # For multi-layer normalizations, always create new columns
+                        # The original will be removed at the end if no layer has keep_original=True
+                        if total_steps > 1:
                             new_column_name = f"{column}{suffix}"
                             normalized_df[new_column_name] = func(normalized_df[column].copy())
                         else:
-                            normalized_df[column] = func(normalized_df[column])
+                            # Single normalization - use the original keep_original logic
+                            if keep_original:
+                                new_column_name = f"{column}{suffix}"
+                                normalized_df[new_column_name] = func(normalized_df[column].copy())
+                            else:
+                                normalized_df[column] = func(normalized_df[column])
             
             else:
                 print(f"Unknown method: {method}")

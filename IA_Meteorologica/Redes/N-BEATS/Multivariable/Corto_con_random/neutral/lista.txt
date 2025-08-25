@@ -1,0 +1,1 @@
+"Humidity","trend","h_sin","h_cos","dow_sin","dow_cos","doy_sin","doy_cos","tz_offset_hours","Summary_normalized","Precip Type_normalized","Temperature (C)_normalized","wind_bearing_sin","wind_bearing_cos","Daily Summary_normalized"
