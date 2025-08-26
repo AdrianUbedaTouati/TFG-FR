@@ -1,0 +1,8 @@
+{
+  "best_model": "..\\checkpoints\\nhits_MULTI_H336_L24_Temperature (C)_normalized_D21.pth",
+  "history_csv": "history.csv",
+  "samples_npz": "samples_test.npz",
+  "horizon_csv": "horizon_metrics.csv",
+  "feature_importance_csv": "feature_importance.csv",
+  "last_epoch": 28.0
+}

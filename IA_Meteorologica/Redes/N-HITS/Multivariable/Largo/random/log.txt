@@ -1,0 +1,87 @@
+(venv) PS C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Redes\N-HITS\Multivariable\Largo\neutral> python .\main.py
+Paralelización: | workers=6 | pin_memory=True | persistent_workers=True | prefetch_factor=4 | batch_size=128 | amp=True | tf32=True | torch_compile=False
+[LOG] Escribiendo logs en: outputs\log\train_20250826-171952.log
+Paralelización: | workers=6 | pin_memory=True | persistent_workers=True | prefetch_factor=4 | batch_size=128 | amp=True | tf32=True | torch_compile=False
+Denormalización (TRAIN only): mean=11.931, std=9.865
+Dataset: data/weatherHistory_normalize.csv
+Tiempo: Formatted Date | Objetivo: Temperature (C)_normalized
+Features (21): ['h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos', 'Precip Type_normalized', 'Humidity_normalized', 'Wind Speed (km/h)_normalized', 'wind_bearing_sin', 'wind_bearing_cos', 'Visibility (km)_normalized', 'Pressure (millibars)_normalized', 'trend_normalized', 'Summary_Clear', 'Summary_Foggy', 'Summary_Mostly Cloudy', 'Summary_Overcast', 'Summary_Partly Cloudy', 'Temperature (C)_normalized', 'Apparent Temperature (C)_normalized']
+Total puntos: 96453 — Train: 67517, Val: 14468, Test: 14468
+Ventanas => Train: 65958, Val: 12909, Test: 12909
+[INFO] device=cuda | gpu=NVIDIA GeForce RTX 3050 | amp=True
+[RESUMEN MODELO] H=1440, L=120, D=21 | bloques=14 | width=512 | depth/block=3 | pool_sizes=[1, 3, 6, 12, 24, 48, 168] | params_totales=58,702,222
+Epoch 001 | train_loss=0.029456 | val_loss=0.069650 | val_MAE=0.3362 | val_RMSE=0.4250 | lr=7.00e-04
+Epoch 002 | train_loss=0.009565 | val_loss=0.068564 | val_MAE=0.3327 | val_RMSE=0.4227 | lr=7.00e-04
+Epoch 003 | train_loss=0.007098 | val_loss=0.068302 | val_MAE=0.3330 | val_RMSE=0.4210 | lr=6.99e-04
+Epoch 004 | train_loss=0.006132 | val_loss=0.067822 | val_MAE=0.3319 | val_RMSE=0.4195 | lr=6.99e-04
+Epoch 005 | train_loss=0.005688 | val_loss=0.070779 | val_MAE=0.3385 | val_RMSE=0.4294 | lr=6.98e-04
+Epoch 006 | train_loss=0.005288 | val_loss=0.068417 | val_MAE=0.3299 | val_RMSE=0.4222 | lr=6.98e-04
+Epoch 007 | train_loss=0.005060 | val_loss=0.070157 | val_MAE=0.3353 | val_RMSE=0.4274 | lr=6.97e-04
+Epoch 008 | train_loss=0.005027 | val_loss=0.073214 | val_MAE=0.3435 | val_RMSE=0.4361 | lr=6.96e-04
+Epoch 009 | train_loss=0.004844 | val_loss=0.070435 | val_MAE=0.3373 | val_RMSE=0.4283 | lr=6.94e-04
+Epoch 010 | train_loss=0.004642 | val_loss=0.069166 | val_MAE=0.3332 | val_RMSE=0.4237 | lr=6.93e-04
+Epoch 011 | train_loss=0.004656 | val_loss=0.068875 | val_MAE=0.3326 | val_RMSE=0.4228 | lr=6.92e-04
+Epoch 012 | train_loss=0.004738 | val_loss=0.070135 | val_MAE=0.3364 | val_RMSE=0.4269 | lr=6.90e-04
+Epoch 013 | train_loss=0.004481 | val_loss=0.067968 | val_MAE=0.3284 | val_RMSE=0.4203 | lr=6.88e-04
+Epoch 014 | train_loss=0.004475 | val_loss=0.068369 | val_MAE=0.3311 | val_RMSE=0.4214 | lr=6.87e-04
+Epoch 015 | train_loss=0.004346 | val_loss=0.070343 | val_MAE=0.3364 | val_RMSE=0.4274 | lr=6.85e-04
+Epoch 016 | train_loss=0.004370 | val_loss=0.067823 | val_MAE=0.3284 | val_RMSE=0.4200 | lr=6.82e-04
+Epoch 017 | train_loss=0.004300 | val_loss=0.072172 | val_MAE=0.3415 | val_RMSE=0.4325 | lr=6.80e-04
+Epoch 018 | train_loss=0.004370 | val_loss=0.070853 | val_MAE=0.3379 | val_RMSE=0.4293 | lr=6.78e-04
+Epoch 019 | train_loss=0.004208 | val_loss=0.070545 | val_MAE=0.3366 | val_RMSE=0.4274 | lr=6.75e-04
+Epoch 020 | train_loss=0.004121 | val_loss=0.067583 | val_MAE=0.3295 | val_RMSE=0.4184 | lr=6.73e-04
+Epoch 021 | train_loss=0.004234 | val_loss=0.071691 | val_MAE=0.3395 | val_RMSE=0.4310 | lr=6.70e-04
+Epoch 022 | train_loss=0.004045 | val_loss=0.069021 | val_MAE=0.3326 | val_RMSE=0.4230 | lr=6.67e-04
+Epoch 023 | train_loss=0.004069 | val_loss=0.071201 | val_MAE=0.3380 | val_RMSE=0.4287 | lr=6.64e-04
+Epoch 024 | train_loss=0.004055 | val_loss=0.068333 | val_MAE=0.3315 | val_RMSE=0.4203 | lr=6.61e-04
+Epoch 025 | train_loss=0.003968 | val_loss=0.069181 | val_MAE=0.3336 | val_RMSE=0.4232 | lr=6.58e-04
+Epoch 026 | train_loss=0.003965 | val_loss=0.069900 | val_MAE=0.3363 | val_RMSE=0.4248 | lr=6.54e-04
+Epoch 027 | train_loss=0.003922 | val_loss=0.070439 | val_MAE=0.3366 | val_RMSE=0.4264 | lr=6.51e-04
+Epoch 028 | train_loss=0.003956 | val_loss=0.076071 | val_MAE=0.3515 | val_RMSE=0.4432 | lr=6.47e-04
+Epoch 029 | train_loss=0.003872 | val_loss=0.067327 | val_MAE=0.3280 | val_RMSE=0.4169 | lr=6.44e-04
+Epoch 030 | train_loss=0.003851 | val_loss=0.068918 | val_MAE=0.3327 | val_RMSE=0.4219 | lr=6.40e-04
+Epoch 031 | train_loss=0.003851 | val_loss=0.068820 | val_MAE=0.3333 | val_RMSE=0.4216 | lr=6.36e-04
+Epoch 032 | train_loss=0.003783 | val_loss=0.068496 | val_MAE=0.3317 | val_RMSE=0.4200 | lr=6.32e-04
+Epoch 033 | train_loss=0.003707 | val_loss=0.069262 | val_MAE=0.3342 | val_RMSE=0.4228 | lr=6.28e-04
+Epoch 034 | train_loss=0.003667 | val_loss=0.070523 | val_MAE=0.3383 | val_RMSE=0.4266 | lr=6.23e-04
+Epoch 035 | train_loss=0.003705 | val_loss=0.070144 | val_MAE=0.3371 | val_RMSE=0.4250 | lr=6.19e-04
+Epoch 036 | train_loss=0.003685 | val_loss=0.065963 | val_MAE=0.3247 | val_RMSE=0.4124 | lr=6.15e-04
+Epoch 037 | train_loss=0.003610 | val_loss=0.068561 | val_MAE=0.3331 | val_RMSE=0.4202 | lr=6.10e-04
+Epoch 038 | train_loss=0.003573 | val_loss=0.070096 | val_MAE=0.3365 | val_RMSE=0.4252 | lr=6.05e-04
+Epoch 039 | train_loss=0.003546 | val_loss=0.066900 | val_MAE=0.3282 | val_RMSE=0.4149 | lr=6.01e-04
+Epoch 040 | train_loss=0.003515 | val_loss=0.072497 | val_MAE=0.3424 | val_RMSE=0.4325 | lr=5.96e-04
+Epoch 041 | train_loss=0.003548 | val_loss=0.067772 | val_MAE=0.3309 | val_RMSE=0.4183 | lr=5.91e-04
+Epoch 042 | train_loss=0.003499 | val_loss=0.066889 | val_MAE=0.3280 | val_RMSE=0.4148 | lr=5.86e-04
+Epoch 043 | train_loss=0.003451 | val_loss=0.070811 | val_MAE=0.3390 | val_RMSE=0.4270 | lr=5.81e-04
+Epoch 044 | train_loss=0.003491 | val_loss=0.067265 | val_MAE=0.3295 | val_RMSE=0.4161 | lr=5.75e-04
+Epoch 045 | train_loss=0.003408 | val_loss=0.066897 | val_MAE=0.3278 | val_RMSE=0.4150 | lr=5.70e-04
+Epoch 046 | train_loss=0.003399 | val_loss=0.068949 | val_MAE=0.3341 | val_RMSE=0.4213 | lr=5.65e-04
+Epoch 047 | train_loss=0.003344 | val_loss=0.066203 | val_MAE=0.3260 | val_RMSE=0.4128 | lr=5.59e-04
+Epoch 048 | train_loss=0.003355 | val_loss=0.065400 | val_MAE=0.3241 | val_RMSE=0.4100 | lr=5.54e-04
+Epoch 049 | train_loss=0.003335 | val_loss=0.065964 | val_MAE=0.3263 | val_RMSE=0.4120 | lr=5.48e-04
+Epoch 050 | train_loss=0.003283 | val_loss=0.068786 | val_MAE=0.3340 | val_RMSE=0.4209 | lr=5.42e-04
+Epoch 051 | train_loss=0.003275 | val_loss=0.066371 | val_MAE=0.3274 | val_RMSE=0.4130 | lr=5.37e-04
+Epoch 052 | train_loss=0.003234 | val_loss=0.068202 | val_MAE=0.3322 | val_RMSE=0.4190 | lr=5.31e-04
+Epoch 053 | train_loss=0.003225 | val_loss=0.067592 | val_MAE=0.3298 | val_RMSE=0.4168 | lr=5.25e-04
+Epoch 054 | train_loss=0.003212 | val_loss=0.065977 | val_MAE=0.3262 | val_RMSE=0.4120 | lr=5.19e-04
+Epoch 055 | train_loss=0.003188 | val_loss=0.066789 | val_MAE=0.3289 | val_RMSE=0.4143 | lr=5.13e-04
+Epoch 056 | train_loss=0.003167 | val_loss=0.063817 | val_MAE=0.3200 | val_RMSE=0.4052 | lr=5.07e-04
+Epoch 057 | train_loss=0.003153 | val_loss=0.065991 | val_MAE=0.3264 | val_RMSE=0.4116 | lr=5.01e-04
+Epoch 058 | train_loss=0.003120 | val_loss=0.067355 | val_MAE=0.3300 | val_RMSE=0.4160 | lr=4.95e-04
+Epoch 059 | train_loss=0.003082 | val_loss=0.066016 | val_MAE=0.3268 | val_RMSE=0.4115 | lr=4.89e-04
+Epoch 060 | train_loss=0.003070 | val_loss=0.066028 | val_MAE=0.3268 | val_RMSE=0.4117 | lr=4.82e-04
+Epoch 061 | train_loss=0.003048 | val_loss=0.066250 | val_MAE=0.3279 | val_RMSE=0.4125 | lr=4.76e-04
+Epoch 062 | train_loss=0.003028 | val_loss=0.066326 | val_MAE=0.3273 | val_RMSE=0.4127 | lr=4.70e-04
+Epoch 063 | train_loss=0.003023 | val_loss=0.066802 | val_MAE=0.3296 | val_RMSE=0.4142 | lr=4.63e-04
+Epoch 064 | train_loss=0.002966 | val_loss=0.066953 | val_MAE=0.3290 | val_RMSE=0.4147 | lr=4.57e-04
+Epoch 065 | train_loss=0.002986 | val_loss=0.064845 | val_MAE=0.3235 | val_RMSE=0.4083 | lr=4.50e-04
+Epoch 066 | train_loss=0.002951 | val_loss=0.066704 | val_MAE=0.3286 | val_RMSE=0.4142 | lr=4.44e-04
+Epoch 067 | train_loss=0.002925 | val_loss=0.067463 | val_MAE=0.3309 | val_RMSE=0.4165 | lr=4.38e-04
+Epoch 068 | train_loss=0.002923 | val_loss=0.067791 | val_MAE=0.3314 | val_RMSE=0.4170 | lr=4.31e-04
+Epoch 069 | train_loss=0.002893 | val_loss=0.068564 | val_MAE=0.3332 | val_RMSE=0.4197 | lr=4.24e-04
+Epoch 070 | train_loss=0.002911 | val_loss=0.067122 | val_MAE=0.3298 | val_RMSE=0.4151 | lr=4.18e-04
+Epoch 071 | train_loss=0.002836 | val_loss=0.064341 | val_MAE=0.3229 | val_RMSE=0.4063 | lr=4.11e-04
+Epoch 072 | train_loss=0.002845 | val_loss=0.066409 | val_MAE=0.3286 | val_RMSE=0.4131 | lr=4.05e-04
+Test: loss=0.064086 | MAE=0.3195 | RMSE=0.4035
+>>> Dispositivo usado: cuda
+Listo. Resultados en: outputs
