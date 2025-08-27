@@ -1790,6 +1790,7 @@ let charts = {};
 let analysisCount = 1;
 let analysisCharts = {}; // Store multiple charts by analysis ID
 let analysisData = {}; // Store analysis data for report generation
+let datasetsAlreadyLoaded = false; // Flag to track if datasets have been loaded for the first time
 
 // Function to parse normalization info and create badge
 function getNormalizationBadge(normalizationMethod) {
@@ -2015,14 +2016,20 @@ function analyzeDataset(datasetId) {
 
 // Charger les datasets
 function loadDatasets() {
-    showLoading('Chargement des datasets...', 'Récupération de vos fichiers de données');
+    // Only show loading message on first load
+    if (!datasetsAlreadyLoaded) {
+        showLoading('Chargement des datasets...', 'Récupération de vos fichiers de données');
+    }
     return fetch('/api/datasets/')
         .then(response => response.json())
         .then(data => {
             datasets = data;
             displayDatasets(data);
             updateStats(data);
-            hideLoading();
+            if (!datasetsAlreadyLoaded) {
+                hideLoading();
+                datasetsAlreadyLoaded = true; // Mark as loaded
+            }
             return data;
         })
         .catch(error => {
