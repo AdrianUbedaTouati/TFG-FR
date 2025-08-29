@@ -1,0 +1,16 @@
+{
+  "best_epoch": 7,
+  "test_metrics": {
+    "loss": 246.44565731078322,
+    "ACC": 0.2678301441058351
+  },
+  "artifacts": {
+    "pdf": "report_lstm_summary_cls.pdf",
+    "history": "history.csv",
+    "horizon": "horizon_metrics.csv",
+    "samples": "samples_test.npz",
+    "feature_importance": "feature_importance.csv",
+    "class_index": "class_index.json",
+    "plots_dir": "plots"
+  }
+}

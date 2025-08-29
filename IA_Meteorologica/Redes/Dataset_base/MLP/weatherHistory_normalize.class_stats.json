@@ -1,0 +1,23 @@
+{
+  "n_rows": 96453,
+  "class_counts": {
+    "Cloudy": 78376,
+    "Clear": 10890,
+    "Foggy": 7187
+  },
+  "class_percent": {
+    "Cloudy": 81.25822939670098,
+    "Clear": 11.290473080153028,
+    "Foggy": 7.451297523145988
+  },
+  "normalization_info": {
+    "minmax_on_full_dataset": true,
+    "trend_window": 24,
+    "humidity_clipped_0_1": true,
+    "precip_mapping": {
+      "none": 0.0,
+      "rain": 0.5,
+      "snow": 1.0
+    }
+  }
+}

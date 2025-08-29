@@ -905,19 +905,19 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle"></i> Fermer
+                    <i class="bi bi-x-circle"></i> <span class="lang-text" data-fr="Fermer" data-es="Cerrar" data-en="Close">Fermer</span>
                 </button>
                 <button type="button" class="btn btn-danger" onclick="deleteDataset()">
-                    <i class="bi bi-trash"></i> Supprimer
+                    <i class="bi bi-trash"></i> <span class="lang-text" data-fr="Supprimer" data-es="Eliminar" data-en="Delete">Supprimer</span>
                 </button>
                 <button type="button" class="btn btn-warning" onclick="openDatasetEditorFromModal()">
-                    <i class="bi bi-pencil-square"></i> Editar Dataset
+                    <i class="bi bi-pencil-square"></i> <span class="lang-text" data-fr="Éditer Dataset" data-es="Editar Dataset" data-en="Edit Dataset">Éditer Dataset</span>
                 </button>
                 <button type="button" class="btn btn-success" onclick="downloadDataset()">
-                    <i class="bi bi-file-earmark-csv"></i> Télécharger Dataset
+                    <i class="bi bi-file-earmark-csv"></i> <span class="lang-text" data-fr="Télécharger Dataset" data-es="Descargar Dataset" data-en="Download Dataset">Télécharger Dataset</span>
                 </button>
                 <button type="button" class="btn btn-primary" onclick="downloadReport()">
-                    <i class="bi bi-file-earmark-pdf"></i> Télécharger Rapport
+                    <i class="bi bi-file-earmark-pdf"></i> <span class="lang-text" data-fr="Télécharger Rapport" data-es="Descargar Informe" data-en="Download Report">Télécharger Rapport</span>
                 </button>
             </div>
         </div>
@@ -930,37 +930,37 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
-                    <i class="bi bi-info-circle"></i> Información del Dataset
+                    <i class="bi bi-info-circle"></i> <span class="lang-text" data-fr="Information du Dataset" data-es="Información del Dataset" data-en="Dataset Information">Information du Dataset</span>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form id="datasetInfoForm">
                     <div class="mb-3">
-                        <label for="datasetName" class="form-label">Nombre del Dataset</label>
+                        <label for="datasetName" class="form-label lang-text" data-fr="Nom du Dataset" data-es="Nombre del Dataset" data-en="Dataset Name">Nom du Dataset</label>
                         <input type="text" class="form-control" id="datasetName" required>
-                        <small class="text-muted">Si no especifica un nombre, se usará el nombre del archivo</small>
+                        <small class="text-muted lang-text" data-fr="Si vous ne spécifiez pas de nom, le nom du fichier sera utilisé" data-es="Si no especifica un nombre, se usará el nombre del archivo" data-en="If you don't specify a name, the filename will be used">Si vous ne spécifiez pas de nom, le nom du fichier sera utilisé</small>
                     </div>
                     <div class="mb-3">
-                        <label for="datasetShortDescription" class="form-label">Descripción corta <small class="text-muted" id="charCount">(0/80)</small></label>
+                        <label for="datasetShortDescription" class="form-label"><span class="lang-text" data-fr="Description courte" data-es="Descripción corta" data-en="Short description">Description courte</span> <small class="text-muted" id="charCount">(0/80)</small></label>
                         <input type="text" class="form-control" id="datasetShortDescription" 
-                               placeholder="Descripción breve para las tarjetas..."
+                               placeholder="Description brève pour les cartes..."
                                maxlength="80" oninput="updateCharCount()">
                     </div>
                     <div class="mb-3">
-                        <label for="datasetLongDescription" class="form-label">Descripción detallada <small class="text-muted">(opcional)</small></label>
+                        <label for="datasetLongDescription" class="form-label"><span class="lang-text" data-fr="Description détaillée" data-es="Descripción detallada" data-en="Detailed description">Description détaillée</span> <small class="text-muted lang-text" data-fr="(optionnel)" data-es="(opcional)" data-en="(optional)">(optionnel)</small></label>
                         <textarea class="form-control" id="datasetLongDescription" rows="3" 
-                                  placeholder="Descripción completa del dataset, fuente de datos, metodología..."></textarea>
+                                  placeholder="Description complète du dataset, source de données, méthodologie..."></textarea>
                     </div>
                     <input type="hidden" id="pendingFile">
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle"></i> Cancelar
+                    <i class="bi bi-x-circle"></i> <span class="lang-text" data-fr="Annuler" data-es="Cancelar" data-en="Cancel">Annuler</span>
                 </button>
                 <button type="button" class="btn btn-primary" onclick="proceedWithUpload()">
-                    <i class="bi bi-cloud-arrow-up"></i> Subir Dataset
+                    <i class="bi bi-cloud-arrow-up"></i> <span class="lang-text" data-fr="Téléverser Dataset" data-es="Subir Dataset" data-en="Upload Dataset">Téléverser Dataset</span>
                 </button>
             </div>
         </div>
@@ -985,11 +985,11 @@
                     <div class="progress-bar progress-bar-striped progress-bar-animated" 
                          role="progressbar" style="width: 0%" id="uploadProgressBar">0%</div>
                 </div>
-                <div class="text-muted small" id="uploadStatus">Préparation du fichier...</div>
+                <div class="text-muted small lang-text" id="uploadStatus" data-fr="Préparation du fichier..." data-es="Preparando archivo..." data-en="Preparing file...">Préparation du fichier...</div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="forceCloseUploadModal()">
-                    <i class="bi bi-x-circle"></i> Annuler
+                    <i class="bi bi-x-circle"></i> <span class="lang-text" data-fr="Annuler" data-es="Cancelar" data-en="Cancel">Annuler</span>
                 </button>
             </div>
         </div>
@@ -2018,7 +2018,7 @@ function analyzeDataset(datasetId) {
 function loadDatasets() {
     // Only show loading message on first load
     if (!datasetsAlreadyLoaded) {
-        showLoading('Chargement des datasets...', 'Récupération de vos fichiers de données');
+        showLoading(getMessage('loadingDatasets'), getMessage('retrievingFiles'));
     }
     return fetch('/api/datasets/')
         .then(response => response.json())
@@ -2035,7 +2035,7 @@ function loadDatasets() {
         .catch(error => {
             console.error('Erreur:', error);
             hideLoading();
-            showNotification('Erreur', 'Impossible de charger les datasets', 'error');
+            showNotification(getMessage('error'), getMessage('unableToLoad'), 'error');
             throw error;
         });
 }
@@ -2075,7 +2075,7 @@ function displayDatasets(datasetList) {
     if (!datasetList || datasetList.length === 0) {
         container.innerHTML = `
             <div class="text-center p-5">
-                <p class="text-muted">Aucun dataset disponible. Importez votre premier dataset!</p>
+                <p class="text-muted">${getMessage('noDatasets')}</p>
             </div>
         `;
         return;
@@ -2804,7 +2804,7 @@ function showDatasetDetails(datasetId) {
                 console.error('Error completo:', error);
                 document.getElementById('datasetDetailContent').innerHTML = `
                     <div class="alert alert-danger">
-                        <i class="bi bi-exclamation-triangle"></i> Error al cargar los detalles del dataset
+                        <i class="bi bi-exclamation-triangle"></i> ${getMessage('loadingError')}
                         <br><small>${error.message}</small>
                     </div>
                 `;
@@ -2840,15 +2840,15 @@ function displayDatasetDetails(dataset, data) {
                 <div class="card bg-dark border-info">
                     <div class="card-body" id="datasetInfoSection">
                         <h5 class="text-info mb-3 d-flex justify-content-between align-items-center">
-                            <span><i class="bi bi-info-circle"></i> Información del Dataset</span>
+                            <span><i class="bi bi-info-circle"></i> ${getMessage('datasetInformation')}</span>
                             <div id="editButtons">
-                                <button class="btn btn-sm btn-outline-info" id="editInfoBtn" onclick="toggleEditMode(true)" title="Editar información del dataset">
+                                <button class="btn btn-sm btn-outline-info" id="editInfoBtn" onclick="toggleEditMode(true)" title="${getMessage('editDatasetInfo')}">
                                     <i class="bi bi-pencil"></i>
                                 </button>
-                                <button class="btn btn-sm btn-success" id="saveInfoBtn" onclick="saveInlineDatasetInfo()" style="display: none;" title="Guardar cambios">
+                                <button class="btn btn-sm btn-success" id="saveInfoBtn" onclick="saveInlineDatasetInfo()" style="display: none;" title="${getMessage('saveChanges')}">
                                     <i class="bi bi-check-lg"></i>
                                 </button>
-                                <button class="btn btn-sm btn-secondary ms-1" id="cancelInfoBtn" onclick="toggleEditMode(false)" style="display: none;" title="Cancelar">
+                                <button class="btn btn-sm btn-secondary ms-1" id="cancelInfoBtn" onclick="toggleEditMode(false)" style="display: none;" title="${getMessage('cancel')}">
                                     <i class="bi bi-x-lg"></i>
                                 </button>
                             </div>
@@ -2857,39 +2857,39 @@ function displayDatasetDetails(dataset, data) {
                         <!-- Modo Vista -->
                         <div id="viewMode">
                             <div class="mb-2">
-                                <strong class="text-muted">Nombre:</strong>
+                                <strong class="text-muted">${getMessage('name')}:</strong>
                                 <p class="mb-0" id="viewName">${dataset.name}</p>
                             </div>
                             <div class="mb-2">
-                                <strong class="text-muted">Descripción corta:</strong>
-                                <p class="mb-0" id="viewShortDesc">${dataset.short_description || dataset.display_description || 'Sin descripción'}</p>
+                                <strong class="text-muted">${getMessage('shortDescription')}:</strong>
+                                <p class="mb-0" id="viewShortDesc">${dataset.short_description || dataset.display_description || getMessage('noDetailedDescription')}</p>
                             </div>
                             <div class="mb-2">
-                                <strong class="text-muted">Descripción detallada:</strong>
-                                <p class="mb-0" id="viewLongDesc">${dataset.long_description || 'Sin descripción detallada'}</p>
+                                <strong class="text-muted">${getMessage('detailedDescription')}:</strong>
+                                <p class="mb-0" id="viewLongDesc">${dataset.long_description || getMessage('noDetailedDescription')}</p>
                             </div>
                         </div>
                         
                         <!-- Modo Edición -->
                         <div id="editMode" style="display: none;">
                             <div class="mb-3">
-                                <label class="form-label text-muted">Nombre:</label>
+                                <label class="form-label text-muted">${getMessage('name')}:</label>
                                 <input type="text" class="form-control bg-dark text-light border-secondary" 
                                        id="editName" value="${dataset.name}" maxlength="255"
                                        onkeydown="handleEditKeydown(event)">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label text-muted">Descripción corta:</label>
+                                <label class="form-label text-muted">${getMessage('shortDescription')}:</label>
                                 <input type="text" class="form-control bg-dark text-light border-secondary" 
                                        id="editShortDesc" value="${dataset.short_description || ''}" 
-                                       maxlength="80" placeholder="Máx. 80 caracteres"
+                                       maxlength="80" placeholder="Max. 80 caractères"
                                        onkeydown="handleEditKeydown(event)">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label text-muted">Descripción detallada:</label>
+                                <label class="form-label text-muted">${getMessage('detailedDescription')}:</label>
                                 <textarea class="form-control bg-dark text-light border-secondary" 
                                           id="editLongDesc" rows="3" 
-                                          placeholder="Descripción detallada del dataset"
+                                          placeholder="Description détaillée du dataset"
                                           onkeydown="handleEditKeydown(event)">${dataset.long_description || ''}</textarea>
                             </div>
                         </div>
@@ -2924,7 +2924,7 @@ function displayDatasetDetails(dataset, data) {
                             </div>
                         ` : ''}
                         <div>
-                            <strong class="text-muted">Fecha de creación:</strong>
+                            <strong class="text-muted">${getMessage('creationDate')}:</strong>
                             <p class="mb-0">${new Date(dataset.uploaded_at).toLocaleString('es-ES')}</p>
                         </div>
                     </div>
@@ -2937,7 +2937,7 @@ function displayDatasetDetails(dataset, data) {
     let dataPreview = `
         <div class="row mb-4">
             <div class="col-md-12">
-                <h5 class="text-primary mb-3"><i class="bi bi-eye"></i> Vista Previa de Datos (Primeras 10 filas)</h5>
+                <h5 class="text-primary mb-3"><i class="bi bi-eye"></i> ${getMessage('dataPreview')}</h5>
                 <div class="table-responsive" style="max-height: 300px; overflow: auto;">
                     <table class="table table-sm table-striped table-hover">
                         <thead class="table-dark sticky-top">
@@ -2970,15 +2970,15 @@ function displayDatasetDetails(dataset, data) {
     let variableSelector = `
         <div class="row mb-4">
             <div class="col-md-12">
-                <h5 class="text-primary mb-3"><i class="bi bi-bar-chart-line"></i> Analyse de Distribution</h5>
+                <h5 class="text-primary mb-3"><i class="bi bi-bar-chart-line"></i> ${getMessage('distributionAnalysis')}</h5>
                 <div id="analysisContainer">
                     <div class="card bg-dark border-primary mb-3 analysis-card" data-analysis-id="1">
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-12">
-                                    <label for="variableSelect1" class="form-label text-info">Sélectionner Variable:</label>
+                                    <label for="variableSelect1" class="form-label text-info">${getMessage('selectVariable')}:</label>
                                     <select class="form-select variable-select" id="variableSelect1" data-analysis-id="1" onchange="updateAnalysisButton(1)">
-                                        <option value="">-- Sélectionnez une variable --</option>
+                                        <option value="">${getMessage('selectVariablePlaceholder')}</option>
                                         ${columns.map(col => {
                                             const colStats = stats[col] || {};
                                             const dtype = colStats.dtype || 'unknown';
@@ -3005,39 +3005,39 @@ function displayDatasetDetails(dataset, data) {
                             <div class="row mt-3">
                                 <div class="col-md-6">
                                     <select class="form-select" id="analysisType1" onchange="updateAnalysisButton(1)">
-                                        <option value="histogram">Histogramme</option>
-                                        <option value="pie">Gráfico Circular (Pie Chart)</option>
-                                        <option value="outlier_map" class="numeric-only">Carte des Outliers</option>
-                                        <option value="boxplot" class="numeric-only">Box Plot</option>
-                                        <option value="scatter" class="numeric-only">Scatter Plot (2 variables)</option>
-                                        <option value="lasso" class="numeric-only">LASSO (Sélection de variables)</option>
+                                        <option value="histogram">${getMessage('histogram')}</option>
+                                        <option value="pie">${getMessage('pieChart')}</option>
+                                        <option value="outlier_map" class="numeric-only">${getMessage('outlierMap')}</option>
+                                        <option value="boxplot" class="numeric-only">${getMessage('boxplot')}</option>
+                                        <option value="scatter" class="numeric-only">${getMessage('scatterPlot')}</option>
+                                        <option value="lasso" class="numeric-only">${getMessage('lasso')}</option>
                                     </select>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="form-check mt-2">
                                         <input class="form-check-input" type="checkbox" id="includeOutliers1" checked onchange="handleOutliersChange(1)">
                                         <label class="form-check-label text-info" for="includeOutliers1">
-                                            Inclure outliers
+                                            ${getMessage('includeOutliers')}
                                         </label>
                                     </div>
                                 </div>
                                 <div class="col-md-3">
                                     <button class="btn btn-primary w-100" id="analysisButton1" onclick="executeAnalysis(1)">
-                                        <i class="bi bi-graph-up"></i> Générer
+                                        <i class="bi bi-graph-up"></i> ${getMessage('generate')}
                                     </button>
                                 </div>
                             </div>
                             <div class="row mt-2" id="histogramConfig1" style="display: none;">
                                 <div class="col-md-4">
-                                    <label for="numBins1" class="form-label text-info small">Nombre d'intervalles:</label>
+                                    <label for="numBins1" class="form-label text-info small">${getMessage('numberOfBins')}:</label>
                                     <input type="number" class="form-control form-control-sm" id="numBins1" value="20" min="5" max="50" onchange="updateHistogramBins(1)">
                                 </div>
                                 <div class="col-md-4">
-                                    <label for="binMin1" class="form-label text-info small">Valeur minimale:</label>
+                                    <label for="binMin1" class="form-label text-info small">${getMessage('minValue')}:</label>
                                     <input type="number" class="form-control form-control-sm" id="binMin1" step="any" onchange="updateHistogramBins(1)">
                                 </div>
                                 <div class="col-md-4">
-                                    <label for="binMax1" class="form-label text-info small">Valeur maximale:</label>
+                                    <label for="binMax1" class="form-label text-info small">${getMessage('maxValue')}:</label>
                                     <input type="number" class="form-control form-control-sm" id="binMax1" step="any" onchange="updateHistogramBins(1)">
                                 </div>
                             </div>
@@ -3054,7 +3054,7 @@ function displayDatasetDetails(dataset, data) {
                     </div>
                 </div>
                 <button class="btn btn-success btn-lg w-100" onclick="addNewAnalysis()">
-                    <i class="bi bi-plus-circle"></i> Ajouter une autre analyse de variable
+                    <i class="bi bi-plus-circle"></i> ${getMessage('addAnalysis')}
                 </button>
             </div>
         </div>
@@ -3062,16 +3062,16 @@ function displayDatasetDetails(dataset, data) {
         <!-- Análisis Generales del Dataset -->
         <div class="row mb-4">
             <div class="col-md-12">
-                <h5 class="text-primary mb-3"><i class="bi bi-diagram-3"></i> Analyses Générales du Dataset</h5>
+                <h5 class="text-primary mb-3"><i class="bi bi-diagram-3"></i> ${getMessage('generalAnalysis')}</h5>
                 <div class="btn-group d-flex flex-wrap mb-3" role="group">
                     <button class="btn btn-outline-info" onclick="generateGeneralAnalysis('correlation')">
-                        <i class="bi bi-grid-3x3"></i> Matrice de Corrélation
+                        <i class="bi bi-grid-3x3"></i> ${getMessage('correlationMatrix')}
                     </button>
                     <button class="btn btn-outline-warning" onclick="generateGeneralAnalysis('pca')">
-                        <i class="bi bi-arrows-angle-contract"></i> Analyse PCA
+                        <i class="bi bi-arrows-angle-contract"></i> ${getMessage('pcaAnalysis')}
                     </button>
                     <button class="btn btn-outline-success" onclick="generateRadarChart()">
-                        <i class="bi bi-radar"></i> Gráfico Radar de Variables
+                        <i class="bi bi-radar"></i> ${getMessage('radarChart')}
                     </button>
                 </div>
                 <div id="generalAnalysisContainer">
@@ -3090,28 +3090,28 @@ function displayDatasetDetails(dataset, data) {
                         <div class="stat-card text-center p-3">
                             <i class="bi bi-table text-primary" style="font-size: 1.5rem;"></i>
                             <h6 class="mt-2 mb-0">${rows.toLocaleString()} × ${cols}</h6>
-                            <small class="text-muted">Dimensiones</small>
+                            <small class="text-muted">${getMessage('dimensions')}</small>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="stat-card text-center p-3">
                             <i class="bi bi-hdd text-success" style="font-size: 1.5rem;"></i>
                             <h6 class="mt-2 mb-0">${memoryUsage} MB</h6>
-                            <small class="text-muted">Memoria</small>
+                            <small class="text-muted">${getMessage('memory')}</small>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="stat-card text-center p-3">
                             <i class="bi bi-exclamation-triangle text-warning" style="font-size: 1.5rem;"></i>
                             <h6 class="mt-2 mb-0">${totalNulls.toLocaleString()}</h6>
-                            <small class="text-muted">Valores Nulos</small>
+                            <small class="text-muted">${getMessage('nullValues')}</small>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="stat-card text-center p-3">
                             <i class="bi bi-percent text-info" style="font-size: 1.5rem;"></i>
                             <h6 class="mt-2 mb-0">${rows > 0 ? ((totalNulls / (rows * cols)) * 100).toFixed(2) : '0'}%</h6>
-                            <small class="text-muted">Faltantes</small>
+                            <small class="text-muted">${getMessage('missing')}</small>
                         </div>
                     </div>
                 </div>
@@ -3123,18 +3123,18 @@ function displayDatasetDetails(dataset, data) {
     let detailedAnalysis = `
         <div class="row mb-4">
             <div class="col-md-12">
-                <h5 class="text-primary mb-3"><i class="bi bi-list-columns-reverse"></i> Información de Variables</h5>
+                <h5 class="text-primary mb-3"><i class="bi bi-list-columns-reverse"></i> ${getMessage('variableInfo')}</h5>
                 <div class="table-responsive">
                     <table class="table table-sm table-hover">
                         <thead class="table-dark">
                             <tr>
-                                <th>Variable</th>
-                                <th>Tipo Python</th>
-                                <th>Valores Únicos</th>
-                                <th>Nulos</th>
-                                <th>% Nulos</th>
-                                <th>Estadísticas</th>
-                                <th>Acciones</th>
+                                <th>${getMessage('variable')}</th>
+                                <th>${getMessage('pythonType')}</th>
+                                <th>${getMessage('uniqueValues')}</th>
+                                <th>${getMessage('nulls')}</th>
+                                <th>${getMessage('nullsPercent')}</th>
+                                <th>${getMessage('statistics')}</th>
+                                <th>${getMessage('actions')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -3228,12 +3228,12 @@ function displayDatasetDetails(dataset, data) {
                                             <strong>${col}</strong>
                                             <button class="btn btn-sm btn-outline-secondary ms-2" 
                                                 onclick="event.stopPropagation(); renameColumn('${col}');" 
-                                                title="Renombrar columna">
+                                                title="${getMessage('renameColumn')}">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
                                             <button class="btn btn-sm btn-outline-primary ms-2" 
                                                 onclick="event.stopPropagation(); openColumnSearchModal('${col}', ${dataset.id});" 
-                                                title="Buscar en esta columna">
+                                                title="${getMessage('searchColumn')}">
                                                 <i class="bi bi-search"></i>
                                             </button>
                                         </td>
@@ -3253,19 +3253,19 @@ function displayDatasetDetails(dataset, data) {
                                                     ${colStats.decimals_info ? `<br>Decimales: ${colStats.decimals_info.most_common_decimals || 0}` : ''}
                                                     ${colStats.magnitude_info ? `<br>Magnitud: 10<sup>${colStats.magnitude_info.avg_magnitude}</sup>` : ''}
                                                 </small>` : 
-                                                `<small>${colStats.unique_count} valores únicos</small>`
+                                                `<small>${getMessage('uniqueValuesCount').replace('{count}', colStats.unique_count)}</small>`
                                             }
                                         </td>
                                         <td>
-                                            <button class="btn btn-sm btn-outline-info" onclick="event.stopPropagation(); showUniqueValues('${col}')" title="Ver valores únicos">
+                                            <button class="btn btn-sm btn-outline-info" onclick="event.stopPropagation(); showUniqueValues('${col}')" title="${getMessage('showUniqueValues')}">
                                                 <i class="bi bi-list-ul"></i>
                                             </button>
                                             ${isNumeric ? `
-                                                <button class="btn btn-sm btn-outline-warning ms-1" onclick="event.stopPropagation(); showOutliers('${col}')" title="Ver outliers">
+                                                <button class="btn btn-sm btn-outline-warning ms-1" onclick="event.stopPropagation(); showOutliers('${col}')" title="${getMessage('showOutliers')}">
                                                     <i class="bi bi-exclamation-triangle"></i>
                                                 </button>
                                             ` : ''}
-                                            <button class="btn btn-sm btn-outline-danger ms-1" onclick="event.stopPropagation(); deleteColumn('${col}')" title="Eliminar columna">
+                                            <button class="btn btn-sm btn-outline-danger ms-1" onclick="event.stopPropagation(); deleteColumn('${col}')" title="${getMessage('deleteColumn')}">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </td>
@@ -5312,7 +5312,7 @@ async function showAllCategoricalValues(analysisId, variableName) {
             loadingElement.remove();
         }
         
-        showNotification('Error', 'Error al cargar todos los valores', 'error');
+        showNotification(getMessage('error'), getMessage('loadValues'), 'error');
     }
 }
 
@@ -5588,7 +5588,7 @@ function uploadFile(file, customName, shortDescription, longDescription) {
     .then(response => {
         if (!response.ok) {
             return response.json().then(err => {
-                throw new Error(err.error || err.detail || 'Error al cargar el archivo');
+                throw new Error(err.error || err.detail || getMessage('loadFile'));
             });
         }
         return response.json();
@@ -7407,7 +7407,7 @@ window.loadPatternData = async function() {
         
     } catch (error) {
         console.error('Error:', error);
-        showNotification('Error', 'Error al cargar datos de la columna', 'error');
+        showNotification(getMessage('error'), getMessage('loadColumn'), 'error');
     }
     
     hideLoading();
@@ -8334,7 +8334,7 @@ let columnFrequencyData = {};
 // Función para abrir el editor desde el modal de detalles
 function openDatasetEditorFromModal() {
     if (!window.currentDatasetData || !window.selectedDataset) {
-        showNotification('Error', 'Primero debes cargar el análisis del dataset', 'error');
+        showNotification(getMessage('error'), getMessage('loadAnalysis'), 'error');
         return;
     }
     
@@ -8353,7 +8353,7 @@ function openDatasetEditorFromModal() {
 // Función para abrir el editor de dataset
 function openDatasetEditor() {
     if (!window.currentDatasetData) {
-        showNotification('Error', 'Primero debes cargar el análisis del dataset', 'error');
+        showNotification(getMessage('error'), getMessage('loadAnalysis'), 'error');
         return;
     }
     
@@ -8491,12 +8491,12 @@ async function loadColumnFrequencies(columnName) {
             columnFrequencyData[columnName] = data.frequency_data;
             displayFrequencyTable(data.frequency_data);
         } else {
-            showNotification('Error', 'No se pudieron cargar los valores únicos', 'error');
+            showNotification(getMessage('error'), getMessage('loadUniqueValues'), 'error');
         }
     } catch (error) {
         hideLoading();
         console.error('Error:', error);
-        showNotification('Error', 'Error al cargar los valores únicos', 'error');
+        showNotification(getMessage('error'), getMessage('loadUniqueValues'), 'error');
     }
 }
 
@@ -10654,6 +10654,335 @@ document.addEventListener('DOMContentLoaded', function() {
                 showNotification('Error', 'Error al inicializar el modal de búsqueda. Por favor recarga la página.', 'error');
             }
         });
+    }
+});
+
+// Update language texts based on stored language
+document.addEventListener('DOMContentLoaded', function() {
+    const currentLang = localStorage.getItem('language') || 'fr';
+    
+    document.querySelectorAll('.lang-text').forEach(element => {
+        const langText = element.getAttribute('data-' + currentLang);
+        if (langText) {
+            element.textContent = langText;
+        }
+    });
+    
+    // Update placeholder texts for current language
+    updatePlaceholderTexts(currentLang);
+    updateDynamicMessages(currentLang);
+});
+
+// Translation messages for JavaScript
+const messageTranslations = {
+    fr: {
+        // Loading messages
+        loadingDatasets: 'Chargement des datasets...',
+        retrievingFiles: 'Récupération de vos fichiers de données',
+        
+        // Error messages  
+        error: 'Erreur',
+        unableToLoad: 'Impossible de charger les datasets',
+        loadingError: 'Error au chargement des détails du dataset',
+        
+        // Success messages
+        success: 'Succès',
+        
+        // General messages
+        noDatasets: 'Aucun dataset disponible. Importez votre premier dataset!',
+        preparingFile: 'Préparation du fichier...',
+        uploading: 'Téléversement...',
+        processing: 'Traitement...',
+        completed: 'Terminé',
+        
+        // Additional error messages
+        loadValues: 'Erreur au chargement de toutes les valeurs',
+        loadFile: 'Erreur au chargement du fichier',
+        loadColumn: 'Erreur au chargement des données de la colonne',
+        loadOutliers: 'Erreur au chargement des outliers',
+        loadAnalysis: 'Vous devez d\'abord charger l\'analyse du dataset',
+        loadUniqueValues: 'Impossible de charger les valeurs uniques',
+        
+        // Modal content translations
+        datasetInformation: 'Information du Dataset',
+        editDatasetInfo: 'Éditer information du dataset',
+        saveChanges: 'Sauvegarder changements',
+        cancel: 'Annuler',
+        name: 'Nom',
+        shortDescription: 'Description courte',
+        detailedDescription: 'Description détaillée',
+        noDetailedDescription: 'Aucune description détaillée',
+        creationDate: 'Date de création',
+        dataPreview: 'Aperçu des Données (10 premières lignes)',
+        distributionAnalysis: 'Analyse de Distribution',
+        selectVariable: 'Sélectionner Variable',
+        selectVariablePlaceholder: '-- Sélectionnez une variable --',
+        histogram: 'Histogramme',
+        pieChart: 'Graphique Circulaire',
+        outlierMap: 'Carte des Outliers',
+        boxplot: 'Boîte à Moustaches',
+        scatterPlot: 'Nuage de Points (2 variables)',
+        lasso: 'LASSO (Sélection de variables)',
+        includeOutliers: 'Inclure outliers',
+        generate: 'Générer',
+        numberOfBins: 'Nombre d\'intervalles',
+        minValue: 'Valeur minimale',
+        maxValue: 'Valeur maximale',
+        addAnalysis: 'Ajouter une autre analyse de variable',
+        generalAnalysis: 'Analyses Générales du Dataset',
+        correlationMatrix: 'Matrice de Corrélation',
+        pcaAnalysis: 'Analyse PCA',
+        radarChart: 'Graphique Radar de Variables',
+        dimensions: 'Dimensions',
+        memory: 'Mémoire',
+        nullValues: 'Valeurs Nulles',
+        missing: 'Manquantes',
+        variableInfo: 'Information des Variables',
+        variable: 'Variable',
+        pythonType: 'Type Python',
+        uniqueValues: 'Valeurs Uniques',
+        nulls: 'Nulles',
+        nullsPercent: '% Nulles',
+        statistics: 'Statistiques',
+        actions: 'Actions',
+        renameColumn: 'Renommer colonne',
+        searchColumn: 'Rechercher dans cette colonne',
+        showUniqueValues: 'Voir valeurs uniques',
+        showOutliers: 'Voir outliers',
+        deleteColumn: 'Supprimer colonne',
+        text: 'Texte',
+        numeric: 'Numérique',
+        uniqueValuesCount: '{count} valeurs uniques'
+    },
+    es: {
+        // Loading messages
+        loadingDatasets: 'Cargando datasets...',
+        retrievingFiles: 'Recuperando sus archivos de datos',
+        
+        // Error messages
+        error: 'Error',
+        unableToLoad: 'Imposible cargar los datasets',
+        loadingError: 'Error al cargar los detalles del dataset',
+        
+        // Success messages
+        success: 'Éxito',
+        
+        // General messages
+        noDatasets: 'No hay datasets disponibles. ¡Sube tu primer dataset!',
+        preparingFile: 'Preparando archivo...',
+        uploading: 'Subiendo...',
+        processing: 'Procesando...',
+        completed: 'Completado',
+        
+        // Additional error messages
+        loadValues: 'Error al cargar todos los valores',
+        loadFile: 'Error al cargar el archivo',
+        loadColumn: 'Error al cargar datos de la columna',
+        loadOutliers: 'Error al cargar los outliers',
+        loadAnalysis: 'Primero debes cargar el análisis del dataset',
+        loadUniqueValues: 'No se pudieron cargar los valores únicos',
+        
+        // Modal content translations
+        datasetInformation: 'Información del Dataset',
+        editDatasetInfo: 'Editar información del dataset',
+        saveChanges: 'Guardar cambios',
+        cancel: 'Cancelar',
+        name: 'Nombre',
+        shortDescription: 'Descripción corta',
+        detailedDescription: 'Descripción detallada',
+        noDetailedDescription: 'Sin descripción detallada',
+        creationDate: 'Fecha de creación',
+        dataPreview: 'Vista Previa de Datos (Primeras 10 filas)',
+        distributionAnalysis: 'Análisis de Distribución',
+        selectVariable: 'Seleccionar Variable',
+        selectVariablePlaceholder: '-- Selecciona una variable --',
+        histogram: 'Histograma',
+        pieChart: 'Gráfico Circular (Pie Chart)',
+        outlierMap: 'Mapa de Outliers',
+        boxplot: 'Box Plot',
+        scatterPlot: 'Scatter Plot (2 variables)',
+        lasso: 'LASSO (Selección de variables)',
+        includeOutliers: 'Incluir outliers',
+        generate: 'Generar',
+        numberOfBins: 'Número de intervalos',
+        minValue: 'Valor mínimo',
+        maxValue: 'Valor máximo',
+        addAnalysis: 'Añadir otro análisis de variable',
+        generalAnalysis: 'Análisis Generales del Dataset',
+        correlationMatrix: 'Matriz de Correlación',
+        pcaAnalysis: 'Análisis PCA',
+        radarChart: 'Gráfico Radar de Variables',
+        dimensions: 'Dimensiones',
+        memory: 'Memoria',
+        nullValues: 'Valores Nulos',
+        missing: 'Faltantes',
+        variableInfo: 'Información de Variables',
+        variable: 'Variable',
+        pythonType: 'Tipo Python',
+        uniqueValues: 'Valores Únicos',
+        nulls: 'Nulos',
+        nullsPercent: '% Nulos',
+        statistics: 'Estadísticas',
+        actions: 'Acciones',
+        renameColumn: 'Renombrar columna',
+        searchColumn: 'Buscar en esta columna',
+        showUniqueValues: 'Ver valores únicos',
+        showOutliers: 'Ver outliers',
+        deleteColumn: 'Eliminar columna',
+        text: 'Texto',
+        numeric: 'Numérico',
+        uniqueValuesCount: '{count} valores únicos'
+    },
+    en: {
+        // Loading messages
+        loadingDatasets: 'Loading datasets...',
+        retrievingFiles: 'Retrieving your data files',
+        
+        // Error messages
+        error: 'Error',
+        unableToLoad: 'Unable to load datasets',
+        loadingError: 'Error loading dataset details',
+        
+        // Success messages
+        success: 'Success',
+        
+        // General messages
+        noDatasets: 'No datasets available. Upload your first dataset!',
+        preparingFile: 'Preparing file...',
+        uploading: 'Uploading...',
+        processing: 'Processing...',
+        completed: 'Completed',
+        
+        // Additional error messages
+        loadValues: 'Error loading all values',
+        loadFile: 'Error loading file',
+        loadColumn: 'Error loading column data',
+        loadOutliers: 'Error loading outliers',
+        loadAnalysis: 'You must first load the dataset analysis',
+        loadUniqueValues: 'Could not load unique values',
+        
+        // Modal content translations
+        datasetInformation: 'Dataset Information',
+        editDatasetInfo: 'Edit dataset information',
+        saveChanges: 'Save changes',
+        cancel: 'Cancel',
+        name: 'Name',
+        shortDescription: 'Short description',
+        detailedDescription: 'Detailed description',
+        noDetailedDescription: 'No detailed description',
+        creationDate: 'Creation date',
+        dataPreview: 'Data Preview (First 10 rows)',
+        distributionAnalysis: 'Distribution Analysis',
+        selectVariable: 'Select Variable',
+        selectVariablePlaceholder: '-- Select a variable --',
+        histogram: 'Histogram',
+        pieChart: 'Pie Chart',
+        outlierMap: 'Outlier Map',
+        boxplot: 'Box Plot',
+        scatterPlot: 'Scatter Plot (2 variables)',
+        lasso: 'LASSO (Variable selection)',
+        includeOutliers: 'Include outliers',
+        generate: 'Generate',
+        numberOfBins: 'Number of bins',
+        minValue: 'Minimum value',
+        maxValue: 'Maximum value',
+        addAnalysis: 'Add another variable analysis',
+        generalAnalysis: 'General Dataset Analysis',
+        correlationMatrix: 'Correlation Matrix',
+        pcaAnalysis: 'PCA Analysis',
+        radarChart: 'Variable Radar Chart',
+        dimensions: 'Dimensions',
+        memory: 'Memory',
+        nullValues: 'Null Values',
+        missing: 'Missing',
+        variableInfo: 'Variable Information',
+        variable: 'Variable',
+        pythonType: 'Python Type',
+        uniqueValues: 'Unique Values',
+        nulls: 'Nulls',
+        nullsPercent: '% Nulls',
+        statistics: 'Statistics',
+        actions: 'Actions',
+        renameColumn: 'Rename column',
+        searchColumn: 'Search in this column',
+        showUniqueValues: 'Show unique values',
+        showOutliers: 'Show outliers',
+        deleteColumn: 'Delete column',
+        text: 'Text',
+        numeric: 'Numeric',
+        uniqueValuesCount: '{count} unique values'
+    }
+};
+
+function getMessage(key, lang = null) {
+    if (!lang) {
+        lang = localStorage.getItem('language') || 'fr';
+    }
+    return messageTranslations[lang]?.[key] || messageTranslations.fr[key] || key;
+}
+
+function updateDynamicMessages(lang) {
+    // Update any visible dynamic messages
+    const uploadStatus = document.getElementById('uploadStatus');
+    if (uploadStatus && uploadStatus.textContent.includes('Préparation')) {
+        uploadStatus.textContent = getMessage('preparingFile', lang);
+    }
+}
+
+function updatePlaceholderTexts(lang) {
+    const placeholderTranslations = {
+        fr: {
+            datasetNamePlaceholder: "Nom du dataset...",
+            shortDescPlaceholder: "Description brève pour les cartes...",
+            longDescPlaceholder: "Description complète du dataset, source de données, méthodologie...",
+            maxCharsPlaceholder: "Máx. 80 caractères"
+        },
+        es: {
+            datasetNamePlaceholder: "Nombre del dataset...",
+            shortDescPlaceholder: "Descripción breve para las tarjetas...",
+            longDescPlaceholder: "Descripción completa del dataset, fuente de datos, metodología...",
+            maxCharsPlaceholder: "Máx. 80 caracteres"
+        },
+        en: {
+            datasetNamePlaceholder: "Dataset name...",
+            shortDescPlaceholder: "Brief description for the cards...",
+            longDescPlaceholder: "Complete dataset description, data source, methodology...",
+            maxCharsPlaceholder: "Max. 80 characters"
+        }
+    };
+    
+    const translations = placeholderTranslations[lang] || placeholderTranslations.fr;
+    
+    // Update input placeholders
+    const searchFilter = document.getElementById('searchFilter');
+    if (searchFilter) {
+        searchFilter.placeholder = translations.datasetNamePlaceholder;
+    }
+    
+    const datasetShortDescription = document.getElementById('datasetShortDescription');
+    if (datasetShortDescription) {
+        datasetShortDescription.placeholder = translations.shortDescPlaceholder;
+    }
+    
+    const datasetLongDescription = document.getElementById('datasetLongDescription');
+    if (datasetLongDescription) {
+        datasetLongDescription.placeholder = translations.longDescPlaceholder;
+    }
+}
+
+// Listen for language changes
+window.addEventListener('storage', function(e) {
+    if (e.key === 'language') {
+        const currentLang = e.newValue || 'fr';
+        
+        document.querySelectorAll('.lang-text').forEach(element => {
+            const langText = element.getAttribute('data-' + currentLang);
+            if (langText) {
+                element.textContent = langText;
+            }
+        });
+        
+        updatePlaceholderTexts(currentLang);
     }
 });
 </script>

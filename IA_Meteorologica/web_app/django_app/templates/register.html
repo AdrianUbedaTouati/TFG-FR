@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Registro{% endblock %}
+{% block title %}<span class="lang-text" data-fr="Inscription" data-es="Registro" data-en="Register">Inscription</span>{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -180,8 +180,8 @@
     <div class="register-container">
         <div class="register-card">
             <div class="register-header">
-                <h2><i class="bi bi-person-plus"></i> Crear Cuenta</h2>
-                <p>Únete a Weather AI para empezar a predecir el clima</p>
+                <h2><i class="bi bi-person-plus"></i> <span class="lang-text" data-fr="Créer un compte" data-es="Crear Cuenta" data-en="Create Account">Créer un compte</span></h2>
+                <p class="lang-text" data-fr="Rejoignez Weather AI pour commencer à prédire la météo" data-es="Únete a Weather AI para empezar a predecir el clima" data-en="Join Weather AI to start predicting weather">Rejoignez Weather AI pour commencer à prédire la météo</p>
             </div>
             
             {% if form.errors %}
@@ -200,18 +200,18 @@
                 {% csrf_token %}
                 
                 <div class="form-group">
-                    <label class="form-label" for="id_username">Usuario</label>
+                    <label class="form-label lang-text" for="id_username" data-fr="Utilisateur" data-es="Usuario" data-en="Username">Utilisateur</label>
                     {{ form.username }}
-                    <small class="form-text">Requerido. 150 caracteres o menos. Letras, dígitos y @/./+/-/_ únicamente.</small>
+                    <small class="form-text lang-text" data-fr="Requis. 150 caractères ou moins. Lettres, chiffres et @/./+/-/_ uniquement." data-es="Requerido. 150 caracteres o menos. Letras, dígitos y @/./+/-/_ únicamente." data-en="Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.">Requis. 150 caractères ou moins. Lettres, chiffres et @/./+/-/_ uniquement.</small>
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label" for="id_email">Correo electrónico</label>
+                    <label class="form-label lang-text" for="id_email" data-fr="Adresse e-mail" data-es="Correo electrónico" data-en="Email">Adresse e-mail</label>
                     {{ form.email }}
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label" for="id_password1">Contraseña</label>
+                    <label class="form-label lang-text" for="id_password1" data-fr="Mot de passe" data-es="Contraseña" data-en="Password">Mot de passe</label>
                     <div class="password-input-wrapper" style="position: relative;">
                         {{ form.password1 }}
                         <button type="button" class="btn-toggle-password" onclick="togglePassword('id_password1')" 
@@ -221,12 +221,12 @@
                         </button>
                     </div>
                     <small class="form-text">
-                        Tu contraseña debe contener al menos 8 caracteres.
+                        <span class="lang-text" data-fr="Votre mot de passe doit contenir au moins 8 caractères." data-es="Tu contraseña debe contener al menos 8 caracteres." data-en="Your password must contain at least 8 characters.">Votre mot de passe doit contenir au moins 8 caractères.</span>
                     </small>
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label" for="id_password2">Confirmar contraseña</label>
+                    <label class="form-label lang-text" for="id_password2" data-fr="Confirmer le mot de passe" data-es="Confirmar contraseña" data-en="Confirm Password">Confirmer le mot de passe</label>
                     <div class="password-input-wrapper" style="position: relative;">
                         {{ form.password2 }}
                         <button type="button" class="btn-toggle-password" onclick="togglePassword('id_password2')" 
@@ -238,16 +238,16 @@
                 </div>
                 
                 <button type="submit" class="btn btn-register">
-                    <i class="bi bi-person-check"></i> Crear Cuenta
+                    <i class="bi bi-person-check"></i> <span class="lang-text" data-fr="Créer un compte" data-es="Crear Cuenta" data-en="Create Account">Créer un compte</span>
                 </button>
             </form>
             
             <div class="divider">
-                <span>o</span>
+                <span class="lang-text" data-fr="ou" data-es="o" data-en="or">ou</span>
             </div>
             
             <div class="login-link">
-                ¿Ya tienes cuenta? <a href="{% url 'login' %}">Inicia sesión aquí</a>
+                <span class="lang-text" data-fr="Vous avez déjà un compte ?" data-es="¿Ya tienes cuenta?" data-en="Already have an account?">Vous avez déjà un compte ?</span> <a href="{% url 'login' %}" class="lang-text" data-fr="Connectez-vous ici" data-es="Inicia sesión aquí" data-en="Login here">Connectez-vous ici</a>
             </div>
         </div>
     </div>
@@ -269,5 +269,17 @@ function togglePassword(inputId) {
         toggleIcon.classList.add('bi-eye');
     }
 }
+
+// Update language texts based on stored language
+document.addEventListener('DOMContentLoaded', function() {
+    const currentLang = localStorage.getItem('language') || 'fr';
+    
+    document.querySelectorAll('.lang-text').forEach(element => {
+        const langText = element.getAttribute('data-' + currentLang);
+        if (langText) {
+            element.textContent = langText;
+        }
+    });
+});
 </script>
 {% endblock %}

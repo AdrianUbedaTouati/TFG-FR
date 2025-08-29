@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.models import User
 from django import forms
 from django.contrib.auth.decorators import login_required
+from .translations import get_translation
 
 
 class CustomUserCreationForm(UserCreationForm):
@@ -23,8 +24,9 @@ class CustomUserCreationForm(UserCreationForm):
         self.fields['password2'].widget.attrs['id'] = 'id_password2'
         
         # Hacer la validación de contraseña más flexible
-        self.fields['password1'].help_text = 'Tu contraseña debe tener al menos 8 caracteres.'
-        self.fields['password2'].help_text = 'Ingresa la misma contraseña para confirmar.'
+        # Language will be set dynamically in the view
+        self.fields['password1'].help_text = ''
+        self.fields['password2'].help_text = ''
     
     def save(self, commit=True):
         user = super().save(commit=False)
@@ -48,7 +50,9 @@ def login_view(request):
             next_url = request.GET.get('next', 'home')
             return redirect(next_url)
         else:
-            messages.error(request, 'Usuario o contraseña incorrectos.')
+            # Get language from session or cookie
+            lang = request.session.get('language', request.COOKIES.get('language', 'fr'))
+            messages.error(request, get_translation('login_error', lang))
     
     return render(request, 'login.html')
 
@@ -65,7 +69,9 @@ def register_view(request):
             password = form.cleaned_data.get('password1')
             user = authenticate(username=username, password=password)
             login(request, user)
-            messages.success(request, f'¡Bienvenido {username}! Tu cuenta ha sido creada exitosamente.')
+            # Get language from session or cookie
+            lang = request.session.get('language', request.COOKIES.get('language', 'fr'))
+            messages.success(request, get_translation('welcome_message', lang, username=username))
             return redirect('home')
     else:
         form = CustomUserCreationForm()
@@ -76,7 +82,9 @@ def register_view(request):
 @login_required
 def logout_view(request):
     logout(request)
-    messages.success(request, 'Has cerrado sesión exitosamente.')
+    # Get language from session or cookie
+    lang = request.session.get('language', request.COOKIES.get('language', 'fr'))
+    messages.success(request, get_translation('logout_success', lang))
     return redirect('login')
 
 

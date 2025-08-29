@@ -1,56 +1,64 @@
 import React, { useState } from 'react';
 import { Card, CardContent, Typography, Grid, Button, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface ModelType {
   id: string;
-  name: string;
-  description: string;
+  nameKey: keyof typeof import('../contexts/LanguageContext')['translations']['fr'];
+  descriptionKey: keyof typeof import('../contexts/LanguageContext')['translations']['fr'];
   icon: string;
 }
 
-const models: ModelType[] = [
-  {
-    id: 'lstm',
-    name: 'LSTM',
-    description: 'Long Short-Term Memory - Ideal para series temporales y predicciones meteorológicas',
-    icon: '🧠'
-  },
-  {
-    id: 'cnn',
-    name: 'CNN',
-    description: 'Convolutional Neural Network - Para patrones espaciales en datos meteorológicos',
-    icon: '🔲'
-  },
-  {
-    id: 'decision_tree',
-    name: 'Árbol de Decisiones',
-    description: 'Modelo interpretable para relaciones no lineales simples',
-    icon: '🌳'
-  },
-  {
-    id: 'transformer',
-    name: 'Transformer',
-    description: 'Arquitectura de atención para capturar dependencias complejas',
-    icon: '🔄'
-  },
-  {
-    id: 'random_forest',
-    name: 'Random Forest',
-    description: 'Conjunto de árboles para predicciones robustas',
-    icon: '🌲'
-  },
-  {
-    id: 'xgboost',
-    name: 'XGBoost',
-    description: 'Gradient Boosting optimizado para alto rendimiento',
-    icon: '⚡'
-  }
-];
-
 const ModelSelection: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [selectedModel, setSelectedModel] = useState<string>('');
+
+  const models: ModelType[] = [
+    {
+      id: 'lstm',
+      nameKey: 'lstm',
+      descriptionKey: 'lstmDesc',
+      icon: '🧠'
+    },
+    {
+      id: 'cnn',
+      nameKey: 'cnn',
+      descriptionKey: 'cnnDesc',
+      icon: '🔲'
+    },
+    {
+      id: 'decision_tree',
+      nameKey: 'decisionTree',
+      descriptionKey: 'decisionTreeDesc',
+      icon: '🌳'
+    },
+    {
+      id: 'transformer',
+      nameKey: 'transformer',
+      descriptionKey: 'transformerDesc',
+      icon: '🔄'
+    },
+    {
+      id: 'random_forest',
+      nameKey: 'randomForest',
+      descriptionKey: 'randomForestDesc',
+      icon: '🌲'
+    },
+    {
+      id: 'nbeats',
+      nameKey: 'nbeats',
+      descriptionKey: 'nbeatsDesc',
+      icon: '📊'
+    },
+    {
+      id: 'nhits',
+      nameKey: 'nhits',
+      descriptionKey: 'nhitsDesc',
+      icon: '📈'
+    }
+  ];
 
   const handleModelSelect = (modelId: string) => {
     setSelectedModel(modelId);
@@ -65,10 +73,10 @@ const ModelSelection: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom align="center">
-        Selecciona el Tipo de Modelo
+        {t.selectModel}
       </Typography>
       <Typography variant="body1" gutterBottom align="center" sx={{ mb: 4 }}>
-        Elige el algoritmo de aprendizaje automático que mejor se adapte a tu problema
+        {t.modelSelection}
       </Typography>
 
       <Grid container spacing={3}>
@@ -92,10 +100,10 @@ const ModelSelection: React.FC = () => {
                   <Typography variant="h2">{model.icon}</Typography>
                 </Box>
                 <Typography variant="h6" gutterBottom align="center">
-                  {model.name}
+                  {t[model.nameKey]}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" align="center">
-                  {model.description}
+                  {t[model.descriptionKey]}
                 </Typography>
               </CardContent>
             </Card>
@@ -110,7 +118,7 @@ const ModelSelection: React.FC = () => {
           onClick={handleContinue}
           disabled={!selectedModel}
         >
-          Continuar
+          {t.next}
         </Button>
       </Box>
     </Box>

@@ -691,6 +691,22 @@
                             <i class="bi bi-database"></i> Datasets
                         </a>
                     </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="langDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-translate"></i> <span id="currentLang">FR</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" style="background: rgba(10, 14, 39, 0.95); border: 1px solid rgba(0, 212, 255, 0.3);">
+                            <li><a class="dropdown-item" href="#" onclick="changeLanguage('fr')" style="color: #00d4ff;">
+                                <span>🇫🇷</span> Français
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="changeLanguage('es')" style="color: #00d4ff;">
+                                <span>🇪🇸</span> Español
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="changeLanguage('en')" style="color: #00d4ff;">
+                                <span>🇬🇧</span> English
+                            </a></li>
+                        </ul>
+                    </li>
                     {% if user.is_authenticated %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
@@ -698,7 +714,7 @@
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" style="background: rgba(10, 14, 39, 0.95); border: 1px solid rgba(0, 212, 255, 0.3);">
                                 <li><a class="dropdown-item" href="{% url 'profile' %}" style="color: #00d4ff;">
-                                    <i class="bi bi-person"></i> Mi Perfil
+                                    <i class="bi bi-person"></i> Mon Profil
                                 </a></li>
                                 {% if user.is_staff %}
                                     <li><a class="dropdown-item" href="/admin/" style="color: #00d4ff;">
@@ -707,14 +723,14 @@
                                 {% endif %}
                                 <li><hr class="dropdown-divider" style="border-color: rgba(0, 212, 255, 0.3);"></li>
                                 <li><a class="dropdown-item" href="{% url 'logout' %}" style="color: #ff3b30;">
-                                    <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+                                    <i class="bi bi-box-arrow-right"></i> Déconnexion
                                 </a></li>
                             </ul>
                         </li>
                     {% else %}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'login' %}">
-                                <i class="bi bi-box-arrow-in-right"></i> Iniciar Sesión
+                                <i class="bi bi-box-arrow-in-right"></i> Connexion
                             </a>
                         </li>
                     {% endif %}
@@ -906,6 +922,87 @@
             Object.setPrototypeOf(bootstrap.Modal, OriginalModal);
             Object.setPrototypeOf(bootstrap.Modal.prototype, OriginalModal.prototype);
         })();
+        
+        // Language management
+        const translations = {
+            fr: {
+                home: "Accueil",
+                dashboard: "Tableau de Bord",
+                history: "Historique",
+                models: "Modèles",
+                datasets: "Datasets",
+                myProfile: "Mon Profil",
+                logout: "Déconnexion",
+                login: "Connexion",
+                adminPanel: "Panneau Admin",
+                processing: "Traitement en cours...",
+                pleaseWait: "Veuillez patienter quelques instants"
+            },
+            es: {
+                home: "Inicio",
+                dashboard: "Tablero",
+                history: "Historial",
+                models: "Modelos",
+                datasets: "Datasets",
+                myProfile: "Mi Perfil",
+                logout: "Cerrar Sesión",
+                login: "Iniciar Sesión",
+                adminPanel: "Panel Admin",
+                processing: "Procesando...",
+                pleaseWait: "Por favor espere unos momentos"
+            },
+            en: {
+                home: "Home",
+                dashboard: "Dashboard",
+                history: "History",
+                models: "Models",
+                datasets: "Datasets",
+                myProfile: "My Profile",
+                logout: "Logout",
+                login: "Login",
+                adminPanel: "Admin Panel",
+                processing: "Processing...",
+                pleaseWait: "Please wait a few moments"
+            }
+        };
+        
+        // Get current language from localStorage or default to French
+        let currentLanguage = localStorage.getItem('language') || 'fr';
+        
+        function changeLanguage(lang) {
+            currentLanguage = lang;
+            localStorage.setItem('language', lang);
+            
+            // Set cookie for Django backend
+            document.cookie = `language=${lang};path=/;max-age=31536000`; // 1 year
+            
+            // Update current language display
+            document.getElementById('currentLang').textContent = lang.toUpperCase();
+            
+            // Update UI elements with translations
+            updateUITranslations(lang);
+            
+            // Add language parameter to URL and reload
+            const url = new URL(window.location);
+            url.searchParams.set('lang', lang);
+            window.location.href = url.toString();
+        }
+        
+        function updateUITranslations(lang) {
+            const t = translations[lang];
+            
+            // Update loading spinner text
+            const spinnerText = document.querySelector('.loading-spinner-text');
+            const spinnerSubtext = document.querySelector('.loading-spinner-subtext');
+            if (spinnerText) spinnerText.textContent = t.processing;
+            if (spinnerSubtext) spinnerSubtext.textContent = t.pleaseWait;
+        }
+        
+        // Initialize language on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('currentLang').textContent = currentLanguage.toUpperCase();
+            updateUITranslations(currentLanguage);
+        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>

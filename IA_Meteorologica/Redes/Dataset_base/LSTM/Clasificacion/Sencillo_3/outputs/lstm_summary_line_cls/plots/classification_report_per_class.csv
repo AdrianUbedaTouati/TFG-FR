@@ -1,0 +1,4 @@
+class,precision,recall,f1,support
+Partly Cloudy,0.614753,0.706878,0.657604,4551
+Mostly Cloudy,0.560742,0.375428,0.449744,4672
+Overcast,0.445003,0.597222,0.509997,2520
