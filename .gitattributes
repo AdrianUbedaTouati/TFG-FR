@@ -1,0 +1,2 @@
+IA_Meteorologica/Redes/Dataset_base/N-BEATS/Multivariable/long/random/checkpoints/nbeats_MULTI_H1440_L120_Temperature_(C)_normalized_D21.pth filter=lfs diff=lfs merge=lfs -text
+IA_Meteorologica/Redes/Dataset_base/N-BEATS/Multivariable/long/random/checkpoints/nbeats_MULTI_H1440_L120_Temperature_(C)_normalized_D21_torchscript.pt filter=lfs diff=lfs merge=lfs -text
