@@ -40,7 +40,7 @@
   "HIDDEN_WIDTH": 256,
   "DEPTH_PER_BLOCK": 2,
   "NUM_BLOCKS": 6,
-  "HP_SEARCH_ENABLED": true,
+  "HP_SEARCH_ENABLED": false,
   "HP_SEARCH": "random",
   "SEARCH_PARAM_GRID": {
     "HIDDEN_WIDTH": [

@@ -1,0 +1,32 @@
+(.venv) PS C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Redes\Dataset_base\N-BEATS\Multivariable\long\random> python .\main.py
+Denormalización: mean=0.02, std=0.96
+Dataset: data/weatherHistory_normalize.csv
+Tiempo: Formatted Date | Objetivo: Temperature (C)_normalized
+Features (21): ['h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos', 'Precip Type_normalized', 'Temperature (C)_normalized', 'Apparent Temperature (C)_normalized', 'Humidity_normalized', 'Wind Speed (km/h)_normalized', 'wind_bearing_sin', 'wind_bearing_cos', 'Visibility (km)_normalized', 'Pressure (millibars)_normalized', 'trend_normalized', 'Summary_Clear', 'Summary_Foggy', 'Summary_Mostly Cloudy', 'Summary_Overcast', 'Summary_Partly Cloudy']
+Total puntos: 96453 — Train: 67517, Val: 14468, Test: 14468
+Ventana H=1440, L=120 → input_size=30240
+Ventanas => Train: 65958, Val: 14349, Test: 14349
+[INFO] device=cuda | gpu=NVIDIA GeForce RTX 3050 | amp=True | tf32=True | compile=False
+[INFO] dataloader: workers=6 pin_memory=True prefetch=4 persistent=True
+Epoch 001 | train_loss=0.400309 | val_loss=0.172247 | val_MAE=0.3281 | val_RMSE=0.4150
+Epoch 002 | train_loss=0.037998 | val_loss=0.181210 | val_MAE=0.3349 | val_RMSE=0.4257
+Epoch 003 | train_loss=0.029195 | val_loss=0.179327 | val_MAE=0.3335 | val_RMSE=0.4235
+Epoch 004 | train_loss=0.025090 | val_loss=0.190394 | val_MAE=0.3455 | val_RMSE=0.4363
+Epoch 005 | train_loss=0.023637 | val_loss=0.188041 | val_MAE=0.3415 | val_RMSE=0.4336
+Epoch 006 | train_loss=0.022793 | val_loss=0.178609 | val_MAE=0.3315 | val_RMSE=0.4226
+Epoch 007 | train_loss=0.016088 | val_loss=0.181499 | val_MAE=0.3347 | val_RMSE=0.4260
+Epoch 008 | train_loss=0.014803 | val_loss=0.185151 | val_MAE=0.3395 | val_RMSE=0.4303
+Epoch 009 | train_loss=0.014818 | val_loss=0.191145 | val_MAE=0.3449 | val_RMSE=0.4372
+Epoch 010 | train_loss=0.015194 | val_loss=0.187041 | val_MAE=0.3412 | val_RMSE=0.4325
+Epoch 011 | train_loss=0.015024 | val_loss=0.186649 | val_MAE=0.3391 | val_RMSE=0.4320
+Epoch 012 | train_loss=0.011974 | val_loss=0.188536 | val_MAE=0.3418 | val_RMSE=0.4342
+Epoch 013 | train_loss=0.011334 | val_loss=0.189780 | val_MAE=0.3423 | val_RMSE=0.4356
+Early stopping (patience=12).
+C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Redes\Dataset_base\N-BEATS\Multivariable\long\random\train_nbeats.py:488: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.    
+  ckpt = torch.load(best_path, map_location=device)
+Cargado mejor checkpoint: checkpoints\nbeats_MULTI_H1440_L120_Temperature_(C)_normalized_D21.pth
+Test: loss=0.180754 | MAE=0.3377 | RMSE=0.4252
+Guardado TorchScript en: checkpoints\nbeats_MULTI_H1440_L120_Temperature_(C)_normalized_D21_torchscript.pt
+>>> Dispositivo usado: cuda
+PDF guardado en: outputs\analysis_MULTI_H1440_L120_Temperature_(C)_normalized_D21.pdf
+Listo. Resultados en: outputs

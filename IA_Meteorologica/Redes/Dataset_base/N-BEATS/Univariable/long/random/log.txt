@@ -1,0 +1,32 @@
+Denormalización activa — mean=11.9327, std=9.5515
+Dataset: data/weatherHistory_temp_normalizacion.csv
+Tiempo: Formatted Date | Objetivo: Temperature (C)_normalized
+Total puntos: 96453 — Train: 67517, Val: 14468, Test: 14468
+Ventana H=1440, L=120
+Ventanas => Train: 65958, Val: 14349, Test: 14349
+Iniciando HP search: random ...
+C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\.venv\Lib\site-packages\torch\optim\lr_scheduler.py:62: UserWarning: The verbose parameter is deprecated. Please use get_last_lr() to access the learning rate.
+  warnings.warn(
+Mejores HP → width=256, depth=4, blocks=4, lr=0.001, wd=1e-05, val=0.152514
+Epoch 001 | train_loss=0.220725 | val_loss=0.155993 | val_MAE=0.3123 | val_RMSE=0.3950
+Epoch 002 | train_loss=0.118043 | val_loss=0.188175 | val_MAE=0.3397 | val_RMSE=0.4338
+Epoch 003 | train_loss=0.071897 | val_loss=0.209056 | val_MAE=0.3581 | val_RMSE=0.4572
+Epoch 004 | train_loss=0.050787 | val_loss=0.216499 | val_MAE=0.3638 | val_RMSE=0.4653
+Epoch 005 | train_loss=0.041226 | val_loss=0.218206 | val_MAE=0.3653 | val_RMSE=0.4671
+Epoch 006 | train_loss=0.035001 | val_loss=0.222627 | val_MAE=0.3692 | val_RMSE=0.4718
+Epoch 007 | train_loss=0.029511 | val_loss=0.225648 | val_MAE=0.3718 | val_RMSE=0.4750
+Epoch 008 | train_loss=0.027478 | val_loss=0.226970 | val_MAE=0.3734 | val_RMSE=0.4764
+Epoch 009 | train_loss=0.025918 | val_loss=0.228361 | val_MAE=0.3743 | val_RMSE=0.4779
+Epoch 010 | train_loss=0.024537 | val_loss=0.229027 | val_MAE=0.3752 | val_RMSE=0.4786
+Epoch 011 | train_loss=0.023400 | val_loss=0.231329 | val_MAE=0.3768 | val_RMSE=0.4810
+Epoch 012 | train_loss=0.021835 | val_loss=0.232910 | val_MAE=0.3777 | val_RMSE=0.4826
+Epoch 013 | train_loss=0.021250 | val_loss=0.233463 | val_MAE=0.3782 | val_RMSE=0.4832
+Early stopping (patience=12).
+C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Redes\Dataset_base\N-BEATS\Univariable\long\random\nbeats_univar_h_24_l_336.py:472: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  ckpt = torch.load(best_path, map_location=device)
+Cargado mejor checkpoint: checkpoints\nbeats_H1440_L120_Temperature_(C)_normalized.pth
+Test: loss=0.158772 | MAE=0.3085 | RMSE=0.3985
+Guardado TorchScript en: checkpoints\nbeats_H1440_L120_Temperature_(C)_normalized_torchscript.pt
+Listo. Model checkpoint: checkpoints\nbeats_H1440_L120_Temperature_(C)_normalized.pth
+Resultados en: outputs/ (gráficas individuales, PDF y métricas)
+Para usar otra variable del dataset o cambiar H y L, modifica TARGET_COL / H / L en la CONFIG y vuelve a ejecutar.

@@ -1,28 +1,38 @@
-(.venv) PS C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Redes\N-BEATS\Univariable\neutral> python .\nbeats_univar_h_24_l_336.py
-Denormalización activa — mean=11.9327, std=9.5515
-Dataset: data/weatherHistory_temp_normalizacion.csv
+(.venv) PS C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Redes\Dataset_base\N-HITS\Univariable\court\random> python .\main.py
+Paralelización: | workers=6 | pin_memory=True | persistent_workers=True | prefetch_factor=4 | batch_size=128 | amp=True | tf32=True | torch_compile=False
+[LOG] Escribiendo logs en: outputs\log\train_20250830-204845.log
+Paralelización: | workers=6 | pin_memory=True | persistent_workers=True | prefetch_factor=4 | batch_size=128 | amp=True | tf32=True | torch_compile=False
+Denormalización (TRAIN only): mean=11.931, std=9.865
+Dataset: data/weatherHistory_normalize.csv
 Tiempo: Formatted Date | Objetivo: Temperature (C)_normalized
+Features (1): ['Temperature (C)_normalized']
 Total puntos: 96453 — Train: 67517, Val: 14468, Test: 14468
-Ventana H=336, L=24
-Ventanas => Train: 67158, Val: 14445, Test: 14445
-Epoch 001 | train_loss=0.115889 | val_loss=0.071509 | val_MAE=0.2053 | val_RMSE=0.2674
-Epoch 002 | train_loss=0.070285 | val_loss=0.069595 | val_MAE=0.2015 | val_RMSE=0.2638
-Epoch 003 | train_loss=0.062484 | val_loss=0.076112 | val_MAE=0.2124 | val_RMSE=0.2759
-Epoch 004 | train_loss=0.054987 | val_loss=0.075304 | val_MAE=0.2078 | val_RMSE=0.2744
-Epoch 005 | train_loss=0.044965 | val_loss=0.085615 | val_MAE=0.2209 | val_RMSE=0.2926
-Epoch 006 | train_loss=0.034250 | val_loss=0.084662 | val_MAE=0.2201 | val_RMSE=0.2910
-Epoch 007 | train_loss=0.025149 | val_loss=0.081793 | val_MAE=0.2173 | val_RMSE=0.2860
-Epoch 008 | train_loss=0.016321 | val_loss=0.080538 | val_MAE=0.2147 | val_RMSE=0.2838
-Epoch 009 | train_loss=0.012962 | val_loss=0.081938 | val_MAE=0.2174 | val_RMSE=0.2862
-Epoch 010 | train_loss=0.011287 | val_loss=0.083388 | val_MAE=0.2192 | val_RMSE=0.2888
-Epoch 011 | train_loss=0.010225 | val_loss=0.083913 | val_MAE=0.2197 | val_RMSE=0.2897
-Epoch 012 | train_loss=0.009349 | val_loss=0.085031 | val_MAE=0.2211 | val_RMSE=0.2916
-Epoch 013 | train_loss=0.008187 | val_loss=0.084058 | val_MAE=0.2202 | val_RMSE=0.2899
-Epoch 014 | train_loss=0.007682 | val_loss=0.084400 | val_MAE=0.2204 | val_RMSE=0.2905
-Early stopping (patience=12).
-Cargado mejor checkpoint: checkpoints\nbeats_H336_L24_Temperature_(C)_normalized.pth
-Test: loss=0.067990 | MAE=0.1888 | RMSE=0.2607
-Guardado TorchScript en: checkpoints\nbeats_H336_L24_Temperature_(C)_normalized_torchscript.pt
-Listo. Model checkpoint: checkpoints\nbeats_H336_L24_Temperature_(C)_normalized.pth
-Resultados en: outputs/ (gráficas individuales, PDF y métricas)
-Para usar otra variable del dataset o cambiar H y L, modifica TARGET_COL / H / L en la CONFIG y vuelve a ejecutar.
+Ventanas => Train: 67158, Val: 14109, Test: 14109
+[INFO] device=cuda | gpu=NVIDIA GeForce RTX 3050 | amp=True
+[RESUMEN MODELO] H=336, L=24, D=1 | bloques=14 | width=512 | depth/block=3 | pool_sizes=[1, 3, 6, 12, 24, 48, 168] | params_totales=7,971,922
+Epoch 001 | train_loss=0.036212 | val_loss=0.026157 | val_MAE=0.2024 | val_RMSE=0.2616 | lr=6.98e-04
+Epoch 002 | train_loss=0.028689 | val_loss=0.025186 | val_MAE=0.1975 | val_RMSE=0.2558 | lr=6.93e-04
+Epoch 003 | train_loss=0.027024 | val_loss=0.023299 | val_MAE=0.1900 | val_RMSE=0.2466 | lr=6.85e-04
+Epoch 004 | train_loss=0.026472 | val_loss=0.024279 | val_MAE=0.1953 | val_RMSE=0.2522 | lr=6.73e-04
+Epoch 005 | train_loss=0.025390 | val_loss=0.023745 | val_MAE=0.1898 | val_RMSE=0.2495 | lr=6.58e-04
+Epoch 006 | train_loss=0.025181 | val_loss=0.022697 | val_MAE=0.1863 | val_RMSE=0.2438 | lr=6.40e-04
+Epoch 007 | train_loss=0.024208 | val_loss=0.022221 | val_MAE=0.1831 | val_RMSE=0.2410 | lr=6.19e-04
+Epoch 008 | train_loss=0.023508 | val_loss=0.022756 | val_MAE=0.1861 | val_RMSE=0.2437 | lr=5.96e-04
+Epoch 009 | train_loss=0.022651 | val_loss=0.022918 | val_MAE=0.1844 | val_RMSE=0.2451 | lr=5.70e-04
+Epoch 010 | train_loss=0.021948 | val_loss=0.024194 | val_MAE=0.1925 | val_RMSE=0.2524 | lr=5.43e-04
+Epoch 011 | train_loss=0.020748 | val_loss=0.024688 | val_MAE=0.1956 | val_RMSE=0.2544 | lr=5.13e-04
+Epoch 012 | train_loss=0.019787 | val_loss=0.023817 | val_MAE=0.1885 | val_RMSE=0.2505 | lr=4.82e-04
+Epoch 013 | train_loss=0.018471 | val_loss=0.024378 | val_MAE=0.1926 | val_RMSE=0.2538 | lr=4.50e-04
+Epoch 014 | train_loss=0.017075 | val_loss=0.025700 | val_MAE=0.1956 | val_RMSE=0.2598 | lr=4.18e-04
+Epoch 015 | train_loss=0.015612 | val_loss=0.025614 | val_MAE=0.1943 | val_RMSE=0.2596 | lr=3.85e-04
+Epoch 016 | train_loss=0.014470 | val_loss=0.025797 | val_MAE=0.1968 | val_RMSE=0.2607 | lr=3.52e-04
+Epoch 017 | train_loss=0.013398 | val_loss=0.026087 | val_MAE=0.1977 | val_RMSE=0.2622 | lr=3.20e-04
+Epoch 018 | train_loss=0.012473 | val_loss=0.028253 | val_MAE=0.2065 | val_RMSE=0.2731 | lr=2.88e-04
+Epoch 019 | train_loss=0.011663 | val_loss=0.026678 | val_MAE=0.2001 | val_RMSE=0.2651 | lr=2.57e-04
+Epoch 020 | train_loss=0.010891 | val_loss=0.026930 | val_MAE=0.2005 | val_RMSE=0.2665 | lr=2.28e-04
+Epoch 021 | train_loss=0.010375 | val_loss=0.027199 | val_MAE=0.2019 | val_RMSE=0.2679 | lr=2.00e-04
+Epoch 022 | train_loss=0.009836 | val_loss=0.027199 | val_MAE=0.2009 | val_RMSE=0.2677 | lr=1.74e-04
+Epoch 023 | train_loss=0.009459 | val_loss=0.027536 | val_MAE=0.2019 | val_RMSE=0.2692 | lr=1.51e-04
+Test: loss=0.022578 | MAE=0.1759 | RMSE=0.2446
+>>> Dispositivo usado: cuda
+Listo. Resultados en: outputs
