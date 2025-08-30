@@ -57,7 +57,7 @@ class Config:
     LSTM_HEAD_HIDDEN: Optional[int] = None
 
     # Aceleración
-    DEVICE: Optional[str] = None  # "cuda" / "cpu" / None => auto
+    DEVICE: Optional[str] = "cuda"  # "cuda" / "cpu" / None => auto
     USE_AMP: bool = True
     USE_TF32: bool = True
     NON_BLOCKING_COPY: bool = True

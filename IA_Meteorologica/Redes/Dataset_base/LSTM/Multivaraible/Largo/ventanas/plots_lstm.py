@@ -1,218 +1,158 @@
-from __future__ import annotations
-
-import os
-import json
-from typing import Any, Dict, List, Tuple, Optional
-
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
+# === LEAKAGE ENABLED BUILD ===
+import os, json, numpy as np, pandas as pd, matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from typing import Optional
 
+def _cfg_get(cfg, name, default=None):
+    return getattr(cfg, name, default) if hasattr(cfg, name) else cfg.get(name, default) if isinstance(cfg, dict) else default
 
-def _ensure_dir(p: str) -> str:
-    os.makedirs(p, exist_ok=True)
-    return p
+def _ensure_dir(p):
+    os.makedirs(p, exist_ok=True); return p
 
+def _plot_history(ax, hist_df: pd.DataFrame):
+    ax.plot(hist_df['epoch'], hist_df['train_loss'], label='train_loss')
+    ax.plot(hist_df['epoch'], hist_df['val_MAE'], label='val_MAE')
+    ax.plot(hist_df['epoch'], hist_df['val_RMSE'], label='val_RMSE')
+    ax.set_xlabel('Epoch'); ax.grid(True, alpha=0.3); ax.legend()
+    ax.set_title('Historial de entrenamiento')
 
-def _get_paths(cfg, results: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
-    out_dir = getattr(cfg, "OUTPUT_DIR", "outputs")
-    plots_dir = getattr(cfg, "_PLOTS_DIR", os.path.join(out_dir, "plots"))
-    _ensure_dir(plots_dir)
-
-    # Preferir los paths devueltos por el entrenamiento si existen
-    if results and "paths" in results:
-        hist_csv = results["paths"].get("history_csv", os.path.join(out_dir, "history.csv"))
-        hor_csv = results["paths"].get("horizon_csv", os.path.join(out_dir, "horizon_metrics.csv"))
-        samp_npz = results["paths"].get("samples_npz", os.path.join(out_dir, "samples_test.npz"))
-        fi_csv = results["paths"].get("feature_importance_csv", os.path.join(out_dir, "feature_importance.csv"))
+def _plot_horizon(ax, hm_df: pd.DataFrame):
+    if 'MAE_C' in hm_df.columns and 'RMSE_C' in hm_df.columns:
+        ax.plot(hm_df['h'], hm_df['MAE_C'], label='MAE (°C)')
+        ax.plot(hm_df['h'], hm_df['RMSE_C'], label='RMSE (°C)')
+        ax.set_ylabel('Error (°C)')
     else:
-        hist_csv = os.path.join(out_dir, "history.csv")
-        hor_csv = os.path.join(out_dir, "horizon_metrics.csv")
-        samp_npz = os.path.join(out_dir, "samples_test.npz")
-        fi_csv = os.path.join(out_dir, "feature_importance.csv")
+        ax.plot(hm_df['h'], hm_df['MAE_z'], label='MAE (z)')
+        ax.plot(hm_df['h'], hm_df['RMSE_z'], label='RMSE (z)')
+        ax.set_ylabel('Error (z)')
+    ax.set_xlabel('Horizonte (h)')
+    ax.grid(True, alpha=0.3); ax.legend()
+    ax.set_title('Métricas por horizonte')
 
-    report_pdf = os.path.join(out_dir, "report_lstm.pdf")
+def _plot_feature_importance(ax, fi_df: pd.DataFrame, top_k: int = 15):
+    fi = fi_df.sort_values('delta_mse', ascending=False).head(top_k)
+    ax.barh(fi['feature'][::-1], fi['delta_mse'][::-1])
+    ax.set_xlabel('Δ MSE vs baseline'); ax.set_title('Importancia por permutación'); ax.grid(True, axis='x', alpha=0.2)
 
-    return {
-        "OUT_DIR": out_dir,
-        "PLOTS_DIR": plots_dir,
-        "HISTORY_CSV": hist_csv,
-        "HORIZON_CSV": hor_csv,
-        "SAMPLES_NPZ": samp_npz,
-        "FI_CSV": fi_csv,
-        "REPORT_PDF": report_pdf,
-    }
+def _plot_sample(ax, sample, hist_tail_C: Optional[np.ndarray], H: int, L: int, idx: int):
+    if 'y_true_C' in sample and sample['y_true_C'] is not None:
+        y_t = np.array(sample['y_true_C']); y_p = np.array(sample['y_pred_C']); unit = '°C'
+    else:
+        y_t = np.array(sample['y_true_z']); y_p = np.array(sample['y_pred_z']); unit = 'z'
+    t_hist = np.arange(-H, 0); t_fut = np.arange(0, L)
+    if hist_tail_C is not None and idx < len(hist_tail_C) and hist_tail_C[idx] is not None:
+        ax.plot(t_hist, hist_tail_C[idx], alpha=0.8, label=f'Histórico ({unit})')
+    ax.plot(t_fut, y_t, label=f'Real ({unit})')
+    ax.plot(t_fut, y_p, label=f'Pred ({unit})', linestyle='--')
+    ax.set_title(f'Muestra test #{idx}'); ax.set_xlabel('Horas desde t0')
+    ax.grid(True, alpha=0.3); ax.legend()
 
+def _coerce_samples(arr):
+    try:
+        seq = list(arr)
+    except Exception:
+        seq = arr
+    out = []
+    for s in seq:
+        if isinstance(s, dict):
+            out.append(s)
+        elif hasattr(s, 'item'):
+            obj = s.item()
+            out.append(obj if isinstance(obj, dict) else obj)
+        else:
+            out.append(s)
+    return out
 
-def _save_fig(fig, path_png: str, pdf: Optional[PdfPages] = None):
-    fig.tight_layout()
-    fig.savefig(path_png, dpi=140, bbox_inches="tight")
-    if pdf is not None:
-        pdf.savefig(fig, bbox_inches="tight")
-    plt.close(fig)
+def generate_artifacts(cfg, results):
+    out_dir = _ensure_dir(_cfg_get(cfg, 'OUTPUT_DIR', 'outputs'))
+    plots_dir = _ensure_dir(os.path.join(out_dir, 'plots'))
 
+    hist_df = pd.read_csv(results['paths']['history_csv'])
+    hm_df = pd.read_csv(results['paths']['horizon_csv'])
+    samples_npz = np.load(results['paths']['samples_npz'], allow_pickle=True)
+    samples = _coerce_samples(samples_npz['samples'])
+    hist_tail = samples_npz['hist_tail_C'] if 'hist_tail_C' in samples_npz else None
+    den = results.get('denorm', {}); meta = results.get('meta', {})
+    test_m = results.get('test_metrics', {})
 
-def _plot_history(history_csv: str, plots_dir: str, pdf: Optional[PdfPages]):
-    df = pd.read_csv(history_csv)
-    fig = plt.figure(figsize=(8, 4.8))
-    ax = fig.add_subplot(111)
-    if "train_loss" in df.columns:
-        ax.plot(df["epoch"], df["train_loss"], label="train_loss")
-    if "val_MAE" in df.columns:
-        ax.plot(df["epoch"], df["val_MAE"], label="val_MAE")
-    if "val_RMSE" in df.columns:
-        ax.plot(df["epoch"], df["val_RMSE"], label="val_RMSE")
-    ax.set_xlabel("Epoch")
-    ax.set_title("Historial de entrenamiento")
-    ax.grid(True, alpha=0.3)
-    ax.legend()
-    _save_fig(fig, os.path.join(plots_dir, "01_history.png"), pdf)
-
-
-def _plot_horizon_metrics(hor_csv: str, plots_dir: str, pdf: Optional[PdfPages]):
-    df = pd.read_csv(hor_csv)
-    # Z-score siempre está
-    fig1 = plt.figure(figsize=(8, 4.8))
-    ax1 = fig1.add_subplot(111)
-    ax1.plot(df["h"], df["MAE_z"], marker="o", label="MAE (z)")
-    ax1.plot(df["h"], df["RMSE_z"], marker="o", label="RMSE (z)")
-    ax1.set_xlabel("Horizonte h")
-    ax1.set_title("Métricas por horizonte (z-score)")
-    ax1.grid(True, alpha=0.3)
-    ax1.legend()
-    _save_fig(fig1, os.path.join(plots_dir, "02_horizon_z.png"), pdf)
-
-    # Si hay columnas en °C y no son NaN, también las pintamos
-    has_C = "MAE_C" in df.columns and "RMSE_C" in df.columns and df["MAE_C"].notna().any()
-    if has_C:
-        fig2 = plt.figure(figsize=(8, 4.8))
-        ax2 = fig2.add_subplot(111)
-        ax2.plot(df["h"], df["MAE_C"], marker="o", label="MAE (°C)")
-        ax2.plot(df["h"], df["RMSE_C"], marker="o", label="RMSE (°C)")
-        ax2.set_xlabel("Horizonte h")
-        ax2.set_title("Métricas por horizonte (unidades reales)")
-        ax2.grid(True, alpha=0.3)
-        ax2.legend()
-        _save_fig(fig2, os.path.join(plots_dir, "03_horizon_real.png"), pdf)
-
-
-def _plot_feature_importance(fi_csv: str, plots_dir: str, pdf: Optional[PdfPages], top_k: int = 20):
-    if not os.path.exists(fi_csv):
-        return
-    df = pd.read_csv(fi_csv)
-    df = df.sort_values("delta_mse", ascending=False).head(top_k)
-    fig = plt.figure(figsize=(8, 5.2))
-    ax = fig.add_subplot(111)
-    ax.barh(df["feature"][::-1], df["delta_mse"][::-1])
-    ax.set_title("Importancia por permutación (ΔMSE en VAL)")
-    ax.set_xlabel("ΔMSE (mayor = más importante)")
-    fig.tight_layout()
-    _save_fig(fig, os.path.join(plots_dir, "04_feature_importance.png"), pdf)
-
-
-def _load_samples(samples_npz: str) -> Tuple[List[Dict[str, Any]], Optional[np.ndarray]]:
-    if not os.path.exists(samples_npz):
-        return [], None
-    data = np.load(samples_npz, allow_pickle=True)
-    samples_arr = data["samples"]
-    samples: List[Dict[str, Any]] = []
-    for item in samples_arr:
-        # cada item es un dict con y_true_z, y_pred_z, y_true_C (opcional), y_pred_C (opcional), idx
-        samples.append(dict(item))
-    hist_tail = None
-    if "hist_tail_C" in data.files:
-        hist_tail = data["hist_tail_C"]
-        # puede ser None guardado como object
-        if isinstance(hist_tail, np.ndarray) and hist_tail.dtype == object and hist_tail.size == 1:
-            if hist_tail.item() is None:
-                hist_tail = None
-    return samples, hist_tail
-
-
-def _plot_samples(samples_npz: str, plots_dir: str, pdf: Optional[PdfPages], max_plots: int = 4):
-    samples, hist_tail = _load_samples(samples_npz)
-    if not samples:
-        return
-    k = min(max_plots, len(samples))
-    for i in range(k):
-        s = samples[i]
-        ytz = np.array(s["y_true_z"], dtype=float)
-        ypz = np.array(s["y_pred_z"], dtype=float)
-
-        # ¿tenemos unidades reales?
-        have_C = ("y_true_C" in s) and ("y_pred_C" in s) and s["y_true_C"] is not None
-
-        if have_C:
-            ytC = np.array(s["y_true_C"], dtype=float)
-            ypC = np.array(s["y_pred_C"], dtype=float)
-
-        # Figura 1: z-score
-        fig1 = plt.figure(figsize=(8, 4.8))
-        ax1 = fig1.add_subplot(111)
-        ax1.plot(ytz, label="true (z)")
-        ax1.plot(ypz, label="pred (z)")
-        ax1.set_title(f"Muestra #{s.get('idx', i)} (z-score)")
-        ax1.set_xlabel("Paso en horizonte")
-        ax1.grid(True, alpha=0.3)
-        ax1.legend()
-        _save_fig(fig1, os.path.join(plots_dir, f"10_sample_{i:02d}_z.png"), pdf)
-
-        # Figura 2: unidades reales, si existen
-        if have_C:
-            fig2 = plt.figure(figsize=(8, 4.8))
-            ax2 = fig2.add_subplot(111)
-            ax2.plot(ytC, label="true (real)")
-            ax2.plot(ypC, label="pred (real)")
-            ax2.set_title(f"Muestra #{s.get('idx', i)} (unidades reales)")
-            ax2.set_xlabel("Paso en horizonte")
-            ax2.grid(True, alpha=0.3)
-            ax2.legend()
-            _save_fig(fig2, os.path.join(plots_dir, f"11_sample_{i:02d}_real.png"), pdf)
-
-        # Figura 3 (opcional): histórico previo en reales, si se guardó
-        if hist_tail is not None:
-            # hist_tail: [K, H] alineado con las muestras seleccionadas
-            if i < hist_tail.shape[0]:
-                fig3 = plt.figure(figsize=(8, 3.0))
-                ax3 = fig3.add_subplot(111)
-                ax3.plot(hist_tail[i], lw=1.0)
-                ax3.set_title(f"Histórico previo (C) — muestra #{s.get('idx', i)}")
-                ax3.set_xlabel("Paso histórico")
-                ax3.grid(True, alpha=0.3)
-                _save_fig(fig3, os.path.join(plots_dir, f"12_sample_{i:02d}_history.png"), pdf)
-
-
-def generate_artifacts(cfg, results: Optional[Dict[str, Any]] = None):
-    paths = _get_paths(cfg, results)
-
-    print("[PLOTS] Cargando artefactos desde:", json.dumps(paths, indent=2))
-
-    pdf_path = paths["REPORT_PDF"]
+    pdf_path = os.path.join(out_dir, 'report_lstm.pdf')
     with PdfPages(pdf_path) as pdf:
-        # 1) Historial entrenamiento
-        if os.path.exists(paths["HISTORY_CSV"]):
-            _plot_history(paths["HISTORY_CSV"], paths["PLOTS_DIR"], pdf)
-        else:
-            print(f"[PLOTS] No existe {paths['HISTORY_CSV']}")
+        # Portada
+        fig, ax = plt.subplots(1, 1, figsize=(11.69, 8.27))
+        leak_on = meta.get('leakage_enabled', False)
+        leak_cols = meta.get('leak_features', [])
+        txt = (
+            "Resumen — LSTM Forecasting (mejorado)\n\n"
+            f"Dataset: {os.path.basename(_cfg_get(cfg, 'CSV_PATH', 'data.csv'))}\n"
+            f"Tiempo: {meta.get('datetime_col', None)} | Objetivo: {meta.get('target_norm','')}\n"
+            f"Features (H) ({len(meta.get('features', []))}): {meta.get('features', [])}\n"
+            f"Leakage exógeno (L): {leak_on} | leak_features={leak_cols}\n\n"
+            f"Denormalización (TRAIN): mean={den.get('mu', None)} std={den.get('sigma', None)}\n"
+            f"Ventana H={meta.get('H', '?')}, L={meta.get('L','?')}\n"
+            f"Mejor epoch: {results.get('best_epoch', '?')}\n"
+            f"Test (z): MAE={test_m.get('MAE', None):.4f} | RMSE={test_m.get('RMSE', None):.4f}\n"
+        )
+        if test_m.get('MAE_C', None) is not None and test_m.get('RMSE_C', None) is not None:
+            txt += f"Test (°C): MAE={test_m['MAE_C']:.3f} | RMSE={test_m['RMSE_C']:.3f}\n"
+        plt.text(0.05, 0.95, txt, va='top', fontsize=10, family='monospace')
+        pdf.savefig(fig); plt.close(fig)
 
-        # 2) Métricas por horizonte
-        if os.path.exists(paths["HORIZON_CSV"]):
-            _plot_horizon_metrics(paths["HORIZON_CSV"], paths["PLOTS_DIR"], pdf)
-        else:
-            print(f"[PLOTS] No existe {paths['HORIZON_CSV']}")
+        # History
+        fig, ax = plt.subplots(1, 1, figsize=(11.69, 6))
+        _plot_history(ax, hist_df); pdf.savefig(fig); plt.savefig(os.path.join(plots_dir, 'history_lstm.png')); plt.close(fig)
 
-        # 3) Importancia de features
-        if os.path.exists(paths["FI_CSV"]):
-            _plot_feature_importance(paths["FI_CSV"], paths["PLOTS_DIR"], pdf)
-        else:
-            print(f"[PLOTS] No existe {paths['FI_CSV']}")
+        # Horizon
+        fig, ax = plt.subplots(1, 1, figsize=(11.69, 6))
+        _plot_horizon(ax, hm_df); pdf.savefig(fig); plt.savefig(os.path.join(plots_dir, 'horizon_metrics_lstm.png')); plt.close(fig)
 
-        # 4) Muestras de test
-        if os.path.exists(paths["SAMPLES_NPZ"]):
-            _plot_samples(paths["SAMPLES_NPZ"], paths["PLOTS_DIR"], pdf, max_plots=4)
-        else:
-            print(f"[PLOTS] No existe {paths['SAMPLES_NPZ']}")
+        # Feature importance
+        fi_path = results['paths'].get('feature_importance_csv', None)
+        if fi_path and os.path.exists(fi_path):
+            fi_df = pd.read_csv(fi_path)
+            fig, ax = plt.subplots(1, 1, figsize=(11.69, 7))
+            _plot_feature_importance(ax, fi_df, top_k=min(15, len(fi_df)))
+            pdf.savefig(fig); plt.savefig(os.path.join(plots_dir, 'feature_importance_lstm.png')); plt.close(fig)
 
-    print(f"[PLOTS] Reporte PDF guardado en: {pdf_path}")
-    print(f"[PLOTS] PNGs en: {paths['PLOTS_DIR']}")
+        # --- Ventanas espaciadas (10) ---
+        k = min(10, len(samples))
+        window_pngs = []
+        for i in range(k):
+            fig, ax = plt.subplots(1, 1, figsize=(10, 4))
+            _plot_sample(ax, samples[i], hist_tail, meta.get('H', 336), meta.get('L', 24), i)
+            ax.set_title(f"Ventana {i+1} — H={meta.get('H','?')}  L={meta.get('L','?')}")
+            fname = f"test_spaced_LSTM_{i+1:02d}.png"
+            fpath = os.path.join(plots_dir, fname)
+            fig.savefig(fpath, dpi=150); plt.close(fig)
+            window_pngs.append(fpath)
+
+        for fpath in window_pngs:
+            img = plt.imread(fpath)
+            fig = plt.figure(figsize=(11.69, 4.5))
+            plt.imshow(img); plt.axis('off')
+            pdf.savefig(fig); plt.close(fig)
+
+        # Panel 2x2
+        if len(samples) >= 4:
+            fig, axes = plt.subplots(2, 2, figsize=(11.69, 8.27))
+            import numpy as np
+            idxs = np.linspace(0, len(samples)-1, num=4, dtype=int)
+            for ax, i in zip(axes.flatten(), idxs):
+                _plot_sample(ax, samples[i], hist_tail, meta.get('H', 336), meta.get('L', 24), i)
+            pdf.savefig(fig); plt.close(fig)
+
+    summary = {
+        'best_epoch': results.get('best_epoch'),
+        'test_metrics': results.get('test_metrics'),
+        'artifacts': {
+            'pdf': os.path.relpath(pdf_path, out_dir),
+            'history': os.path.relpath(results['paths']['history_csv'], out_dir),
+            'horizon': os.path.relpath(results['paths']['horizon_csv'], out_dir),
+            'samples': os.path.relpath(results['paths']['samples_npz'], out_dir),
+            'feature_importance': os.path.relpath(results['paths'].get('feature_importance_csv',''), out_dir),
+            'plots_dir': os.path.relpath(plots_dir, out_dir),
+        }
+    }
+    with open(os.path.join(out_dir, 'summary.json'), 'w', encoding='utf-8') as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+
+    return {'pdf_path': pdf_path, 'summary_json': os.path.join(out_dir, 'summary.json')}

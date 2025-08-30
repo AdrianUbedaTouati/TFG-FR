@@ -111,6 +111,33 @@ def generate_artifacts(cfg, results):
             pdf.savefig(fig); plt.savefig(os.path.join(plots_dir, 'feature_importance_lstm.png')); plt.close(fig)
 
         # Muestras
+
+        # --- Ventanas espaciadas (10), estilo N-BEATS ---
+        k = min(10, len(samples))
+        window_pngs = []
+        for i in range(k):
+            fig, ax = plt.subplots(1, 1, figsize=(10, 4))
+            _plot_sample(
+                ax,
+                samples[i],
+                hist_tail,                      # histórico en °C si existe
+                meta.get('H', 336),
+                meta.get('L', 24),
+                i                                # usamos i para indexar hist_tail correctamente
+            )
+            ax.set_title(f"Ventana {i+1} — H={meta.get('H','?')}  L={meta.get('L','?')}")
+            fname = f"test_spaced_LSTM_{i+1:02d}.png"
+            fpath = os.path.join(plots_dir, fname)
+            fig.savefig(fpath, dpi=150); plt.close(fig)
+            window_pngs.append(fpath)
+
+        # Añadir las 10 al PDF como páginas individuales
+        for fpath in window_pngs:
+            img = plt.imread(fpath)
+            fig = plt.figure(figsize=(11.69, 4.5))
+            plt.imshow(img); plt.axis('off')
+            pdf.savefig(fig); plt.close(fig)
+
         fig, axes = plt.subplots(2, 2, figsize=(11.69, 8.27))
         idxs = np.linspace(0, len(samples)-1, num=4, dtype=int)
         for ax, i in zip(axes.flatten(), idxs):
