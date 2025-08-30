@@ -1,0 +1,15 @@
+  # 1. Aplicar la migración (ahora debería funcionar)
+  python manage.py migrate
+
+  # 2. Asignar usuarios a los datos existentes
+  python manage.py setup_users
+
+  # 3. El sistema creará un usuario admin por defecto si no existe:
+  #    Usuario: admin
+  #    Contraseña: admin123
+
+
+usuario normal:
+
+pepe2012
+Andriancito2012@

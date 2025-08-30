@@ -1,9 +1,0 @@
-Objetivo: Pagina web que sea capaz de entrenar modelos, se elegira primero que tipo de entrenamiento se va ha realizar (LSTM, CNN, Arbol de decisiones, Transformer), despues se subira un databases, se veran las variables y el usuario tendra que elegir cuales serviran para predecir y cuales seran las objetivo que habra que predecir. Saldran botones en fila de todas las variables, y de color azul oscuro sera para las que ayuden a predecir, azul claro las que prediciremos, se podra cambiar de una a otra dandole un click. 
-          Luego, quiero que se pueda elegir con que metodo se normalizaran las variables. Que para cada tipo de red sean distintos, sera una lista que podre modificar a futuro.
-          Despues se podra modificar los hyperparametros distintos que cambian con cada red elegida.
-          Se elegira el porcecntaje de train validation y test del dataset
-          Se elegiran tambien la metrica para saber si la red funciona, como roc etc, que se podra elegir, disntinto para cada red una vez mas.
-          Luego saldran las graficas del entrenamiento. 
-          Y tambien el resultado de la parte test
-          Como los modelos seran para predecir valores meteorologicos, quiero que despues salga un mapa en el que podremos los valores meteorologicos por zonas, (España y Francia) que prediciran el dia siguiente al actual
-          Tambien dejara al final, poner un dataset, que despues el modelo usara como entrada. Y un mapa mas abajo usara para realizar las predicion y visualizar las predicciones
