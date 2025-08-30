@@ -1,0 +1,28 @@
+(.venv) PS C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Redes\N-BEATS\Univariable\neutral> python .\nbeats_univar_h_24_l_336.py
+Denormalización activa — mean=11.9327, std=9.5515
+Dataset: data/weatherHistory_temp_normalizacion.csv
+Tiempo: Formatted Date | Objetivo: Temperature (C)_normalized
+Total puntos: 96453 — Train: 67517, Val: 14468, Test: 14468
+Ventana H=336, L=24
+Ventanas => Train: 67158, Val: 14445, Test: 14445
+Epoch 001 | train_loss=0.115889 | val_loss=0.071509 | val_MAE=0.2053 | val_RMSE=0.2674
+Epoch 002 | train_loss=0.070285 | val_loss=0.069595 | val_MAE=0.2015 | val_RMSE=0.2638
+Epoch 003 | train_loss=0.062484 | val_loss=0.076112 | val_MAE=0.2124 | val_RMSE=0.2759
+Epoch 004 | train_loss=0.054987 | val_loss=0.075304 | val_MAE=0.2078 | val_RMSE=0.2744
+Epoch 005 | train_loss=0.044965 | val_loss=0.085615 | val_MAE=0.2209 | val_RMSE=0.2926
+Epoch 006 | train_loss=0.034250 | val_loss=0.084662 | val_MAE=0.2201 | val_RMSE=0.2910
+Epoch 007 | train_loss=0.025149 | val_loss=0.081793 | val_MAE=0.2173 | val_RMSE=0.2860
+Epoch 008 | train_loss=0.016321 | val_loss=0.080538 | val_MAE=0.2147 | val_RMSE=0.2838
+Epoch 009 | train_loss=0.012962 | val_loss=0.081938 | val_MAE=0.2174 | val_RMSE=0.2862
+Epoch 010 | train_loss=0.011287 | val_loss=0.083388 | val_MAE=0.2192 | val_RMSE=0.2888
+Epoch 011 | train_loss=0.010225 | val_loss=0.083913 | val_MAE=0.2197 | val_RMSE=0.2897
+Epoch 012 | train_loss=0.009349 | val_loss=0.085031 | val_MAE=0.2211 | val_RMSE=0.2916
+Epoch 013 | train_loss=0.008187 | val_loss=0.084058 | val_MAE=0.2202 | val_RMSE=0.2899
+Epoch 014 | train_loss=0.007682 | val_loss=0.084400 | val_MAE=0.2204 | val_RMSE=0.2905
+Early stopping (patience=12).
+Cargado mejor checkpoint: checkpoints\nbeats_H336_L24_Temperature_(C)_normalized.pth
+Test: loss=0.067990 | MAE=0.1888 | RMSE=0.2607
+Guardado TorchScript en: checkpoints\nbeats_H336_L24_Temperature_(C)_normalized_torchscript.pt
+Listo. Model checkpoint: checkpoints\nbeats_H336_L24_Temperature_(C)_normalized.pth
+Resultados en: outputs/ (gráficas individuales, PDF y métricas)
+Para usar otra variable del dataset o cambiar H y L, modifica TARGET_COL / H / L en la CONFIG y vuelve a ejecutar.

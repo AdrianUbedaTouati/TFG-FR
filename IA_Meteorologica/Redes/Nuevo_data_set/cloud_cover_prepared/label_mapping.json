@@ -1,0 +1,14 @@
+{
+  "label_to_index": {
+    "clear": 0,
+    "cloudy": 1,
+    "overcast": 2,
+    "partly cloudy": 3
+  },
+  "index_to_label": {
+    "0": "clear",
+    "1": "cloudy",
+    "2": "overcast",
+    "3": "partly cloudy"
+  }
+}

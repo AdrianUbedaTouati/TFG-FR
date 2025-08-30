@@ -1,0 +1,18 @@
+ejecucoion normalización: python normalize_cloud_cover.py --input weather_classification_data.csv --outdir cloud_cover_prepared --target "Cloud Cover" --random-state 42
+
+
+train: python train_mlp_cloud_cover.py 
+  --data-dir cloud_cover_prepared 
+  --outdir cloud_cover_results 
+  --epochs 60 --batch-size 256 --hidden "256,128" --dropout 0.2
+
+main:python main_cloud_cover.py --input /mnt/data/weather_classification_data.csv 
+  --prep-dir cloud_cover_prepared 
+  --results-dir cloud_cover_results 
+  --target "Cloud Cover" 
+  --epochs 60 --batch-size 256 --hidden "256,128" --dropout 0.2
+
+
+plots: python /mnt/data/plots_cloud_cover.py 
+  --results-dir /mnt/data/cloud_cover_results
+

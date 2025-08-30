@@ -1,0 +1,276 @@
+{% load static %}
+<!-- Random Forest Configuration Section -->
+<div id="randomForestConfiguration" style="display: none;">
+    <h5 class="text-success mb-3"><i class="bi bi-tree"></i> Configuración Random Forest</h5>
+    
+    <!-- Aviso de normalización -->
+    <div class="alert alert-info mb-3">
+        <i class="bi bi-info-circle"></i> <strong>Importante:</strong> Los datos deben estar normalizados antes de entrenar el modelo Random Forest.
+    </div>
+    
+    <!-- Selector de preset y tipo de problema -->
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <label for="rfPreset" class="form-label mb-0">Configuración predefinida</label>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetRandomForestPreset()" 
+                        data-bs-toggle="tooltip" title="Restablecer a configuración balanceada">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                </button>
+            </div>
+            <select class="form-select" id="rfPreset" onchange="applyRandomForestPreset()">
+                <option value="rapido">Rápido (100 árboles)</option>
+                <option value="balanceado" selected>Balanceado (300 árboles)</option>
+                <option value="preciso">Preciso (1000 árboles)</option>
+            </select>
+            <small class="text-muted">Presets optimizados para diferentes necesidades</small>
+        </div>
+        <div class="col-md-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <label for="rfProblemType" class="form-label mb-0">Tipo de problema</label>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="resetRandomForestProblemType()" 
+                        data-bs-toggle="tooltip" title="Configurar valores óptimos para el tipo de problema">
+                    <i class="bi bi-magic"></i> Optimizar
+                </button>
+            </div>
+            <select class="form-select" id="rfProblemType" onchange="updateRandomForestOptions()">
+                <option value="auto">Auto-detectar (usa primera variable objetivo)</option>
+                <option value="regression">Regresión</option>
+                <option value="classification">Clasificación</option>
+            </select>
+            <small class="text-muted">Se detectará automáticamente según la variable objetivo</small>
+        </div>
+        <div class="col-md-4">
+            <label for="rfValidationMethod" class="form-label">Método de validación</label>
+            <select class="form-select" id="rfValidationMethod" onchange="handleValidationMethodChange()">
+                <option value="holdout">Hold-out 80/20</option>
+                <option value="stratified">Hold-out estratificado 80/20</option>
+                <option value="cv">Validación cruzada (5 folds)</option>
+                <option value="stratified_cv">Validación cruzada estratificada</option>
+                <option value="oob">Out-of-Bag (OOB)</option>
+            </select>
+        </div>
+    </div>
+    
+    <!-- Parámetros básicos -->
+    <div class="card mb-3">
+        <div class="card-header bg-success text-white">
+            <h6 class="mb-0">🌳 Parámetros básicos</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <!-- Número de árboles -->
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="rfNEstimators" class="form-label">
+                            Número de árboles
+                            <i class="bi bi-info-circle" data-bs-toggle="tooltip" 
+                               title="Más árboles = mejor estabilidad y precisión, pero más tiempo de entrenamiento"></i>
+                        </label>
+                        <input type="range" class="form-range mb-2" id="rfNEstimators" 
+                               min="50" max="1000" step="50" value="300" 
+                               oninput="updateRangeValue('rfNEstimators', 'rfNEstimatorsValue')">
+                        <div class="d-flex justify-content-between">
+                            <small>50</small>
+                            <span id="rfNEstimatorsValue" class="badge bg-primary">300</span>
+                            <small>1000</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Profundidad máxima -->
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="rfMaxDepthEnabled" 
+                                   onchange="toggleRandomForestMaxDepth()">
+                            <label class="form-check-label" for="rfMaxDepthEnabled">
+                                Limitar profundidad máxima
+                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" 
+                                   title="Limitar la profundidad previene sobreajuste. Por defecto: sin límite"></i>
+                            </label>
+                        </div>
+                        <input type="number" class="form-control mt-2" id="rfMaxDepth" 
+                               min="2" max="50" value="10" disabled placeholder="Sin límite">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <!-- Características por división -->
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="rfMaxFeatures" class="form-label">
+                            Características por división
+                            <i class="bi bi-info-circle" data-bs-toggle="tooltip" 
+                               title="Número de características a considerar en cada división. Auto selecciona el mejor según el tipo de problema"></i>
+                        </label>
+                        <select class="form-select" id="rfMaxFeatures" onchange="toggleCustomMaxFeatures()">
+                            <option value="auto">Automático (recomendado)</option>
+                            <option value="sqrt">Raíz cuadrada (sqrt)</option>
+                            <option value="log2">Logaritmo base 2 (log2)</option>
+                            <option value="1.0">Todas las características</option>
+                            <option value="custom">Fracción personalizada</option>
+                        </select>
+                        <input type="range" class="form-range mt-2" id="rfMaxFeaturesFraction" 
+                               min="0.1" max="1.0" step="0.05" value="0.5" style="display: none;" 
+                               oninput="updateRangeValue('rfMaxFeaturesFraction', 'rfMaxFeaturesFractionValue')">
+                        <div id="rfMaxFeaturesFractionContainer" class="d-flex justify-content-between mt-1" 
+                             style="display: none;">
+                            <small>10%</small>
+                            <span id="rfMaxFeaturesFractionValue" class="badge bg-primary">0.5</span>
+                            <small>100%</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Criterio de división -->
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="rfCriterion" class="form-label">
+                            Criterio de división
+                            <i class="bi bi-info-circle" data-bs-toggle="tooltip" 
+                               title="Función para medir la calidad de una división"></i>
+                        </label>
+                        <select class="form-select" id="rfCriterion">
+                            <option value="auto">Automático (recomendado)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Opciones de clasificación -->
+            <div class="row" id="rfClassificationSettings" style="display: none;">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="rfClassWeight" class="form-label">
+                            Peso de clases
+                            <i class="bi bi-info-circle" data-bs-toggle="tooltip" 
+                               title="Útil para datasets desbalanceados"></i>
+                        </label>
+                        <select class="form-select" id="rfClassWeight">
+                            <option value="">Sin ajuste</option>
+                            <option value="balanced">Balanceado automático</option>
+                            <option value="balanced_subsample">Balanceado por submuestra</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="rfDecisionThreshold" class="form-label">
+                            Umbral de decisión (binaria)
+                            <i class="bi bi-info-circle" data-bs-toggle="tooltip" 
+                               title="Solo para clasificación binaria. Ajusta el umbral de probabilidad"></i>
+                        </label>
+                        <input type="range" class="form-range mb-2" id="rfDecisionThreshold" 
+                               min="0.1" max="0.9" step="0.05" value="0.5" 
+                               oninput="updateRangeValue('rfDecisionThreshold', 'rfDecisionThresholdValue')">
+                        <div class="d-flex justify-content-between">
+                            <small>0.1</small>
+                            <span id="rfDecisionThresholdValue" class="badge bg-primary">0.5</span>
+                            <small>0.9</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Parámetros avanzados -->
+    <div class="card mb-3">
+        <div class="card-header bg-warning">
+            <h6 class="mb-0">
+                <button class="btn btn-link text-dark p-0" type="button" 
+                        data-bs-toggle="collapse" data-bs-target="#rfAdvancedOptions" 
+                        aria-expanded="false">
+                    ⚙️ Parámetros avanzados <i class="bi bi-chevron-down"></i>
+                </button>
+            </h6>
+        </div>
+        <div class="collapse" id="rfAdvancedOptions">
+            <div class="card-body">
+                <!-- Estructura del árbol -->
+                <h6 class="text-info mb-3">Estructura del árbol</h6>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="rfMinSamplesSplit" class="form-label">
+                            Mínimo muestras para dividir
+                            <i class="bi bi-info-circle" data-bs-toggle="tooltip" 
+                               title="Número mínimo de muestras requeridas para dividir un nodo interno"></i>
+                        </label>
+                        <input type="number" class="form-control" id="rfMinSamplesSplit" 
+                               min="2" max="100" value="2">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="rfMinSamplesLeaf" class="form-label">
+                            Mínimo muestras en hoja
+                            <i class="bi bi-info-circle" data-bs-toggle="tooltip" 
+                               title="Número mínimo de muestras requeridas en un nodo hoja"></i>
+                        </label>
+                        <input type="number" class="form-control" id="rfMinSamplesLeaf" 
+                               min="1" max="50" value="1">
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="rfMinWeightFractionLeaf" class="form-label">
+                            Fracción mínima de peso en hoja
+                        </label>
+                        <input type="number" class="form-control" id="rfMinWeightFractionLeaf" 
+                               min="0" max="0.5" step="0.01" value="0">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="rfMinImpurityDecrease" class="form-label">
+                            Decremento mínimo de impureza
+                        </label>
+                        <input type="number" class="form-control" id="rfMinImpurityDecrease" 
+                               min="0" max="0.1" step="0.001" value="0">
+                    </div>
+                </div>
+                
+                <!-- Muestreo y paralelización -->
+                <h6 class="text-info mb-3">Muestreo y rendimiento</h6>
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="rfBootstrap" 
+                                   checked onchange="toggleBootstrapOptions()">
+                            <label class="form-check-label" for="rfBootstrap">
+                                Bootstrap
+                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" 
+                                   title="Muestreo con reemplazo para cada árbol"></i>
+                            </label>
+                        </div>
+                        <div class="form-check mt-2" id="rfOobScoreContainer">
+                            <input class="form-check-input" type="checkbox" id="rfOobScore">
+                            <label class="form-check-label" for="rfOobScore">
+                                Calcular score OOB
+                                <i class="bi bi-info-circle" data-bs-toggle="tooltip" 
+                                   title="Usar muestras out-of-bag para estimar error"></i>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="rfNJobs" class="form-label">
+                            Trabajos paralelos
+                        </label>
+                        <select class="form-select" id="rfNJobs">
+                            <option value="-1">Todos los núcleos</option>
+                            <option value="1">1 núcleo</option>
+                            <option value="2">2 núcleos</option>
+                            <option value="4">4 núcleos</option>
+                        </select>
+                    </div>
+                    <!-- Semilla aleatoria eliminada - ahora se usa la semilla global del Módulo 1 -->
+                    <div class="col-md-4">
+                        <div class="alert alert-info p-2">
+                            <small><i class="bi bi-info-circle"></i> La semilla aleatoria se configura globalmente en el Módulo 1: División de Datos</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+</div>

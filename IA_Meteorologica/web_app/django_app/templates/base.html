@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}MétéoIA - Prédiction Météorologique avec IA{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #00d4ff;
+            --secondary-color: #0099ff;
+            --accent-color: #ff00ff;
+            --dark-color: #0a0e27;
+            --light-color: #f0f9ff;
+            --neon-glow: 0 0 20px rgba(0, 212, 255, 0.8);
+            --neon-glow-intense: 0 0 40px rgba(0, 212, 255, 1);
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: #0a0e27;
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(0, 212, 255, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(255, 0, 255, 0.2) 0%, transparent 50%),
+                radial-gradient(circle at 50% 100%, rgba(0, 153, 255, 0.2) 0%, transparent 50%);
+            pointer-events: none;
+            animation: backgroundPulse 10s ease-in-out infinite;
+        }
+        
+        @keyframes backgroundPulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.5; }
+        }
+        
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(0deg, transparent 24%, rgba(0, 212, 255, 0.05) 25%, rgba(0, 212, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 212, 255, 0.05) 75%, rgba(0, 212, 255, 0.05) 76%, transparent 77%, transparent),
+                linear-gradient(90deg, transparent 24%, rgba(0, 212, 255, 0.05) 25%, rgba(0, 212, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 212, 255, 0.05) 75%, rgba(0, 212, 255, 0.05) 76%, transparent 77%, transparent);
+            background-size: 50px 50px;
+            pointer-events: none;
+            animation: gridMove 20s linear infinite;
+        }
+        
+        @keyframes gridMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+        
+        .navbar {
+            background: rgba(10, 14, 39, 0.9) !important;
+            backdrop-filter: blur(20px);
+            border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+            box-shadow: 0 4px 30px rgba(0, 212, 255, 0.3), var(--neon-glow);
+            animation: navGlow 3s ease-in-out infinite alternate;
+        }
+        
+        @keyframes navGlow {
+            0% { box-shadow: 0 4px 30px rgba(0, 212, 255, 0.3), 0 0 20px rgba(0, 212, 255, 0.5); }
+            100% { box-shadow: 0 4px 30px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.8); }
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: #00d4ff !important;
+            text-shadow: var(--neon-glow);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+        
+        .navbar-brand:hover {
+            text-shadow: var(--neon-glow-intense);
+            transform: scale(1.05);
+        }
+        
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8) !important;
+            font-weight: 500;
+            margin: 0 10px;
+            transition: all 0.3s ease;
+            border-radius: 30px;
+            padding: 8px 20px !important;
+            border: 1px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .nav-link::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(0, 212, 255, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.5s, height 0.5s;
+        }
+        
+        .nav-link:hover {
+            background: rgba(0, 212, 255, 0.1);
+            border-color: rgba(0, 212, 255, 0.5);
+            color: #00d4ff !important;
+            box-shadow: inset 0 0 20px rgba(0, 212, 255, 0.3), var(--neon-glow);
+        }
+        
+        .nav-link:hover::before {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .nav-link.active {
+            background: rgba(0, 212, 255, 0.2);
+            border-color: #00d4ff;
+            color: #00d4ff !important;
+            box-shadow: inset 0 0 20px rgba(0, 212, 255, 0.3), var(--neon-glow);
+        }
+        
+        .main-content {
+            padding-top: 120px;
+            min-height: calc(100vh - 60px);
+            position: relative;
+            z-index: 1;
+        }
+        
+        .card {
+            background: rgba(10, 14, 39, 0.8);
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, #00d4ff, #0099ff, #ff00ff, #00d4ff);
+            background-size: 400% 400%;
+            border-radius: 20px;
+            opacity: 0;
+            z-index: -1;
+            transition: opacity 0.3s ease;
+            animation: gradientShift 3s ease infinite;
+        }
+        
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 212, 255, 0.3), var(--neon-glow);
+            border-color: #00d4ff;
+        }
+        
+        .card:hover::before {
+            opacity: 0.8;
+        }
+        
+        .card * {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .btn {
+            border-radius: 30px;
+            font-weight: 600;
+            padding: 10px 30px;
+            transition: all 0.3s ease;
+            border: none;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #00d4ff, #0099ff);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.5), var(--neon-glow);
+            background: linear-gradient(135deg, #00d4ff, #0099ff);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #00d4ff;
+            border: 1px solid rgba(0, 212, 255, 0.5);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(0, 212, 255, 0.2);
+            border-color: #00d4ff;
+            box-shadow: inset 0 0 20px rgba(0, 212, 255, 0.3), var(--neon-glow);
+            color: white;
+        }
+        
+        .footer {
+            background: rgba(10, 14, 39, 0.9);
+            backdrop-filter: blur(10px);
+            color: #f0f9ff;
+            padding: 30px 0;
+            margin-top: 50px;
+            border-top: 1px solid rgba(0, 212, 255, 0.3);
+            box-shadow: 0 -10px 30px rgba(0, 212, 255, 0.2);
+        }
+        
+        .glass-effect {
+            background: rgba(0, 212, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            box-shadow: inset 0 0 20px rgba(0, 212, 255, 0.1);
+        }
+        
+        /* Animaciones adicionales */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .float-animation {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        /* Scrollbar personalizada */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(10, 14, 39, 0.5);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 212, 255, 0.5);
+            border-radius: 5px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 212, 255, 0.8);
+        }
+        
+        /* Texto general */
+        h1, h2, h3, h4, h5, h6 {
+            color: #f0f9ff;
+        }
+        
+        p, span, div {
+            color: rgba(240, 249, 255, 0.9);
+        }
+        
+        .text-white {
+            color: #f0f9ff !important;
+        }
+        
+        .text-muted {
+            color: rgba(240, 249, 255, 0.6) !important;
+        }
+        
+        .loading-spinner {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 999; /* Menor que el backdrop del modal (1040) */
+            pointer-events: none; /* Permite clicks a través del spinner */
+            text-align: center;
+            background: rgba(10, 14, 39, 0.95);
+            padding: 40px 60px;
+            border-radius: 20px;
+            border: 2px solid rgba(0, 212, 255, 0.5);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 212, 255, 0.6);
+            animation: pulseGlow 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulseGlow {
+            0%, 100% { 
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 212, 255, 0.6);
+                transform: translate(-50%, -50%) scale(1);
+            }
+            50% { 
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 60px rgba(0, 212, 255, 0.8);
+                transform: translate(-50%, -50%) scale(1.02);
+            }
+        }
+        
+        .loading-spinner.active {
+            display: block;
+        }
+        
+        .loading-spinner-icon {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(0, 212, 255, 0.3);
+            border-top-color: #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-spinner-text {
+            color: #00d4ff;
+            font-size: 1.2rem;
+            font-weight: 600;
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.8);
+            letter-spacing: 1px;
+            margin-top: 15px;
+        }
+        
+        .loading-spinner-subtext {
+            color: rgba(240, 249, 255, 0.7);
+            font-size: 0.95rem;
+            margin-top: 10px;
+            font-weight: 300;
+        }
+        
+        /* Estilos mejorados para modales - IMPORTANTE: Fix para el overlay */
+        .modal-backdrop {
+            background-color: rgba(10, 14, 39, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 1040 !important;
+        }
+        
+        .modal {
+            z-index: 1050 !important;
+        }
+        
+        .modal-dialog {
+            margin-top: 80px;
+            z-index: 1055 !important;
+        }
+        
+        .modal-content {
+            background: rgba(10, 14, 39, 0.95);
+            border: 2px solid rgba(0, 212, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), var(--neon-glow);
+            animation: modalGlow 3s ease-in-out infinite alternate;
+            overflow: visible;
+        }
+        
+        @keyframes modalGlow {
+            0% { box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(0, 212, 255, 0.5); }
+            100% { box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 50px rgba(0, 212, 255, 0.8); }
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 153, 255, 0.2));
+            color: #00d4ff;
+            border-radius: 18px 18px 0 0;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.3);
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+        
+        .modal-header .btn-close {
+            filter: none;
+            color: #00d4ff;
+            opacity: 0.8;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
+        }
+        
+        .modal-header .btn-close:hover {
+            opacity: 1;
+            transform: rotate(90deg);
+        }
+        
+        .modal-body {
+            background: transparent;
+            color: #f0f9ff;
+        }
+        
+        .modal-footer {
+            background: rgba(0, 212, 255, 0.05);
+            border-top: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 0 0 18px 18px;
+        }
+        
+        /* Asegurar que los textos en modales sean legibles */
+        .modal-body .form-label {
+            color: #00d4ff;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.9rem;
+        }
+        
+        .modal-body .form-control,
+        .modal-body .form-select {
+            background: rgba(0, 212, 255, 0.05);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            color: #f0f9ff;
+            transition: all 0.3s ease;
+        }
+        
+        .modal-body .form-control:focus,
+        .modal-body .form-select:focus {
+            border-color: #00d4ff;
+            box-shadow: 0 0 0 0.2rem rgba(0, 212, 255, 0.25), inset 0 0 20px rgba(0, 212, 255, 0.1);
+            background: rgba(0, 212, 255, 0.1);
+        }
+        
+        .modal-body .form-control option,
+        .modal-body .form-select option {
+            background: #0a0e27;
+            color: #f0f9ff;
+        }
+        
+        .modal-body .text-muted {
+            color: rgba(240, 249, 255, 0.6) !important;
+        }
+        
+        .modal-body .alert {
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            color: #f0f9ff;
+        }
+        
+        .modal-body .alert-info {
+            background: rgba(0, 153, 255, 0.1);
+            border-color: rgba(0, 153, 255, 0.3);
+        }
+        
+        .modal-body .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+        
+        /* Ajuste para modales grandes */
+        .modal-xl {
+            max-width: 90%;
+        }
+        
+        /* Ensure no modal backdrops are visible */
+        .modal-backdrop {
+            display: none !important;
+        }
+        
+        /* Modal background styling when no backdrop */
+        .modal.show {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        
+        /* Make placeholder text more visible */
+        ::placeholder {
+            color: rgba(0, 212, 255, 0.6) !important;
+            opacity: 1 !important;
+        }
+        
+        ::-webkit-input-placeholder {
+            color: rgba(0, 212, 255, 0.6) !important;
+            opacity: 1 !important;
+        }
+        
+        ::-moz-placeholder {
+            color: rgba(0, 212, 255, 0.6) !important;
+            opacity: 1 !important;
+        }
+        
+        :-ms-input-placeholder {
+            color: rgba(0, 212, 255, 0.6) !important;
+            opacity: 1 !important;
+        }
+        
+        :-moz-placeholder {
+            color: rgba(0, 212, 255, 0.6) !important;
+            opacity: 1 !important;
+        }
+        
+        /* Make close button more visible */
+        .btn-close {
+            filter: brightness(2) invert(1);
+            opacity: 0.8 !important;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-close:hover {
+            opacity: 1 !important;
+            transform: scale(1.1);
+            filter: brightness(2) invert(1) drop-shadow(0 0 5px rgba(0, 212, 255, 0.8));
+        }
+        
+        .btn-close:focus {
+            box-shadow: 0 0 0 0.25rem rgba(0, 212, 255, 0.5);
+        }
+        
+        /* Alternative close button style for better visibility */
+        .modal-header .btn-close {
+            background-color: rgba(0, 212, 255, 0.2);
+            border-radius: 50%;
+            padding: 0.5rem;
+        }
+        
+        /* Improve form control visibility */
+        .form-control, .form-select {
+            color: #ffffff !important;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            color: #ffffff !important;
+        }
+        
+        /* Make select option text more visible */
+        .form-select option {
+            background-color: #0a0e27;
+            color: #ffffff;
+        }
+        
+        /* Improve textarea visibility */
+        textarea.form-control {
+            color: #ffffff !important;
+        }
+        
+        /* Make muted text more visible */
+        .text-muted {
+            color: rgba(0, 212, 255, 0.7) !important;
+        }
+        
+        /* Improve small helper text visibility */
+        small.text-muted, .form-text {
+            color: rgba(0, 212, 255, 0.6) !important;
+        }
+        
+        @media (max-width: 768px) {
+            .modal-dialog {
+                margin-top: 80px;
+            }
+        }
+        
+        /* SweetAlert2 custom styles */
+        .swal-custom-popup {
+            border: 2px solid rgba(0, 212, 255, 0.5) !important;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.3) !important;
+        }
+        
+        .swal-custom-title {
+            color: #00d4ff !important;
+            font-weight: 600 !important;
+        }
+        
+        .swal-custom-text {
+            color: #f0f9ff !important;
+        }
+        
+        .swal-custom-button {
+            background: linear-gradient(135deg, #00d4ff, #0099ff) !important;
+            border: none !important;
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3) !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        .swal-custom-button:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.5) !important;
+        }
+        
+        .swal2-icon.swal2-success {
+            border-color: #10b981 !important;
+            color: #10b981 !important;
+        }
+        
+        .swal2-icon.swal2-success [class^=swal2-success-line] {
+            background-color: #10b981 !important;
+        }
+        
+        .swal2-icon.swal2-success .swal2-success-ring {
+            border-color: rgba(16, 185, 129, 0.3) !important;
+        }
+        
+        /* Success notification specific styling - matching dataset success green */
+        .swal2-popup.swal2-show .swal-custom-popup {
+            border-color: rgba(16, 185, 129, 0.6) !important;
+            box-shadow: 0 0 40px rgba(16, 185, 129, 0.5) !important;
+        }
+        
+        .swal2-icon.swal2-success + .swal2-title {
+            color: #10b981 !important;
+            text-shadow: 0 0 15px rgba(16, 185, 129, 0.8) !important;
+        }
+        
+        .swal2-popup.swal2-show .swal2-actions button.swal2-confirm {
+            background: linear-gradient(135deg, #10b981, #059669) !important;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.5) !important;
+            border: none !important;
+        }
+        
+        .swal2-popup.swal2-show .swal2-actions button.swal2-confirm:hover {
+            background: linear-gradient(135deg, #059669, #047857) !important;
+            box-shadow: 0 8px 30px rgba(16, 185, 129, 0.7) !important;
+            transform: translateY(-2px) !important;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'home' %}">
+                <i class="bi bi-cloud-sun"></i> MétéoIA
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'home' %}">
+                            <i class="bi bi-house"></i> Accueil
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
+                            <i class="bi bi-speedometer2"></i> Tableau de Bord
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'predictions' %}active{% endif %}" href="{% url 'predictions' %}">
+                            <i class="bi bi-clock-history"></i> Historique
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'models' %}active{% endif %}" href="{% url 'models' %}">
+                            <i class="bi bi-cpu"></i> Modèles
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'datasets' %}active{% endif %}" href="{% url 'datasets' %}">
+                            <i class="bi bi-database"></i> Datasets
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="langDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-translate"></i> <span id="currentLang">FR</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" style="background: rgba(10, 14, 39, 0.95); border: 1px solid rgba(0, 212, 255, 0.3);">
+                            <li><a class="dropdown-item" href="#" onclick="changeLanguage('fr')" style="color: #00d4ff;">
+                                <span>🇫🇷</span> Français
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="changeLanguage('es')" style="color: #00d4ff;">
+                                <span>🇪🇸</span> Español
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="changeLanguage('en')" style="color: #00d4ff;">
+                                <span>🇬🇧</span> English
+                            </a></li>
+                        </ul>
+                    </li>
+                    {% if user.is_authenticated %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-person-circle"></i> {{ user.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" style="background: rgba(10, 14, 39, 0.95); border: 1px solid rgba(0, 212, 255, 0.3);">
+                                <li><a class="dropdown-item" href="{% url 'profile' %}" style="color: #00d4ff;">
+                                    <i class="bi bi-person"></i> Mon Profil
+                                </a></li>
+                                {% if user.is_staff %}
+                                    <li><a class="dropdown-item" href="/admin/" style="color: #00d4ff;">
+                                        <i class="bi bi-shield-lock"></i> Admin Panel
+                                    </a></li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider" style="border-color: rgba(0, 212, 255, 0.3);"></li>
+                                <li><a class="dropdown-item" href="{% url 'logout' %}" style="color: #ff3b30;">
+                                    <i class="bi bi-box-arrow-right"></i> Déconnexion
+                                </a></li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'login' %}">
+                                <i class="bi bi-box-arrow-in-right"></i> Connexion
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        {% block content %}{% endblock %}
+    </div>
+
+    <footer class="footer">
+        <div class="container text-center">
+            <p class="mb-0">&copy; 2025 MétéoIA - Système de Prédiction Météorologique avec Intelligence Artificielle</p>
+            <small>Développé avec <i class="bi bi-heart-fill text-danger"></i> pour des prédictions précises</small>
+        </div>
+    </footer>
+
+    <!-- Loading Spinner -->
+    <div class="loading-spinner">
+        <div class="loading-spinner-icon"></div>
+        <div class="loading-spinner-text">Traitement en cours...</div>
+        <div class="loading-spinner-subtext">Veuillez patienter quelques instants</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        // Global modal cleanup function
+        function cleanupModals() {
+            document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+        }
+        
+        // Override Bootstrap modal to ensure proper cleanup
+        document.addEventListener('DOMContentLoaded', function() {
+            // Interceptar todos los eventos de modal
+            document.addEventListener('show.bs.modal', function(event) {
+                // Limpiar cualquier backdrop existente antes de mostrar un nuevo modal
+                cleanupModals();
+            });
+            
+            document.addEventListener('hidden.bs.modal', function(event) {
+                // Limpiar después de ocultar un modal
+                setTimeout(cleanupModals, 150);
+            });
+            
+            // Limpiar al presionar ESC
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    setTimeout(cleanupModals, 150);
+                }
+            });
+        });
+        
+        // Fonction pour afficher le spinner de chargement
+        // Exemples d'utilisation avec messages personnalisés:
+        // showLoading('Analyse en cours...', 'Traitement de vos données météorologiques');
+        // showLoading('Entraînement du modèle...', 'Cela peut prendre plusieurs minutes');
+        // showLoading('Génération des graphiques...', 'Préparation de vos visualisations');
+        // showLoading('Sauvegarde...', 'Enregistrement de vos modifications');
+        // showLoading('Connexion au serveur...', 'Établissement de la connexion');
+        function showLoading(mainText = 'Traitement en cours...', subText = 'Veuillez patienter quelques instants') {
+            const spinner = document.querySelector('.loading-spinner');
+            if (spinner) {
+                // Update the text if custom messages are provided
+                const mainTextElement = spinner.querySelector('.loading-spinner-text');
+                const subTextElement = spinner.querySelector('.loading-spinner-subtext');
+                
+                if (mainTextElement) {
+                    mainTextElement.textContent = mainText;
+                }
+                if (subTextElement) {
+                    subTextElement.textContent = subText;
+                }
+                
+                spinner.classList.add('active');
+            }
+        }
+        
+        function hideLoading() {
+            const spinner = document.querySelector('.loading-spinner');
+            if (spinner) {
+                spinner.classList.remove('active');
+                
+                // Reset to default messages after hiding
+                setTimeout(() => {
+                    const mainTextElement = spinner.querySelector('.loading-spinner-text');
+                    const subTextElement = spinner.querySelector('.loading-spinner-subtext');
+                    
+                    if (mainTextElement) {
+                        mainTextElement.textContent = 'Traitement en cours...';
+                    }
+                    if (subTextElement) {
+                        subTextElement.textContent = 'Veuillez patienter quelques instants';
+                    }
+                }, 300);
+            }
+            // Also ensure no modal backdrops are stuck
+            setTimeout(() => {
+                if (!document.querySelector('.modal.show')) {
+                    cleanupModals();
+                }
+            }, 100);
+        }
+        
+        // Fonction pour afficher des notifications
+        function showNotification(title, text, type = 'success') {
+            Swal.fire({
+                title: title,
+                text: text,
+                icon: type,
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#6366f1',
+                background: '#1a1f3a',
+                color: '#ffffff',
+                customClass: {
+                    popup: 'swal-custom-popup',
+                    title: 'swal-custom-title',
+                    htmlContainer: 'swal-custom-text',
+                    confirmButton: 'swal-custom-button'
+                }
+            });
+        }
+        
+        // IMPORTANT: Always use this function to create modals
+        // This ensures no gray backdrop issues in the future
+        function createModal(modalElement, options = {}) {
+            // Force backdrop to false to prevent gray overlay
+            const safeOptions = {
+                backdrop: false,
+                keyboard: true,
+                focus: true,
+                ...options
+            };
+            
+            // Always override backdrop to false
+            safeOptions.backdrop = false;
+            
+            // Clean up any existing instance
+            const existingModal = bootstrap.Modal.getInstance(modalElement);
+            if (existingModal) {
+                existingModal.dispose();
+            }
+            
+            // Clean up any lingering backdrops
+            cleanupModals();
+            
+            return new bootstrap.Modal(modalElement, safeOptions);
+        }
+        
+        // Helper function to show a modal safely
+        function showModal(modalElementOrId) {
+            const modalElement = typeof modalElementOrId === 'string' 
+                ? document.getElementById(modalElementOrId) 
+                : modalElementOrId;
+                
+            if (!modalElement) {
+                console.error('Modal element not found');
+                return null;
+            }
+            
+            const modal = createModal(modalElement);
+            modal.show();
+            return modal;
+        }
+        
+        // Override Bootstrap Modal constructor to prevent backdrop issues
+        (function() {
+            const OriginalModal = bootstrap.Modal;
+            
+            bootstrap.Modal = function(element, config) {
+                // Log warning if someone tries to use static backdrop
+                if (config && (config.backdrop === 'static' || config.backdrop === true)) {
+                    console.warn('⚠️ Modal backdrop detected! Use backdrop: false to prevent gray overlay issues.');
+                    console.warn('Use createModal() helper function instead of new bootstrap.Modal()');
+                    
+                    // Force backdrop to false
+                    config.backdrop = false;
+                }
+                
+                return new OriginalModal(element, config);
+            };
+            
+            // Copy static methods
+            Object.setPrototypeOf(bootstrap.Modal, OriginalModal);
+            Object.setPrototypeOf(bootstrap.Modal.prototype, OriginalModal.prototype);
+        })();
+        
+        // Language management
+        const translations = {
+            fr: {
+                home: "Accueil",
+                dashboard: "Tableau de Bord",
+                history: "Historique",
+                models: "Modèles",
+                datasets: "Datasets",
+                myProfile: "Mon Profil",
+                logout: "Déconnexion",
+                login: "Connexion",
+                adminPanel: "Panneau Admin",
+                processing: "Traitement en cours...",
+                pleaseWait: "Veuillez patienter quelques instants"
+            },
+            es: {
+                home: "Inicio",
+                dashboard: "Tablero",
+                history: "Historial",
+                models: "Modelos",
+                datasets: "Datasets",
+                myProfile: "Mi Perfil",
+                logout: "Cerrar Sesión",
+                login: "Iniciar Sesión",
+                adminPanel: "Panel Admin",
+                processing: "Procesando...",
+                pleaseWait: "Por favor espere unos momentos"
+            },
+            en: {
+                home: "Home",
+                dashboard: "Dashboard",
+                history: "History",
+                models: "Models",
+                datasets: "Datasets",
+                myProfile: "My Profile",
+                logout: "Logout",
+                login: "Login",
+                adminPanel: "Admin Panel",
+                processing: "Processing...",
+                pleaseWait: "Please wait a few moments"
+            }
+        };
+        
+        // Get current language from localStorage or default to French
+        let currentLanguage = localStorage.getItem('language') || 'fr';
+        
+        function changeLanguage(lang) {
+            currentLanguage = lang;
+            localStorage.setItem('language', lang);
+            
+            // Set cookie for Django backend
+            document.cookie = `language=${lang};path=/;max-age=31536000`; // 1 year
+            
+            // Update current language display
+            document.getElementById('currentLang').textContent = lang.toUpperCase();
+            
+            // Update UI elements with translations
+            updateUITranslations(lang);
+            
+            // Add language parameter to URL and reload
+            const url = new URL(window.location);
+            url.searchParams.set('lang', lang);
+            window.location.href = url.toString();
+        }
+        
+        function updateUITranslations(lang) {
+            const t = translations[lang];
+            
+            // Update loading spinner text
+            const spinnerText = document.querySelector('.loading-spinner-text');
+            const spinnerSubtext = document.querySelector('.loading-spinner-subtext');
+            if (spinnerText) spinnerText.textContent = t.processing;
+            if (spinnerSubtext) spinnerSubtext.textContent = t.pleaseWait;
+        }
+        
+        // Initialize language on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('currentLang').textContent = currentLanguage.toUpperCase();
+            updateUITranslations(currentLanguage);
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

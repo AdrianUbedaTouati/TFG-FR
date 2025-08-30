@@ -1,0 +1,35 @@
+{
+  "cv_folds": [
+    {
+      "fold": 1,
+      "best_val_f1_macro": 0.585452825472118
+    },
+    {
+      "fold": 2,
+      "best_val_f1_macro": 0.5968007946465587
+    },
+    {
+      "fold": 3,
+      "best_val_f1_macro": 0.6153196026290266
+    },
+    {
+      "fold": 4,
+      "best_val_f1_macro": 0.5987617396192884
+    },
+    {
+      "fold": 5,
+      "best_val_f1_macro": 0.6041003931984621
+    }
+  ],
+  "test": {
+    "accuracy": 0.6212121212121212,
+    "f1_macro": 0.5837938557384631,
+    "balanced_accuracy": 0.7199215203192342
+  },
+  "class_names": [
+    "clear",
+    "cloudy",
+    "overcast",
+    "partly cloudy"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "best_epoch": 3,
+  "test_metrics": {
+    "loss": 0.04746378678034942,
+    "MAE": 0.275260938779039,
+    "RMSE": 0.3438559476115923
+  },
+  "artifacts": {
+    "pdf": "report_lstm.pdf",
+    "history": "history.csv",
+    "horizon": "horizon_metrics.csv",
+    "samples": "samples_test.npz",
+    "feature_importance": "feature_importance.csv",
+    "plots_dir": "plots"
+  }
+}

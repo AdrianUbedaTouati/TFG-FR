@@ -1,0 +1,18 @@
+[
+  "Temperature_normalized",
+  "Humidity_normalized",
+  "Wind_Speed_normalized",
+  "Precipitation_pct_normalized",
+  "Atmospheric_Pressure_normalized",
+  "UV_Index_normalized",
+  "Visibility_km_normalized",
+  "dew_point_approx_normalized",
+  "humid_x_precip_raw_normalized",
+  "Season_Autumn",
+  "Season_Spring",
+  "Season_Summer",
+  "Season_Winter",
+  "Location_coastal",
+  "Location_inland",
+  "Location_mountain"
+]

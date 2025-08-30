@@ -1,0 +1,98 @@
+1. Problématique
+
+Traditionnellement, les prévisions météorologiques sont produites par des modèles physiques de dynamique de l’atmosphère exécutés sur des super‑calculateurs. Ces modèles résolvent des équations différentielles complexes, demandent beaucoup d’énergie et présentent parfois une latence incompatible avec certaines applications temps réel. Notre défi : montrer qu’un modèle d’IA entraîné sur des données historiques peut atteindre — voire dépasser — la précision des modèles numériques, tout en réduisant les coûts de calcul et le temps d’inférence.
+
+2. Objectif
+
+Construire un système capable de prédire simultanément :
+
+précipitations (mm/h),
+
+humidité relative (%),
+
+résumé météo (catégorie : soleil, nuages, pluie, etc.),
+
+température (°C) et température ressentie (°C),
+
+vitesse du vent (m/s) et direction (portée du vent),
+
+visibilité (km).
+
+La cible est d’obtenir une précision comparable ou supérieure à celle des prévisions physiques locales pour des horizons de 1 h à 24 h.
+
+3. Techniques utilisées
+
+Étape
+
+Outils / Méthodes
+
+Collecte & nettoyage
+
+détection/traitement des valeurs aberrantes, arrondi cohérent des températures.
+
+Normalisation & encodage
+
+- Numériques : StandardScaler ou MinMaxScaler (0‑1). - Catégorielles : OneHotEncoder (ex. ciel partiellement nuageux → [0 0 1]).
+
+Modélisation
+
+- LSTM multi‑sortie (prend en compte la dépendance temporelle). - Baselines : RandomForest, Gradient Boosting. - Option : Transformers pour de plus longues séquences.
+
+Validation
+
+Fraction temporelle 75 % train / 15 % validation / 10 % test; cross‑validation glissante.
+
+Déploiement & visualisation
+
+API REST + page web (dashboard) pour interroger le modèle et afficher les prévisions quotidiennes.
+
+4. Étapes du projet
+
+Nettoyage & préparation des données : corriger les décimales, supprimer ou imputer les trous, arrondir les variables si nécessaire.
+
+Normalisation & encodage : appliquer les scalers/encoders et enregistrer les objets pour la production.
+
+Création de fenêtres temporelles : séquences de 24 pas (ou paramétrable) avec horizon de prédiction .
+
+Construction des modèles :
+
+Baselines arbres (RandomForest, GBT).
+
+Réseau LSTM multi‑tâche ; test éventuel d’un Transformer.
+
+Entraînement : early‑stopping, recherche d’hyperparamètres, cross‑validation temporelle.
+
+Évaluation : comparaison avec modèles physiques (super‑ordinateur) et métriques spécifiques (MAE, F1 pluie/no‑pluie, etc.). Wilcoxon para comparar entre modelos
+
+Déploiement :  dashboard web pour la visualisation.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Tengo que realizar varios modelos sobre una IA meteorologica, ahora mismo me estoy enfocando en la normalizacion estoy haciendo un fichero con todos los tipos de normalizacion que me haran falta. Quiero realizar varios modelos con diferntes arquitecturas, LSTM Transformer etc... Y

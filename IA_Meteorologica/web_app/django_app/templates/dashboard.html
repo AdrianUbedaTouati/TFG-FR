@@ -1,0 +1,2157 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Tableau de Bord - MétéoIA{% endblock %}
+
+{% block extra_css %}
+<style>
+    .metric-card {
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 20px;
+        overflow: hidden;
+        position: relative;
+        transition: all 0.3s ease;
+        background: rgba(10, 14, 39, 0.8);
+        backdrop-filter: blur(10px);
+    }
+    
+    /* Estilos para las checkboxes de variables */
+    .predictor-checkbox:checked {
+        background-color: #00d4ff;
+        border-color: #00d4ff;
+    }
+    
+    .target-checkbox:checked {
+        background-color: #ff6b6b;
+        border-color: #ff6b6b;
+    }
+    
+    .predictor-checkbox:disabled,
+    .target-checkbox:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .form-check-label {
+        user-select: none;
+        transition: all 0.2s ease;
+    }
+    
+    .form-check:hover .form-check-label {
+        color: #00d4ff;
+    }
+    
+    .form-check.text-muted .form-check-label {
+        text-decoration: line-through;
+        opacity: 0.6;
+    }
+    
+    #predictorVariables {
+        min-height: 150px;
+    }
+    
+    #predictorVariables .form-check {
+        padding: 8px 12px;
+        margin: 4px 0;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+    
+    #predictorVariables .form-check:hover {
+        background: rgba(0, 212, 255, 0.1);
+    }
+    
+    #targetVariables {
+        min-height: 150px;
+    }
+    
+    #targetVariables .form-check {
+        padding: 8px 12px;
+        margin: 4px 0;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+    
+    #targetVariables .form-check:hover {
+        background: rgba(255, 107, 107, 0.1);
+    }
+    
+    .model-requirements {
+        background: rgba(255, 193, 7, 0.1);
+        border: 1px solid rgba(255, 193, 7, 0.3);
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    /* Estilos para el constructor de capas */
+    .layer-item {
+        background: rgba(0, 212, 255, 0.1);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 10px;
+        position: relative;
+        transition: all 0.3s ease;
+    }
+    
+    .layer-item:hover {
+        background: rgba(0, 212, 255, 0.15);
+        transform: translateX(5px);
+    }
+    
+    .layer-item .layer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .layer-item .layer-title {
+        font-weight: bold;
+        color: #00d4ff;
+    }
+    
+    .layer-item .layer-controls {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .layer-item .btn-move {
+        background: rgba(0, 212, 255, 0.2);
+        border: 1px solid rgba(0, 212, 255, 0.4);
+        color: #00d4ff;
+        padding: 2px 8px;
+        font-size: 0.8rem;
+    }
+    
+    .layer-item .btn-delete {
+        background: rgba(255, 107, 107, 0.2);
+        border: 1px solid rgba(255, 107, 107, 0.4);
+        color: #ff6b6b;
+        padding: 2px 8px;
+        font-size: 0.8rem;
+    }
+    
+    .layer-params {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px;
+    }
+    
+    .expert-section {
+        background: rgba(138, 43, 226, 0.05);
+        border: 1px solid rgba(138, 43, 226, 0.3);
+        border-radius: 15px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    
+    #expertMode:checked {
+        background-color: #8a2be2;
+        border-color: #8a2be2;
+    }
+    
+    .metric-card::before {
+        content: '';
+        position: absolute;
+        top: -100%;
+        left: -100%;
+        width: 300%;
+        height: 300%;
+        background: linear-gradient(45deg, transparent, rgba(0, 212, 255, 0.3), transparent);
+        transform: rotate(45deg);
+        transition: all 0.5s;
+    }
+    
+    .metric-card:hover::before {
+        top: -50%;
+        left: -50%;
+    }
+    
+    .metric-card:hover {
+        border-color: #00d4ff;
+        box-shadow: 0 10px 40px rgba(0, 212, 255, 0.3), var(--neon-glow);
+        transform: translateY(-5px);
+    }
+    
+    .metric-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-bottom: 15px;
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 153, 255, 0.2));
+        border: 1px solid rgba(0, 212, 255, 0.5);
+        color: #00d4ff;
+        box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #00d4ff;
+        text-shadow: 0 0 20px rgba(0, 212, 255, 0.8);
+        letter-spacing: 2px;
+    }
+    
+    .chart-container {
+        height: 400px;
+        padding: 20px;
+    }
+    
+    .action-card {
+        border: 2px solid rgba(0, 212, 255, 0.3);
+        background: rgba(10, 14, 39, 0.8);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .action-card::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        background: radial-gradient(circle, rgba(0, 212, 255, 0.3) 0%, transparent 70%);
+        transform: translate(-50%, -50%);
+        transition: width 0.5s, height 0.5s;
+    }
+    
+    .action-card:hover::after {
+        width: 300px;
+        height: 300px;
+    }
+    
+    .action-card:hover {
+        border-color: #00d4ff;
+        transform: translateY(-5px) scale(1.02);
+        box-shadow: 0 15px 40px rgba(0, 212, 255, 0.4), var(--neon-glow);
+    }
+    
+    .action-card h4 {
+        color: #00d4ff;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+    }
+    
+    .action-card p {
+        color: rgba(240, 249, 255, 0.8) !important;
+    }
+    
+    .action-card i {
+        color: #00d4ff !important;
+        font-size: 3rem;
+        margin-bottom: 20px;
+        display: block;
+        filter: drop-shadow(0 0 10px rgba(0, 212, 255, 0.8));
+        transition: all 0.3s ease;
+    }
+    
+    .action-card:hover i {
+        transform: scale(1.1) rotate(5deg);
+        filter: drop-shadow(0 0 20px rgba(0, 212, 255, 1));
+    }
+    
+    .table-container {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    
+    .table-container::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .table-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    
+    .table-container::-webkit-scrollbar-thumb {
+        background: var(--primary-color);
+        border-radius: 10px;
+    }
+    
+    .progress-ring {
+        transform: rotate(-90deg);
+    }
+    
+    .progress-ring-circle {
+        stroke-dasharray: 282.6;
+        stroke-dashoffset: 282.6;
+        animation: progressAnimation 2s ease-out forwards;
+    }
+    
+    @keyframes progressAnimation {
+        to {
+            stroke-dashoffset: 70;
+        }
+    }
+    
+    /* Estilos específicos para este dashboard */
+    .modal-body h6 {
+        color: #1e1b4b;
+        font-weight: 600;
+    }
+    
+    .modal-body .alert {
+        background: #e0e7ff;
+        border: 1px solid #c7d2fe;
+        color: #4338ca;
+    }
+    
+    .modal-body .alert i {
+        color: #4338ca;
+    }
+    
+    /* Modal styles - no backdrop needed */
+    .modal {
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <h1 class="text-white fw-bold">
+                <i class="bi bi-speedometer2"></i> Tableau de Bord
+            </h1>
+            <p class="text-white-50">Bienvenue dans votre centre de contrôle météorologique</p>
+        </div>
+    </div>
+
+    <!-- Métriques principales -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-3">
+            <div class="card metric-card">
+                <div class="card-body text-center p-4">
+                    <div class="metric-icon mx-auto">
+                        <i class="bi bi-database-fill-up"></i>
+                    </div>
+                    <h5 class="mb-2" style="color: rgba(240, 249, 255, 0.8);">Datasets</h5>
+                    <p class="metric-value mb-0" id="datasetsCount">0</p>
+                    <small style="color: rgba(240, 249, 255, 0.6);">Jeux de données</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card metric-card">
+                <div class="card-body text-center p-4">
+                    <div class="metric-icon mx-auto" style="background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 204, 102, 0.2)); border-color: rgba(0, 255, 136, 0.5); color: #00ff88; box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);">
+                        <i class="bi bi-cpu-fill"></i>
+                    </div>
+                    <h5 class="mb-2" style="color: rgba(240, 249, 255, 0.8);">Modèles</h5>
+                    <p class="metric-value mb-0" id="modelsCount">0</p>
+                    <small style="color: rgba(240, 249, 255, 0.6);">Modèles entraînés</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card metric-card">
+                <div class="card-body text-center p-4">
+                    <div class="metric-icon mx-auto" style="background: linear-gradient(135deg, rgba(255, 0, 255, 0.2), rgba(204, 0, 204, 0.2)); border-color: rgba(255, 0, 255, 0.5); color: #ff00ff; box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);">
+                        <i class="bi bi-graph-up-arrow"></i>
+                    </div>
+                    <h5 class="mb-2" style="color: rgba(240, 249, 255, 0.8);">Précision</h5>
+                    <p class="metric-value mb-0" id="accuracyRate">0%</p>
+                    <small style="color: rgba(240, 249, 255, 0.6);">Taux moyen</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card metric-card">
+                <div class="card-body text-center p-4">
+                    <div class="metric-icon mx-auto" style="background: linear-gradient(135deg, rgba(255, 170, 0, 0.2), rgba(204, 136, 0, 0.2)); border-color: rgba(255, 170, 0, 0.5); color: #ffaa00; box-shadow: 0 0 20px rgba(255, 170, 0, 0.5);">
+                        <i class="bi bi-lightning-fill"></i>
+                    </div>
+                    <h5 class="mb-2" style="color: rgba(240, 249, 255, 0.8);">Prédictions</h5>
+                    <p class="metric-value mb-0" id="predictionsToday">0</p>
+                    <small style="color: rgba(240, 249, 255, 0.6);">Aujourd'hui</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions rapides -->
+    <div class="row g-4 mb-5">
+        <div class="col-12">
+            <h2 class="text-white mb-4">Actions Rapides</h2>
+        </div>
+        <div class="col-md-4">
+            <div class="card action-card h-100" onclick="showUploadDatasetModal()">
+                <div class="card-body text-center p-5">
+                    <i class="bi bi-cloud-upload"></i>
+                    <h4>Charger un Dataset</h4>
+                    <p class="mb-0">Importez vos données météorologiques</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card action-card h-100" onclick="showTrainModelModal()">
+                <div class="card-body text-center p-5">
+                    <i class="bi bi-play-circle"></i>
+                    <h4>Entraîner un Modèle</h4>
+                    <p class="mb-0">Créez un nouveau modèle IA</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card action-card h-100" onclick="showPredictionModal()">
+                <div class="card-body text-center p-5">
+                    <i class="bi bi-cloud-fog2"></i>
+                    <h4>Faire une Prédiction</h4>
+                    <p class="mb-0">Prédisez la météo</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graphiques et tableaux -->
+    <div class="row g-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header" style="background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 153, 255, 0.2)); color: #00d4ff; border-bottom: 1px solid rgba(0, 212, 255, 0.3); text-transform: uppercase; letter-spacing: 1px;">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart-line"></i> Performance des Modèles</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header" style="background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 153, 255, 0.2)); color: #00d4ff; border-bottom: 1px solid rgba(0, 212, 255, 0.3); text-transform: uppercase; letter-spacing: 1px;">
+                    <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Répartition des Modèles</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="modelsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activité récente -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header" style="background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 153, 255, 0.2)); color: #00d4ff; border-bottom: 1px solid rgba(0, 212, 255, 0.3); text-transform: uppercase; letter-spacing: 1px;">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Activité Récente</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-container">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                    <th>État</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activityTable">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-5">
+                                        <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                        Aucune activité récente
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Charger Dataset -->
+<div class="modal fade" id="uploadDatasetModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-white">
+                    <i class="bi bi-cloud-upload"></i> Charger un Dataset
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="uploadDatasetForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="datasetName" class="form-label">Nom du Dataset</label>
+                        <input type="text" class="form-control" id="datasetName" placeholder="Ex: Données météo 2024" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="datasetShortDescription" class="form-label">Description courte <small class="text-muted" id="dashShortCharCount">(0/80)</small></label>
+                        <input type="text" class="form-control" id="datasetShortDescription" 
+                               placeholder="Description brève pour les cartes..." 
+                               maxlength="80" oninput="updateDashShortCharCount()">
+                    </div>
+                    <div class="mb-3">
+                        <label for="datasetLongDescription" class="form-label">Description détaillée <small class="text-muted">(optionnel)</small></label>
+                        <textarea class="form-control" id="datasetLongDescription" rows="3" 
+                                  placeholder="Description complète du dataset, méthodologie, source des données..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="datasetFile" class="form-label">Fichier CSV</label>
+                        <input type="file" class="form-control" id="datasetFile" accept=".csv" required>
+                        <div class="form-text">Format accepté: CSV (max 50MB)</div>
+                    </div>
+                    <div id="uploadProgress" class="progress d-none mb-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="uploadDataset()">
+                    <i class="bi bi-upload"></i> Charger
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Entraîner Modèle -->
+<div class="modal fade" id="trainModelModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-white">
+                    <i class="bi bi-cpu"></i> Entraîner un Nouveau Modèle
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="trainModelForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="modelName" class="form-label">Nom du Modèle</label>
+                                <input type="text" class="form-control" id="modelName" placeholder="Ex: Modèle Météo LSTM v2" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="modelType" class="form-label">Type de Modèle</label>
+                                <select class="form-select" id="modelType" required>
+                                    <option value="">Sélectionner...</option>
+                                    <option value="decision_tree">Decision Tree</option>
+                                    <option value="random_forest">Random Forest</option>
+                                    <option value="lstm">LSTM (Deep Learning)</option>
+                                    <option value="gru">GRU (Deep Learning)</option>
+                                    <option value="xgboost">XGBoost</option>
+                                    <option value="gradient_boosting">Gradient Boosting</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="dataset" class="form-label">Dataset</label>
+                                <select class="form-select" id="dataset" required onchange="loadDatasetColumns()">
+                                    <option value="">Sélectionner un dataset...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div id="modelRequirements" class="model-requirements" style="display: none;">
+                                <h6 class="text-warning mb-2"><i class="bi bi-info-circle"></i> Exigences du Modèle</h6>
+                                <p id="modelRequirementsText" class="mb-0 small"></p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Colonnes Cibles (à prédire)</label>
+                                <div id="targetVariables" class="border rounded p-3" style="max-height: 200px; overflow-y: auto; background: rgba(255, 107, 107, 0.05); border-color: rgba(255, 107, 107, 0.3) !important;">
+                                    <p class="text-muted">Sélectionnez d'abord un dataset</p>
+                                </div>
+                                <small class="text-muted" id="targetHelp">Cliquez pour sélectionner les variables à prédire</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Variables Prédictives</label>
+                                <div id="predictorVariables" class="border rounded p-3" style="max-height: 200px; overflow-y: auto; background: rgba(0, 212, 255, 0.05); border-color: rgba(0, 212, 255, 0.3) !important;">
+                                    <p class="text-muted">Sélectionnez d'abord un dataset</p>
+                                </div>
+                                <small class="text-muted" id="predictorHelp">Cliquez pour sélectionner les variables d'entrée</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Division des Données</label>
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label for="trainSize" class="form-label small">Entraînement (%)</label>
+                                        <input type="number" class="form-control" id="trainSize" min="40" max="80" value="70" required onchange="updateDataSplits()">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="valSize" class="form-label small">Validation (%)</label>
+                                        <input type="number" class="form-control" id="valSize" min="10" max="30" value="15" required onchange="updateDataSplits()">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="testSize" class="form-label small">Test (%)</label>
+                                        <input type="number" class="form-control" id="testSize" min="10" max="30" value="15" readonly style="background-color: rgba(255,255,255,0.1);">
+                                    </div>
+                                </div>
+                                <small class="text-muted">Les pourcentages doivent totaliser 100%</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="epochs" class="form-label">Époques (pour Deep Learning)</label>
+                                <input type="number" class="form-control" id="epochs" min="1" max="1000" value="50">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Mode Expert Toggle -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="expertMode" onchange="toggleExpertMode()">
+                                <label class="form-check-label" for="expertMode">
+                                    <i class="bi bi-gear-fill"></i> Mode Expert - Configuration avancée du modèle
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Configuration du Modèle (Normal + Expert) -->
+                    <div id="modelConfiguration" class="mt-4" style="display: none;">
+                        <h5 class="text-info mb-3"><i class="bi bi-sliders"></i> Configuration du Modèle</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="lossFunction" class="form-label">Fonction de Perte</label>
+                                    <select class="form-select" id="lossFunction">
+                                        <option value="">Sélectionner...</option>
+                                        <optgroup label="Régression">
+                                            <option value="mse">MSE (Mean Squared Error)</option>
+                                            <option value="mae">MAE (Mean Absolute Error)</option>
+                                            <option value="huber">Huber Loss</option>
+                                            <option value="log_cosh">Log-Cosh Loss</option>
+                                        </optgroup>
+                                        <optgroup label="Classification">
+                                            <option value="binary_crossentropy">Binary Crossentropy</option>
+                                            <option value="categorical_crossentropy">Categorical Crossentropy</option>
+                                            <option value="sparse_categorical_crossentropy">Sparse Categorical Crossentropy</option>
+                                        </optgroup>
+                                        <optgroup label="Multi-tâches">
+                                            <option value="custom">Personnalisée (définir dans le code)</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="optimizer" class="form-label">Optimiseur</label>
+                                    <select class="form-select" id="optimizer">
+                                        <option value="adam">Adam</option>
+                                        <option value="sgd">SGD</option>
+                                        <option value="rmsprop">RMSprop</option>
+                                        <option value="adagrad">Adagrad</option>
+                                        <option value="adamax">Adamax</option>
+                                        <option value="nadam">Nadam</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="learningRate" class="form-label">Taux d'Apprentissage</label>
+                                    <input type="number" class="form-control" id="learningRate" step="0.0001" value="0.001">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="batchSize" class="form-label">Taille du Batch</label>
+                                    <input type="number" class="form-control" id="batchSize" min="1" value="32">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Architecture du Réseau (Mode Expert) -->
+                    <div id="networkArchitecture" class="mt-4" style="display: none;">
+                        <h5 class="text-info mb-3"><i class="bi bi-diagram-3"></i> Architecture du Réseau</h5>
+                        
+                        <!-- Boutons pour ajouter des couches -->
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('dense')">
+                                <i class="bi bi-plus-circle"></i> Dense
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('lstm')">
+                                <i class="bi bi-plus-circle"></i> LSTM
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('gru')">
+                                <i class="bi bi-plus-circle"></i> GRU
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('conv1d')">
+                                <i class="bi bi-plus-circle"></i> Conv1D
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('dropout')">
+                                <i class="bi bi-plus-circle"></i> Dropout
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('batchnorm')">
+                                <i class="bi bi-plus-circle"></i> BatchNorm
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="addLayer('flatten')">
+                                <i class="bi bi-plus-circle"></i> Flatten
+                            </button>
+                        </div>
+                        
+                        <!-- Conteneur des couches -->
+                        <div id="layersContainer" class="border rounded p-3" style="max-height: 400px; overflow-y: auto; background: rgba(0, 0, 0, 0.3);">
+                            <p class="text-muted text-center">Aucune couche ajoutée. Cliquez sur les boutons ci-dessus pour ajouter des couches.</p>
+                        </div>
+                        
+                        <!-- Configuration de la couche de sortie -->
+                        <div class="mt-3">
+                            <h6 class="text-warning">Couche de Sortie</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="outputActivation" class="form-label">Activation de Sortie</label>
+                                        <select class="form-select" id="outputActivation">
+                                            <option value="linear">Linear (Régression)</option>
+                                            <option value="sigmoid">Sigmoid (Classification binaire)</option>
+                                            <option value="softmax">Softmax (Classification multi-classe)</option>
+                                            <option value="tanh">Tanh</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="outputUnits" class="form-label">Nombre d'Unités de Sortie</label>
+                                        <input type="number" class="form-control" id="outputUnits" min="1" value="1">
+                                        <small class="text-muted">Sera automatiquement ajusté selon les variables cibles</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Métriques et Callbacks -->
+                    <div id="metricsCallbacks" class="mt-4" style="display: none;">
+                        <h5 class="text-info mb-3"><i class="bi bi-graph-up"></i> Métriques et Callbacks</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Métriques à Suivre</label>
+                                <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+                                    <div class="form-check">
+                                        <input class="form-check-input metric-checkbox" type="checkbox" value="accuracy" id="metric_accuracy">
+                                        <label class="form-check-label" for="metric_accuracy">Accuracy</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input metric-checkbox" type="checkbox" value="mae" id="metric_mae" checked>
+                                        <label class="form-check-label" for="metric_mae">MAE</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input metric-checkbox" type="checkbox" value="mse" id="metric_mse" checked>
+                                        <label class="form-check-label" for="metric_mse">MSE</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input metric-checkbox" type="checkbox" value="rmse" id="metric_rmse">
+                                        <label class="form-check-label" for="metric_rmse">RMSE</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input metric-checkbox" type="checkbox" value="r2" id="metric_r2">
+                                        <label class="form-check-label" for="metric_r2">R²</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Callbacks</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="earlyStoppingCallback" checked>
+                                    <label class="form-check-label" for="earlyStoppingCallback">
+                                        Early Stopping
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="reduceLRCallback" checked>
+                                    <label class="form-check-label" for="reduceLRCallback">
+                                        Reduce LR on Plateau
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="modelCheckpointCallback" checked>
+                                    <label class="form-check-label" for="modelCheckpointCallback">
+                                        Model Checkpoint
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info mt-4">
+                        <i class="bi bi-info-circle"></i> L'entraînement peut prendre plusieurs minutes selon la taille du dataset et la complexité du modèle.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-outline-primary" onclick="createModelOnly()">
+                    <i class="bi bi-save"></i> Sauvegarder sans entraîner
+                </button>
+                <button type="button" class="btn btn-primary" onclick="trainModel()">
+                    <i class="bi bi-play-fill"></i> Sauvegarder et Entraîner
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Faire une Prédiction -->
+<div class="modal fade" id="predictionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-white">
+                    <i class="bi bi-cloud-fog2"></i> Faire une Prédiction
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="predictionForm">
+                    <div class="mb-3">
+                        <label for="predModel" class="form-label">Modèle</label>
+                        <select class="form-select" id="predModel" required>
+                            <option value="">Sélectionner un modèle...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Données d'Entrée</label>
+                        <div id="inputFields" class="row g-3">
+                            <!-- Les champs seront générés dynamiquement -->
+                        </div>
+                    </div>
+                    <div id="predictionResult" class="alert alert-success d-none">
+                        <h5><i class="bi bi-check-circle"></i> Résultat de la Prédiction</h5>
+                        <div id="predictionValue"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                <button type="button" class="btn btn-primary" onclick="makePrediction()">
+                    <i class="bi bi-stars"></i> Prédire
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Configuration des graphiques
+const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+const gradient = performanceCtx.createLinearGradient(0, 0, 0, 400);
+gradient.addColorStop(0, 'rgba(0, 212, 255, 0.5)');
+gradient.addColorStop(1, 'rgba(0, 212, 255, 0)');
+
+const performanceChart = new Chart(performanceCtx, {
+    type: 'line',
+    data: {
+        labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin'],
+        datasets: [{
+            label: 'Précision (%)',
+            data: [88, 90, 89, 92, 94, 95],
+            borderColor: '#00d4ff',
+            backgroundColor: gradient,
+            borderWidth: 3,
+            pointBackgroundColor: '#00d4ff',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            tension: 0.4,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: true,
+                labels: {
+                    color: '#f0f9ff',
+                    font: {
+                        size: 14
+                    }
+                }
+            },
+            tooltip: {
+                backgroundColor: 'rgba(10, 14, 39, 0.9)',
+                titleColor: '#00d4ff',
+                bodyColor: '#f0f9ff',
+                borderColor: 'rgba(0, 212, 255, 0.5)',
+                borderWidth: 1
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 100,
+                grid: {
+                    color: 'rgba(0, 212, 255, 0.1)',
+                    borderColor: 'rgba(0, 212, 255, 0.3)'
+                },
+                ticks: {
+                    color: '#f0f9ff',
+                    callback: function(value) {
+                        return value + '%';
+                    }
+                }
+            },
+            x: {
+                grid: {
+                    color: 'rgba(0, 212, 255, 0.1)',
+                    borderColor: 'rgba(0, 212, 255, 0.3)'
+                },
+                ticks: {
+                    color: '#f0f9ff'
+                }
+            }
+        }
+    }
+});
+
+const modelsCtx = document.getElementById('modelsChart').getContext('2d');
+const modelsChart = new Chart(modelsCtx, {
+    type: 'doughnut',
+    data: {
+        labels: ['LSTM', 'Random Forest', 'XGBoost', 'GRU'],
+        datasets: [{
+            data: [30, 25, 25, 20],
+            backgroundColor: [
+                'rgba(0, 212, 255, 0.8)',
+                'rgba(0, 255, 136, 0.8)',
+                'rgba(255, 0, 255, 0.8)',
+                'rgba(255, 170, 0, 0.8)'
+            ],
+            borderColor: [
+                '#00d4ff',
+                '#00ff88',
+                '#ff00ff',
+                '#ffaa00'
+            ],
+            borderWidth: 2,
+            hoverBorderWidth: 3
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    color: '#f0f9ff',
+                    padding: 20,
+                    font: {
+                        size: 12
+                    }
+                }
+            },
+            tooltip: {
+                backgroundColor: 'rgba(10, 14, 39, 0.9)',
+                titleColor: '#00d4ff',
+                bodyColor: '#f0f9ff',
+                borderColor: 'rgba(0, 212, 255, 0.5)',
+                borderWidth: 1
+            }
+        },
+        animation: {
+            animateRotate: true,
+            animateScale: true
+        }
+    }
+});
+
+// Function to get CSRF token from cookies
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Fonctions pour les modals
+function showUploadDatasetModal() {
+    // Clean up any existing modals/backdrops first
+    cleanupModals();
+    
+    // Hide loading if it's stuck
+    hideLoading();
+    
+    const modalElement = document.getElementById('uploadDatasetModal');
+    // Always create a fresh instance
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: false,  // Pas de backdrop
+        keyboard: true,
+        focus: true
+    });
+    modal.show();
+}
+
+function showTrainModelModal() {
+    // Clean up any existing modals/backdrops first
+    cleanupModals();
+    hideLoading();
+    
+    // Réinitialiser le formulaire
+    document.getElementById('trainModelForm').reset();
+    document.getElementById('targetVariables').innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+    document.getElementById('predictorVariables').innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+    document.getElementById('modelRequirements').style.display = 'none';
+    
+    loadDatasets();
+    const modalElement = document.getElementById('trainModelModal');
+    // Always create a fresh instance
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: false,  // Pas de backdrop
+        keyboard: true,
+        focus: true
+    });
+    modal.show();
+}
+
+function showPredictionModal() {
+    // Clean up any existing modals/backdrops first
+    cleanupModals();
+    hideLoading();
+    
+    loadModels();
+    const modalElement = document.getElementById('predictionModal');
+    // Always create a fresh instance
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: false,  // Pas de backdrop
+        keyboard: true,
+        focus: true
+    });
+    modal.show();
+}
+
+// Charger les datasets
+function loadDatasets() {
+    fetch('/api/datasets/')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('dataset');
+            select.innerHTML = '<option value="">Sélectionner un dataset...</option>';
+            data.forEach(dataset => {
+                select.innerHTML += `<option value="${dataset.id}">${dataset.name}</option>`;
+            });
+        })
+        .catch(error => console.error('Erreur:', error));
+}
+
+// Charger les modèles
+function loadModels() {
+    fetch('/api/training-sessions/')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('predModel');
+            select.innerHTML = '<option value="">Sélectionner un modèle...</option>';
+            data.filter(session => session.status === 'completed').forEach(session => {
+                select.innerHTML += `<option value="${session.id}">${session.name} (${session.model_type})</option>`;
+            });
+        })
+        .catch(error => console.error('Erreur:', error));
+}
+
+// Charger les colonnes du dataset sélectionné
+function loadDatasetColumns() {
+    const datasetId = document.getElementById('dataset').value;
+    const targetDiv = document.getElementById('targetVariables');
+    const predictorDiv = document.getElementById('predictorVariables');
+    
+    if (!datasetId) {
+        targetDiv.innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+        predictorDiv.innerHTML = '<p class="text-muted">Sélectionnez d\'abord un dataset</p>';
+        return;
+    }
+    
+    // Afficher un message de chargement
+    targetDiv.innerHTML = '<p class="text-muted"><i class="bi bi-hourglass-split"></i> Chargement des colonnes...</p>';
+    predictorDiv.innerHTML = '<p class="text-muted"><i class="bi bi-hourglass-split"></i> Chargement des colonnes...</p>';
+    
+    fetch(`/api/datasets/${datasetId}/columns/`)
+        .then(response => {
+            console.log('Response status:', response.status);
+            console.log('Response headers:', response.headers);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Données reçues:', data); // Debug
+            
+            // La réponse contient un objet avec 'columns' et 'dtypes'
+            // Filtrer les colonnes pour s'assurer qu'elles sont valides
+            const columns = (data.columns || []).filter(col => col && typeof col === 'string');
+            const dtypes = data.dtypes || {};
+            
+            // Créer les checkboxes pour les variables cibles et prédictives
+            targetDiv.innerHTML = '';
+            predictorDiv.innerHTML = '';
+            
+            if (columns.length === 0) {
+                targetDiv.innerHTML = '<p class="text-warning">Aucune colonne trouvée dans ce dataset</p>';
+                predictorDiv.innerHTML = '<p class="text-warning">Aucune colonne trouvée dans ce dataset</p>';
+                return;
+            }
+            
+            columns.forEach(columnName => {
+                // Skip if columnName is undefined or null
+                if (!columnName) {
+                    console.warn('Colonne vide ou non définie trouvée, ignorée');
+                    return;
+                }
+                
+                const dtype = dtypes[columnName] || 'unknown';
+                const safeId = columnName.replace(/[^a-zA-Z0-9]/g, '_');
+                
+                // Créer une checkbox pour les variables cibles
+                const targetCheckboxDiv = document.createElement('div');
+                targetCheckboxDiv.className = 'form-check mb-2';
+                targetCheckboxDiv.innerHTML = `
+                    <input class="form-check-input target-checkbox" type="checkbox" 
+                           value="${columnName}" id="target_${safeId}">
+                    <label class="form-check-label" for="target_${safeId}" style="cursor: pointer;">
+                        ${columnName} <span class="text-muted small">(${dtype})</span>
+                    </label>
+                `;
+                targetDiv.appendChild(targetCheckboxDiv);
+                
+                // Créer une checkbox pour les variables prédictives
+                const predCheckboxDiv = document.createElement('div');
+                predCheckboxDiv.className = 'form-check mb-2';
+                predCheckboxDiv.innerHTML = `
+                    <input class="form-check-input predictor-checkbox" type="checkbox" 
+                           value="${columnName}" id="pred_${safeId}" checked>
+                    <label class="form-check-label" for="pred_${safeId}" style="cursor: pointer;">
+                        ${columnName} <span class="text-muted small">(${dtype})</span>
+                    </label>
+                `;
+                predictorDiv.appendChild(predCheckboxDiv);
+            });
+            
+            // Appliquer les règles du modèle sélectionné
+            applyModelRules();
+            
+            showNotification('Succès', `${columns.length} colonnes chargées`, 'success');
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des colonnes:', error);
+            targetDiv.innerHTML = '<p class="text-danger">Erreur lors du chargement des colonnes</p>';
+            predictorDiv.innerHTML = '<p class="text-danger">Erreur lors du chargement des colonnes</p>';
+            showNotification('Erreur', 'Impossible de charger les colonnes du dataset: ' + error.message, 'error');
+        });
+}
+
+// Définir les règles spécifiques pour chaque type de modèle
+const modelRules = {
+    'random_forest': {
+        name: 'Random Forest',
+        minTargets: 1,
+        maxTargets: 1,
+        minPredictors: 1,
+        allowSameVarAsBoth: false,
+        description: 'Modèle de classification/régression. Nécessite exactement 1 variable cible et au moins 1 variable prédictive. Les variables ne peuvent pas être à la fois cible et prédictive.'
+    },
+    'lstm': {
+        name: 'LSTM',
+        minTargets: 1,
+        maxTargets: null, // Pas de limite
+        minPredictors: 1,
+        allowSameVarAsBoth: true,
+        description: 'Réseau de neurones récurrent pour séries temporelles. Peut prédire plusieurs variables simultanément. Les variables peuvent être à la fois cible et prédictive (prédiction auto-régressive).'
+    },
+    'gru': {
+        name: 'GRU',
+        minTargets: 1,
+        maxTargets: null,
+        minPredictors: 1,
+        allowSameVarAsBoth: true,
+        description: 'Réseau de neurones récurrent optimisé. Similaire à LSTM mais plus rapide. Peut gérer des prédictions multivariées et auto-régressives.'
+    },
+    'xgboost': {
+        name: 'XGBoost',
+        minTargets: 1,
+        maxTargets: 1,
+        minPredictors: 1,
+        allowSameVarAsBoth: false,
+        description: 'Boosting de gradient optimisé. Excellent pour la classification/régression. Nécessite exactement 1 variable cible.'
+    },
+    'gradient_boosting': {
+        name: 'Gradient Boosting',
+        minTargets: 1,
+        maxTargets: 1,
+        minPredictors: 1,
+        allowSameVarAsBoth: false,
+        description: 'Méthode d\'ensemble par boosting. Nécessite exactement 1 variable cible et au moins 1 variable prédictive distincte.'
+    }
+};
+
+// Appliquer les règles du modèle sélectionné
+function applyModelRules() {
+    const modelType = document.getElementById('modelType').value;
+    const modelReqDiv = document.getElementById('modelRequirements');
+    const modelReqText = document.getElementById('modelRequirementsText');
+    
+    if (!modelType || !modelRules[modelType]) {
+        modelReqDiv.style.display = 'none';
+        return;
+    }
+    
+    const rules = modelRules[modelType];
+    modelReqDiv.style.display = 'block';
+    modelReqText.innerHTML = rules.description;
+    
+    // Mettre à jour les textes d'aide
+    const targetHelp = document.getElementById('targetHelp');
+    const predictorHelp = document.getElementById('predictorHelp');
+    
+    if (rules.maxTargets === 1) {
+        targetHelp.textContent = 'Sélectionnez exactement 1 variable à prédire';
+    } else {
+        targetHelp.textContent = 'Sélectionnez une ou plusieurs variables à prédire';
+    }
+    
+    if (!rules.allowSameVarAsBoth) {
+        predictorHelp.textContent = 'Les variables cibles ne peuvent pas être sélectionnées comme prédictives';
+    } else {
+        predictorHelp.textContent = 'Les variables peuvent être à la fois cibles et prédictives';
+    }
+    
+    // Appliquer les restrictions si nécessaire
+    updateVariableRestrictions();
+}
+
+// Mettre à jour les restrictions sur les variables
+function updateVariableRestrictions() {
+    const modelType = document.getElementById('modelType').value;
+    if (!modelType || !modelRules[modelType]) return;
+    
+    const rules = modelRules[modelType];
+    const targetCheckboxes = document.querySelectorAll('.target-checkbox:checked');
+    const predictorCheckboxes = document.querySelectorAll('.predictor-checkbox');
+    
+    if (!rules.allowSameVarAsBoth) {
+        // Désactiver dans les prédicteurs les variables sélectionnées comme cibles
+        const targetValues = Array.from(targetCheckboxes).map(cb => cb.value);
+        
+        predictorCheckboxes.forEach(checkbox => {
+            if (targetValues.includes(checkbox.value)) {
+                checkbox.checked = false;
+                checkbox.disabled = true;
+                checkbox.parentElement.classList.add('text-muted');
+            } else {
+                checkbox.disabled = false;
+                checkbox.parentElement.classList.remove('text-muted');
+            }
+        });
+    } else {
+        // Réactiver toutes les checkboxes si le modèle le permet
+        predictorCheckboxes.forEach(checkbox => {
+            checkbox.disabled = false;
+            checkbox.parentElement.classList.remove('text-muted');
+        });
+    }
+    
+    // Si maxTargets = 1, désactiver les autres checkboxes cibles
+    if (rules.maxTargets === 1 && targetCheckboxes.length >= 1) {
+        document.querySelectorAll('.target-checkbox:not(:checked)').forEach(checkbox => {
+            checkbox.disabled = true;
+        });
+    } else {
+        document.querySelectorAll('.target-checkbox:not(:checked)').forEach(checkbox => {
+            checkbox.disabled = false;
+        });
+    }
+}
+
+// Variables globales pour l'architecture du réseau
+let networkLayers = [];
+let layerIdCounter = 0;
+
+// Toggle du mode expert
+function toggleExpertMode() {
+    const expertMode = document.getElementById('expertMode').checked;
+    const modelType = document.getElementById('modelType').value;
+    
+    // Afficher/masquer les sections selon le mode
+    document.getElementById('modelConfiguration').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
+    document.getElementById('networkArchitecture').style.display = expertMode ? 'block' : 'none';
+    document.getElementById('metricsCallbacks').style.display = expertMode || isDeepLearningModel(modelType) ? 'block' : 'none';
+    
+    // Si on désactive le mode expert, réinitialiser l'architecture personnalisée
+    if (!expertMode) {
+        networkLayers = [];
+        document.getElementById('layersContainer').innerHTML = '<p class="text-muted text-center">Aucune couche ajoutée. Cliquez sur les boutons ci-dessus pour ajouter des couches.</p>';
+    }
+}
+
+// Vérifier si c'est un modèle de deep learning
+function isDeepLearningModel(modelType) {
+    return ['lstm', 'gru'].includes(modelType);
+}
+
+// Configuration des paramètres par défaut pour chaque type de couche
+const layerDefaults = {
+    dense: {
+        name: 'Dense',
+        params: {
+            units: { type: 'number', default: 128, min: 1, label: 'Unités' },
+            activation: { 
+                type: 'select', 
+                default: 'relu', 
+                options: ['relu', 'tanh', 'sigmoid', 'linear', 'elu', 'selu', 'swish'],
+                label: 'Activation'
+            },
+            use_bias: { type: 'checkbox', default: true, label: 'Utiliser Bias' },
+            kernel_initializer: {
+                type: 'select',
+                default: 'glorot_uniform',
+                options: ['glorot_uniform', 'glorot_normal', 'he_uniform', 'he_normal', 'random_normal', 'random_uniform'],
+                label: 'Initialisation'
+            }
+        }
+    },
+    lstm: {
+        name: 'LSTM',
+        params: {
+            units: { type: 'number', default: 128, min: 1, label: 'Unités' },
+            activation: { type: 'select', default: 'tanh', options: ['tanh', 'sigmoid', 'relu'], label: 'Activation' },
+            recurrent_activation: { type: 'select', default: 'sigmoid', options: ['sigmoid', 'tanh', 'relu'], label: 'Activation Récurrente' },
+            return_sequences: { type: 'checkbox', default: false, label: 'Return Sequences' },
+            dropout: { type: 'number', default: 0, min: 0, max: 1, step: 0.1, label: 'Dropout' },
+            recurrent_dropout: { type: 'number', default: 0, min: 0, max: 1, step: 0.1, label: 'Dropout Récurrent' }
+        }
+    },
+    gru: {
+        name: 'GRU',
+        params: {
+            units: { type: 'number', default: 128, min: 1, label: 'Unités' },
+            activation: { type: 'select', default: 'tanh', options: ['tanh', 'sigmoid', 'relu'], label: 'Activation' },
+            recurrent_activation: { type: 'select', default: 'sigmoid', options: ['sigmoid', 'tanh', 'relu'], label: 'Activation Récurrente' },
+            return_sequences: { type: 'checkbox', default: false, label: 'Return Sequences' },
+            dropout: { type: 'number', default: 0, min: 0, max: 1, step: 0.1, label: 'Dropout' },
+            recurrent_dropout: { type: 'number', default: 0, min: 0, max: 1, step: 0.1, label: 'Dropout Récurrent' }
+        }
+    },
+    conv1d: {
+        name: 'Conv1D',
+        params: {
+            filters: { type: 'number', default: 64, min: 1, label: 'Filtres' },
+            kernel_size: { type: 'number', default: 3, min: 1, label: 'Taille du Noyau' },
+            strides: { type: 'number', default: 1, min: 1, label: 'Strides' },
+            padding: { type: 'select', default: 'same', options: ['valid', 'same', 'causal'], label: 'Padding' },
+            activation: { type: 'select', default: 'relu', options: ['relu', 'tanh', 'sigmoid', 'linear'], label: 'Activation' }
+        }
+    },
+    dropout: {
+        name: 'Dropout',
+        params: {
+            rate: { type: 'number', default: 0.2, min: 0, max: 1, step: 0.05, label: 'Taux de Dropout' }
+        }
+    },
+    batchnorm: {
+        name: 'BatchNormalization',
+        params: {
+            momentum: { type: 'number', default: 0.99, min: 0, max: 1, step: 0.01, label: 'Momentum' },
+            epsilon: { type: 'number', default: 0.001, min: 0, step: 0.0001, label: 'Epsilon' }
+        }
+    },
+    flatten: {
+        name: 'Flatten',
+        params: {}
+    }
+};
+
+// Ajouter une couche
+function addLayer(layerType) {
+    const layerConfig = layerDefaults[layerType];
+    if (!layerConfig) return;
+    
+    const layerId = layerIdCounter++;
+    const layer = {
+        id: layerId,
+        type: layerType,
+        name: layerConfig.name,
+        params: {}
+    };
+    
+    // Initialiser avec les valeurs par défaut
+    Object.keys(layerConfig.params).forEach(param => {
+        layer.params[param] = layerConfig.params[param].default;
+    });
+    
+    networkLayers.push(layer);
+    renderLayers();
+}
+
+// Rendre l'affichage des couches
+function renderLayers() {
+    const container = document.getElementById('layersContainer');
+    
+    if (networkLayers.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center">Aucune couche ajoutée. Cliquez sur les boutons ci-dessus pour ajouter des couches.</p>';
+        return;
+    }
+    
+    container.innerHTML = networkLayers.map((layer, index) => {
+        const layerConfig = layerDefaults[layer.type];
+        let paramsHtml = '';
+        
+        Object.keys(layerConfig.params).forEach(paramName => {
+            const paramConfig = layerConfig.params[paramName];
+            const value = layer.params[paramName];
+            
+            switch (paramConfig.type) {
+                case 'number':
+                    paramsHtml += `
+                        <div class="mb-2">
+                            <label class="form-label small">${paramConfig.label}</label>
+                            <input type="number" class="form-control form-control-sm" 
+                                   value="${value}" 
+                                   min="${paramConfig.min || ''}" 
+                                   max="${paramConfig.max || ''}" 
+                                   step="${paramConfig.step || ''}"
+                                   onchange="updateLayerParam(${layer.id}, '${paramName}', this.value)">
+                        </div>
+                    `;
+                    break;
+                case 'select':
+                    paramsHtml += `
+                        <div class="mb-2">
+                            <label class="form-label small">${paramConfig.label}</label>
+                            <select class="form-select form-select-sm" 
+                                    onchange="updateLayerParam(${layer.id}, '${paramName}', this.value)">
+                                ${paramConfig.options.map(opt => 
+                                    `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                    `;
+                    break;
+                case 'checkbox':
+                    paramsHtml += `
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" 
+                                   ${value ? 'checked' : ''}
+                                   onchange="updateLayerParam(${layer.id}, '${paramName}', this.checked)">
+                            <label class="form-check-label small">${paramConfig.label}</label>
+                        </div>
+                    `;
+                    break;
+            }
+        });
+        
+        return `
+            <div class="layer-item">
+                <div class="layer-header">
+                    <span class="layer-title">
+                        <i class="bi bi-layers"></i> ${index + 1}. ${layer.name}
+                    </span>
+                    <div class="layer-controls">
+                        <button class="btn btn-move btn-sm" onclick="moveLayer(${index}, -1)" 
+                                ${index === 0 ? 'disabled' : ''}>
+                            <i class="bi bi-arrow-up"></i>
+                        </button>
+                        <button class="btn btn-move btn-sm" onclick="moveLayer(${index}, 1)" 
+                                ${index === networkLayers.length - 1 ? 'disabled' : ''}>
+                            <i class="bi bi-arrow-down"></i>
+                        </button>
+                        <button class="btn btn-delete btn-sm" onclick="removeLayer(${index})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="layer-params">
+                    ${paramsHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Mettre à jour un paramètre de couche
+function updateLayerParam(layerId, paramName, value) {
+    const layer = networkLayers.find(l => l.id === layerId);
+    if (layer) {
+        // Convertir les valeurs string en nombres si nécessaire
+        if (typeof value === 'string' && !isNaN(value) && value !== '') {
+            value = parseFloat(value);
+        }
+        layer.params[paramName] = value;
+    }
+}
+
+// Déplacer une couche
+function moveLayer(index, direction) {
+    if (index + direction < 0 || index + direction >= networkLayers.length) return;
+    
+    const temp = networkLayers[index];
+    networkLayers[index] = networkLayers[index + direction];
+    networkLayers[index + direction] = temp;
+    renderLayers();
+}
+
+// Supprimer une couche
+function removeLayer(index) {
+    networkLayers.splice(index, 1);
+    renderLayers();
+}
+
+// Ajouter des listeners pour les changements
+document.addEventListener('DOMContentLoaded', function() {
+    // Listener pour le changement de type de modèle
+    document.getElementById('modelType').addEventListener('change', function() {
+        applyModelRules();
+        toggleExpertMode(); // Mettre à jour l'affichage selon le type de modèle
+    });
+    
+    // Listener pour les changements de variables cibles
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('target-checkbox')) {
+            updateVariableRestrictions();
+            // Mettre à jour automatiquement le nombre d'unités de sortie
+            const targetCount = document.querySelectorAll('.target-checkbox:checked').length;
+            document.getElementById('outputUnits').value = targetCount || 1;
+        }
+    });
+});
+
+// Upload dataset
+function uploadDataset() {
+    // Validate inputs
+    const datasetName = document.getElementById('datasetName').value;
+    const datasetFile = document.getElementById('datasetFile').files[0];
+    
+    if (!datasetName || !datasetFile) {
+        showNotification('Erreur', 'Veuillez remplir tous les champs requis', 'error');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('name', datasetName);
+    formData.append('file', datasetFile);
+    
+    const progressBar = document.querySelector('#uploadProgress .progress-bar');
+    document.getElementById('uploadProgress').classList.remove('d-none');
+    
+    showLoading('Téléversement en cours...', 'Envoi de votre fichier de données');
+    
+    const csrfToken = getCookie('csrftoken');
+    
+    console.log('Uploading dataset:', datasetName);
+    console.log('File:', datasetFile.name, datasetFile.size, 'bytes');
+    console.log('CSRF Token:', csrfToken);
+    
+    fetch('/api/datasets/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken
+        },
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.text().then(text => {
+                throw new Error(`HTTP error! status: ${response.status}, message: ${text}`);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        hideLoading();
+        document.getElementById('uploadProgress').classList.add('d-none');
+        progressBar.style.width = '0%';
+        
+        // Close modal properly
+        const modalElement = document.getElementById('uploadDatasetModal');
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) {
+            modal.hide();
+        }
+        
+        // Remove any remaining backdrop
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        
+        // Reset form
+        document.getElementById('uploadDatasetForm').reset();
+        
+        showNotification('Succès!', 'Dataset chargé avec succès', 'success');
+        updateDashboard();
+    })
+    .catch(error => {
+        hideLoading();
+        document.getElementById('uploadProgress').classList.add('d-none');
+        progressBar.style.width = '0%';
+        
+        // Close modal properly on error
+        const modalElement = document.getElementById('uploadDatasetModal');
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) {
+            modal.hide();
+        }
+        
+        // Remove any remaining backdrop
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        
+        showNotification('Erreur', 'Erreur lors du chargement: ' + error.message, 'error');
+    });
+}
+
+// Entraîner modèle
+function trainModel() {
+    const modelType = document.getElementById('modelType').value;
+    
+    // Validation du type de modèle
+    if (!modelType || !modelRules[modelType]) {
+        showNotification('Erreur', 'Veuillez sélectionner un type de modèle', 'error');
+        return;
+    }
+    
+    const rules = modelRules[modelType];
+    
+    // Collecter les variables cibles sélectionnées
+    const targetCheckboxes = document.querySelectorAll('.target-checkbox:checked');
+    const targetColumns = Array.from(targetCheckboxes).map(cb => cb.value);
+    
+    // Collecter les variables prédictives sélectionnées
+    const predictorCheckboxes = document.querySelectorAll('.predictor-checkbox:checked:not(:disabled)');
+    const predictorColumns = Array.from(predictorCheckboxes).map(cb => cb.value);
+    
+    // Validation selon les règles du modèle
+    if (targetColumns.length < rules.minTargets) {
+        showNotification('Erreur', `${rules.name} nécessite au moins ${rules.minTargets} variable(s) cible(s)`, 'error');
+        return;
+    }
+    
+    if (rules.maxTargets && targetColumns.length > rules.maxTargets) {
+        showNotification('Erreur', `${rules.name} ne peut avoir que ${rules.maxTargets} variable(s) cible(s) maximum`, 'error');
+        return;
+    }
+    
+    if (predictorColumns.length < rules.minPredictors) {
+        showNotification('Erreur', `${rules.name} nécessite au moins ${rules.minPredictors} variable(s) prédictive(s)`, 'error');
+        return;
+    }
+    
+    // Vérifier que les variables ne sont pas identiques si non permis
+    if (!rules.allowSameVarAsBoth) {
+        const overlap = targetColumns.filter(col => predictorColumns.includes(col));
+        if (overlap.length > 0) {
+            showNotification('Erreur', `${rules.name} ne permet pas qu\'une variable soit à la fois cible et prédictive`, 'error');
+            return;
+        }
+    }
+    
+    // Construire la configuration du modèle
+    const expertMode = document.getElementById('expertMode').checked;
+    let modelConfig = {
+        epochs: parseInt(document.getElementById('epochs').value)
+    };
+    
+    // Configuration commune pour les modèles de deep learning
+    if (isDeepLearningModel(modelType) || expertMode) {
+        modelConfig.loss_function = document.getElementById('lossFunction').value;
+        modelConfig.optimizer = document.getElementById('optimizer').value;
+        modelConfig.learning_rate = parseFloat(document.getElementById('learningRate').value);
+        modelConfig.batch_size = parseInt(document.getElementById('batchSize').value);
+        
+        // Métriques sélectionnées
+        const selectedMetrics = Array.from(document.querySelectorAll('.metric-checkbox:checked')).map(cb => cb.value);
+        modelConfig.metrics = selectedMetrics;
+        
+        // Callbacks
+        modelConfig.callbacks = {
+            early_stopping: document.getElementById('earlyStoppingCallback').checked,
+            reduce_lr: document.getElementById('reduceLRCallback').checked,
+            model_checkpoint: document.getElementById('modelCheckpointCallback').checked
+        };
+        
+        // Configuration de sortie
+        modelConfig.output_activation = document.getElementById('outputActivation').value;
+        modelConfig.output_units = parseInt(document.getElementById('outputUnits').value);
+    }
+    
+    // Architecture personnalisée en mode expert
+    if (expertMode && networkLayers.length > 0) {
+        modelConfig.custom_architecture = networkLayers;
+        modelConfig.use_custom_architecture = true;
+    } else {
+        modelConfig.use_custom_architecture = false;
+    }
+    
+    const modelDefinitionData = {
+        name: document.getElementById('modelName').value,
+        description: `Modèle ${modelType.toUpperCase()} pour prédire ${targetColumns.join(', ')}`,
+        model_type: modelType,
+        dataset: document.getElementById('dataset').value,
+        target_columns: targetColumns,
+        predictor_columns: predictorColumns,
+        default_config: modelConfig,
+        hyperparameters: modelConfig,
+        custom_architecture: expertMode && networkLayers.length > 0 ? networkLayers : null,
+        use_custom_architecture: expertMode && networkLayers.length > 0
+    };
+    
+    showLoading();
+    
+    const csrfToken = getCookie('csrftoken');
+    
+    // D'abord créer la définition du modèle
+    fetch('/api/models/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(modelDefinitionData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(modelDef => {
+        // Ensuite créer la session d'entraînement basée sur le modèle
+        const sessionData = {
+            name: `${modelDef.name} - Training ${new Date().toISOString()}`,
+            model_definition: modelDef.id,
+            model_type: modelType,
+            dataset: document.getElementById('dataset').value,
+            target_columns: targetColumns,
+            target_column: targetColumns[0], // Pour compatibilité avec le backend
+            predictor_columns: predictorColumns,
+            train_split: document.getElementById('trainSize').value / 100,
+            val_split: document.getElementById('valSize').value / 100,
+            test_split: document.getElementById('testSize').value / 100,
+            test_size: document.getElementById('testSize').value / 100,  // Para compatibilidad
+            config: modelConfig,
+            hyperparameters: modelConfig,
+            custom_architecture: modelDef.custom_architecture,
+            use_custom_architecture: modelDef.use_custom_architecture
+        };
+        
+        return fetch('/api/training-sessions/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(sessionData)
+        });
+    })
+    .then(response => response.json())
+    .then(session => {
+        // Fermer le modal et rediriger vers la page de progression
+        hideLoading();
+        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('trainModelModal'));
+        if (modalInstance) {
+            modalInstance.hide();
+            modalInstance.dispose();
+        }
+        cleanupModals();
+        
+        showNotification('Succès', 'Modèle créé avec succès! Démarrage de l\'entraînement...', 'success');
+        
+        // Rediriger vers la page de progression de l'entraînement
+        setTimeout(() => {
+            window.location.href = `/training-progress/${session.id}/`;
+        }, 1000);
+    })
+    .catch(error => {
+        hideLoading();
+        showNotification('Erreur', 'Erreur lors de la création du modèle: ' + error, 'error');
+    });
+}
+
+// Créer uniquement la définition du modèle (sans entraînement)
+function createModelOnly() {
+    const modelType = document.getElementById('modelType').value;
+    
+    // Validation du type de modèle
+    if (!modelType || !modelRules[modelType]) {
+        showNotification('Erreur', 'Veuillez sélectionner un type de modèle', 'error');
+        return;
+    }
+    
+    const rules = modelRules[modelType];
+    
+    // Collecter les variables cibles sélectionnées
+    const targetCheckboxes = document.querySelectorAll('.target-checkbox:checked');
+    const targetColumns = Array.from(targetCheckboxes).map(cb => cb.value);
+    
+    // Collecter les variables prédictives sélectionnées
+    const predictorCheckboxes = document.querySelectorAll('.predictor-checkbox:checked:not(:disabled)');
+    const predictorColumns = Array.from(predictorCheckboxes).map(cb => cb.value);
+    
+    // Validation selon les règles du modèle
+    if (targetColumns.length < rules.minTargets) {
+        showNotification('Erreur', `${rules.name} nécessite au moins ${rules.minTargets} variable(s) cible(s)`, 'error');
+        return;
+    }
+    
+    if (predictorColumns.length < rules.minPredictors) {
+        showNotification('Erreur', `${rules.name} nécessite au moins ${rules.minPredictors} variable(s) prédictive(s)`, 'error');
+        return;
+    }
+    
+    // Validation des pourcentages de division des données
+    if (!updateDataSplits()) {
+        showNotification('Erreur', 'Les pourcentages de division des données doivent totaliser 100%', 'error');
+        return;
+    }
+    
+    const trainSize = parseInt(document.getElementById('trainSize').value);
+    const valSize = parseInt(document.getElementById('valSize').value);
+    const testSize = parseInt(document.getElementById('testSize').value);
+    
+    if (trainSize < 40) {
+        showNotification('Erreur', 'Le pourcentage d\'entraînement doit être d\'au moins 40%', 'error');
+        return;
+    }
+    
+    // Construire la configuration du modèle
+    const expertMode = document.getElementById('expertMode').checked;
+    let modelConfig = {
+        epochs: parseInt(document.getElementById('epochs').value)
+    };
+    
+    // Configuration pour les modèles de deep learning
+    if (modelType === 'lstm' || modelType === 'gru') {
+        modelConfig.optimizer = document.getElementById('optimizer').value;
+        modelConfig.learning_rate = parseFloat(document.getElementById('learningRate').value);
+        modelConfig.loss_function = document.getElementById('lossFunction').value;
+        
+        // Métriques
+        const selectedMetrics = Array.from(document.querySelectorAll('.metric-checkbox:checked'))
+            .map(cb => cb.value);
+        modelConfig.metrics = selectedMetrics;
+        
+        // Callbacks
+        modelConfig.callbacks = {
+            early_stopping: document.getElementById('earlyStoppingCallback').checked,
+            reduce_lr: document.getElementById('reduceLRCallback').checked,
+            model_checkpoint: document.getElementById('modelCheckpointCallback').checked
+        };
+        
+        modelConfig.output_activation = document.getElementById('outputActivation').value;
+        modelConfig.output_units = parseInt(document.getElementById('outputUnits').value);
+    }
+    
+    const modelDefinitionData = {
+        name: document.getElementById('modelName').value,
+        description: `Modèle ${modelType.toUpperCase()} pour prédire ${targetColumns.join(', ')}`,
+        model_type: modelType,
+        dataset: document.getElementById('dataset').value,
+        target_columns: targetColumns,
+        predictor_columns: predictorColumns,
+        default_config: modelConfig,
+        hyperparameters: modelConfig,
+        custom_architecture: expertMode && networkLayers.length > 0 ? networkLayers : null,
+        use_custom_architecture: expertMode && networkLayers.length > 0
+    };
+    
+    showLoading();
+    
+    const csrfToken = getCookie('csrftoken');
+    
+    // Créer uniquement la définition du modèle
+    fetch('/api/models/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(modelDefinitionData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(modelDef => {
+        hideLoading();
+        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('trainModelModal'));
+        if (modalInstance) {
+            modalInstance.hide();
+            modalInstance.dispose();
+        }
+        cleanupModals();
+        
+        showNotification('Succès', 'Modèle créé avec succès!', 'success');
+        
+        // Rediriger vers la page des modèles
+        setTimeout(() => {
+            window.location.href = '/models/';
+        }, 1000);
+    })
+    .catch(error => {
+        hideLoading();
+        showNotification('Erreur', 'Erreur lors de la création du modèle: ' + error, 'error');
+    });
+}
+
+// Faire une prédiction
+function makePrediction() {
+    const modelId = document.getElementById('predModel').value;
+    const inputs = {};
+    
+    // Collecter les valeurs d'entrée
+    document.querySelectorAll('#inputFields input').forEach(input => {
+        inputs[input.name] = parseFloat(input.value);
+    });
+    
+    showLoading();
+    
+    const csrfToken = getCookie('csrftoken');
+    
+    fetch('/api/predict/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            model_id: modelId,
+            data: inputs
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        document.getElementById('predictionResult').classList.remove('d-none');
+        document.getElementById('predictionValue').innerHTML = `
+            <strong>Valeur prédite:</strong> ${data.prediction}<br>
+            <strong>Confiance:</strong> ${data.confidence || 'N/A'}%
+        `;
+    })
+    .catch(error => {
+        hideLoading();
+        showNotification('Erreur', 'Erreur lors de la prédiction: ' + error, 'error');
+    });
+}
+
+// Mettre à jour le dashboard
+function updateDashboard() {
+    // Charger les statistiques
+    fetch('/api/datasets/')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('datasetsCount').textContent = data.length;
+        });
+    
+    fetch('/api/training-sessions/')
+        .then(response => response.json())
+        .then(data => {
+            const completed = data.filter(s => s.status === 'completed').length;
+            document.getElementById('modelsCount').textContent = completed;
+            
+            // Calculer la précision moyenne
+            const accuracies = data.filter(s => s.metrics && s.metrics.accuracy)
+                                 .map(s => s.metrics.accuracy);
+            if (accuracies.length > 0) {
+                const avgAccuracy = (accuracies.reduce((a, b) => a + b, 0) / accuracies.length * 100).toFixed(1);
+                document.getElementById('accuracyRate').textContent = avgAccuracy + '%';
+            }
+        });
+    
+    fetch('/api/predictions/')
+        .then(response => response.json())
+        .then(data => {
+            const today = new Date().toDateString();
+            const todayPredictions = data.filter(p => new Date(p.created_at).toDateString() === today).length;
+            document.getElementById('predictionsToday').textContent = todayPredictions;
+        });
+}
+
+// Initialiser le dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    updateDashboard();
+    setInterval(updateDashboard, 30000); // Mise à jour toutes les 30 secondes
+    
+    // Clean up modals on hide
+    const uploadModal = document.getElementById('uploadDatasetModal');
+    uploadModal.addEventListener('hidden.bs.modal', function () {
+        // Clean up any stuck overlays
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        hideLoading();
+        
+        // Reset form
+        document.getElementById('uploadDatasetForm').reset();
+        document.getElementById('uploadProgress').classList.add('d-none');
+        document.querySelector('#uploadProgress .progress-bar').style.width = '0%';
+    });
+    
+    // Also handle modal hide on backdrop click or ESC
+    uploadModal.addEventListener('hide.bs.modal', function () {
+        hideLoading();
+    });
+    
+    // Clean up train model modal
+    const trainModal = document.getElementById('trainModelModal');
+    trainModal.addEventListener('hidden.bs.modal', function () {
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        hideLoading();
+    });
+    
+    // Clean up prediction modal
+    const predModal = document.getElementById('predictionModal');
+    predModal.addEventListener('hidden.bs.modal', function () {
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        hideLoading();
+    });
+});
+
+// Actualizar contador de caracteres para descripción corta
+function updateDashShortCharCount() {
+    const input = document.getElementById('datasetShortDescription');
+    const charCount = document.getElementById('dashShortCharCount');
+    if (input && charCount) {
+        const current = input.value.length;
+        charCount.textContent = `(${current}/80)`;
+        charCount.style.color = current >= 80 ? '#ff6b6b' : '#6c757d';
+    }
+}
+
+// Función para subir dataset
+function uploadDataset() {
+    const name = document.getElementById('datasetName').value.trim();
+    const shortDescription = document.getElementById('datasetShortDescription').value.trim();
+    const longDescription = document.getElementById('datasetLongDescription').value.trim();
+    const fileInput = document.getElementById('datasetFile');
+    const file = fileInput.files[0];
+    
+    if (!name || !file) {
+        showNotification('Por favor complete todos los campos requeridos', 'error');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('short_description', shortDescription);
+    formData.append('long_description', longDescription);
+    formData.append('file', file);
+    
+    // Mostrar progreso
+    document.getElementById('uploadProgress').classList.remove('d-none');
+    const progressBar = document.querySelector('#uploadProgress .progress-bar');
+    
+    // Simular progreso
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+        progress += Math.random() * 20;
+        if (progress > 90) progress = 90;
+        progressBar.style.width = progress + '%';
+    }, 200);
+    
+    fetch('/api/datasets/', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        clearInterval(progressInterval);
+        progressBar.style.width = '100%';
+        
+        setTimeout(() => {
+            // Cerrar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('uploadDatasetModal'));
+            modal.hide();
+            
+            showNotification('Dataset cargado exitosamente', 'success');
+            updateDashboardMetrics();
+        }, 1000);
+    })
+    .catch(error => {
+        clearInterval(progressInterval);
+        showNotification('Error al cargar el dataset: ' + error, 'error');
+        document.getElementById('uploadProgress').classList.add('d-none');
+    });
+}
+
+// Función para obtener CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Función para actualizar los porcentajes de división de datos
+function updateDataSplits() {
+    const trainSize = parseInt(document.getElementById('trainSize').value) || 0;
+    const valSize = parseInt(document.getElementById('valSize').value) || 0;
+    const testSizeInput = document.getElementById('testSize');
+    
+    // Calcular el porcentaje de test restante
+    const testSize = 100 - trainSize - valSize;
+    
+    // Validar que los porcentajes sean válidos
+    if (testSize < 0 || testSize > 100) {
+        testSizeInput.value = 'Error';
+        testSizeInput.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
+        return false;
+    }
+    
+    testSizeInput.value = testSize;
+    testSizeInput.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+    
+    // Validar que la suma sea 100
+    if (trainSize + valSize + testSize !== 100) {
+        testSizeInput.style.backgroundColor = 'rgba(255, 193, 7, 0.2)';
+        return false;
+    }
+    
+    return true;
+}
+</script>
+{% endblock %}

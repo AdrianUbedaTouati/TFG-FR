@@ -1,0 +1,1155 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Análisis de {{ dataset_name }} - IA Meteorológica{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Estilos similares a los del modal pero adaptados para vista completa */
+    .analysis-container {
+        background: rgba(10, 14, 39, 0.9);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 1px solid rgba(0, 212, 255, 0.3);
+    }
+    
+    .dataset-header {
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 153, 255, 0.1));
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 30px;
+        border: 1px solid rgba(0, 212, 255, 0.3);
+    }
+    
+    .dataset-title {
+        color: #00d4ff;
+        font-size: 2rem;
+        font-weight: 600;
+        margin-bottom: 10px;
+    }
+    
+    .dataset-meta {
+        color: #8b92a9;
+        font-size: 0.9rem;
+    }
+    
+    .section-card {
+        background: rgba(10, 14, 39, 0.8);
+        border: 1px solid rgba(0, 212, 255, 0.2);
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+    }
+    
+    .section-card:hover {
+        border-color: rgba(0, 212, 255, 0.5);
+        box-shadow: 0 5px 20px rgba(0, 212, 255, 0.2);
+    }
+    
+    .section-title {
+        color: #00d4ff;
+        font-size: 1.3rem;
+        font-weight: 500;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .section-title i {
+        font-size: 1.5rem;
+    }
+    
+    /* Tabla de variables */
+    .variables-table {
+        background: rgba(20, 24, 49, 0.6);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    .variables-table th {
+        background: rgba(0, 212, 255, 0.1);
+        color: #00d4ff;
+        font-weight: 500;
+        padding: 12px;
+        border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+    }
+    
+    .variables-table td {
+        padding: 10px;
+        border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+    }
+    
+    .column-row {
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    
+    .column-row:hover {
+        background: rgba(0, 212, 255, 0.05);
+    }
+    
+    .column-row.selected {
+        background: rgba(0, 212, 255, 0.1);
+        border-left: 3px solid #00d4ff;
+    }
+    
+    /* Botones de acción */
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    
+    .btn-analyze {
+        background: linear-gradient(135deg, #00d4ff, #0099ff);
+        border: none;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-analyze:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
+    }
+    
+    /* Loading spinner */
+    .loading-container {
+        text-align: center;
+        padding: 40px;
+    }
+    
+    .spinner-border {
+        width: 3rem;
+        height: 3rem;
+        border-color: rgba(0, 212, 255, 0.3);
+        border-right-color: #00d4ff;
+    }
+    
+    /* Estilos para SweetAlert2 */
+    .swal2-popup input.form-control:not(:disabled) {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border-color: #2d3561 !important;
+        cursor: text !important;
+    }
+    
+    .swal2-popup input.form-control:not(:disabled):focus {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border-color: #00d4ff !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 212, 255, 0.25) !important;
+        outline: none !important;
+    }
+    
+    .swal2-popup input.form-control:disabled {
+        background-color: #0d1225 !important;
+        color: #8b92a9 !important;
+        border-color: #1a1e3a !important;
+        opacity: 0.7;
+        cursor: not-allowed !important;
+    }
+    
+    .swal2-popup input.form-control::placeholder {
+        color: #6b7280 !important;
+        opacity: 0.8;
+    }
+    
+    .swal2-popup .form-label {
+        color: #00d4ff !important;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Estilos para el input nativo de SweetAlert2 */
+    .swal2-input {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border: 1px solid #2d3561 !important;
+        padding: 8px 12px !important;
+        font-size: 1rem !important;
+        width: 80% !important;
+    }
+    
+    .swal2-input:focus {
+        background-color: #1a1e3a !important;
+        color: #f0f9ff !important;
+        border-color: #00d4ff !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 212, 255, 0.25) !important;
+        outline: none !important;
+    }
+    
+    .swal2-input::placeholder {
+        color: #6b7280 !important;
+        opacity: 0.8;
+    }
+    
+    /* Label del input */
+    .swal2-input-label {
+        color: #00d4ff !important;
+        font-weight: 500 !important;
+        margin-bottom: 0.5rem !important;
+        display: block !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header con información del dataset -->
+    <div class="dataset-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="dataset-title">
+                    <i class="bi {% if is_normalized %}bi-sliders{% else %}bi-database{% endif %}"></i>
+                    {{ dataset_name }}
+                </h1>
+                <div class="dataset-meta">
+                    <span><i class="bi bi-hdd"></i> {{ file_size|floatformat:2 }} MB</span>
+                    <span class="ms-3"><i class="bi bi-calendar"></i> {{ dataset.uploaded_at|date:"d/m/Y H:i" }}</span>
+                    {% if is_normalized %}
+                        <span class="ms-3 badge bg-success"><i class="bi bi-check-circle"></i> Normalizado</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="action-buttons justify-content-end">
+                    <a href="{% url 'datasets' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Volver
+                    </a>
+                    <a href="{% url 'dataset-normalize' dataset_id %}" class="btn btn-outline-primary">
+                        <i class="bi bi-sliders"></i> Normalizar
+                    </a>
+                    <button class="btn btn-outline-info" onclick="downloadDataset({{ dataset_id }})">
+                        <i class="bi bi-download"></i> Descargar
+                    </button>
+                    <button class="btn btn-outline-warning" onclick="openDatasetEditor()">
+                        <i class="bi bi-pencil-square"></i> Editar Dataset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor principal de análisis -->
+    <div id="analysisContent">
+        <div class="loading-container">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Cargando análisis...</span>
+            </div>
+            <p class="mt-3 text-muted">Cargando análisis del dataset...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Edición de Dataset -->
+<div class="modal fade" id="datasetEditorModal" tabindex="-1" aria-labelledby="datasetEditorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header">
+                <h5 class="modal-title" id="datasetEditorModalLabel">
+                    <i class="bi bi-pencil-square"></i> Editor de Dataset
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <!-- Panel de selección de columna -->
+                    <div class="col-md-4">
+                        <h6 class="text-info mb-3">Seleccionar Columna</h6>
+                        <div class="list-group" id="columnListEditor" style="max-height: 500px; overflow-y: auto;">
+                            <!-- Se llenará dinámicamente -->
+                        </div>
+                    </div>
+                    
+                    <!-- Panel de información y acciones -->
+                    <div class="col-md-8">
+                        <div id="columnEditPanel" style="display: none;">
+                            <h6 class="text-info mb-3">Información de la Columna: <span id="selectedColumnName"></span></h6>
+                            
+                            <!-- Estadísticas básicas -->
+                            <div class="card bg-secondary mb-3">
+                                <div class="card-body">
+                                    <h6 class="card-title">Estadísticas</h6>
+                                    <div id="columnStatistics">
+                                        <!-- Se llenará dinámicamente -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Valores únicos y frecuencias -->
+                            <div class="card bg-secondary mb-3">
+                                <div class="card-body">
+                                    <h6 class="card-title">Valores Únicos y Frecuencias</h6>
+                                    <div class="mb-3">
+                                        <label class="form-label">Filtrar por porcentaje mínimo:</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" id="percentageThreshold" 
+                                                   min="0" max="100" step="0.1" value="0.1">
+                                            <span class="input-group-text">%</span>
+                                            <button class="btn btn-primary" onclick="applyPercentageFilter()">
+                                                <i class="bi bi-funnel"></i> Aplicar Filtro
+                                            </button>
+                                        </div>
+                                        <small class="text-muted">Eliminará todas las filas con valores que aparezcan menos del porcentaje especificado</small>
+                                    </div>
+                                    <div id="uniqueValuesTable" style="max-height: 300px; overflow-y: auto;">
+                                        <!-- Se llenará dinámicamente -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Acciones adicionales -->
+                            <div class="card bg-secondary">
+                                <div class="card-body">
+                                    <h6 class="card-title">Acciones</h6>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button class="btn btn-sm btn-outline-info" onclick="renameColumnFromEditor()">
+                                            <i class="bi bi-pencil"></i> Renombrar Columna
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" onclick="deleteColumnFromEditor()">
+                                            <i class="bi bi-trash"></i> Eliminar Columna
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-warning" onclick="removeNullValues()">
+                                            <i class="bi bi-x-circle"></i> Eliminar Valores Nulos
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-success" onclick="fillNullValues()">
+                                            <i class="bi bi-plus-circle"></i> Rellenar Valores Nulos
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="noColumnSelected" class="text-center text-muted">
+                            <i class="bi bi-arrow-left" style="font-size: 3rem;"></i>
+                            <p>Selecciona una columna para ver su información y opciones de edición</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" onclick="saveDatasetChanges()" style="display: none;" id="saveChangesBtn">
+                    <i class="bi bi-save"></i> Guardar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Incluir los archivos JavaScript necesarios -->
+<script src="{% static 'js/dataset-common.js' %}"></script>
+<script src="{% static 'js/dataset-analysis.js' %}"></script>
+
+<script>
+// Variables globales
+let selectedDataset = {
+    id: {{ dataset_id }},
+    name: "{{ dataset_name|escapejs }}",
+    file_size: {{ dataset.file_size|default:0 }}
+};
+let currentDatasetData = null;
+let selectedVariable = null;
+
+// Función para cargar el análisis del dataset
+async function loadDatasetAnalysis() {
+    try {
+        const response = await fetch(`/api/datasets/${selectedDataset.id}/columns/`);
+        const data = await response.json();
+        
+        if (response.ok) {
+            currentDatasetData = data;
+            displayDatasetAnalysis(data);
+        } else {
+            showError('Error al cargar el análisis del dataset');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showError('Error de conexión al cargar el análisis');
+    }
+}
+
+// Función para mostrar el análisis
+function displayDatasetAnalysis(data) {
+    let descriptionsSection = createDescriptionSection(data);
+    let dataPreview = createDataPreview(data);
+    let variableInfo = createVariableInfo(data);
+    let generalInfo = createGeneralInfo(data);
+    
+    document.getElementById('analysisContent').innerHTML = 
+        descriptionsSection + dataPreview + variableInfo + generalInfo;
+    
+    // Inicializar eventos
+    initializeEvents();
+}
+
+// Crear sección de descripción
+function createDescriptionSection(data) {
+    const shortDesc = data.short_description || 'Sin descripción breve';
+    const longDesc = data.long_description || 'Sin descripción detallada';
+    
+    return `
+        <div class="section-card">
+            <h3 class="section-title">
+                <i class="bi bi-info-circle"></i> Descripción del Dataset
+            </h3>
+            <div class="row">
+                <div class="col-md-6">
+                    <h5 class="text-info">Descripción Breve</h5>
+                    <p class="text-light">${shortDesc}</p>
+                </div>
+                <div class="col-md-6">
+                    <h5 class="text-info">Descripción Detallada</h5>
+                    <p class="text-light">${longDesc}</p>
+                </div>
+            </div>
+            <div class="text-end mt-3">
+                <button class="btn btn-sm btn-outline-primary" onclick="editDescriptions()">
+                    <i class="bi bi-pencil"></i> Editar Descripciones
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// Crear vista previa de datos
+function createDataPreview(data) {
+    if (!data.preview) return '';
+    
+    const columns = Object.keys(data.preview);
+    const numRows = data.preview[columns[0]]?.length || 0;
+    
+    let html = `
+        <div class="section-card">
+            <h3 class="section-title">
+                <i class="bi bi-table"></i> Vista Previa de Datos
+            </h3>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover variables-table">
+                    <thead>
+                        <tr>
+                            ${columns.map(col => `<th>${col}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    for (let i = 0; i < Math.min(numRows, 10); i++) {
+        html += '<tr>';
+        columns.forEach(col => {
+            const value = data.preview[col][i];
+            html += `<td>${value !== null && value !== undefined ? value : '<em>null</em>'}</td>`;
+        });
+        html += '</tr>';
+    }
+    
+    html += `
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    return html;
+}
+
+// Crear información de variables
+function createVariableInfo(data) {
+    const columns = data.columns || [];
+    const stats = data.stats || {};
+    
+    let html = `
+        <div class="section-card">
+            <h3 class="section-title">
+                <i class="bi bi-list-columns"></i> Información de Variables
+            </h3>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover variables-table">
+                    <thead>
+                        <tr>
+                            <th>Variable</th>
+                            <th>Tipo Python</th>
+                            <th>Valores Únicos</th>
+                            <th>Nulos</th>
+                            <th>% Nulos</th>
+                            <th>Estadísticas</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    columns.forEach(col => {
+        const colStats = stats[col] || {};
+        const isNumeric = colStats.is_numeric;
+        const pythonType = colStats.python_type || 'unknown';
+        
+        html += `
+            <tr class="column-row" data-column="${col}" onclick="selectVariable('${col}', ${isNumeric})">
+                <td>
+                    <strong>${col}</strong>
+                    <button class="btn btn-sm btn-outline-secondary ms-2" 
+                        onclick="event.stopPropagation(); renameColumn('${col}');" 
+                        title="Renombrar columna">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                </td>
+                <td>
+                    <span class="badge bg-${isNumeric ? 'success' : 'info'}">
+                        <i class="bi ${isNumeric ? 'bi-123' : 'bi-fonts'}"></i> ${pythonType}
+                    </span>
+                </td>
+                <td>${colStats.unique_count || 0}</td>
+                <td>${colStats.null_count || 0}</td>
+                <td>${colStats.null_percentage ? colStats.null_percentage.toFixed(1) : '0'}%</td>
+                <td>
+                    ${isNumeric ? 
+                        `<small>μ=${colStats.mean?.toFixed(2) || 'N/A'}, σ=${colStats.std?.toFixed(2) || 'N/A'}</small>` : 
+                        `<small>${colStats.unique_count} valores únicos</small>`
+                    }
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-info" onclick="event.stopPropagation(); showUniqueValues('${col}')" title="Ver valores únicos">
+                        <i class="bi bi-list-ul"></i>
+                    </button>
+                    ${isNumeric ? `
+                        <button class="btn btn-sm btn-outline-warning ms-1" onclick="event.stopPropagation(); showOutliers('${col}')" title="Ver outliers">
+                            <i class="bi bi-exclamation-triangle"></i>
+                        </button>
+                    ` : ''}
+                    <button class="btn btn-sm btn-outline-danger ms-1" onclick="event.stopPropagation(); deleteColumn('${col}')" title="Eliminar columna">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    return html;
+}
+
+// Crear información general
+function createGeneralInfo(data) {
+    return `
+        <div class="row">
+            <div class="col-md-4">
+                <div class="section-card">
+                    <h4 class="text-info"><i class="bi bi-info-square"></i> Información General</h4>
+                    <ul class="list-unstyled">
+                        <li><strong>Filas:</strong> ${data.row_count || 0}</li>
+                        <li><strong>Columnas:</strong> ${data.column_count || 0}</li>
+                        <li><strong>Tamaño:</strong> ${data.memory_usage || 'N/A'}</li>
+                        <li><strong>Valores nulos totales:</strong> ${data.total_null_count || 0}</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="section-card">
+                    <h4 class="text-info"><i class="bi bi-graph-up"></i> Análisis Avanzados</h4>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-sm btn-outline-primary" onclick="generateGeneralAnalysis('correlation_matrix')">
+                            <i class="bi bi-grid-3x3"></i> Matriz de Correlación
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="generateGeneralAnalysis('pca')">
+                            <i class="bi bi-diagram-3"></i> Análisis PCA
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="generateGeneralAnalysis('lasso')">
+                            <i class="bi bi-funnel"></i> Selección LASSO
+                        </button>
+                    </div>
+                    <div id="generalAnalysisContainer" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Función para seleccionar una variable
+function selectVariable(columnName, isNumeric) {
+    document.querySelectorAll('.column-row').forEach(row => {
+        row.classList.remove('selected');
+    });
+    
+    const currentRow = document.querySelector(`tr[data-column="${columnName}"]`);
+    if (currentRow) {
+        currentRow.classList.add('selected');
+    }
+    
+    selectedVariable = {
+        name: columnName,
+        isNumeric: isNumeric
+    };
+}
+
+// Las funciones renameColumn, deleteColumn, showUniqueValues, showOutliers 
+// ya están disponibles desde dataset-common.js
+
+// Función para mostrar error
+function showError(message) {
+    document.getElementById('analysisContent').innerHTML = `
+        <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle"></i> ${message}
+        </div>
+    `;
+}
+
+// Función para inicializar eventos
+function initializeEvents() {
+    // Aquí puedes agregar más inicializaciones si es necesario
+}
+
+// Función para descargar dataset
+function downloadDataset(datasetId) {
+    window.location.href = `/api/datasets/${datasetId}/download/`;
+}
+
+// Función para editar descripciones
+function editDescriptions() {
+    // Implementar edición de descripciones
+    alert('Función de edición de descripciones en desarrollo');
+}
+
+// Cargar el análisis cuando la página esté lista
+document.addEventListener('DOMContentLoaded', function() {
+    loadDatasetAnalysis();
+});
+
+// Variables del editor
+let editorModal = null;
+let selectedEditorColumn = null;
+let columnFrequencyData = {};
+
+// Función para abrir el editor de dataset
+function openDatasetEditor() {
+    if (!currentDatasetData) {
+        showNotification('Error', 'Primero debes cargar el análisis del dataset', 'error');
+        return;
+    }
+    
+    // Inicializar el modal si no existe
+    if (!editorModal) {
+        editorModal = new bootstrap.Modal(document.getElementById('datasetEditorModal'));
+    }
+    
+    // Limpiar selección previa
+    selectedEditorColumn = null;
+    document.getElementById('columnEditPanel').style.display = 'none';
+    document.getElementById('noColumnSelected').style.display = 'block';
+    
+    // Llenar la lista de columnas
+    populateColumnList();
+    
+    // Mostrar el modal
+    editorModal.show();
+}
+
+// Función para llenar la lista de columnas
+function populateColumnList() {
+    const columnList = document.getElementById('columnListEditor');
+    const columns = currentDatasetData.columns || [];
+    const stats = currentDatasetData.stats || {};
+    
+    let html = '';
+    columns.forEach(col => {
+        const colStats = stats[col] || {};
+        const nullPercentage = colStats.null_percentage || 0;
+        const uniqueCount = colStats.unique_count || 0;
+        const isNumeric = colStats.is_numeric;
+        
+        html += `
+            <a href="#" class="list-group-item list-group-item-action" 
+               onclick="selectColumnForEdit('${col}')" data-column="${col}">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">${col}</h6>
+                    <small>
+                        <span class="badge bg-${isNumeric ? 'success' : 'info'}">
+                            ${colStats.python_type || 'unknown'}
+                        </span>
+                    </small>
+                </div>
+                <small class="text-muted">
+                    ${uniqueCount} valores únicos | ${nullPercentage.toFixed(1)}% nulos
+                </small>
+            </a>
+        `;
+    });
+    
+    columnList.innerHTML = html;
+}
+
+// Función para seleccionar una columna para editar
+function selectColumnForEdit(columnName) {
+    selectedEditorColumn = columnName;
+    
+    // Actualizar UI
+    document.querySelectorAll('#columnListEditor .list-group-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    document.querySelector(`#columnListEditor [data-column="${columnName}"]`).classList.add('active');
+    
+    // Mostrar panel de edición
+    document.getElementById('columnEditPanel').style.display = 'block';
+    document.getElementById('noColumnSelected').style.display = 'none';
+    document.getElementById('selectedColumnName').textContent = columnName;
+    
+    // Cargar estadísticas
+    loadColumnStatistics(columnName);
+    
+    // Cargar valores únicos y frecuencias
+    loadColumnFrequencies(columnName);
+}
+
+// Función para cargar estadísticas de la columna
+function loadColumnStatistics(columnName) {
+    const stats = currentDatasetData.stats[columnName] || {};
+    const statsDiv = document.getElementById('columnStatistics');
+    
+    let html = '<div class="row">';
+    
+    if (stats.is_numeric) {
+        html += `
+            <div class="col-md-6">
+                <p><strong>Media:</strong> ${stats.mean?.toFixed(4) || 'N/A'}</p>
+                <p><strong>Desviación estándar:</strong> ${stats.std?.toFixed(4) || 'N/A'}</p>
+                <p><strong>Mínimo:</strong> ${stats.min || 'N/A'}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Máximo:</strong> ${stats.max || 'N/A'}</p>
+                <p><strong>Valores únicos:</strong> ${stats.unique_count || 0}</p>
+                <p><strong>Valores nulos:</strong> ${stats.null_count || 0} (${stats.null_percentage?.toFixed(2) || 0}%)</p>
+            </div>
+        `;
+    } else {
+        html += `
+            <div class="col-md-6">
+                <p><strong>Tipo:</strong> ${stats.python_type || 'unknown'}</p>
+                <p><strong>Valores únicos:</strong> ${stats.unique_count || 0}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Valores nulos:</strong> ${stats.null_count || 0} (${stats.null_percentage?.toFixed(2) || 0}%)</p>
+                <p><strong>Filas totales:</strong> ${currentDatasetData.row_count || 0}</p>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    statsDiv.innerHTML = html;
+}
+
+// Función para cargar frecuencias de valores
+async function loadColumnFrequencies(columnName) {
+    showLoading('Cargando valores únicos...', 'Por favor espera');
+    
+    try {
+        const response = await fetch(`/api/datasets/${selectedDataset.id}/columns/${encodeURIComponent(columnName)}/`);
+        const data = await response.json();
+        
+        hideLoading();
+        
+        if (response.ok && data.frequency_data) {
+            columnFrequencyData[columnName] = data.frequency_data;
+            displayFrequencyTable(data.frequency_data);
+        } else {
+            showNotification('Error', 'No se pudieron cargar los valores únicos', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error:', error);
+        showNotification('Error', 'Error al cargar los valores únicos', 'error');
+    }
+}
+
+// Función para mostrar la tabla de frecuencias
+function displayFrequencyTable(frequencyData) {
+    const tableDiv = document.getElementById('uniqueValuesTable');
+    
+    if (!frequencyData || frequencyData.length === 0) {
+        tableDiv.innerHTML = '<p class="text-muted">No hay datos de frecuencia disponibles</p>';
+        return;
+    }
+    
+    let html = `
+        <table class="table table-sm table-dark table-hover">
+            <thead>
+                <tr>
+                    <th>Valor</th>
+                    <th>Frecuencia</th>
+                    <th>Porcentaje</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    frequencyData.forEach(item => {
+        const percentage = item.percentage || 0;
+        const barColor = percentage < 1 ? 'bg-danger' : percentage < 5 ? 'bg-warning' : 'bg-info';
+        
+        html += `
+            <tr data-value="${item.value}" data-percentage="${percentage}">
+                <td><code>${item.value}</code></td>
+                <td>${item.count.toLocaleString()}</td>
+                <td>
+                    <div class="progress" style="height: 20px; min-width: 100px;">
+                        <div class="progress-bar ${barColor}" role="progressbar" 
+                             style="width: ${Math.max(percentage, 5)}%">
+                            ${percentage.toFixed(2)}%
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-danger" 
+                            onclick="removeSpecificValue('${item.value}')"
+                            title="Eliminar todas las filas con este valor">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    
+    if (frequencyData.length > 50) {
+        html += `<p class="text-muted text-center">Mostrando los primeros 50 valores de ${frequencyData.length} totales</p>`;
+    }
+    
+    tableDiv.innerHTML = html;
+}
+
+// Función para aplicar filtro por porcentaje
+async function applyPercentageFilter() {
+    const threshold = parseFloat(document.getElementById('percentageThreshold').value);
+    
+    if (isNaN(threshold) || threshold < 0 || threshold > 100) {
+        showNotification('Error', 'Por favor ingresa un porcentaje válido entre 0 y 100', 'error');
+        return;
+    }
+    
+    if (!selectedEditorColumn || !columnFrequencyData[selectedEditorColumn]) {
+        showNotification('Error', 'Primero selecciona una columna', 'error');
+        return;
+    }
+    
+    const valuesToRemove = columnFrequencyData[selectedEditorColumn]
+        .filter(item => item.percentage < threshold)
+        .map(item => item.value);
+    
+    if (valuesToRemove.length === 0) {
+        showNotification('Info', `No hay valores con menos del ${threshold}% de frecuencia`, 'info');
+        return;
+    }
+    
+    const result = await Swal.fire({
+        title: '¿Confirmar filtrado?',
+        html: `Se eliminarán todas las filas donde "${selectedEditorColumn}" tenga uno de estos ${valuesToRemove.length} valores:<br>
+               <small class="text-muted">${valuesToRemove.slice(0, 10).join(', ')}${valuesToRemove.length > 10 ? '...' : ''}</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sí, filtrar',
+        cancelButtonText: 'Cancelar',
+        background: '#0a0e27',
+        color: '#f0f9ff'
+    });
+    
+    if (result.isConfirmed) {
+        await filterDatasetByValues(selectedEditorColumn, valuesToRemove);
+    }
+}
+
+// Función para filtrar el dataset
+async function filterDatasetByValues(columnName, valuesToRemove) {
+    showLoading('Filtrando dataset...', 'Esto puede tomar un momento');
+    
+    try {
+        const response = await fetch(`/api/datasets/${selectedDataset.id}/filter-values/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                column_name: columnName,
+                values_to_remove: valuesToRemove
+            })
+        });
+        
+        hideLoading();
+        
+        if (response.ok) {
+            const data = await response.json();
+            showNotification('¡Éxito!', `Se eliminaron ${data.rows_removed || 0} filas del dataset`, 'success');
+            
+            // Cerrar el modal y recargar
+            editorModal.hide();
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            const errorData = await response.json();
+            showNotification('Error', errorData.error || 'Error al filtrar el dataset', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error:', error);
+        showNotification('Error', 'Error de conexión al filtrar el dataset', 'error');
+    }
+}
+
+// Funciones auxiliares para el editor
+function renameColumnFromEditor() {
+    if (selectedEditorColumn) {
+        editorModal.hide();
+        setTimeout(() => renameColumn(selectedEditorColumn), 300);
+    }
+}
+
+function deleteColumnFromEditor() {
+    if (selectedEditorColumn) {
+        editorModal.hide();
+        setTimeout(() => deleteColumn(selectedEditorColumn), 300);
+    }
+}
+
+function removeNullValues() {
+    if (!selectedEditorColumn) return;
+    
+    Swal.fire({
+        title: '¿Eliminar valores nulos?',
+        text: `Se eliminarán todas las filas donde "${selectedEditorColumn}" tenga valores nulos`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+        background: '#0a0e27',
+        color: '#f0f9ff'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            await removeNullsFromColumn(selectedEditorColumn);
+        }
+    });
+}
+
+async function removeNullsFromColumn(columnName) {
+    showLoading('Eliminando valores nulos...', 'Por favor espera');
+    
+    try {
+        const response = await fetch(`/api/datasets/${selectedDataset.id}/remove-nulls/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                column_name: columnName
+            })
+        });
+        
+        hideLoading();
+        
+        if (response.ok) {
+            const data = await response.json();
+            showNotification('¡Éxito!', `Se eliminaron ${data.rows_removed || 0} filas con valores nulos`, 'success');
+            
+            editorModal.hide();
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            const errorData = await response.json();
+            showNotification('Error', errorData.error || 'Error al eliminar valores nulos', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error:', error);
+        showNotification('Error', 'Error de conexión', 'error');
+    }
+}
+
+function fillNullValues() {
+    if (!selectedEditorColumn) return;
+    
+    const stats = currentDatasetData.stats[selectedEditorColumn];
+    const isNumeric = stats?.is_numeric;
+    
+    Swal.fire({
+        title: 'Rellenar valores nulos',
+        html: `
+            <p>¿Cómo deseas rellenar los valores nulos de "${selectedEditorColumn}"?</p>
+            <select class="form-select" id="fillMethod">
+                ${isNumeric ? `
+                    <option value="mean">Media</option>
+                    <option value="median">Mediana</option>
+                    <option value="mode">Moda</option>
+                    <option value="zero">Cero (0)</option>
+                ` : `
+                    <option value="mode">Moda (valor más frecuente)</option>
+                    <option value="empty">Cadena vacía</option>
+                `}
+                <option value="custom">Valor personalizado</option>
+            </select>
+            <input type="text" class="form-control mt-2" id="customValue" 
+                   placeholder="Valor personalizado" style="display: none;">
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Rellenar',
+        cancelButtonText: 'Cancelar',
+        background: '#0a0e27',
+        color: '#f0f9ff',
+        didOpen: () => {
+            document.getElementById('fillMethod').addEventListener('change', (e) => {
+                document.getElementById('customValue').style.display = 
+                    e.target.value === 'custom' ? 'block' : 'none';
+            });
+        },
+        preConfirm: () => {
+            const method = document.getElementById('fillMethod').value;
+            const customValue = document.getElementById('customValue').value;
+            
+            if (method === 'custom' && !customValue) {
+                Swal.showValidationMessage('Por favor ingresa un valor personalizado');
+                return false;
+            }
+            
+            return { method, customValue };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            await fillNullsInColumn(selectedEditorColumn, result.value.method, result.value.customValue);
+        }
+    });
+}
+
+async function fillNullsInColumn(columnName, method, customValue) {
+    showLoading('Rellenando valores nulos...', 'Por favor espera');
+    
+    try {
+        const response = await fetch(`/api/datasets/${selectedDataset.id}/fill-nulls/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                column_name: columnName,
+                method: method,
+                custom_value: customValue
+            })
+        });
+        
+        hideLoading();
+        
+        if (response.ok) {
+            const data = await response.json();
+            showNotification('¡Éxito!', `Se rellenaron ${data.nulls_filled || 0} valores nulos`, 'success');
+            
+            editorModal.hide();
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            const errorData = await response.json();
+            showNotification('Error', errorData.error || 'Error al rellenar valores nulos', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error:', error);
+        showNotification('Error', 'Error de conexión', 'error');
+    }
+}
+
+function removeSpecificValue(value) {
+    Swal.fire({
+        title: '¿Eliminar filas con este valor?',
+        text: `Se eliminarán todas las filas donde "${selectedEditorColumn}" = "${value}"`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+        background: '#0a0e27',
+        color: '#f0f9ff'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            await filterDatasetByValues(selectedEditorColumn, [value]);
+        }
+    });
+}
+</script>
+
+<!-- Importar funciones del archivo de datasets.html -->
+<script>
+// Importar funciones necesarias que están en datasets.html
+// Por ahora, incluiré las funciones críticas aquí mismo
+
+// Función para obtener el token CSRF
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Función para mostrar notificaciones
+function showNotification(title, message, type = 'info') {
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer);
+            toast.addEventListener('mouseleave', Swal.resumeTimer);
+        }
+    });
+
+    Toast.fire({
+        icon: type,
+        title: title,
+        text: message
+    });
+}
+
+// Función showLoading
+function showLoading(title = 'Cargando...', text = '') {
+    Swal.fire({
+        title: title,
+        text: text,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        background: '#0a0e27',
+        color: '#f0f9ff',
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+}
+
+// Función hideLoading
+function hideLoading() {
+    Swal.close();
+}
+</script>
+{% endblock %}

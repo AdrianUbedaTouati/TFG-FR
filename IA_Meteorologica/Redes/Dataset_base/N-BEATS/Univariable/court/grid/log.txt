@@ -1,0 +1,30 @@
+Cargado mejor checkpoint: checkpoints\nbeats_H336_L24_Temperature_(C)_normalized.pth
+Tiempo: Formatted Date | Objetivo: Temperature (C)_normalized
+Total puntos: 96453 — Train: 67517, Val: 14468, Test: 14468
+Ventana H=336, L=24
+Ventanas => Train: 67158, Val: 14445, Test: 14445
+Iniciando HP search: grid ...
+Mejores HP → width=256, depth=4, blocks=8, lr=0.0005, wd=1e-05, val=0.064876
+Epoch 001 | train_loss=0.143490 | val_loss=0.072974 | val_MAE=0.2109 | val_RMSE=0.2701
+Epoch 002 | train_loss=0.076244 | val_loss=0.070654 | val_MAE=0.2052 | val_RMSE=0.2658
+Epoch 003 | train_loss=0.071158 | val_loss=0.066896 | val_MAE=0.1980 | val_RMSE=0.2586
+Epoch 004 | train_loss=0.067101 | val_loss=0.067624 | val_MAE=0.1971 | val_RMSE=0.2600
+Epoch 005 | train_loss=0.063643 | val_loss=0.071290 | val_MAE=0.2002 | val_RMSE=0.2670
+Epoch 006 | train_loss=0.060861 | val_loss=0.068830 | val_MAE=0.1998 | val_RMSE=0.2624
+Epoch 007 | train_loss=0.055069 | val_loss=0.071181 | val_MAE=0.2030 | val_RMSE=0.2668
+Epoch 008 | train_loss=0.049759 | val_loss=0.078828 | val_MAE=0.2150 | val_RMSE=0.2808
+Epoch 009 | train_loss=0.041934 | val_loss=0.074185 | val_MAE=0.2050 | val_RMSE=0.2724
+Epoch 010 | train_loss=0.037713 | val_loss=0.075981 | val_MAE=0.2089 | val_RMSE=0.2756
+Epoch 011 | train_loss=0.033644 | val_loss=0.078136 | val_MAE=0.2091 | val_RMSE=0.2795
+Epoch 012 | train_loss=0.030952 | val_loss=0.080158 | val_MAE=0.2142 | val_RMSE=0.2831
+Epoch 013 | train_loss=0.028606 | val_loss=0.079915 | val_MAE=0.2130 | val_RMSE=0.2827
+Epoch 014 | train_loss=0.024785 | val_loss=0.081018 | val_MAE=0.2146 | val_RMSE=0.2846
+Epoch 015 | train_loss=0.023524 | val_loss=0.082219 | val_MAE=0.2158 | val_RMSE=0.2867
+Early stopping (patience=12).
+Cargado mejor checkpoint: checkpoints\nbeats_H336_L24_Temperature_(C)_normalized.pth
+Test: loss=0.066353 | MAE=0.1860 | RMSE=0.2576
+Guardado TorchScript en: checkpoints\nbeats_H336_L24_Temperature_(C)_normalized_torchscript.pt
+Listo. Model checkpoint: checkpoints\nbeats_H336_L24_Temperature_(C)_normalized.pth
+Resultados en: outputs/ (gráficas individuales, PDF y métricas)
+Para usar otra variable del dataset o cambiar H y L, modifica TARGET_COL / H / L en la CONFIG y vuelve a ejecutar.
+(.venv) PS C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Redes\Univariable\N-BEATS> 

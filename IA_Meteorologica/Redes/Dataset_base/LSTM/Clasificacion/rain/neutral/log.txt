@@ -1,0 +1,11 @@
+(venv) PS C:\Users\adrian\Despython .\main.pyIA_Meteorologica\Redes\LSTM\Multivaraible\Largo\neutral>
+Paralelización: | workers=0 | pin_memory=False | persistent_workers=False | prefetch_factor=None | batch_size=128 | amp=True | tf32=True | torch_compile=False
+[LOG] Escribiendo logs en: outputs/lstm_improved\log\train_20250827-135408.log
+Modelo seleccionado: LSTM
+Denormalización (TRAIN only): mean=11.931, std=9.865
+Epoch 001 | train_loss=0.04183 | val_MAE=0.17375 | val_RMSE=0.22092
+Epoch 002 | train_loss=0.01938 | val_MAE=0.16885 | val_RMSE=0.21581
+Epoch 003 | train_loss=0.01797 | val_MAE=0.16088 | val_RMSE=0.20862
+Test: loss=0.019155 | MAE=0.1703 | RMSE=0.2208
+Listo. Resultados en: outputs/lstm_improved
+Exception ignored in: Exception ignored in sys.unraisablehook

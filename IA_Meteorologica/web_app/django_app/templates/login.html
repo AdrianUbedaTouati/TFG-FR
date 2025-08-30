@@ -1,0 +1,242 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}<span class="lang-text" data-fr="Connexion" data-es="Iniciar Sesión" data-en="Login">Connexion</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+    .login-container {
+        min-height: 80vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .login-card {
+        background: rgba(0, 212, 255, 0.05);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 20px;
+        padding: 40px;
+        width: 100%;
+        max-width: 400px;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px rgba(0, 212, 255, 0.1);
+    }
+    
+    .login-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    
+    .login-header h2 {
+        color: var(--primary-color);
+        margin-bottom: 10px;
+        font-weight: 700;
+    }
+    
+    .login-header p {
+        color: rgba(240, 249, 255, 0.7);
+        font-size: 0.9rem;
+    }
+    
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    .form-label {
+        color: var(--light-color);
+        margin-bottom: 8px;
+        display: block;
+        font-size: 0.9rem;
+    }
+    
+    .form-control {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        color: var(--light-color);
+        padding: 12px 15px;
+        border-radius: 10px;
+        width: 100%;
+        transition: all 0.3s ease;
+    }
+    
+    .form-control:focus {
+        background: rgba(0, 0, 0, 0.5);
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+        outline: none;
+    }
+    
+    .btn-login {
+        background: linear-gradient(135deg, var(--primary-color), #0099cc);
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 25px;
+        font-weight: 600;
+        width: 100%;
+        margin-top: 20px;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .btn-login:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
+    }
+    
+    .divider {
+        text-align: center;
+        margin: 30px 0;
+        position: relative;
+    }
+    
+    .divider::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: rgba(0, 212, 255, 0.3);
+    }
+    
+    .divider span {
+        background: #0a0e27;
+        padding: 0 15px;
+        position: relative;
+        color: rgba(240, 249, 255, 0.5);
+        font-size: 0.85rem;
+    }
+    
+    .register-link {
+        text-align: center;
+        margin-top: 20px;
+    }
+    
+    .register-link a {
+        color: var(--primary-color);
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .register-link a:hover {
+        text-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
+    }
+    
+    .error-message {
+        background: rgba(255, 59, 48, 0.1);
+        border: 1px solid rgba(255, 59, 48, 0.3);
+        color: #ff3b30;
+        padding: 10px 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        font-size: 0.9rem;
+    }
+    
+    .password-input-wrapper {
+        position: relative;
+    }
+    
+    .btn-toggle-password {
+        transition: all 0.3s ease;
+        padding: 5px;
+        line-height: 1;
+    }
+    
+    .btn-toggle-password:hover {
+        color: var(--accent-color) !important;
+        transform: scale(1.1);
+    }
+    
+    .btn-toggle-password:focus {
+        outline: none;
+        box-shadow: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h2><i class="bi bi-cloud-sun"></i> Weather AI</h2>
+                <p class="lang-text" data-fr="Connectez-vous pour accéder à votre compte" data-es="Inicia sesión para acceder a tu cuenta" data-en="Sign in to access your account">Connectez-vous pour accéder à votre compte</p>
+            </div>
+            
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="error-message">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+            
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="form-group">
+                    <label class="form-label lang-text" for="username" data-fr="Utilisateur" data-es="Usuario" data-en="Username">Utilisateur</label>
+                    <input type="text" class="form-control" id="username" name="username" required autofocus>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label lang-text" for="password" data-fr="Mot de passe" data-es="Contraseña" data-en="Password">Mot de passe</label>
+                    <div class="password-input-wrapper" style="position: relative;">
+                        <input type="password" class="form-control" id="password" name="password" required>
+                        <button type="button" class="btn-toggle-password" onclick="togglePassword()" 
+                                style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); 
+                                       background: none; border: none; color: var(--primary-color); cursor: pointer;">
+                            <i class="bi bi-eye" id="toggle-icon"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-login">
+                    <i class="bi bi-box-arrow-in-right"></i> <span class="lang-text" data-fr="Connexion" data-es="Iniciar Sesión" data-en="Login">Connexion</span>
+                </button>
+            </form>
+            
+            <div class="divider">
+                <span class="lang-text" data-fr="ou" data-es="o" data-en="or">ou</span>
+            </div>
+            
+            <div class="register-link">
+                <span class="lang-text" data-fr="Vous n'avez pas de compte ?" data-es="¿No tienes cuenta?" data-en="Don't have an account?">Vous n'avez pas de compte ?</span> <a href="{% url 'register' %}" class="lang-text" data-fr="Inscrivez-vous ici" data-es="Regístrate aquí" data-en="Register here">Inscrivez-vous ici</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function togglePassword() {
+    const passwordInput = document.getElementById('password');
+    const toggleIcon = document.getElementById('toggle-icon');
+    
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        toggleIcon.classList.remove('bi-eye');
+        toggleIcon.classList.add('bi-eye-slash');
+    } else {
+        passwordInput.type = 'password';
+        toggleIcon.classList.remove('bi-eye-slash');
+        toggleIcon.classList.add('bi-eye');
+    }
+}
+
+// Update language texts based on stored language
+document.addEventListener('DOMContentLoaded', function() {
+    const currentLang = localStorage.getItem('language') || 'fr';
+    
+    document.querySelectorAll('.lang-text').forEach(element => {
+        const langText = element.getAttribute('data-' + currentLang);
+        if (langText) {
+            element.textContent = langText;
+        }
+    });
+});
+</script>
+{% endblock %}

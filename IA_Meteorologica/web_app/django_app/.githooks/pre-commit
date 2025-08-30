@@ -1,0 +1,18 @@
+#!/bin/sh
+# Pre-commit hook to check for modal backdrop issues
+
+echo "🔍 Checking for modal backdrop issues..."
+
+# Run the modal check script
+python3 check_modals.py
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "❌ Commit blocked: Modal backdrop issues detected!"
+    echo "Please fix the issues before committing."
+    echo ""
+    exit 1
+fi
+
+echo "✅ Modal check passed!"
+exit 0

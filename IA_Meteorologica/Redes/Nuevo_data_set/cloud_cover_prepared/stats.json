@@ -1,0 +1,126 @@
+{
+  "input_path": "C:\\Users\\andri\\Desktop\\TFG_FR\\IA_Meteorologica\\Redes\\Dataset_base\\Nuevo_data_set\\weather_classification_data.csv",
+  "rows_in": 13200,
+  "cols_in": 11,
+  "rows_out": 13200,
+  "target_col": "Cloud Cover",
+  "unique_labels": [
+    "clear",
+    "cloudy",
+    "overcast",
+    "partly cloudy"
+  ],
+  "class_distribution": {
+    "clear": 2139,
+    "cloudy": 411,
+    "overcast": 6090,
+    "partly cloudy": 4560
+  },
+  "splits": {
+    "test": 1320,
+    "train": 10560,
+    "val": 1320
+  },
+  "numeric_columns_used": [
+    "Temperature",
+    "Humidity",
+    "Wind Speed",
+    "Precipitation (%)",
+    "Atmospheric Pressure",
+    "UV Index",
+    "Visibility (km)"
+  ],
+  "categorical_columns_used": [
+    "Season",
+    "Location"
+  ],
+  "one_hot_columns": [
+    "Season_Autumn",
+    "Season_Spring",
+    "Season_Summer",
+    "Season_Winter",
+    "Location_coastal",
+    "Location_inland",
+    "Location_mountain"
+  ],
+  "derived_features": [
+    "dew_point_approx",
+    "humid_x_precip_raw"
+  ],
+  "normalization": "minmax",
+  "random_state": 42,
+  "normalization_stats_per_column": {
+    "Temperature": {
+      "min": -25.0,
+      "max": 109.0,
+      "mean": 19.12757575757576,
+      "std": 17.38566799691074
+    },
+    "Humidity": {
+      "min": 20.0,
+      "max": 100.0,
+      "mean": 68.54787878787879,
+      "std": 19.912759995841217
+    },
+    "Wind Speed": {
+      "min": 0.0,
+      "max": 48.5,
+      "mean": 9.83219696969697,
+      "std": 6.908442443236099
+    },
+    "Precipitation (%)": {
+      "min": 0.0,
+      "max": 100.0,
+      "mean": 53.496212121212125,
+      "std": 31.714180236547445
+    },
+    "Atmospheric Pressure": {
+      "min": 800.12,
+      "max": 1199.21,
+      "mean": 1005.8278962121212,
+      "std": 37.1981795954858
+    },
+    "UV Index": {
+      "min": 0.0,
+      "max": 14.0,
+      "mean": 4.005757575757576,
+      "std": 3.8564542753148423
+    },
+    "Visibility (km)": {
+      "min": 0.0,
+      "max": 20.0,
+      "mean": 5.462916666666667,
+      "std": 3.371371199643081
+    },
+    "dew_point_approx": {
+      "min": -35.4,
+      "max": 107.0,
+      "mean": 12.837151515151515,
+      "std": 16.979691124222867
+    },
+    "humid_x_precip_raw": {
+      "min": 0.0,
+      "max": 10000.0,
+      "mean": 4070.1601515151515,
+      "std": 2881.841975109497
+    }
+  },
+  "feature_columns": [
+    "Temperature_normalized",
+    "Humidity_normalized",
+    "Wind_Speed_normalized",
+    "Precipitation_pct_normalized",
+    "Atmospheric_Pressure_normalized",
+    "UV_Index_normalized",
+    "Visibility_km_normalized",
+    "dew_point_approx_normalized",
+    "humid_x_precip_raw_normalized",
+    "Season_Autumn",
+    "Season_Spring",
+    "Season_Summer",
+    "Season_Winter",
+    "Location_coastal",
+    "Location_inland",
+    "Location_mountain"
+  ]
+}
