@@ -1,0 +1,174 @@
+import pandas as pd
+import numpy as np
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
+from sklearn.decomposition import PCA
+
+def auto_cluster_summaries(
+    df: pd.DataFrame,
+    num_cols=None,          # por defecto usa columnas numéricas "típicas"
+    k_min: int = 2,
+    k_max: int = 7,
+    random_state: int = 42,
+):
+    """
+    Elige k automáticamente y clusteriza los 27 (o N) 'Summary' usando TODAS las variables numéricas indicadas.
+    Devuelve summary_map, coords_2d, metrics_df, chosen_k.
+    """
+    if "Summary" not in df.columns:
+        raise ValueError("Falta la columna 'Summary'.")
+    data = df.dropna(subset=["Summary"]).copy()
+
+    # columnas numéricas por defecto (ajusta libremente)
+    if num_cols is None:
+        candidate_numeric = [
+            "Temperature (C)",
+            "Apparent Temperature (C)",
+            "Humidity",
+            "Wind Speed (km/h)",
+            "Wind Bearing (degrees)",
+            "Visibility (km)",
+            "Pressure (millibars)",
+        ]
+        num_cols = [c for c in candidate_numeric if c in data.columns]
+        if len(num_cols) < 2:
+            num_cols = [c for c in data.select_dtypes(include="number").columns if c != "Summary"]
+
+    by_sum = data.groupby("Summary")[num_cols].mean()
+    summaries = by_sum.index.tolist()
+
+    # estandarizar
+    X = StandardScaler().fit_transform(by_sum.values)
+
+    # rango válido de k
+    n_samples = X.shape[0]
+    k_max = min(k_max, max(2, n_samples - 1))
+    ks = list(range(max(2, k_min), k_max + 1))
+
+    # explorar k y guardar métricas
+    rows = []
+    for k in ks:
+        km = KMeans(n_clusters=k, n_init=25, random_state=random_state)
+        labels = km.fit_predict(X)
+        try:
+            sil = float(silhouette_score(X, labels)) if len(set(labels)) > 1 else float("nan")
+        except Exception:
+            sil = float("nan")
+        try:
+            ch = float(calinski_harabasz_score(X, labels))
+        except Exception:
+            ch = float("nan")
+        try:
+            db = float(davies_bouldin_score(X, labels))
+        except Exception:
+            db = float("nan")
+        rows.append({"k": k, "silhouette": sil, "calinski_harabasz": ch, "davies_bouldin": db})
+
+    metrics_df = pd.DataFrame(rows)
+
+    # elegir k (silhouette -> CH -> DB)
+    chosen_k = None
+    if metrics_df["silhouette"].notna().any():
+        chosen_k = int(metrics_df.sort_values("silhouette", ascending=False).iloc[0]["k"])
+    elif metrics_df["calinski_harabasz"].notna().any():
+        chosen_k = int(metrics_df.sort_values("calinski_harabasz", ascending=False).iloc[0]["k"])
+    elif metrics_df["davies_bouldin"].notna().any():
+        chosen_k = int(metrics_df.sort_values("davies_bouldin", ascending=True).iloc[0]["k"])
+    else:
+        chosen_k = 3
+
+    # clustering final
+    km_final = KMeans(n_clusters=chosen_k, n_init=100, random_state=random_state)
+    labels = km_final.fit_predict(X)
+
+    # nombres (si k==3 intento etiquetar por “humedad/nubes”)
+    def _find_col(cols, keyword):
+        kw = keyword.lower()
+        for c in cols:
+            if kw in c.lower():
+                return c
+        return None
+
+    hum_col = _find_col(by_sum.columns, "humidity")
+    vis_col = _find_col(by_sum.columns, "visibility")
+
+    cluster_ids = sorted(set(labels))
+    name_map = {cid: f"Cluster {i+1}" for i, cid in enumerate(cluster_ids)}
+
+    if chosen_k == 3 and (hum_col is not None or vis_col is not None):
+        # perfil por cluster (en el espacio original agregado)
+        prof = []
+        for cid in cluster_ids:
+            idx = [i for i, lab in enumerate(labels) if lab == cid]
+            sub = by_sum.iloc[idx]
+            d = {"ClusterId": cid}
+            if hum_col is not None: d["Hum.avg"] = float(sub[hum_col].mean())
+            if vis_col is not None: d["Vis.avg"] = float(sub[vis_col].mean())
+            prof.append(d)
+        prof = pd.DataFrame(prof)
+
+        def _minmax(s):
+            s = pd.Series(s)
+            if s.isna().all():
+                return s
+            return (s - s.min()) / (s.max() - s.min() + 1e-9)
+
+        wet = 0
+        if "Hum.avg" in prof: wet = wet + _minmax(prof["Hum.avg"]) * 0.95
+        if "Vis.avg" in prof: wet = wet + (1 - _minmax(prof["Vis.avg"])) * 0.05
+        prof["WetScore"] = wet if isinstance(wet, pd.Series) else 0
+        order = prof.sort_values("WetScore")["ClusterId"].tolist()
+        name_map = {order[0]: "Dry/Clear", order[1]: "Intermediate", order[2]: "Humid/Cloudy"}
+
+    summary_map = pd.DataFrame({"Summary": summaries, "ClusterId": labels})
+    summary_map["ClusterName"] = summary_map["ClusterId"].map(name_map)
+    summary_map = summary_map.sort_values(["ClusterId", "Summary"]).reset_index(drop=True)
+
+    # PCA 2D para graficar
+    pca = PCA(n_components=2, random_state=random_state)
+    coords = pca.fit_transform(X)
+    coords_2d = pd.DataFrame(coords, columns=["PC1", "PC2"])
+    coords_2d["Summary"] = summaries
+    coords_2d["ClusterId"] = labels
+    coords_2d["ClusterName"] = coords_2d["ClusterId"].map(name_map)
+
+    return summary_map, coords_2d, metrics_df, chosen_k
+ 
+
+
+
+
+Uso 
+
+import pandas as pd
+df = pd.read_csv("weatherHistory_all_summary.csv")
+summary_map, coords_2d, metrics, k = auto_cluster_summaries(df)
+
+print("k elegido:", k)
+print(summary_map.head())
+
+# (Opcional) gráfica de PCA:
+import matplotlib.pyplot as plt
+plt.figure(figsize=(9,7))
+for cid in sorted(coords_2d["ClusterId"].unique()):
+    sub = coords_2d[coords_2d["ClusterId"] == cid]
+    plt.scatter(sub["PC1"], sub["PC2"], label=sub["ClusterName"].iloc[0])
+for _, r in coords_2d.iterrows():
+    plt.text(r["PC1"], r["PC2"], s=str(r["Summary"]), fontsize=7, ha="left", va="bottom")
+plt.title(f"Summaries • PCA 2D • k = {k}")
+plt.xlabel("PC1"); plt.ylabel("PC2")
+plt.legend(title="Cluster")
+plt.tight_layout()
+plt.show()
+
+# (Opcional) curva silhouette:
+from matplotlib import pyplot as plt
+plt.figure(figsize=(7,5))
+plt.plot(metrics["k"], metrics["silhouette"], marker="o")
+plt.axvline(k, linestyle="--")
+plt.title("Silhouette vs k (k elegido)")
+plt.xlabel("k"); plt.ylabel("silhouette")
+plt.tight_layout()
+plt.show()

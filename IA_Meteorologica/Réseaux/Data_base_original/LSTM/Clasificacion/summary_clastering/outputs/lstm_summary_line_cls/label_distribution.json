@@ -1,0 +1,30 @@
+{
+  "train": [
+    61106,
+    5067,
+    1180,
+    128,
+    36
+  ],
+  "val": [
+    13064,
+    1036,
+    359,
+    6,
+    2
+  ],
+  "test": [
+    13310,
+    1055,
+    101,
+    2,
+    1
+  ],
+  "class_names": [
+    "Cloudy & Humid",
+    "Fog / Rain (Low Visibility)",
+    "Windy / Breezy",
+    "Warm & Dry",
+    "Windy & Foggy"
+  ]
+}

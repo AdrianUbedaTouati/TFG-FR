@@ -1,0 +1,3 @@
+class,precision,recall,f1,support
+Rainy,0.949612,0.945946,0.947776,518
+Snowy,0.940928,0.944915,0.942918,472

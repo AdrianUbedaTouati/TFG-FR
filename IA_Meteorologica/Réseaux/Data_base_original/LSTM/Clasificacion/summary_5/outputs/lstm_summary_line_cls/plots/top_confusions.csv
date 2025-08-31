@@ -1,0 +1,19 @@
+true,pred,count
+Partly Cloudy,Clear,1575
+Mostly Cloudy,Partly Cloudy,1247
+Overcast,Mostly Cloudy,1189
+Partly Cloudy,Mostly Cloudy,1133
+Mostly Cloudy,Clear,621
+Mostly Cloudy,Overcast,554
+Overcast,Clear,255
+Partly Cloudy,Overcast,182
+Overcast,Partly Cloudy,158
+Clear,Foggy,143
+Clear,Mostly Cloudy,137
+Clear,Partly Cloudy,112
+Overcast,Foggy,75
+Clear,Overcast,58
+Mostly Cloudy,Foggy,43
+Partly Cloudy,Foggy,37
+Foggy,Overcast,7
+Foggy,Partly Cloudy,1

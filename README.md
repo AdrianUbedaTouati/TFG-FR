@@ -64,9 +64,27 @@ IA_Meteorologica/
 # Cloner le repository
 git clone https://github.com/AdrianUbedaTouati/TFG-FR/tree/main
 
-# Installer les dépendances Django
-cd web_app/django_app
+cd TFG-FR/IA_Meteorologica
+
+
+python -m venv .venv
+
+#Power Shell
+.venv\Scripts\Activate.ps1 
+
+#CMD
+.venv\Scripts\activate.bat
+
+#Linux/Mac
+source .venv/bin/activate
+
+# Installer les dépendances + paralelisation (carte grafique nvidia)
+pip install -r requirements_cuda.txt
+
+# Installer les dépendances 
 pip install -r requirements.txt
+
+cd web_app/django_app
 
 # Migrations de base de données
 python manage.py migrate

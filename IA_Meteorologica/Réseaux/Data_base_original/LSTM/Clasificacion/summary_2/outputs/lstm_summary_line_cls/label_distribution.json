@@ -1,0 +1,18 @@
+{
+  "train": [
+    23656,
+    19036
+  ],
+  "val": [
+    4131,
+    5017
+  ],
+  "test": [
+    4503,
+    4646
+  ],
+  "class_names": [
+    "Partly Cloudy",
+    "Mostly Cloudy"
+  ]
+}

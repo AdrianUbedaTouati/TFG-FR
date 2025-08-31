@@ -1,0 +1,28 @@
+Summary,ClusterId,ClusterName
+Clear,0,Cluster 1
+Drizzle,0,Cluster 1
+Humid and Mostly Cloudy,0,Cluster 1
+Humid and Overcast,0,Cluster 1
+Humid and Partly Cloudy,0,Cluster 1
+Light Rain,0,Cluster 1
+Mostly Cloudy,0,Cluster 1
+Overcast,0,Cluster 1
+Partly Cloudy,0,Cluster 1
+Breezy,1,Cluster 2
+Breezy and Mostly Cloudy,1,Cluster 2
+Breezy and Overcast,1,Cluster 2
+Breezy and Partly Cloudy,1,Cluster 2
+Dangerously Windy and Partly Cloudy,1,Cluster 2
+Windy,1,Cluster 2
+Windy and Mostly Cloudy,1,Cluster 2
+Windy and Overcast,1,Cluster 2
+Windy and Partly Cloudy,1,Cluster 2
+Breezy and Dry,2,Cluster 3
+Dry,2,Cluster 3
+Dry and Mostly Cloudy,2,Cluster 3
+Dry and Partly Cloudy,2,Cluster 3
+Windy and Dry,2,Cluster 3
+Foggy,3,Cluster 4
+Rain,3,Cluster 4
+Breezy and Foggy,4,Cluster 5
+Windy and Foggy,4,Cluster 5

@@ -24,5 +24,3 @@ Pillow==10.3.0
 openpyxl==3.1.2      # Para exportar archivos Excel
 requests==2.31.0     # Para realizar peticiones HTTP
 
-# --- OpenAI (IA generativa) -
-openai>=1.0.0,<2.0.0  # nuevo cliente: from openai import OpenAI

@@ -1,0 +1,3 @@
+class,precision,recall,f1,support
+Cloudy_Sunny,0.937049,0.930328,0.933676,976
+Rainy_Snowy,0.932740,0.939243,0.935980,1004

@@ -1,1 +1,0 @@
-python .\01_fetch_meteostat_alicante_v_3.py --months-back 36 --station 08360 --out "C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Redes\Univariable\observations_meteostat_alicante_36m.csv"

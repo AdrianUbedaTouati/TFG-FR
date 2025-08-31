@@ -1,0 +1,12 @@
+{
+  "best_epoch": 145,
+  "best_val_loss": 0.22152507094421772,
+  "test": {
+    "loss": 0.21544710900446382,
+    "acc": 0.9050505050505051,
+    "f1_macro": 0.9052823440436344
+  },
+  "ckpt_path": "outputs/lstm_summary_line_cls\\checkpoints\\lstm_line_cls_20250831-222744.pt",
+  "ts_path": "outputs/lstm_summary_line_cls\\checkpoints\\lstm_line_cls_20250831-222744.ts",
+  "confusion_png": "outputs/lstm_summary_line_cls\\plots\\confusion_matrix_raw_from_train.png"
+}

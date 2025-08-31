@@ -1,0 +1,9 @@
+true,pred,count
+Cloudy & Humid,Fog / Rain (Low Visibility),306
+Cloudy & Humid,Warm & Dry,88
+Cloudy & Humid,Windy / Breezy,67
+Fog / Rain (Low Visibility),Cloudy & Humid,3
+Fog / Rain (Low Visibility),Windy & Foggy,3
+Windy / Breezy,Fog / Rain (Low Visibility),1
+Windy / Breezy,Warm & Dry,1
+Windy / Breezy,Windy & Foggy,1

@@ -1,12 +1,12 @@
 {
   "best_epoch": 29,
-  "best_val_loss": 0.016156442894197657,
+  "best_val_loss": 0.016156125184833656,
   "test": {
-    "loss": 0.011918361800127874,
+    "loss": 0.011918211712814706,
     "acc": 0.9919137466307277,
     "f1_macro": 0.966201728209525
   },
-  "ckpt_path": "outputs/lstm_summary_line_cls\\checkpoints\\lstm_line_cls_20250830-191638.pt",
-  "ts_path": "outputs/lstm_summary_line_cls\\checkpoints\\lstm_line_cls_20250830-191638.ts",
+  "ckpt_path": "outputs/lstm_summary_line_cls\\checkpoints\\lstm_line_cls_20250831-162618.pt",
+  "ts_path": "outputs/lstm_summary_line_cls\\checkpoints\\lstm_line_cls_20250831-162618.ts",
   "confusion_png": "outputs/lstm_summary_line_cls\\plots\\confusion_matrix_raw_from_train.png"
 }

@@ -1,0 +1,6 @@
+class,precision,recall,f1,support
+Cloudy & Humid,0.999767,0.965364,0.982264,13310
+Fog / Rain (Low Visibility),0.773599,0.994313,0.870178,1055
+Windy / Breezy,0.593939,0.970297,0.736842,101
+Warm & Dry,0.021978,1.000000,0.043011,2
+Windy & Foggy,0.200000,1.000000,0.333333,1
