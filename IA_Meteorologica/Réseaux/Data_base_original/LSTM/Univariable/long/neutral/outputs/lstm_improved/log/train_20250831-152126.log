@@ -1,0 +1,16 @@
+[LOG] Escribiendo logs en: outputs/lstm_improved\log\train_20250831-152126.log
+Modelo seleccionado: LSTM
+Denormalización (TRAIN only): mean=11.931, std=9.865
+Traceback (most recent call last):
+  File "C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Réseaux\Data_base_original\LSTM\Univariable\long\neutral\main.py", line 112, in <module>
+    main()
+  File "C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Réseaux\Data_base_original\LSTM\Univariable\long\neutral\main.py", line 105, in main
+    results = train_lstm(cfg)
+              ^^^^^^^^^^^^^^^
+  File "C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Réseaux\Data_base_original\LSTM\Univariable\long\neutral\train_lstm.py", line 547, in train_lstm
+    return run_training(cfg)
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Réseaux\Data_base_original\LSTM\Univariable\long\neutral\train_lstm.py", line 404, in run_training
+    scaler = torch.amp.GradScaler('cuda', enabled=use_amp and device.type == 'cuda')
+             ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'torch.amp' has no attribute 'GradScaler'

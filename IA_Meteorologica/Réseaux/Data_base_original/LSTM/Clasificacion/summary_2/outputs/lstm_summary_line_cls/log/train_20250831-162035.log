@@ -1,0 +1,39 @@
+[LOG] Escribiendo logs en: outputs/lstm_summary_line_cls\log\train_20250831-162035.log
+Modelo seleccionado: LSTM (Clasificación Summary, *una línea -> clase*)
+Modo: SIN ventanas deslizantes (seq_len=1).
+[TOP-K] Clases seleccionadas (one-hot): ['Partly Cloudy', 'Mostly Cloudy'] | cobertura=63.23%
+[TOP-K] Mantengo 60989/96453 filas (63.23%) pertenecientes al top-2 por frecuencia.
+Dataset: data/weatherHistory_normalize.csv
+Tiempo: Formatted Date | Clases: 2
+Features (16): ['h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos', 'Precip Type_normalized', 'Humidity_normalized', 'Wind Speed (km/h)_normalized', 'wind_bearing_sin', 'wind_bearing_cos', 'Visibility (km)_normalized', 'Pressure (millibars)_normalized', 'trend_normalized', 'Temperature (C)_normalized', 'Apparent Temperature (C)_normalized']
+Nota: excluimos 'Summary_*' de FEATURES para evitar fuga de información.
+Salida: outputs/lstm_summary_line_cls (guardado class_index.json)
+[TOP-K] (one-hot) ['Partly Cloudy', 'Mostly Cloudy'] | cobertura=63.23%
+[TOP-K] Mantengo 60989/96453 filas (63.23%) tras filtrar fuera del top-2.
+Inicio entrenamiento — clases=2 | muestras: train=42692, val=9148, test=9149
+Epoch 001 | train_loss=0.6512 | train_acc=0.6151 | train_f1=0.6143 | val_loss=0.6653 | val_acc=0.6009 | val_f1=0.5985
+Epoch 002 | train_loss=0.6383 | train_acc=0.6313 | train_f1=0.6298 | val_loss=0.6538 | val_acc=0.6099 | val_f1=0.6049
+Epoch 003 | train_loss=0.6339 | train_acc=0.6385 | train_f1=0.6366 | val_loss=0.6497 | val_acc=0.6111 | val_f1=0.6059
+Epoch 004 | train_loss=0.6311 | train_acc=0.6418 | train_f1=0.6402 | val_loss=0.6532 | val_acc=0.6076 | val_f1=0.6036
+Epoch 005 | train_loss=0.6284 | train_acc=0.6439 | train_f1=0.6421 | val_loss=0.6487 | val_acc=0.6147 | val_f1=0.6090
+Epoch 006 | train_loss=0.6263 | train_acc=0.6471 | train_f1=0.6453 | val_loss=0.6476 | val_acc=0.6124 | val_f1=0.6085
+Epoch 007 | train_loss=0.6245 | train_acc=0.6485 | train_f1=0.6467 | val_loss=0.6468 | val_acc=0.6216 | val_f1=0.6196
+Epoch 008 | train_loss=0.6225 | train_acc=0.6514 | train_f1=0.6493 | val_loss=0.6621 | val_acc=0.6179 | val_f1=0.6177
+Epoch 009 | train_loss=0.6211 | train_acc=0.6526 | train_f1=0.6502 | val_loss=0.6467 | val_acc=0.6220 | val_f1=0.6187
+Epoch 010 | train_loss=0.6197 | train_acc=0.6539 | train_f1=0.6517 | val_loss=0.6413 | val_acc=0.6313 | val_f1=0.6285
+Epoch 011 | train_loss=0.6180 | train_acc=0.6555 | train_f1=0.6533 | val_loss=0.6428 | val_acc=0.6305 | val_f1=0.6249
+Epoch 012 | train_loss=0.6168 | train_acc=0.6571 | train_f1=0.6548 | val_loss=0.6513 | val_acc=0.6317 | val_f1=0.6307
+Epoch 013 | train_loss=0.6153 | train_acc=0.6570 | train_f1=0.6549 | val_loss=0.6435 | val_acc=0.6362 | val_f1=0.6345
+Epoch 014 | train_loss=0.6148 | train_acc=0.6573 | train_f1=0.6552 | val_loss=0.6439 | val_acc=0.6358 | val_f1=0.6333
+Epoch 015 | train_loss=0.6143 | train_acc=0.6591 | train_f1=0.6568 | val_loss=0.6581 | val_acc=0.6263 | val_f1=0.6260
+Epoch 016 | train_loss=0.6135 | train_acc=0.6598 | train_f1=0.6577 | val_loss=0.6464 | val_acc=0.6349 | val_f1=0.6337
+Epoch 017 | train_loss=0.6130 | train_acc=0.6591 | train_f1=0.6570 | val_loss=0.6578 | val_acc=0.6263 | val_f1=0.6258
+Epoch 018 | train_loss=0.6126 | train_acc=0.6601 | train_f1=0.6581 | val_loss=0.6496 | val_acc=0.6358 | val_f1=0.6348
+Epoch 019 | train_loss=0.6121 | train_acc=0.6600 | train_f1=0.6578 | val_loss=0.6434 | val_acc=0.6385 | val_f1=0.6363
+Epoch 020 | train_loss=0.6114 | train_acc=0.6601 | train_f1=0.6581 | val_loss=0.6564 | val_acc=0.6305 | val_f1=0.6296
+[EarlyStopping] Sin mejora en 10 épocas. Mejor epoch=10 (val_loss=0.6413).
+Test: loss=0.61028 | acc=0.6792 | f1_macro=0.6786
+[CONFUSION] Guardada en: outputs/lstm_summary_line_cls\plots\confusion_matrix_raw_from_train.png
+[CKPT] Guardado en: outputs/lstm_summary_line_cls\checkpoints\lstm_line_cls_20250831-162054.pt | [TorchScript] outputs/lstm_summary_line_cls\checkpoints\lstm_line_cls_20250831-162054.ts
+[PLOTS] Artefactos guardados en: outputs/lstm_summary_line_cls\plots
+Listo.

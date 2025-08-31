@@ -1,0 +1,50 @@
+[LOG] Escribiendo logs en: outputs/lstm_improved\log\train_20250831-135303.log
+Modelo seleccionado: LSTM
+Denormalización (TRAIN only): mean=11.931, std=9.865
+Epoch 001 | train_loss=0.05302 | val_MAE=0.19943 | val_RMSE=0.25749
+Epoch 002 | train_loss=0.03181 | val_MAE=0.19457 | val_RMSE=0.25224
+Epoch 003 | train_loss=0.03090 | val_MAE=0.18885 | val_RMSE=0.24397
+Epoch 004 | train_loss=0.03034 | val_MAE=0.18858 | val_RMSE=0.24495
+Epoch 005 | train_loss=0.02955 | val_MAE=0.18427 | val_RMSE=0.23794
+Epoch 006 | train_loss=0.02902 | val_MAE=0.18810 | val_RMSE=0.24238
+Epoch 007 | train_loss=0.02932 | val_MAE=0.18531 | val_RMSE=0.24223
+Epoch 008 | train_loss=0.02825 | val_MAE=0.18505 | val_RMSE=0.23904
+Epoch 009 | train_loss=0.02742 | val_MAE=0.18953 | val_RMSE=0.24134
+Epoch 010 | train_loss=0.02654 | val_MAE=0.18920 | val_RMSE=0.24571
+Epoch 011 | train_loss=0.02530 | val_MAE=0.18581 | val_RMSE=0.24326
+Epoch 012 | train_loss=0.02537 | val_MAE=0.18655 | val_RMSE=0.24362
+Epoch 013 | train_loss=0.02401 | val_MAE=0.18770 | val_RMSE=0.24580
+Epoch 014 | train_loss=0.02340 | val_MAE=0.18306 | val_RMSE=0.23941
+Epoch 015 | train_loss=0.02301 | val_MAE=0.18407 | val_RMSE=0.24047
+Epoch 016 | train_loss=0.02250 | val_MAE=0.18672 | val_RMSE=0.24353
+Epoch 017 | train_loss=0.02238 | val_MAE=0.18347 | val_RMSE=0.23772
+Epoch 018 | train_loss=0.02213 | val_MAE=0.18731 | val_RMSE=0.24512
+Epoch 019 | train_loss=0.02171 | val_MAE=0.18388 | val_RMSE=0.24090
+Epoch 020 | train_loss=0.02358 | val_MAE=0.20171 | val_RMSE=0.25925
+Epoch 021 | train_loss=0.02326 | val_MAE=0.18357 | val_RMSE=0.23890
+Epoch 022 | train_loss=0.02126 | val_MAE=0.18400 | val_RMSE=0.23948
+Epoch 023 | train_loss=0.02093 | val_MAE=0.18235 | val_RMSE=0.23851
+Epoch 024 | train_loss=0.02065 | val_MAE=0.18144 | val_RMSE=0.23627
+Epoch 025 | train_loss=0.02040 | val_MAE=0.17922 | val_RMSE=0.23437
+Epoch 026 | train_loss=0.02064 | val_MAE=0.18631 | val_RMSE=0.24196
+Epoch 027 | train_loss=0.02078 | val_MAE=0.18094 | val_RMSE=0.23673
+Epoch 028 | train_loss=0.01981 | val_MAE=0.18251 | val_RMSE=0.23885
+Epoch 029 | train_loss=0.01957 | val_MAE=0.18161 | val_RMSE=0.23786
+Epoch 030 | train_loss=0.01936 | val_MAE=0.18177 | val_RMSE=0.23756
+Epoch 031 | train_loss=0.01883 | val_MAE=0.18410 | val_RMSE=0.23989
+Epoch 032 | train_loss=0.01855 | val_MAE=0.18307 | val_RMSE=0.23955
+Epoch 033 | train_loss=0.01841 | val_MAE=0.18457 | val_RMSE=0.24017
+Epoch 034 | train_loss=0.01812 | val_MAE=0.18683 | val_RMSE=0.24401
+Epoch 035 | train_loss=0.01784 | val_MAE=0.18429 | val_RMSE=0.24139
+Early stopping at epoch 35 (best epoch 25)
+Test: loss=0.024680 | MAE=0.1839 | RMSE=0.2429
+Traceback (most recent call last):
+  File "C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Réseaux\Data_base_original\LSTM\Univariable\court\neutral\main.py", line 112, in <module>
+    main()
+  File "C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Réseaux\Data_base_original\LSTM\Univariable\court\neutral\main.py", line 107, in main
+    artifacts = generate_artifacts(cfg, results)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Réseaux\Data_base_original\LSTM\Univariable\court\neutral\plots_lstm.py", line 101, in generate_artifacts
+    _plot_sample(ax, samples[i].item(), hist_tail, meta.get('H', 336), meta.get('L', 24), i)
+                     ^^^^^^^^^^^^^^^
+AttributeError: 'dict' object has no attribute 'item'. Did you mean: 'items'?

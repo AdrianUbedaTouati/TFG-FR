@@ -1,0 +1,34 @@
+[LOG] Escribiendo logs en: outputs/lstm_summary_line_cls\log\train_20250831-160021.log
+Modelo seleccionado: LSTM (Clasificación Summary, *una línea -> clase*)
+Modo: SIN ventanas deslizantes (seq_len=1).
+[TOP-K] Clases seleccionadas (one-hot): ['Partly Cloudy', 'Mostly Cloudy', 'Overcast'] | cobertura=81.16%
+[TOP-K] Mantengo 78278/96453 filas (81.16%) pertenecientes al top-3 por frecuencia.
+Dataset: data/weatherHistory_normalize.csv
+Tiempo: Formatted Date | Clases: 3
+Features (16): ['h_sin', 'h_cos', 'dow_sin', 'dow_cos', 'doy_sin', 'doy_cos', 'Precip Type_normalized', 'Humidity_normalized', 'Wind Speed (km/h)_normalized', 'wind_bearing_sin', 'wind_bearing_cos', 'Visibility (km)_normalized', 'Pressure (millibars)_normalized', 'trend_normalized', 'Temperature (C)_normalized', 'Apparent Temperature (C)_normalized']
+Nota: excluimos 'Summary_*' de FEATURES para evitar fuga de información.
+Salida: outputs/lstm_summary_line_cls (guardado class_index.json)
+[TOP-K] (one-hot) ['Partly Cloudy', 'Mostly Cloudy', 'Overcast'] | cobertura=81.16%
+[TOP-K] Mantengo 78278/96453 filas (81.16%) tras filtrar fuera del top-3.
+Inicio entrenamiento — clases=3 | muestras: train=54794, val=11741, test=11743
+Epoch 001 | train_loss=0.9496 | train_acc=0.5015 | train_f1=0.4732 | val_loss=0.9874 | val_acc=0.5126 | val_f1=0.5152
+Epoch 002 | train_loss=0.9053 | train_acc=0.5312 | train_f1=0.5200 | val_loss=0.9704 | val_acc=0.5111 | val_f1=0.5144
+Epoch 003 | train_loss=0.8962 | train_acc=0.5377 | train_f1=0.5277 | val_loss=0.9645 | val_acc=0.5155 | val_f1=0.5189
+Epoch 004 | train_loss=0.8894 | train_acc=0.5445 | train_f1=0.5352 | val_loss=0.9591 | val_acc=0.5228 | val_f1=0.5248
+Epoch 005 | train_loss=0.8838 | train_acc=0.5493 | train_f1=0.5398 | val_loss=0.9509 | val_acc=0.5221 | val_f1=0.5234
+Traceback (most recent call last):
+  File "C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Réseaux\Data_base_original\LSTM\Clasificacion\summary_2\main_summary_line_cls.py", line 190, in <module>
+    main()
+  File "C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Réseaux\Data_base_original\LSTM\Clasificacion\summary_2\main_summary_line_cls.py", line 175, in main
+    results = train_lstm_line_cls(cfg)  # ← lo generaré cuando me digas "continua"
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Réseaux\Data_base_original\LSTM\Clasificacion\summary_2\train_lstm_line_cls.py", line 425, in train_lstm_line_cls
+    tr_loss, tr_acc, tr_f1, _, _ = _epoch(model, dl_tr, device, crit, optimizer, scaler, non_blocking=cfg.NON_BLOCKING_COPY)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\Réseaux\Data_base_original\LSTM\Clasificacion\summary_2\train_lstm_line_cls.py", line 301, in _epoch
+    scaler.scale(loss).backward()
+  File "C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\.venv\Lib\site-packages\torch\_tensor.py", line 522, in backward
+    torch.autograd.backward(
+  File "C:\Users\adrian\Desktop\TFM\TFG-FR\IA_Meteorologica\.venv\Lib\site-packages\torch\autograd\__init__.py", line 266, in backward
+    Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+KeyboardInterrupt
