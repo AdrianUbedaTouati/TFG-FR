@@ -1,9 +1,0 @@
-Arquitecturas que realizaremos:
-
--LSTM / TCN 
-
--CNN
-
--Transformer 
-
--Arboles: RandomForest, Gradient Boosting
