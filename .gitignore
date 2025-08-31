@@ -93,7 +93,6 @@ StyleCopReport.xml
 *.tmp
 *.tmp_proj
 *_wpftmp.csproj
-*.log
 *.tlog
 *.vspscc
 *.vssscc
@@ -421,9 +420,6 @@ build/
 dist/
 *.egg-info/
 .eggs/
-
-# Archivos de logs
-*.log
 
 # Configuración local / IDE
 .vscode/
