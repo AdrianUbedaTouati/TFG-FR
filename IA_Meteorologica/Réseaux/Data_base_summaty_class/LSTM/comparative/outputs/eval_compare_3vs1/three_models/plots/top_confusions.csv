@@ -1,0 +1,13 @@
+true,pred,count
+Snowy,Rainy,442
+Cloudy,Sunny,393
+Sunny,Snowy,51
+Cloudy,Snowy,40
+Cloudy,Rainy,28
+Rainy,Sunny,25
+Rainy,Cloudy,16
+Snowy,Sunny,15
+Sunny,Rainy,15
+Rainy,Snowy,11
+Snowy,Cloudy,11
+Sunny,Cloudy,10

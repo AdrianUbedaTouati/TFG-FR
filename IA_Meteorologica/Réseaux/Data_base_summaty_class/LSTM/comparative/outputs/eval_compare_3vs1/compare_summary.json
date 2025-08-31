@@ -1,0 +1,22 @@
+{
+  "dataset": "data/weather_classification_normalized.csv",
+  "classes": [
+    "Cloudy",
+    "Rainy",
+    "Snowy",
+    "Sunny"
+  ],
+  "single_model": {
+    "path": "data/4_global.pt",
+    "accuracy": 0.9050505050505051,
+    "f1_macro": 0.9052823440436344
+  },
+  "three_models": {
+    "general": "data/2_general.pt",
+    "spec_A": "data/cloudy_sunny.pt",
+    "spec_B": "data/rain_snowy.pt",
+    "accuracy": 0.46616161616161617,
+    "f1_macro": 0.3385020525818241
+  },
+  "timestamp": "2025-08-31T23:40:30"
+}
