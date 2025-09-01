@@ -1,0 +1,26 @@
+{
+  "specialist_a": {
+    "data_path": "data_corrected\\weather_classification_CloudySunny_corrected.csv",
+    "target_classes": [
+      "Cloudy",
+      "Sunny"
+    ],
+    "class_weights": {
+      "0": 1.0,
+      "1": 1.0,
+      "2": 0.3
+    }
+  },
+  "specialist_b": {
+    "data_path": "data_corrected\\weather_classification_RainySnowy_corrected.csv",
+    "target_classes": [
+      "Rainy",
+      "Snowy"
+    ],
+    "class_weights": {
+      "0": 1.0,
+      "1": 1.0,
+      "2": 0.3
+    }
+  }
+}

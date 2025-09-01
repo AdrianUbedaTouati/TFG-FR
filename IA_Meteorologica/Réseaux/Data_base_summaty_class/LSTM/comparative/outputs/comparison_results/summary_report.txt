@@ -1,0 +1,51 @@
+================================================================================
+REPORTE DE COMPARACIÓN DE ARQUITECTURAS
+================================================================================
+
+RESUMEN EJECUTIVO
+----------------------------------------
+✗ La arquitectura jerárquica REDUCE la accuracy en 7.93%
+✗ La arquitectura jerárquica REDUCE el macro F1 en 8.52%
+
+MÉTRICAS GLOBALES
+----------------------------------------
+Métrica                 Modelo Único      Jerárquico      Diferencia
+Accuracy                      0.9051          0.8258         -0.0793
+Macro F1                      0.9053          0.8201         -0.0852
+Weighted F1                   0.9052          0.8212         -0.0839
+
+ANÁLISIS POR CLASE
+----------------------------------------
+
+Cloudy:
+  F1-Score: 0.883 → 0.697 (-0.186)
+  Precisión: 0.881 → 0.868 (-0.012)
+  Recall: 0.884 → 0.582 (-0.303)
+  Soporte: 476
+
+Rainy:
+  F1-Score: 0.896 → 0.869 (-0.026)
+  Precisión: 0.885 → 0.872 (-0.013)
+  Recall: 0.907 → 0.867 (-0.040)
+  Soporte: 526
+
+Snowy:
+  F1-Score: 0.929 → 0.909 (-0.020)
+  Precisión: 0.940 → 0.900 (-0.040)
+  Recall: 0.918 → 0.918 (+0.000)
+  Soporte: 478
+
+Sunny:
+  F1-Score: 0.914 → 0.805 (-0.108)
+  Precisión: 0.917 → 0.712 (-0.205)
+  Recall: 0.910 → 0.926 (+0.016)
+  Soporte: 500
+
+DETALLES DE LA ARQUITECTURA JERÁRQUICA
+----------------------------------------
+Accuracy del modelo general: 0.9348
+Distribución de enrutamiento:
+  - Especialista A (Cloudy/Sunny): 969 muestras
+  - Especialista B (Rainy/Snowy): 1011 muestras
+
+================================================================================

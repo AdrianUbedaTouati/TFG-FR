@@ -1,0 +1,47 @@
+================================================================================
+REPORTE DE ENSEMBLE VOTING
+================================================================================
+
+Estrategia de Voting: hard
+Fecha: 2025-09-01T09:49:21
+
+RESUMEN DE RESULTADOS
+----------------------------------------
+Accuracy del Modelo Único:        0.9051
+Accuracy de Arquitectura Jerárquica: 0.9162
+Accuracy del Ensemble:            0.9162 ⭐
+
+ANÁLISIS DE MEJORA
+----------------------------------------
+Mejora sobre Modelo Único:        +1.11%
+Mejora sobre Arquitectura Jerárquica: +0.00%
+Mejora sobre Mejor Individual:    +0.00%
+
+ANÁLISIS DE ACUERDO ENTRE MODELOS
+----------------------------------------
+Tasa de Acuerdo:                  94.04%
+Accuracy cuando están de acuerdo: 0.9495
+Accuracy cuando discrepan:        0.3898
+Muestras con acuerdo:             1862
+Muestras con desacuerdo:          118
+
+ANÁLISIS DE CONFIANZA
+----------------------------------------
+Confianza Promedio:               0.9383
+Muestras con Alta Confianza:      1733
+Accuracy en Alta Confianza:       0.9879
+
+CONFIGURACIÓN DEL ENSEMBLE
+----------------------------------------
+Estrategia: hard
+Umbral de Confianza: 0.85
+Usar Calibración: True
+Usar Meta-features: True
+Pesos Adaptativos: True
+
+CONCLUSIONES
+----------------------------------------
+❌ El ensemble NO mejora sobre el mejor modelo individual
+
+⚠️  Hay margen de mejora en el manejo de desacuerdos
+✅ El ensemble muestra alta confianza en sus predicciones

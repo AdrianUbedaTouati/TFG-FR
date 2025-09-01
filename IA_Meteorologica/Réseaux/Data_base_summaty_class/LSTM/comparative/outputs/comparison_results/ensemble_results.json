@@ -1,0 +1,12 @@
+{
+  "method": "weighted",
+  "weights": [
+    0.7000000000000001,
+    0.29999999999999993
+  ],
+  "accuracy": 0.9065656565656566,
+  "macro_f1": 0.9068708746739815,
+  "weighted_f1": 0.9066543081717588,
+  "improvement_over_single": 0.0015151515151514694,
+  "improvement_over_hierarchical": 0.08080808080808077
+}

@@ -1,0 +1,91 @@
+2025-09-01 11:05:49,340 - a - INFO - Inicializando entrenador para a
+2025-09-01 11:05:49,340 - a - INFO - Dispositivo: cpu
+2025-09-01 11:05:49,341 - a - INFO - Pesos de clase: [1.  1.  0.3]
+2025-09-01 11:05:49,341 - a - INFO - ================================================================================
+2025-09-01 11:05:49,341 - a - INFO - REENTRENANDO A
+2025-09-01 11:05:49,341 - a - INFO - ================================================================================
+2025-09-01 11:05:49,342 - a - INFO - Cargando datos desde: data_corrected\weather_classification_CloudySunny_corrected.csv
+2025-09-01 11:05:49,390 - a - INFO - Forma del dataset: (13200, 22)
+2025-09-01 11:05:49,394 - a - INFO - Características: 18
+2025-09-01 11:05:49,394 - a - INFO - Clases: ['Weather Type_Cloudy', 'Weather Type_Sunny', 'Weather Type_Other']
+2025-09-01 11:05:49,394 - a - INFO - Distribución de clases: [3300 3300 6600]
+2025-09-01 11:05:49,403 - a - INFO - 
+División de datos:
+2025-09-01 11:05:49,403 - a - INFO -   - Train: 9537 muestras
+2025-09-01 11:05:49,403 - a - INFO -   - Val: 1683 muestras
+2025-09-01 11:05:49,404 - a - INFO -   - Test: 1980 muestras
+2025-09-01 11:05:51,503 - a - INFO - Iniciando entrenamiento...
+2025-09-01 11:05:52,920 - a - INFO - Epoch [0/150] - Loss: 0.4228/0.3619 - Acc: 0.7824/0.8307 - Target Acc: 0.8335/0.9359 - Other Acc: 0.4777/0.7253
+2025-09-01 11:06:05,617 - a - INFO - Epoch [10/150] - Loss: 0.1268/0.2345 - Acc: 0.9285/0.8800 - Target Acc: 0.9470/0.9418 - Other Acc: 0.8184/0.8181
+2025-09-01 11:06:18,331 - a - INFO - Epoch [20/150] - Loss: 0.1083/0.2321 - Acc: 0.9393/0.8889 - Target Acc: 0.9551/0.9430 - Other Acc: 0.8416/0.8347
+2025-09-01 11:06:31,078 - a - INFO - Epoch [30/150] - Loss: 0.0945/0.2299 - Acc: 0.9470/0.8930 - Target Acc: 0.9643/0.9406 - Other Acc: 0.8445/0.8454
+2025-09-01 11:06:36,178 - a - INFO - Early stopping en epoch 34
+2025-09-01 11:06:36,185 - a - INFO - Modelo guardado en: outputs/retrained_a\a_corrected.pt
+2025-09-01 11:06:37,588 - a - INFO - Gráficos guardados en: outputs/retrained_a\training_history.png
+2025-09-01 11:06:37,668 - a - INFO - 
+Reporte de clasificación:
+2025-09-01 11:06:37,675 - a - INFO -                      precision    recall  f1-score   support
+
+Weather Type_Cloudy       0.79      0.95      0.86       495
+ Weather Type_Sunny       0.87      0.94      0.90       495
+ Weather Type_Other       0.99      0.85      0.92       990
+
+           accuracy                           0.90      1980
+          macro avg       0.88      0.91      0.89      1980
+       weighted avg       0.91      0.90      0.90      1980
+
+2025-09-01 11:06:38,216 - a - INFO - 
+================================================================================
+2025-09-01 11:06:38,216 - a - INFO - RESUMEN DEL REENTRENAMIENTO
+2025-09-01 11:06:38,216 - a - INFO - ================================================================================
+2025-09-01 11:06:38,216 - a - INFO - Modelo: a
+2025-09-01 11:06:38,217 - a - INFO - Mejor precisión en validación (general): 0.8966
+2025-09-01 11:06:38,217 - a - INFO - Mejor precisión en validación (clases objetivo): 0.9454
+2025-09-01 11:06:38,218 - a - INFO - Precisión en test (general): 0.8980
+2025-09-01 11:06:38,218 - a - INFO - Modelo guardado en: outputs/retrained_a\a_corrected.pt
+2025-09-01 11:06:38,219 - b - INFO - Inicializando entrenador para b
+2025-09-01 11:06:38,219 - b - INFO - Dispositivo: cpu
+2025-09-01 11:06:38,220 - b - INFO - Pesos de clase: [1.  1.  0.3]
+2025-09-01 11:06:38,220 - b - INFO - ================================================================================
+2025-09-01 11:06:38,221 - b - INFO - REENTRENANDO B
+2025-09-01 11:06:38,221 - b - INFO - ================================================================================
+2025-09-01 11:06:38,221 - b - INFO - Cargando datos desde: data_corrected\weather_classification_RainySnowy_corrected.csv
+2025-09-01 11:06:38,261 - b - INFO - Forma del dataset: (13200, 22)
+2025-09-01 11:06:38,265 - b - INFO - Características: 18
+2025-09-01 11:06:38,265 - b - INFO - Clases: ['Weather Type_Rainy', 'Weather Type_Snowy', 'Weather Type_Other']
+2025-09-01 11:06:38,265 - b - INFO - Distribución de clases: [3300 3300 6600]
+2025-09-01 11:06:38,275 - b - INFO - 
+División de datos:
+2025-09-01 11:06:38,275 - b - INFO -   - Train: 9537 muestras
+2025-09-01 11:06:38,276 - b - INFO -   - Val: 1683 muestras
+2025-09-01 11:06:38,276 - b - INFO -   - Test: 1980 muestras
+2025-09-01 11:06:38,278 - b - INFO - Iniciando entrenamiento...
+2025-09-01 11:06:39,665 - b - INFO - Epoch [0/150] - Loss: 0.3379/0.3979 - Acc: 0.8059/0.8021 - Target Acc: 0.8729/0.9347 - Other Acc: 0.3991/0.6694
+2025-09-01 11:06:52,640 - b - INFO - Epoch [10/150] - Loss: 0.0970/0.2092 - Acc: 0.9387/0.8919 - Target Acc: 0.9581/0.9513 - Other Acc: 0.8217/0.8323
+2025-09-01 11:07:05,499 - b - INFO - Epoch [20/150] - Loss: 0.0835/0.1858 - Acc: 0.9475/0.9043 - Target Acc: 0.9615/0.9561 - Other Acc: 0.8670/0.8526
+2025-09-01 11:07:18,381 - b - INFO - Epoch [30/150] - Loss: 0.0853/0.1888 - Acc: 0.9474/0.9020 - Target Acc: 0.9644/0.9513 - Other Acc: 0.8464/0.8526
+2025-09-01 11:07:31,407 - b - INFO - Epoch [40/150] - Loss: 0.0760/0.1910 - Acc: 0.9558/0.9043 - Target Acc: 0.9704/0.9513 - Other Acc: 0.8677/0.8573
+2025-09-01 11:07:34,037 - b - INFO - Early stopping en epoch 42
+2025-09-01 11:07:34,040 - b - INFO - Modelo guardado en: outputs/retrained_b\b_corrected.pt
+2025-09-01 11:07:35,332 - b - INFO - Gráficos guardados en: outputs/retrained_b\training_history.png
+2025-09-01 11:07:35,408 - b - INFO - 
+Reporte de clasificación:
+2025-09-01 11:07:35,415 - b - INFO -                     precision    recall  f1-score   support
+
+Weather Type_Rainy       0.80      0.96      0.87       495
+Weather Type_Snowy       0.88      0.95      0.91       495
+Weather Type_Other       1.00      0.86      0.93       990
+
+          accuracy                           0.91      1980
+         macro avg       0.89      0.92      0.90      1980
+      weighted avg       0.92      0.91      0.91      1980
+
+2025-09-01 11:07:35,847 - b - INFO - 
+================================================================================
+2025-09-01 11:07:35,847 - b - INFO - RESUMEN DEL REENTRENAMIENTO
+2025-09-01 11:07:35,847 - b - INFO - ================================================================================
+2025-09-01 11:07:35,848 - b - INFO - Modelo: b
+2025-09-01 11:07:35,848 - b - INFO - Mejor precisión en validación (general): 0.9061
+2025-09-01 11:07:35,848 - b - INFO - Mejor precisión en validación (clases objetivo): 0.9584
+2025-09-01 11:07:35,848 - b - INFO - Precisión en test (general): 0.9071
+2025-09-01 11:07:35,848 - b - INFO - Modelo guardado en: outputs/retrained_b\b_corrected.pt

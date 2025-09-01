@@ -1,0 +1,16 @@
+{
+  "strategy": "hard",
+  "weights": {
+    "single": 0.5,
+    "hierarchical": 0.5
+  },
+  "thresholds": {
+    "confidence": 0.85,
+    "disagreement": 0.3
+  },
+  "options": {
+    "use_calibration": true,
+    "use_meta_features": true,
+    "adaptive_weights": true
+  }
+}

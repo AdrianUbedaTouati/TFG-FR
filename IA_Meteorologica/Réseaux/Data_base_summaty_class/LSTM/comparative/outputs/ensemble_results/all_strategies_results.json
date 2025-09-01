@@ -1,0 +1,42 @@
+{
+  "hard": {
+    "accuracy": 0.9161616161616162,
+    "improvements": {
+      "over_single": 1.1111111111111072,
+      "over_hierarchical": 0.0,
+      "over_best_individual": 0.0
+    }
+  },
+  "soft": {
+    "accuracy": 0.9136363636363637,
+    "improvements": {
+      "over_single": 0.8585858585858586,
+      "over_hierarchical": -0.2525252525252486,
+      "over_best_individual": -0.2525252525252486
+    }
+  },
+  "weighted": {
+    "accuracy": 0.9136363636363637,
+    "improvements": {
+      "over_single": 0.8585858585858586,
+      "over_hierarchical": -0.2525252525252486,
+      "over_best_individual": -0.2525252525252486
+    }
+  },
+  "weighted_confidence": {
+    "accuracy": 0.9151515151515152,
+    "improvements": {
+      "over_single": 1.0101010101010055,
+      "over_hierarchical": -0.10101010101010166,
+      "over_best_individual": -0.10101010101010166
+    }
+  },
+  "cascade": {
+    "accuracy": 0.9126262626262627,
+    "improvements": {
+      "over_single": 0.7575757575757569,
+      "over_hierarchical": -0.35353535353535026,
+      "over_best_individual": -0.35353535353535026
+    }
+  }
+}

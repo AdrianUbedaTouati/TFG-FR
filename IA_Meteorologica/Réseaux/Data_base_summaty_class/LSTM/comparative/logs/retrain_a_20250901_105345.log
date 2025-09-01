@@ -1,0 +1,16 @@
+2025-09-01 10:53:45,460 - a - INFO - Inicializando entrenador para a
+2025-09-01 10:53:45,462 - a - INFO - Dispositivo: cpu
+2025-09-01 10:53:45,462 - a - INFO - Pesos de clase: [1.  1.  0.3]
+2025-09-01 10:53:45,463 - a - INFO - ================================================================================
+2025-09-01 10:53:45,463 - a - INFO - REENTRENANDO A
+2025-09-01 10:53:45,463 - a - INFO - ================================================================================
+2025-09-01 10:53:45,463 - a - INFO - Cargando datos desde: data_corrected\weather_classification_CloudySunny_corrected.csv
+2025-09-01 10:53:45,519 - a - INFO - Forma del dataset: (13200, 22)
+2025-09-01 10:53:45,523 - a - INFO - Características: 18
+2025-09-01 10:53:45,523 - a - INFO - Clases: ['Weather Type_Cloudy', 'Weather Type_Sunny', 'Weather Type_Other']
+2025-09-01 10:53:45,524 - a - INFO - Distribución de clases: [3300 3300 6600]
+2025-09-01 10:53:45,538 - a - INFO - 
+División de datos:
+2025-09-01 10:53:45,538 - a - INFO -   - Train: 9537 muestras
+2025-09-01 10:53:45,538 - a - INFO -   - Val: 1683 muestras
+2025-09-01 10:53:45,538 - a - INFO -   - Test: 1980 muestras

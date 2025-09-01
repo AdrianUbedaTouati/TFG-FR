@@ -1,0 +1,93 @@
+2025-09-01 10:58:37,923 - a - INFO - Inicializando entrenador para a
+2025-09-01 10:58:37,923 - a - INFO - Dispositivo: cpu
+2025-09-01 10:58:37,924 - a - INFO - Pesos de clase: [1.  1.  0.3]
+2025-09-01 10:58:37,924 - a - INFO - ================================================================================
+2025-09-01 10:58:37,924 - a - INFO - REENTRENANDO A
+2025-09-01 10:58:37,924 - a - INFO - ================================================================================
+2025-09-01 10:58:37,925 - a - INFO - Cargando datos desde: data_corrected\weather_classification_CloudySunny_corrected.csv
+2025-09-01 10:58:37,980 - a - INFO - Forma del dataset: (13200, 22)
+2025-09-01 10:58:37,984 - a - INFO - Características: 18
+2025-09-01 10:58:37,984 - a - INFO - Clases: ['Weather Type_Cloudy', 'Weather Type_Sunny', 'Weather Type_Other']
+2025-09-01 10:58:37,984 - a - INFO - Distribución de clases: [3300 3300 6600]
+2025-09-01 10:58:37,993 - a - INFO - 
+División de datos:
+2025-09-01 10:58:37,993 - a - INFO -   - Train: 9537 muestras
+2025-09-01 10:58:37,993 - a - INFO -   - Val: 1683 muestras
+2025-09-01 10:58:37,993 - a - INFO -   - Test: 1980 muestras
+2025-09-01 10:58:40,148 - a - INFO - Iniciando entrenamiento...
+2025-09-01 10:58:41,661 - a - INFO - Epoch [0/150] - Loss: 0.4231/0.3873 - Acc: 0.7908/0.8116 - Target Acc: 0.8517/0.9192 - Other Acc: 0.4250/0.7039
+2025-09-01 10:58:54,379 - a - INFO - Epoch [10/150] - Loss: 0.1260/0.2286 - Acc: 0.9264/0.8734 - Target Acc: 0.9433/0.9382 - Other Acc: 0.8281/0.8086
+2025-09-01 10:59:07,090 - a - INFO - Epoch [20/150] - Loss: 0.1162/0.2375 - Acc: 0.9355/0.8776 - Target Acc: 0.9502/0.9394 - Other Acc: 0.8483/0.8157
+2025-09-01 10:59:19,784 - a - INFO - Epoch [30/150] - Loss: 0.1049/0.2326 - Acc: 0.9400/0.8913 - Target Acc: 0.9597/0.9430 - Other Acc: 0.8277/0.8395
+2025-09-01 10:59:32,529 - a - INFO - Epoch [40/150] - Loss: 0.0994/0.2413 - Acc: 0.9429/0.8824 - Target Acc: 0.9592/0.9382 - Other Acc: 0.8463/0.8264
+2025-09-01 10:59:38,974 - a - INFO - Early stopping en epoch 45
+2025-09-01 10:59:38,989 - a - INFO - Modelo guardado en: outputs/retrained_a\a_corrected.pt
+2025-09-01 10:59:40,335 - a - INFO - Gráficos guardados en: outputs/retrained_a\training_history.png
+2025-09-01 10:59:40,397 - a - INFO - 
+Reporte de clasificación:
+2025-09-01 10:59:40,402 - a - INFO -                      precision    recall  f1-score   support
+
+Weather Type_Cloudy       0.77      0.96      0.85       495
+ Weather Type_Sunny       0.87      0.94      0.91       495
+ Weather Type_Other       0.99      0.83      0.91       990
+
+           accuracy                           0.89      1980
+          macro avg       0.88      0.91      0.89      1980
+       weighted avg       0.91      0.89      0.89      1980
+
+2025-09-01 10:59:40,815 - a - INFO - 
+================================================================================
+2025-09-01 10:59:40,817 - a - INFO - RESUMEN DEL REENTRENAMIENTO
+2025-09-01 10:59:40,817 - a - INFO - ================================================================================
+2025-09-01 10:59:40,817 - a - INFO - Modelo: a
+2025-09-01 10:59:40,817 - a - INFO - Mejor precisión en validación (general): 0.8913
+2025-09-01 10:59:40,817 - a - INFO - Mejor precisión en validación (clases objetivo): 0.9442
+2025-09-01 10:59:40,818 - a - INFO - Precisión en test (general): 0.8914
+2025-09-01 10:59:40,818 - a - INFO - Modelo guardado en: outputs/retrained_a\a_corrected.pt
+2025-09-01 10:59:40,819 - b - INFO - Inicializando entrenador para b
+2025-09-01 10:59:40,819 - b - INFO - Dispositivo: cpu
+2025-09-01 10:59:40,820 - b - INFO - Pesos de clase: [1.  1.  0.3]
+2025-09-01 10:59:40,820 - b - INFO - ================================================================================
+2025-09-01 10:59:40,820 - b - INFO - REENTRENANDO B
+2025-09-01 10:59:40,820 - b - INFO - ================================================================================
+2025-09-01 10:59:40,820 - b - INFO - Cargando datos desde: data_corrected\weather_classification_RainySnowy_corrected.csv
+2025-09-01 10:59:40,861 - b - INFO - Forma del dataset: (13200, 22)
+2025-09-01 10:59:40,864 - b - INFO - Características: 18
+2025-09-01 10:59:40,865 - b - INFO - Clases: ['Weather Type_Rainy', 'Weather Type_Snowy', 'Weather Type_Other']
+2025-09-01 10:59:40,865 - b - INFO - Distribución de clases: [3300 3300 6600]
+2025-09-01 10:59:40,874 - b - INFO - 
+División de datos:
+2025-09-01 10:59:40,875 - b - INFO -   - Train: 9537 muestras
+2025-09-01 10:59:40,875 - b - INFO -   - Val: 1683 muestras
+2025-09-01 10:59:40,875 - b - INFO -   - Test: 1980 muestras
+2025-09-01 10:59:40,879 - b - INFO - Iniciando entrenamiento...
+2025-09-01 10:59:42,258 - b - INFO - Epoch [0/150] - Loss: 0.3409/0.3904 - Acc: 0.8051/0.8051 - Target Acc: 0.8710/0.9299 - Other Acc: 0.4037/0.6801
+2025-09-01 10:59:55,109 - b - INFO - Epoch [10/150] - Loss: 0.0978/0.2113 - Acc: 0.9393/0.8829 - Target Acc: 0.9591/0.9549 - Other Acc: 0.8186/0.8109
+2025-09-01 11:00:08,078 - b - INFO - Epoch [20/150] - Loss: 0.0857/0.1846 - Acc: 0.9461/0.9037 - Target Acc: 0.9623/0.9584 - Other Acc: 0.8503/0.8490
+2025-09-01 11:00:20,915 - b - INFO - Epoch [30/150] - Loss: 0.0784/0.1941 - Acc: 0.9547/0.9037 - Target Acc: 0.9695/0.9561 - Other Acc: 0.8653/0.8514
+2025-09-01 11:00:33,826 - b - INFO - Epoch [40/150] - Loss: 0.0680/0.1882 - Acc: 0.9596/0.9115 - Target Acc: 0.9761/0.9608 - Other Acc: 0.8634/0.8621
+2025-09-01 11:00:46,779 - b - INFO - Epoch [50/150] - Loss: 0.0655/0.2027 - Acc: 0.9623/0.9115 - Target Acc: 0.9792/0.9644 - Other Acc: 0.8617/0.8585
+2025-09-01 11:00:48,103 - b - INFO - Early stopping en epoch 51
+2025-09-01 11:00:48,107 - b - INFO - Modelo guardado en: outputs/retrained_b\b_corrected.pt
+2025-09-01 11:00:49,550 - b - INFO - Gráficos guardados en: outputs/retrained_b\training_history.png
+2025-09-01 11:00:49,623 - b - INFO - 
+Reporte de clasificación:
+2025-09-01 11:00:49,628 - b - INFO -                     precision    recall  f1-score   support
+
+Weather Type_Rainy       0.79      0.96      0.87       495
+Weather Type_Snowy       0.89      0.94      0.92       495
+Weather Type_Other       1.00      0.86      0.93       990
+
+          accuracy                           0.91      1980
+         macro avg       0.89      0.92      0.90      1980
+      weighted avg       0.92      0.91      0.91      1980
+
+2025-09-01 11:00:50,057 - b - INFO - 
+================================================================================
+2025-09-01 11:00:50,058 - b - INFO - RESUMEN DEL REENTRENAMIENTO
+2025-09-01 11:00:50,058 - b - INFO - ================================================================================
+2025-09-01 11:00:50,058 - b - INFO - Modelo: b
+2025-09-01 11:00:50,058 - b - INFO - Mejor precisión en validación (general): 0.9115
+2025-09-01 11:00:50,058 - b - INFO - Mejor precisión en validación (clases objetivo): 0.9656
+2025-09-01 11:00:50,058 - b - INFO - Precisión en test (general): 0.9081
+2025-09-01 11:00:50,059 - b - INFO - Modelo guardado en: outputs/retrained_b\b_corrected.pt

@@ -1,0 +1,39 @@
+================================================================================
+REPORTE DE COMPARACIÓN: ARQUITECTURAS ORIGINAL vs CORREGIDA
+================================================================================
+
+RESUMEN EJECUTIVO
+----------------------------------------
+
+┌─────────────────────────┬──────────┬──────────┬──────────┐
+│ Arquitectura           │ Accuracy │ Macro F1 │ Weighted │
+├─────────────────────────┼──────────┼──────────┼──────────┤
+│ Modelo Único           │  0.9051  │  0.9053  │  0.9052  │
+│ Jerárquica Original    │  0.8258  │  0.8201  │  0.8212  │
+│ Jerárquica Corregida   │  0.9162  │  0.9162  │  0.9161  │
+└─────────────────────────┴──────────┴──────────┴──────────┘
+
+ANÁLISIS DE MEJORA
+----------------------------------------
+Mejora Original vs Único: -7.93%
+Mejora Corregida vs Único: +1.11%
+Mejora Corregida vs Original: +9.04%
+
+ANÁLISIS DE ENRUTAMIENTO
+----------------------------------------
+Accuracy del modelo general: 0.9348
+Enrutamiento correcto: 93.5%
+Muestras detectadas como fuera de dominio: 1
+
+CONCLUSIONES
+----------------------------------------
+✓ La arquitectura jerárquica corregida SUPERA al modelo único
+✓ El entrenamiento con muestras fuera de dominio fue exitoso
+✓ Los especialistas ahora son robustos a errores de enrutamiento
+
+RECOMENDACIONES
+----------------------------------------
+1. Mejorar el modelo general para reducir errores de enrutamiento
+2. Implementar ensemble voting entre arquitecturas
+3. Ajustar pesos de clase para optimizar el balance
+4. Considerar arquitectura con rechazo de baja confianza

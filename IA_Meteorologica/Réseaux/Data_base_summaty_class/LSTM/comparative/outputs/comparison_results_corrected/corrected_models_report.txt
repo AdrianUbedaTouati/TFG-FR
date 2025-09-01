@@ -1,0 +1,20 @@
+REPORTE DE MODELOS REENTRENADOS
+============================================================
+
+INFORMACIÓN DE MODELOS ESPECIALISTAS:
+----------------------------------------
+Especialista A:
+  - Clases objetivo: ['Cloudy', 'Sunny']
+  - Número de clases: 3
+  - Mejor accuracy validación: 0.8954
+
+Especialista B:
+  - Clases objetivo: ['Rainy', 'Snowy']
+  - Número de clases: 3
+  - Mejor accuracy validación: 0.9127
+
+ESTADÍSTICAS DE PREDICCIÓN:
+----------------------------------------
+Muestras detectadas como 'Other': 1
+Porcentaje de 'Other': 0.1%
+Confianza promedio: 0.965

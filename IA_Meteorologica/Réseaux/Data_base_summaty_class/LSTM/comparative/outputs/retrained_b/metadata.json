@@ -1,0 +1,42 @@
+{
+  "specialist_name": "b",
+  "target_classes": [
+    "Rainy",
+    "Snowy"
+  ],
+  "num_classes": 3,
+  "in_features": 18,
+  "feature_names": [
+    "Temperature_normalized",
+    "Humidity_normalized",
+    "Wind Speed_normalized",
+    "Precipitation (%)_normalized",
+    "Cloud Cover_clear",
+    "Cloud Cover_cloudy",
+    "Cloud Cover_overcast",
+    "Cloud Cover_partly cloudy",
+    "Atmospheric Pressure_normalized",
+    "UV Index_normalized",
+    "Season_Autumn",
+    "Season_Spring",
+    "Season_Summer",
+    "Season_Winter",
+    "Visibility (km)_normalized",
+    "Location_coastal",
+    "Location_inland",
+    "Location_mountain"
+  ],
+  "class_names": [
+    "Weather Type_Rainy",
+    "Weather Type_Snowy",
+    "Weather Type_Other"
+  ],
+  "class_weights": [
+    1.0,
+    1.0,
+    0.30000001192092896
+  ],
+  "best_val_acc": 0.9126559714795008,
+  "best_val_acc_target": 0.9608076009501187,
+  "training_date": "2025-09-01T11:15:43.564026"
+}

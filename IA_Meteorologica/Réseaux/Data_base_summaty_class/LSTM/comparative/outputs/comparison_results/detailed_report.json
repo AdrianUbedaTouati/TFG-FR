@@ -1,0 +1,111 @@
+{
+  "timestamp": "2025-09-01T11:21:46.217030",
+  "configuration": {
+    "models": {
+      "single": "C:\\Users\\andri\\Desktop\\TFG_FR\\IA_Meteorologica\\R\u00e9seaux\\Data_base_summaty_class\\LSTM\\summary_4\\outputs\\lstm_summary_line_cls\\checkpoints\\4_global.pt",
+      "general": "C:\\Users\\andri\\Desktop\\TFG_FR\\IA_Meteorologica\\R\u00e9seaux\\Data_base_summaty_class\\LSTM\\summary_2_general\\outputs\\lstm_summary_line_cls\\checkpoints\\2_general.pt",
+      "specialist_a": "C:\\Users\\andri\\Desktop\\TFG_FR\\IA_Meteorologica\\R\u00e9seaux\\Data_base_summaty_class\\LSTM\\summary_Cloudy_Sunny\\outputs\\lstm_summary_line_cls\\checkpoints\\cloudy_sunny.pt",
+      "specialist_b": "C:\\Users\\andri\\Desktop\\TFG_FR\\IA_Meteorologica\\R\u00e9seaux\\Data_base_summaty_class\\LSTM\\summary_Rainy_Snowy\\outputs\\lstm_summary_line_cls\\checkpoints\\rain_snowy.pt"
+    },
+    "data": "C:\\Users\\andri\\Desktop\\TFG_FR\\IA_Meteorologica\\R\u00e9seaux\\Data_base_summaty_class\\LSTM\\comparative\\data\\weather_classification_normalized.csv",
+    "test_size": 0.15
+  },
+  "results": {
+    "single_model": {
+      "accuracy": 0.9050505050505051,
+      "macro_f1": 0.9052823440436342,
+      "weighted_f1": 0.9051677915934446,
+      "per_class": {
+        "Cloudy": {
+          "precision": 0.8807531380753139,
+          "recall": 0.884453781512605,
+          "f1": 0.8825995807127882,
+          "support": 476
+        },
+        "Rainy": {
+          "precision": 0.8849721706864564,
+          "recall": 0.9068441064638784,
+          "f1": 0.895774647887324,
+          "support": 526
+        },
+        "Snowy": {
+          "precision": 0.9400428265524625,
+          "recall": 0.9184100418410042,
+          "f1": 0.9291005291005291,
+          "support": 478
+        },
+        "Sunny": {
+          "precision": 0.9173387096774194,
+          "recall": 0.91,
+          "f1": 0.9136546184738956,
+          "support": 500
+        }
+      }
+    },
+    "hierarchical_model": {
+      "accuracy": 0.8257575757575758,
+      "macro_f1": 0.8200937141885942,
+      "weighted_f1": 0.8212481949448207,
+      "general_accuracy": 0.9348484848484848,
+      "routing_distribution": {
+        "A": 969,
+        "B": 1011
+      },
+      "per_class": {
+        "Cloudy": {
+          "precision": 0.8683385579937304,
+          "recall": 0.5819327731092437,
+          "f1": 0.6968553459119496,
+          "support": 476
+        },
+        "Rainy": {
+          "precision": 0.8718929254302104,
+          "recall": 0.8669201520912547,
+          "f1": 0.8693994280266921,
+          "support": 526
+        },
+        "Snowy": {
+          "precision": 0.8995901639344263,
+          "recall": 0.9184100418410042,
+          "f1": 0.9089026915113871,
+          "support": 478
+        },
+        "Sunny": {
+          "precision": 0.7123076923076923,
+          "recall": 0.926,
+          "f1": 0.8052173913043478,
+          "support": 500
+        }
+      }
+    },
+    "improvements": {
+      "global": {
+        "accuracy": -0.0792929292929293,
+        "macro_f1": -0.08518862985503994,
+        "weighted_f1": -0.08391959664862392
+      },
+      "per_class": {
+        "Cloudy": {
+          "f1_improvement": -0.18574423480083857,
+          "precision_improvement": -0.01241458008158347,
+          "recall_improvement": -0.30252100840336127
+        },
+        "Rainy": {
+          "f1_improvement": -0.02637521986063185,
+          "precision_improvement": -0.013079245256246042,
+          "recall_improvement": -0.03992395437262364
+        },
+        "Snowy": {
+          "f1_improvement": -0.020197837589141954,
+          "precision_improvement": -0.04045266261803626,
+          "recall_improvement": 0.0
+        },
+        "Sunny": {
+          "f1_improvement": -0.10843722716954785,
+          "precision_improvement": -0.20503101736972706,
+          "recall_improvement": 0.016000000000000014
+        }
+      }
+    }
+  }
+}

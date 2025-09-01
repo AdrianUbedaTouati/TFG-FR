@@ -1,0 +1,76 @@
+{
+  "a": {
+    "model_path": "outputs/retrained_a\\a_corrected.pt",
+    "accuracy": 0.8838383838383839,
+    "report": {
+      "Weather Type_Cloudy": {
+        "precision": 0.7480190174326465,
+        "recall": 0.9535353535353536,
+        "f1-score": 0.8383658969804618,
+        "support": 495.0
+      },
+      "Weather Type_Sunny": {
+        "precision": 0.874766355140187,
+        "recall": 0.9454545454545454,
+        "f1-score": 0.9087378640776699,
+        "support": 495.0
+      },
+      "Weather Type_Other": {
+        "precision": 0.995085995085995,
+        "recall": 0.8181818181818182,
+        "f1-score": 0.8980044345898004,
+        "support": 990.0
+      },
+      "accuracy": 0.8838383838383839,
+      "macro avg": {
+        "precision": 0.8726237892196095,
+        "recall": 0.9057239057239057,
+        "f1-score": 0.881702731882644,
+        "support": 1980.0
+      },
+      "weighted avg": {
+        "precision": 0.9032393406862059,
+        "recall": 0.8838383838383839,
+        "f1-score": 0.8857781575594331,
+        "support": 1980.0
+      }
+    }
+  },
+  "b": {
+    "model_path": "outputs/retrained_b\\b_corrected.pt",
+    "accuracy": 0.906060606060606,
+    "report": {
+      "Weather Type_Rainy": {
+        "precision": 0.8051282051282052,
+        "recall": 0.9515151515151515,
+        "f1-score": 0.8722222222222222,
+        "support": 495.0
+      },
+      "Weather Type_Snowy": {
+        "precision": 0.8710280373831776,
+        "recall": 0.9414141414141414,
+        "f1-score": 0.9048543689320389,
+        "support": 495.0
+      },
+      "Weather Type_Other": {
+        "precision": 0.9965116279069768,
+        "recall": 0.8656565656565657,
+        "f1-score": 0.9264864864864865,
+        "support": 990.0
+      },
+      "accuracy": 0.906060606060606,
+      "macro avg": {
+        "precision": 0.8908892901394531,
+        "recall": 0.9195286195286195,
+        "f1-score": 0.9011876925469159,
+        "support": 1980.0
+      },
+      "weighted avg": {
+        "precision": 0.917294874581334,
+        "recall": 0.906060606060606,
+        "f1-score": 0.9075123910318085,
+        "support": 1980.0
+      }
+    }
+  }
+}

@@ -1,60 +1,66 @@
-
 """
-evaluate_architectures.py
-Compara dos enfoques de inferencia para CLASIFICACIÓN MULTICLASE (4 clases):
-  A) Un SOLO modelo que predice directamente las 4 clases.
-  B) Arquitectura de 3 modelos: 1 "general" (enruta) + 2 "específicos" (predicen subgrupos).
-Queda LISTO para que solo cambies las rutas de los modelos (.pt o .ts) y, si hace falta,
-los mapas de rutas de clases. No requiere volver a entrenar.
+evaluate_architectures.py - Sistema mejorado de comparación de arquitecturas
 
-- Lee un CSV (mismas features/config que tu proyecto base) y genera métricas/artefactos.
-- Carga modelos .pt (checkpoint con metadatos) o .ts (TorchScript) de forma transparente.
-- Guarda: comparación JSON, confusiones y reporte por clase para ambos enfoques.
+Compara dos enfoques de clasificación meteorológica:
+  A) Modelo único: Predice directamente las 4 clases (Cloudy, Rainy, Snowy, Sunny)
+  B) Arquitectura jerárquica: 
+     - Modelo general clasifica en grupos (Cloudy_Sunny vs Rainy_Snowy)
+     - Modelos especialistas refinan la predicción dentro de cada grupo
 
-➡️ PASOS:
-1) Ajusta en la sección "CONFIG RÁPIDA" las rutas a:
-   - SINGLE_MODEL_PATH   → modelo de 4 clases.
-   - MODEL_GENERAL_PATH  → modelo enrutador (p. ej., 2 clases: Grupo A vs Grupo B).
-   - MODEL_SPEC_A_PATH   → modelo específico para el Grupo A.
-   - MODEL_SPEC_B_PATH   → modelo específico para el Grupo B.
-2) (Opcional) Ajusta los diccionarios ROUTE_BY_GENERAL y FINAL_CLASS_MAP si tus índices difieren.
-3) Ejecuta:  python evaluate_architectures.py
+Mejoras sobre la versión anterior:
+- Carga automática de modelos desde sus directorios originales
+- Mejor manejo de mapeo de clases y enrutamiento
+- Visualizaciones mejoradas con análisis detallado
+- Métricas comparativas más completas
+- Análisis de errores y patrones de confusión
 """
 
 from __future__ import annotations
-import os, json, math, datetime, copy
-from dataclasses import dataclass, field, asdict
-from typing import Optional, List, Dict, Tuple, Union
-
+import os
+import json
 import numpy as np
 import pandas as pd
 import torch
 from torch import nn
-from plots_lstm_line_cls import generate_artifacts_line_cls
+from typing import Dict, List, Tuple, Optional, Union
+from dataclasses import dataclass, field
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime
+import platform
+import warnings
+warnings.filterwarnings('ignore')
 
 # =============================
-# CONFIG RÁPIDA — EDITA AQUÍ
+# CONFIGURACIÓN
 # =============================
+
+# Detectar sistema operativo
+IS_WINDOWS = platform.system() == 'Windows'
 
 @dataclass
 class EvalConfig:
-     # === Datos ===
-    CSV_PATH: str = "data/weather_classification_normalized.csv"
-    DATETIME_COL: Optional[str] = None  # si tienes columna de tiempo para splits ordenados
-
-    # Detección de etiquetas
-    LABEL_COL_RAW: Optional[str] = "Weather Type"
-    SUMMARY_ONEHOT_PREFIX: str = "Weather Type_"
-    FORCE_TOPK: Optional[int] = None          # nos quedamos con 4 clases
-    FORCE_TOPK_DROP_OTHERS: bool = False      # descarta filas fuera del top-k
-
-    # === Features (no incluyas los one-hot del objetivo para evitar fuga) ===
+    """Configuración para la evaluación comparativa"""
+    
+    # Rutas base - compatibles con Windows y Unix
+    if IS_WINDOWS:
+        BASE_DIR: str = r"C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Réseaux\Data_base_summaty_class\LSTM"
+    else:
+        BASE_DIR: str = "/mnt/c/Users/andri/Desktop/TFG_FR/IA_Meteorologica/Réseaux/Data_base_summaty_class/LSTM"
+    
+    # Datos - buscar en la carpeta de data local
+    CSV_PATH: str = field(default_factory=lambda: 
+        os.path.join(os.path.dirname(__file__), "data", "weather_classification_normalized.csv")
+    )
+    
+    # Columnas de características
+    # NOTA: Algunos modelos pueden haber sido entrenados sin "Cloud Cover_clear"
     FEATURE_COLS: List[str] = field(default_factory=lambda: [
         "Temperature_normalized",
-        "Humidity_normalized",
+        "Humidity_normalized", 
         "Wind Speed_normalized",
         "Precipitation (%)_normalized",
-        "Cloud Cover_clear",
+        "Cloud Cover_clear",  # Esta característica podría no estar en todos los modelos
         "Cloud Cover_cloudy",
         "Cloud Cover_overcast",
         "Cloud Cover_partly cloudy",
@@ -69,98 +75,96 @@ class EvalConfig:
         "Location_inland",
         "Location_mountain",
     ])
-
-    # === Rutas de modelos (pon aquí las tuyas) ===
-    SINGLE_MODEL_PATH: str = "data/4_global.pt"   # o .ts
-    MODEL_GENERAL_PATH: str = "data/2_general.pt"     # o .ts
-    MODEL_SPEC_A_PATH: str = "data/cloudy_sunny.pt" # o .ts
-    MODEL_SPEC_B_PATH: str = "data/rain_snowy.pt" # o .tsv
-
-
-    # === Routing (solo para arquitectura 3-modelos) ===
-    # Mapea el índice de clase del modelo GENERAL → a qué específico ir ("A" o "B").
-    # Supón que el general devuelve 0 -> Grupo A, 1 -> Grupo B (edítalo si no coincide).
-    ROUTE_BY_GENERAL: Dict[int, str] = field(default_factory=lambda: {0: "cloudy_sunny", 1: "rain_snowy"})
-
-    # Mapa de etiquetas finales: (spec_id, idx_pred_específico) -> idx_clase_final (0..3)
-    # Por defecto: Grupo A cubre clases finales [0,1], Grupo B cubre [2,3].
-    FINAL_CLASS_MAP: Dict[Tuple[str, int], int] = field(default_factory=lambda: {
-        ("A", 1): 0, ("A", 0): 1,
-        ("B", 1): 2, ("B", 0): 3,
+    
+    # Características alternativas (sin Cloud Cover_clear) para modelos de 17 features
+    FEATURE_COLS_17: List[str] = field(default_factory=lambda: [
+        "Temperature_normalized",
+        "Humidity_normalized", 
+        "Wind Speed_normalized",
+        "Precipitation (%)_normalized",
+        # "Cloud Cover_clear",  # Omitida en algunos modelos
+        "Cloud Cover_cloudy",
+        "Cloud Cover_overcast",
+        "Cloud Cover_partly cloudy",
+        "Atmospheric Pressure_normalized",
+        "UV Index_normalized",
+        "Season_Autumn",
+        "Season_Spring",
+        "Season_Summer",
+        "Season_Winter",
+        "Visibility (km)_normalized",
+        "Location_coastal",
+        "Location_inland",
+        "Location_mountain",
+    ])
+    
+    # Etiquetas
+    LABEL_COL_RAW: str = "Weather Type"
+    SUMMARY_ONEHOT_PREFIX: str = "Weather Type_"
+    
+    # Modelos - rutas a los originales en sus carpetas respectivas
+    if IS_WINDOWS:
+        SINGLE_MODEL_PATH: str = field(default_factory=lambda:
+            os.path.join(r"C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Réseaux\Data_base_summaty_class\LSTM", "summary_4", "outputs", "lstm_summary_line_cls", "checkpoints", "4_global.pt")
+        )
+        MODEL_GENERAL_PATH: str = field(default_factory=lambda:
+            os.path.join(r"C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Réseaux\Data_base_summaty_class\LSTM", "summary_2_general", "outputs", "lstm_summary_line_cls", "checkpoints", "2_general.pt")
+        )
+        MODEL_SPEC_A_PATH: str = field(default_factory=lambda:
+            os.path.join(r"C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Réseaux\Data_base_summaty_class\LSTM", "summary_Cloudy_Sunny", "outputs", "lstm_summary_line_cls", "checkpoints", "cloudy_sunny.pt")
+        )
+        MODEL_SPEC_B_PATH: str = field(default_factory=lambda:
+            os.path.join(r"C:\Users\andri\Desktop\TFG_FR\IA_Meteorologica\Réseaux\Data_base_summaty_class\LSTM", "summary_Rainy_Snowy", "outputs", "lstm_summary_line_cls", "checkpoints", "rain_snowy.pt")
+        )
+    else:
+        SINGLE_MODEL_PATH: str = field(default_factory=lambda:
+            os.path.join("/mnt/c/Users/andri/Desktop/TFG_FR/IA_Meteorologica/Réseaux/Data_base_summaty_class/LSTM", "summary_4", "outputs", "lstm_summary_line_cls", "checkpoints", "4_global.pt")
+        )
+        MODEL_GENERAL_PATH: str = field(default_factory=lambda:
+            os.path.join("/mnt/c/Users/andri/Desktop/TFG_FR/IA_Meteorologica/Réseaux/Data_base_summaty_class/LSTM", "summary_2_general", "outputs", "lstm_summary_line_cls", "checkpoints", "2_general.pt")
+        )
+        MODEL_SPEC_A_PATH: str = field(default_factory=lambda:
+            os.path.join("/mnt/c/Users/andri/Desktop/TFG_FR/IA_Meteorologica/Réseaux/Data_base_summaty_class/LSTM", "summary_Cloudy_Sunny", "outputs", "lstm_summary_line_cls", "checkpoints", "cloudy_sunny.pt")
+        )
+        MODEL_SPEC_B_PATH: str = field(default_factory=lambda:
+            os.path.join("/mnt/c/Users/andri/Desktop/TFG_FR/IA_Meteorologica/Réseaux/Data_base_summaty_class/LSTM", "summary_Rainy_Snowy", "outputs", "lstm_summary_line_cls", "checkpoints", "rain_snowy.pt")
+        )
+    
+    # Mapeo de clases basado en los archivos class_index.json
+    # 4_global: {0: Cloudy, 1: Rainy, 2: Snowy, 3: Sunny}
+    # 2_general: {0: Cloudy_Sunny, 1: Rainy_Snowy}
+    # cloudy_sunny: {0: Cloudy, 1: Sunny}
+    # rain_snowy: {0: Rainy, 1: Snowy}
+    
+    # Enrutamiento: modelo general -> especialista
+    ROUTE_BY_GENERAL: Dict[int, str] = field(default_factory=lambda: {
+        0: "A",  # Cloudy_Sunny -> especialista A
+        1: "B"   # Rainy_Snowy -> especialista B
     })
-
-    # === Salidas ===
-    OUTPUT_DIR: str = "outputs/eval_compare_3vs1"
-    CHECKPOINT_DIR: str = "checkpoints"  # se usa solo para estética de paths/artefactos
-
-    # === Aceleración ===
-    DEVICE: Optional[str] = "cuda"  # "cuda" / "cpu" / None => auto
-
-
-# =============================
-# Utilidades de datos
-# =============================
-
-def device_auto(user_pref: Optional[str] = None) -> torch.device:
-    if user_pref is not None:
-        try:
-            return torch.device(user_pref)
-        except Exception:
-            pass
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-def load_dataframe(csv_path: str, feature_cols: List[str]) -> pd.DataFrame:
-    df = pd.read_csv(csv_path)
-    available_cols = [c for c in feature_cols if c in df.columns]
-    # Convierte a numérico solo las que existan
-    for c in available_cols:
-        if not np.issubdtype(df[c].dtype, np.number):
-            df[c] = pd.to_numeric(df[c], errors="coerce")
-    # NO recortamos columnas: mantenemos etiquetas/one-hot en el dataframe
-    # El filtrado de filas con NaN se hará más adelante por cada set de features.
-    return df
-
-def detect_classes(df: pd.DataFrame, onehot_prefix: str, label_col_raw: Optional[str], force_topk: Optional[int]):
-    oh_cols = [c for c in df.columns if c.startswith(onehot_prefix)]
-    if oh_cols:
-        counts = df[oh_cols].sum(axis=0).sort_values(ascending=False)
-        chosen = list(counts.index[:force_topk]) if force_topk is not None else list(counts.index)
-        class_names = [c.replace(onehot_prefix, "") for c in chosen]
-        mat = df[chosen].values
-        label_ids = np.where(mat.sum(axis=1) > 0, mat.argmax(axis=1), -1)
-        return label_ids, class_names
-    if label_col_raw and label_col_raw in df.columns:
-        vals = df[label_col_raw].astype(str).fillna("__nan__").values
-        vc = pd.Series(vals).value_counts()
-        chosen = list(vc.index[:force_topk]) if force_topk is not None else list(vc.index)
-        class_names = chosen
-        idx_of = {c:i for i,c in enumerate(class_names)}
-        label_ids = np.array([idx_of.get(v, -1) for v in vals], dtype=np.int64)
-        return label_ids, class_names
-    raise ValueError("No se encontraron columnas de objetivo (one-hot o columna cruda).")
-
-def filter_topk(df: pd.DataFrame, label_ids: np.ndarray, k: Optional[int], drop_others: bool):
-    if k is None:
-        return df, label_ids
-    mask = label_ids >= 0
-    if drop_others and mask.mean() < 1.0:
-        df = df.loc[mask].reset_index(drop=True)
-        label_ids = label_ids[mask]
-    return df, label_ids
-
-def chronological_split(n: int, ratios=(0.7, 0.15, 0.15)):
-    n_train = int(ratios[0] * n)
-    n_val = int(ratios[1] * n)
-    idx_train = np.arange(n_train)
-    idx_val = np.arange(n_train, n_train + n_val)
-    idx_test = np.arange(n_train + n_val, n)
-    return idx_train, idx_val, idx_test
+    
+    # Mapeo final: (especialista, índice) -> clase global
+    FINAL_CLASS_MAP: Dict[Tuple[str, int], int] = field(default_factory=lambda: {
+        ("A", 0): 0,  # Cloudy (del especialista A) -> 0 (Cloudy global)
+        ("A", 1): 3,  # Sunny (del especialista A) -> 3 (Sunny global)
+        ("B", 0): 1,  # Rainy (del especialista B) -> 1 (Rainy global)
+        ("B", 1): 2,  # Snowy (del especialista B) -> 2 (Snowy global)
+    })
+    
+    # Salidas
+    OUTPUT_DIR: str = "outputs/comparison_results"
+    
+    # Configuración de evaluación
+    TEST_RATIO: float = 0.15
+    VAL_RATIO: float = 0.15
+    BATCH_SIZE: int = 2048
+    DEVICE: Optional[str] = None  # None = auto-detectar
 
 # =============================
-# Modelo base (para .pt)
+# MODELO BASE LSTM
 # =============================
 
 class LSTMLineClassifier(nn.Module):
+    """Modelo LSTM para clasificación"""
     def __init__(self, in_features: int, num_classes: int, hidden_size: int = 128,
                  num_layers: int = 1, dropout: float = 0.2, bidirectional: bool = False,
                  head_hidden: Optional[int] = None):
@@ -185,301 +189,735 @@ class LSTMLineClassifier(nn.Module):
         else:
             self.head = nn.Linear(proj_in, num_classes)
 
-    def forward(self, x):  # x: [B, 1, F]
+    def forward(self, x):
         out, _ = self.lstm(x)
         h_last = out[:, -1, :]
         logits = self.head(h_last)
         return logits
 
 # =============================
-# Carga de modelos (.pt o .ts)
+# CARGA Y EVALUACIÓN DE MODELOS
 # =============================
 
 class ModelWrapper:
+    """Wrapper para cargar y usar modelos .pt o .ts"""
     def __init__(self, path: str, device: torch.device):
         self.path = path
         self.device = device
-        self.is_torchscript = path.lower().endswith(".ts")
         self.model = None
-        self.in_features = None
-        self.num_classes = None
-        self.class_names = None
+        self.metadata = {}
         self._load()
-
+        
     def _load(self):
-        if self.is_torchscript:
+        """Carga el modelo y sus metadatos"""
+        if self.path.endswith('.ts'):
             self.model = torch.jit.load(self.path, map_location=self.device).eval()
-            try:
-                # Intento: metadatos embebidos no existen en .ts de forma estándar
-                meta_path = self.path.replace(".ts", ".meta.json")
-                if os.path.exists(meta_path):
-                    with open(meta_path, "r", encoding="utf-8") as f:
-                        meta = json.load(f)
-                    self.in_features = meta.get("in_features")
-                    self.num_classes = meta.get("num_classes")
-                    self.class_names = meta.get("class_names")
-            except Exception:
-                pass
         else:
-            ckpt = torch.load(self.path, map_location="cpu")
-            st = ckpt.get("model_state", ckpt)
-            self.in_features = ckpt.get("in_features")
-            self.num_classes = ckpt.get("num_classes")
-            self.class_names = ckpt.get("class_names")
-            # reconstruir arquitectura mínima (LSTMLineClassifier) con metadatos si existen
-            cfg = ckpt.get("cfg", {})
-            model = LSTMLineClassifier(
-                in_features=self.in_features or cfg.get("in_features", 32),
-                num_classes=self.num_classes or cfg.get("num_classes", 4),
-                hidden_size=cfg.get("LSTM_HIDDEN_SIZE", 128),
-                num_layers=cfg.get("LSTM_NUM_LAYERS", 1),
-                dropout=cfg.get("LSTM_DROPOUT", 0.2),
-                bidirectional=cfg.get("LSTM_BIDIRECTIONAL", False),
-                head_hidden=cfg.get("LSTM_HEAD_HIDDEN", None),
+            checkpoint = torch.load(self.path, map_location=self.device)
+            
+            # Extraer metadatos
+            self.metadata = {
+                'in_features': checkpoint.get('in_features', 18),
+                'num_classes': checkpoint.get('num_classes', 4),
+                'class_names': checkpoint.get('class_names', []),
+                'cfg': checkpoint.get('cfg', {})
+            }
+            
+            # Cargar class_index.json si existe
+            model_dir = os.path.dirname(os.path.dirname(os.path.dirname(self.path)))
+            class_index_path = os.path.join(model_dir, 'outputs', 'lstm_summary_line_cls', 'class_index.json')
+            if os.path.exists(class_index_path):
+                with open(class_index_path, 'r') as f:
+                    class_index = json.load(f)
+                    self.metadata['class_names'] = [class_index[str(i)] for i in range(len(class_index))]
+                    self.metadata['num_classes'] = len(class_index)
+            
+            # Crear modelo
+            cfg = self.metadata['cfg']
+            self.model = LSTMLineClassifier(
+                in_features=self.metadata['in_features'],
+                num_classes=self.metadata['num_classes'],
+                hidden_size=cfg.get('LSTM_HIDDEN_SIZE', 128),
+                num_layers=cfg.get('LSTM_NUM_LAYERS', 1),
+                dropout=cfg.get('LSTM_DROPOUT', 0.2),
+                bidirectional=cfg.get('LSTM_BIDIRECTIONAL', False),
+                head_hidden=cfg.get('LSTM_HEAD_HIDDEN', None)
             )
-            model.load_state_dict(st)
-            self.model = model.to(self.device).eval()
-
+            
+            # Cargar pesos
+            state_dict = checkpoint.get('model_state', checkpoint)
+            self.model.load_state_dict(state_dict)
+            self.model.to(self.device).eval()
+    
     @torch.no_grad()
-    def predict_logits(self, X: np.ndarray, batch: int = 1024) -> np.ndarray:
-        """
-        X: [N, F] -> logits [N, C]
-        """
-        outs = []
-        for i in range(0, len(X), batch):
-            xb = torch.from_numpy(X[i:i+batch].astype(np.float32)).to(self.device)
-            xb = xb.unsqueeze(1)  # [B,1,F]
-            logits = self.model(xb)
-            outs.append(logits.detach().cpu().numpy())
-        return np.concatenate(outs, axis=0)
-
-    @torch.no_grad()
-    def predict_classes(self, X: np.ndarray, batch: int = 1024) -> np.ndarray:
-        logits = self.predict_logits(X, batch=batch)
-        return np.argmax(logits, axis=1)
-
-
-# =============================
-# Métricas y artefactos
-# =============================
-
-def confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, num_classes: int) -> np.ndarray:
-    cm = np.zeros((num_classes, num_classes), dtype=np.int64)
-    for t, p in zip(y_true, y_pred):
-        if 0 <= t < num_classes and 0 <= p < num_classes:
-            cm[t, p] += 1
-    return cm
-
-def per_class_metrics(cm: np.ndarray) -> Dict[str, Dict[str, float]]:
-    num_classes = cm.shape[0]
-    metrics = {}
-    support = cm.sum(axis=1)
-    tp = np.diag(cm).astype(np.float64)
-    fp = cm.sum(axis=0) - tp
-    fn = cm.sum(axis=1) - tp
-
-    prec = np.divide(tp, tp + fp, out=np.zeros_like(tp), where=(tp + fp) > 0)
-    rec = np.divide(tp, tp + fn, out=np.zeros_like(tp), where=(tp + fn) > 0)
-    f1 = np.divide(2 * prec * rec, prec + rec, out=np.zeros_like(prec), where=(prec + rec) > 0)
-
-    micro_tp = tp.sum(); micro_fp = fp.sum(); micro_fn = fn.sum()
-    micro_prec = micro_tp / (micro_tp + micro_fp) if (micro_tp + micro_fp) > 0 else 0.0
-    micro_rec = micro_tp / (micro_tp + micro_fn) if (micro_tp + micro_fn) > 0 else 0.0
-    micro_f1 = (2 * micro_prec * micro_rec / (micro_prec + micro_rec)) if (micro_prec + micro_rec) > 0 else 0.0
-
-    macro_prec = float(np.mean(prec)) if len(prec) else 0.0
-    macro_rec = float(np.mean(rec)) if len(rec) else 0.0
-    macro_f1 = float(np.mean(f1)) if len(f1) else 0.0
-
-    weights = support / max(1, support.sum())
-    weighted_prec = float(np.sum(weights * prec))
-    weighted_rec = float(np.sum(weights * rec))
-    weighted_f1 = float(np.sum(weights * f1))
-
-    metrics["_micro"] = {"precision": float(micro_prec), "recall": float(micro_rec), "f1": float(micro_f1)}
-    metrics["_macro"] = {"precision": float(macro_prec), "recall": float(macro_rec), "f1": float(macro_f1)}
-    metrics["_weighted"] = {"precision": float(weighted_prec), "recall": float(weighted_rec), "f1": float(weighted_f1)}
-    metrics["per_class"] = [
-        {"precision": float(prec[i]), "recall": float(rec[i]), "f1": float(f1[i]), "support": int(support[i])}
-        for i in range(num_classes)
-    ]
-    return metrics
-
-def save_matrix_csv(path: str, mat: np.ndarray, headers: List[str]):
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(",".join([""] + headers) + "\\n")
-        for i, row in enumerate(mat):
-            f.write(",".join([headers[i]] + [str(int(v)) if float(v).is_integer() else f"{v:.6f}" for v in row]) + "\\n")
+    def predict(self, X: np.ndarray, batch_size: int = 2048) -> Tuple[np.ndarray, np.ndarray]:
+        """Predice clases y probabilidades"""
+        # Ajustar dimensiones si es necesario
+        if hasattr(self.model, 'lstm') and hasattr(self.model.lstm, 'input_size'):
+            expected_features = self.model.lstm.input_size
+            if X.shape[1] != expected_features:
+                # Solo mostrar el mensaje la primera vez
+                if not hasattr(self, '_adjustment_shown'):
+                    print(f"    [AJUSTE] Modelo espera {expected_features} features, recibió {X.shape[1]}")
+                    self._adjustment_shown = True
+                
+                if X.shape[1] > expected_features:
+                    # Si espera 17 y recibe 18, probablemente es el modelo sin "Cloud Cover_clear"
+                    if expected_features == 17 and X.shape[1] == 18:
+                        # Omitir la columna 4 (Cloud Cover_clear)
+                        # Las primeras 4 columnas: Temperature, Humidity, Wind Speed, Precipitation
+                        # Columna 4 sería Cloud Cover_clear
+                        # Resto de columnas desde la 5 en adelante
+                        X = np.concatenate([X[:, :4], X[:, 5:]], axis=1)
+                        if not hasattr(self, '_feature_info_shown'):
+                            print(f"    Omitiendo 'Cloud Cover_clear' (columna 5)")
+                            self._feature_info_shown = True
+                    else:
+                        # Caso general: tomar solo las primeras características
+                        X = X[:, :expected_features]
+                else:
+                    # Padding con ceros (esto no debería ocurrir normalmente)
+                    padding = np.zeros((X.shape[0], expected_features - X.shape[1]))
+                    X = np.concatenate([X, padding], axis=1)
+        
+        all_logits = []
+        
+        for i in range(0, len(X), batch_size):
+            batch = torch.FloatTensor(X[i:i+batch_size]).to(self.device)
+            batch = batch.unsqueeze(1)  # Agregar dimensión temporal
+            logits = self.model(batch)
+            all_logits.append(logits.cpu().numpy())
+        
+        logits = np.concatenate(all_logits, axis=0)
+        probs = torch.softmax(torch.FloatTensor(logits), dim=1).numpy()
+        preds = np.argmax(logits, axis=1)
+        
+        return preds, probs
 
 # =============================
-# Pipeline de evaluación
+# FUNCIONES DE EVALUACIÓN
 # =============================
 
+def evaluate_single_model(X_test: np.ndarray, y_test: np.ndarray, 
+                         model_path: str, device: torch.device) -> Dict:
+    """Evalúa el modelo único de 4 clases"""
+    print("\n[EVALUANDO] Modelo único (4 clases directas)")
+    
+    model = ModelWrapper(model_path, device)
+    print(f"  - Modelo cargado: {model.metadata.get('num_classes', 4)} clases, {model.metadata.get('in_features', 'desconocido')} features")
+    
+    preds, probs = model.predict(X_test)
+    
+    # Calcular métricas
+    from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
+    
+    accuracy = accuracy_score(y_test, preds)
+    precision, recall, f1, support = precision_recall_fscore_support(y_test, preds, average=None)
+    macro_f1 = np.mean(f1)
+    weighted_f1 = np.average(f1, weights=support)
+    cm = confusion_matrix(y_test, preds)
+    
+    print(f"  - Accuracy: {accuracy:.4f}")
+    print(f"  - Macro F1: {macro_f1:.4f}")
+    print(f"  - Weighted F1: {weighted_f1:.4f}")
+    
+    return {
+        'predictions': preds,
+        'probabilities': probs,
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1': f1,
+        'support': support,
+        'macro_f1': macro_f1,
+        'weighted_f1': weighted_f1,
+        'confusion_matrix': cm,
+        'class_names': model.metadata.get('class_names', ['Cloudy', 'Rainy', 'Snowy', 'Sunny'])
+    }
 
-def build_feature_matrix(df: pd.DataFrame, feature_cols: List[str]) -> Tuple[np.ndarray, np.ndarray]:
-    """Devuelve X y una máscara booleana de filas válidas (sin NaNs) para esas columnas disponibles."""
-    cols = [c for c in feature_cols if c in df.columns]
-    if not cols:
-        raise ValueError("Ninguna de las columnas de features especificadas está en el CSV.")
-    Xfull = df[cols]
-    mask = ~Xfull.isna().any(axis=1)
-    X = Xfull[mask].values.astype(np.float32)
-    return X, mask.values
-
-def align_features_to_model(X: np.ndarray, expected_in: Optional[int]) -> np.ndarray:
-    """Si el modelo conoce su 'in_features' y no coincide con X, ajusta:\n    - si X tiene más columnas: recorta por la izquierda (respeta el orden dado en FEATURE_COLS)\n    - si X tiene menos: rellena con ceros a la derecha.\n    """ 
-    if expected_in is None or X.ndim != 2:
-        return X
-    n = X.shape[1]
-    if n == expected_in:
-        return X
-    if n > expected_in:
-        return X[:, :expected_in]
-    # n < expected_in → pad con ceros
-    pad = np.zeros((X.shape[0], expected_in - n), dtype=X.dtype)
-    return np.concatenate([X, pad], axis=1)
-
-def evaluate_single(df: pd.DataFrame, idx_te: np.ndarray, y_all: np.ndarray, class_names: List[str], cfg: EvalConfig, device: torch.device):
-    # Construye X usando las features configuradas y la porción de test
-    X_all, mask = build_feature_matrix(df, cfg.FEATURE_COLS)
-    # Índices de filas válidas en todo el df
-    valid_idx = np.where(mask)[0]
-    te_mask_from_valid = np.isin(valid_idx, idx_te)
-    X_te_local = X_all[te_mask_from_valid]
-    y_te_local = y_all[valid_idx[te_mask_from_valid]]
-
-    mdl = ModelWrapper(cfg.SINGLE_MODEL_PATH, device)
-    X_te_local = align_features_to_model(X_te_local, mdl.in_features)
-    y_pred = mdl.predict_classes(X_te_local, batch=2048)
-    num_classes = len(class_names)
-    cm = confusion_matrix(y_te_local, y_pred, num_classes)
-    rep = per_class_metrics(cm)
-    acc = float((y_te_local == y_pred).mean()) if len(y_te_local) else 0.0
-    rep["accuracy"] = acc
-    return {"y_pred": y_pred, "cm": cm, "report": rep, "y_true": y_te_local, "class_names": class_names}
-
-def evaluate_three_models(df: pd.DataFrame, idx_te: np.ndarray, y_all: np.ndarray, class_names: List[str], cfg: EvalConfig, device: torch.device):
-    # Construye matrices de test específicas por modelo y alínea dimensiones
-    Xg_all, mask_g = build_feature_matrix(df, cfg.FEATURE_COLS)  # usamos FEATURE_COLS también para el general por defecto
-    valid_idx_g = np.where(mask_g)[0]
-    te_mask_g = np.isin(valid_idx_g, idx_te)
-    Xg_te = Xg_all[te_mask_g]
-    y_te_local = y_all[valid_idx_g[te_mask_g]]
-
-    mdl_gen = ModelWrapper(cfg.MODEL_GENERAL_PATH, device)
-    Xg_te = align_features_to_model(Xg_te, mdl_gen.in_features)
-    gen_pred = mdl_gen.predict_classes(Xg_te, batch=2048)
-
-    # Para específicos usamos la MISMA selección de filas (para comparabilidad)
-    Xa_all, mask_a = build_feature_matrix(df, cfg.FEATURE_COLS)
-    Xb_all, mask_b = build_feature_matrix(df, cfg.FEATURE_COLS)
-    # alineamos a las mismas filas que Xg (las que entraron al general)
-    Xa_te = Xa_all[te_mask_g]
-    Xb_te = Xb_all[te_mask_g]
-
-    mdl_A = ModelWrapper(cfg.MODEL_SPEC_A_PATH, device)
-    mdl_B = ModelWrapper(cfg.MODEL_SPEC_B_PATH, device)
-    Xa_te = align_features_to_model(Xa_te, mdl_A.in_features)
-    Xb_te = align_features_to_model(Xb_te, mdl_B.in_features)
-
-    final_pred = np.zeros_like(y_te_local)
-    for i in range(len(Xg_te)):
-        route = cfg.ROUTE_BY_GENERAL.get(int(gen_pred[i]), None)
-        if route == "B":
-            pred_b = mdl_B.predict_classes(Xb_te[i:i+1])[0]
-            final_pred[i] = cfg.FINAL_CLASS_MAP.get(("B", int(pred_b)), 0)
+def evaluate_hierarchical_model(X_test: np.ndarray, y_test: np.ndarray,
+                               general_path: str, spec_a_path: str, spec_b_path: str,
+                               route_map: Dict, final_map: Dict, device: torch.device) -> Dict:
+    """Evalúa la arquitectura jerárquica de 3 modelos"""
+    print("\n[EVALUANDO] Arquitectura jerárquica (3 modelos)")
+    
+    # Cargar modelos
+    print("  Cargando modelos:")
+    general_model = ModelWrapper(general_path, device)
+    print(f"    - General: {general_model.metadata.get('num_classes', 2)} clases, {general_model.metadata.get('in_features', 'desconocido')} features")
+    
+    spec_a_model = ModelWrapper(spec_a_path, device)
+    print(f"    - Especialista A: {spec_a_model.metadata.get('num_classes', 2)} clases, {spec_a_model.metadata.get('in_features', 'desconocido')} features")
+    
+    spec_b_model = ModelWrapper(spec_b_path, device)
+    print(f"    - Especialista B: {spec_b_model.metadata.get('num_classes', 2)} clases, {spec_b_model.metadata.get('in_features', 'desconocido')} features")
+    
+    # Predicción del modelo general
+    print("\n  Ejecutando predicciones...")
+    general_preds, general_probs = general_model.predict(X_test)
+    
+    # Inicializar predicciones finales
+    final_preds = np.zeros_like(y_test)
+    final_probs = np.zeros((len(y_test), 4))  # 4 clases finales
+    
+    # Estadísticas de enrutamiento
+    route_counts = {'A': 0, 'B': 0}
+    
+    # Para cada muestra, enrutar al especialista correspondiente
+    for i in range(len(X_test)):
+        general_pred = general_preds[i]
+        route = route_map.get(general_pred, 'A')
+        route_counts[route] += 1
+        
+        if route == 'A':
+            # Usar especialista A (Cloudy/Sunny)
+            spec_pred, spec_prob = spec_a_model.predict(X_test[i:i+1])
+            final_pred = final_map.get(('A', spec_pred[0]), 0)
+            
+            # Mapear probabilidades a las 4 clases finales
+            for j, (k, v) in enumerate(final_map.items()):
+                if k[0] == 'A':
+                    final_probs[i, v] = spec_prob[0, k[1]]
+                    
         else:
-            pred_a = mdl_A.predict_classes(Xa_te[i:i+1])[0]
-            final_pred[i] = cfg.FINAL_CLASS_MAP.get(("A", int(pred_a)), 0)
-
-    num_classes = len(class_names)
-    cm = confusion_matrix(y_te_local, final_pred, num_classes)
-    rep = per_class_metrics(cm)
-    acc = float((y_te_local == final_pred).mean()) if len(y_te_local) else 0.0
-    rep["accuracy"] = acc
-    return {"y_pred": final_pred, "cm": cm, "report": rep, "gen_pred": gen_pred, "y_true": y_te_local, "class_names": class_names}
+            # Usar especialista B (Rainy/Snowy)
+            spec_pred, spec_prob = spec_b_model.predict(X_test[i:i+1])
+            final_pred = final_map.get(('B', spec_pred[0]), 0)
+            
+            # Mapear probabilidades a las 4 clases finales
+            for j, (k, v) in enumerate(final_map.items()):
+                if k[0] == 'B':
+                    final_probs[i, v] = spec_prob[0, k[1]]
+        
+        final_preds[i] = final_pred
+    
+    # Calcular métricas
+    from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
+    
+    accuracy = accuracy_score(y_test, final_preds)
+    precision, recall, f1, support = precision_recall_fscore_support(y_test, final_preds, average=None)
+    macro_f1 = np.mean(f1)
+    weighted_f1 = np.average(f1, weights=support)
+    cm = confusion_matrix(y_test, final_preds)
+    
+    print(f"  - Accuracy: {accuracy:.4f}")
+    print(f"  - Macro F1: {macro_f1:.4f}")
+    print(f"  - Weighted F1: {weighted_f1:.4f}")
+    print(f"  - Enrutamiento: A={route_counts['A']}, B={route_counts['B']}")
+    
+    # Análisis detallado por componente
+    # Evaluar modelo general
+    y_test_general = np.zeros_like(y_test)
+    for i, y in enumerate(y_test):
+        if y in [0, 3]:  # Cloudy o Sunny -> grupo 0
+            y_test_general[i] = 0
+        else:  # Rainy o Snowy -> grupo 1
+            y_test_general[i] = 1
+    
+    general_accuracy = accuracy_score(y_test_general, general_preds)
+    
+    return {
+        'predictions': final_preds,
+        'probabilities': final_probs,
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1': f1,
+        'support': support,
+        'macro_f1': macro_f1,
+        'weighted_f1': weighted_f1,
+        'confusion_matrix': cm,
+        'class_names': ['Cloudy', 'Rainy', 'Snowy', 'Sunny'],
+        'general_accuracy': general_accuracy,
+        'general_predictions': general_preds,
+        'route_counts': route_counts,
+        'models': {
+            'general': general_model.metadata,
+            'spec_a': spec_a_model.metadata,
+            'spec_b': spec_b_model.metadata
+        }
+    }
 
 # =============================
-# MAIN
+# VISUALIZACIONES MEJORADAS
+# =============================
+
+def plot_confusion_matrices(results_single: Dict, results_hier: Dict, output_dir: str):
+    """Crea visualizaciones comparativas de matrices de confusión"""
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+    
+    class_names = results_single['class_names']
+    
+    # Matriz modelo único
+    sns.heatmap(results_single['confusion_matrix'], annot=True, fmt='d', 
+                cmap='Blues', xticklabels=class_names, yticklabels=class_names,
+                ax=axes[0], cbar_kws={'label': 'Número de predicciones'})
+    axes[0].set_title('Modelo Único (4 clases)', fontsize=14, fontweight='bold')
+    axes[0].set_xlabel('Predicción', fontsize=12)
+    axes[0].set_ylabel('Real', fontsize=12)
+    
+    # Matriz arquitectura jerárquica
+    sns.heatmap(results_hier['confusion_matrix'], annot=True, fmt='d',
+                cmap='Greens', xticklabels=class_names, yticklabels=class_names,
+                ax=axes[1], cbar_kws={'label': 'Número de predicciones'})
+    axes[1].set_title('Arquitectura Jerárquica (3 modelos)', fontsize=14, fontweight='bold')
+    axes[1].set_xlabel('Predicción', fontsize=12)
+    axes[1].set_ylabel('Real', fontsize=12)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, 'confusion_matrices_comparison.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # Matrices normalizadas
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+    
+    # Normalizar por filas
+    cm_single_norm = results_single['confusion_matrix'].astype('float') / results_single['confusion_matrix'].sum(axis=1)[:, np.newaxis]
+    cm_hier_norm = results_hier['confusion_matrix'].astype('float') / results_hier['confusion_matrix'].sum(axis=1)[:, np.newaxis]
+    
+    # Convertir a porcentajes para la visualización
+    cm_single_pct = cm_single_norm * 100
+    cm_hier_pct = cm_hier_norm * 100
+    
+    sns.heatmap(cm_single_pct, annot=True, fmt='.1f', cmap='Blues',
+                xticklabels=class_names, yticklabels=class_names,
+                ax=axes[0], cbar_kws={'label': 'Porcentaje (%)'})
+    axes[0].set_title('Modelo Único (normalizado)', fontsize=14, fontweight='bold')
+    axes[0].set_xlabel('Predicción', fontsize=12)
+    axes[0].set_ylabel('Real', fontsize=12)
+    
+    sns.heatmap(cm_hier_pct, annot=True, fmt='.1f', cmap='Greens',
+                xticklabels=class_names, yticklabels=class_names,
+                ax=axes[1], cbar_kws={'label': 'Porcentaje (%)'})
+    axes[1].set_title('Arquitectura Jerárquica (normalizado)', fontsize=14, fontweight='bold')
+    axes[1].set_xlabel('Predicción', fontsize=12)
+    axes[1].set_ylabel('Real', fontsize=12)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, 'confusion_matrices_normalized.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_metrics_comparison(results_single: Dict, results_hier: Dict, output_dir: str):
+    """Compara métricas entre ambos enfoques"""
+    metrics = ['Accuracy', 'Macro F1', 'Weighted F1']
+    single_values = [
+        results_single['accuracy'],
+        results_single['macro_f1'],
+        results_single['weighted_f1']
+    ]
+    hier_values = [
+        results_hier['accuracy'],
+        results_hier['macro_f1'],
+        results_hier['weighted_f1']
+    ]
+    
+    x = np.arange(len(metrics))
+    width = 0.35
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars1 = ax.bar(x - width/2, single_values, width, label='Modelo Único', color='skyblue', edgecolor='black')
+    bars2 = ax.bar(x + width/2, hier_values, width, label='Arquitectura Jerárquica', color='lightgreen', edgecolor='black')
+    
+    # Agregar valores en las barras
+    for bars in [bars1, bars2]:
+        for bar in bars:
+            height = bar.get_height()
+            ax.annotate(f'{height:.3f}',
+                       xy=(bar.get_x() + bar.get_width() / 2, height),
+                       xytext=(0, 3),
+                       textcoords="offset points",
+                       ha='center', va='bottom',
+                       fontsize=10, fontweight='bold')
+    
+    ax.set_xlabel('Métricas', fontsize=12)
+    ax.set_ylabel('Valor', fontsize=12)
+    ax.set_title('Comparación de Métricas Globales', fontsize=14, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(metrics)
+    ax.legend(fontsize=11)
+    ax.set_ylim(0, 1.1)
+    ax.grid(True, axis='y', alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, 'metrics_comparison.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_per_class_metrics(results_single: Dict, results_hier: Dict, output_dir: str):
+    """Compara métricas por clase"""
+    class_names = results_single['class_names']
+    
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+    axes = axes.ravel()
+    
+    metrics = ['precision', 'recall', 'f1', 'support']
+    metric_titles = ['Precisión', 'Recall', 'F1-Score', 'Soporte']
+    
+    for idx, (metric, title) in enumerate(zip(metrics, metric_titles)):
+        ax = axes[idx]
+        
+        if metric == 'support':
+            # El soporte es el mismo para ambos modelos
+            values = results_single[metric]
+            x = np.arange(len(class_names))
+            bars = ax.bar(x, values, color='gray', edgecolor='black')
+            
+            for bar, val in zip(bars, values):
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 10,
+                       f'{int(val)}', ha='center', va='bottom', fontweight='bold')
+        else:
+            single_values = results_single[metric]
+            hier_values = results_hier[metric]
+            
+            x = np.arange(len(class_names))
+            width = 0.35
+            
+            bars1 = ax.bar(x - width/2, single_values, width, label='Modelo Único', 
+                           color='skyblue', edgecolor='black')
+            bars2 = ax.bar(x + width/2, hier_values, width, label='Arquitectura Jerárquica',
+                           color='lightgreen', edgecolor='black')
+            
+            # Valores en barras
+            for bars, vals in [(bars1, single_values), (bars2, hier_values)]:
+                for bar, val in zip(bars, vals):
+                    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
+                           f'{val:.2f}', ha='center', va='bottom', fontsize=9)
+            
+            ax.legend()
+            ax.set_ylim(0, 1.15)
+        
+        ax.set_xlabel('Clases', fontsize=11)
+        ax.set_ylabel(title, fontsize=11)
+        ax.set_title(f'{title} por Clase', fontsize=12, fontweight='bold')
+        ax.set_xticks(x)
+        ax.set_xticklabels(class_names, rotation=45, ha='right')
+        ax.grid(True, axis='y', alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, 'per_class_metrics_comparison.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_error_analysis(results_single: Dict, results_hier: Dict, y_test: np.ndarray, output_dir: str):
+    """Analiza los errores de ambos modelos"""
+    # Identificar errores
+    errors_single = results_single['predictions'] != y_test
+    errors_hier = results_hier['predictions'] != y_test
+    
+    # Errores únicos de cada modelo
+    only_single_errors = errors_single & ~errors_hier
+    only_hier_errors = ~errors_single & errors_hier
+    both_errors = errors_single & errors_hier
+    
+    # Crear gráfico de Venn conceptual
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    categories = ['Solo Modelo\nÚnico', 'Ambos\nModelos', 'Solo Arquitectura\nJerárquica', 'Correctos\nAmbos']
+    sizes = [
+        np.sum(only_single_errors),
+        np.sum(both_errors),
+        np.sum(only_hier_errors),
+        np.sum(~errors_single & ~errors_hier)
+    ]
+    colors = ['#ff9999', '#ffcc99', '#99ff99', '#99ccff']
+    
+    # Gráfico de pastel
+    wedges, texts, autotexts = ax.pie(sizes, labels=categories, colors=colors, autopct='%1.1f%%',
+                                       startangle=90, textprops={'fontsize': 11})
+    
+    # Agregar conteo absoluto
+    for i, (wedge, text, autotext) in enumerate(zip(wedges, texts, autotexts)):
+        autotext.set_text(f'{sizes[i]}\n({autotext.get_text()})')
+        autotext.set_fontweight('bold')
+    
+    ax.set_title('Distribución de Errores y Aciertos', fontsize=14, fontweight='bold')
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, 'error_distribution.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # Análisis detallado de mejoras
+    improvements = only_single_errors  # Casos donde jerárquico acierta y único falla
+    deteriorations = only_hier_errors  # Casos donde único acierta y jerárquico falla
+    
+    if np.sum(improvements) > 0:
+        print(f"\n[MEJORAS] La arquitectura jerárquica corrige {np.sum(improvements)} errores del modelo único")
+        
+    if np.sum(deteriorations) > 0:
+        print(f"[DETERIOROS] La arquitectura jerárquica introduce {np.sum(deteriorations)} nuevos errores")
+
+def generate_detailed_report(results_single: Dict, results_hier: Dict, cfg: EvalConfig, output_dir: str):
+    """Genera un reporte detallado en formato JSON y texto"""
+    
+    # Calcular mejoras
+    improvement = {
+        'accuracy': results_hier['accuracy'] - results_single['accuracy'],
+        'macro_f1': results_hier['macro_f1'] - results_single['macro_f1'],
+        'weighted_f1': results_hier['weighted_f1'] - results_single['weighted_f1']
+    }
+    
+    # Mejoras por clase
+    class_improvements = {}
+    for i, class_name in enumerate(results_single['class_names']):
+        class_improvements[class_name] = {
+            'f1_improvement': results_hier['f1'][i] - results_single['f1'][i],
+            'precision_improvement': results_hier['precision'][i] - results_single['precision'][i],
+            'recall_improvement': results_hier['recall'][i] - results_single['recall'][i]
+        }
+    
+    report = {
+        'timestamp': datetime.now().isoformat(),
+        'configuration': {
+            'models': {
+                'single': cfg.SINGLE_MODEL_PATH,
+                'general': cfg.MODEL_GENERAL_PATH,
+                'specialist_a': cfg.MODEL_SPEC_A_PATH,
+                'specialist_b': cfg.MODEL_SPEC_B_PATH
+            },
+            'data': cfg.CSV_PATH,
+            'test_size': cfg.TEST_RATIO
+        },
+        'results': {
+            'single_model': {
+                'accuracy': float(results_single['accuracy']),
+                'macro_f1': float(results_single['macro_f1']),
+                'weighted_f1': float(results_single['weighted_f1']),
+                'per_class': {
+                    class_name: {
+                        'precision': float(results_single['precision'][i]),
+                        'recall': float(results_single['recall'][i]),
+                        'f1': float(results_single['f1'][i]),
+                        'support': int(results_single['support'][i])
+                    }
+                    for i, class_name in enumerate(results_single['class_names'])
+                }
+            },
+            'hierarchical_model': {
+                'accuracy': float(results_hier['accuracy']),
+                'macro_f1': float(results_hier['macro_f1']),
+                'weighted_f1': float(results_hier['weighted_f1']),
+                'general_accuracy': float(results_hier['general_accuracy']),
+                'routing_distribution': results_hier['route_counts'],
+                'per_class': {
+                    class_name: {
+                        'precision': float(results_hier['precision'][i]),
+                        'recall': float(results_hier['recall'][i]),
+                        'f1': float(results_hier['f1'][i]),
+                        'support': int(results_hier['support'][i])
+                    }
+                    for i, class_name in enumerate(results_hier['class_names'])
+                }
+            },
+            'improvements': {
+                'global': improvement,
+                'per_class': class_improvements
+            }
+        }
+    }
+    
+    # Guardar JSON
+    with open(os.path.join(output_dir, 'detailed_report.json'), 'w') as f:
+        json.dump(report, f, indent=2)
+    
+    # Crear reporte de texto (con encoding UTF-8 para soportar caracteres especiales)
+    with open(os.path.join(output_dir, 'summary_report.txt'), 'w', encoding='utf-8') as f:
+        f.write("="*80 + "\n")
+        f.write("REPORTE DE COMPARACIÓN DE ARQUITECTURAS\n")
+        f.write("="*80 + "\n\n")
+        
+        f.write("RESUMEN EJECUTIVO\n")
+        f.write("-"*40 + "\n")
+        
+        if improvement['accuracy'] > 0:
+            f.write(f"✓ La arquitectura jerárquica MEJORA la accuracy en {improvement['accuracy']*100:.2f}%\n")
+        else:
+            f.write(f"✗ La arquitectura jerárquica REDUCE la accuracy en {-improvement['accuracy']*100:.2f}%\n")
+            
+        if improvement['macro_f1'] > 0:
+            f.write(f"✓ La arquitectura jerárquica MEJORA el macro F1 en {improvement['macro_f1']*100:.2f}%\n")
+        else:
+            f.write(f"✗ La arquitectura jerárquica REDUCE el macro F1 en {-improvement['macro_f1']*100:.2f}%\n")
+        
+        f.write("\nMÉTRICAS GLOBALES\n")
+        f.write("-"*40 + "\n")
+        f.write(f"{'Métrica':<20} {'Modelo Único':>15} {'Jerárquico':>15} {'Diferencia':>15}\n")
+        f.write(f"{'Accuracy':<20} {results_single['accuracy']:>15.4f} {results_hier['accuracy']:>15.4f} "
+                f"{improvement['accuracy']:>+15.4f}\n")
+        f.write(f"{'Macro F1':<20} {results_single['macro_f1']:>15.4f} {results_hier['macro_f1']:>15.4f} "
+                f"{improvement['macro_f1']:>+15.4f}\n")
+        f.write(f"{'Weighted F1':<20} {results_single['weighted_f1']:>15.4f} {results_hier['weighted_f1']:>15.4f} "
+                f"{improvement['weighted_f1']:>+15.4f}\n")
+        
+        f.write("\nANÁLISIS POR CLASE\n")
+        f.write("-"*40 + "\n")
+        
+        for i, class_name in enumerate(results_single['class_names']):
+            f.write(f"\n{class_name}:\n")
+            f.write(f"  F1-Score: {results_single['f1'][i]:.3f} → {results_hier['f1'][i]:.3f} "
+                   f"({class_improvements[class_name]['f1_improvement']:+.3f})\n")
+            f.write(f"  Precisión: {results_single['precision'][i]:.3f} → {results_hier['precision'][i]:.3f} "
+                   f"({class_improvements[class_name]['precision_improvement']:+.3f})\n")
+            f.write(f"  Recall: {results_single['recall'][i]:.3f} → {results_hier['recall'][i]:.3f} "
+                   f"({class_improvements[class_name]['recall_improvement']:+.3f})\n")
+            f.write(f"  Soporte: {results_single['support'][i]}\n")
+        
+        f.write("\nDETALLES DE LA ARQUITECTURA JERÁRQUICA\n")
+        f.write("-"*40 + "\n")
+        f.write(f"Accuracy del modelo general: {results_hier['general_accuracy']:.4f}\n")
+        f.write(f"Distribución de enrutamiento:\n")
+        f.write(f"  - Especialista A (Cloudy/Sunny): {results_hier['route_counts']['A']} muestras\n")
+        f.write(f"  - Especialista B (Rainy/Snowy): {results_hier['route_counts']['B']} muestras\n")
+        
+        f.write("\n" + "="*80 + "\n")
+
+# =============================
+# FUNCIÓN PRINCIPAL
 # =============================
 
 def main():
+    """Función principal de evaluación"""
     cfg = EvalConfig()
-    device = device_auto(cfg.DEVICE)
+    
+    # Configurar dispositivo
+    if cfg.DEVICE:
+        device = torch.device(cfg.DEVICE)
+    else:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    print(f"[INFO] Usando dispositivo: {device}")
+    
+    # Verificar rutas de modelos
+    print("\n[VERIFICANDO RUTAS]")
+    print(f"  - CSV: {cfg.CSV_PATH}")
+    print(f"  - Modelo único: {cfg.SINGLE_MODEL_PATH}")
+    print(f"  - Modelo general: {cfg.MODEL_GENERAL_PATH}")
+    print(f"  - Especialista A: {cfg.MODEL_SPEC_A_PATH}")
+    print(f"  - Especialista B: {cfg.MODEL_SPEC_B_PATH}")
+    
+    # Verificar existencia de archivos
+    for name, path in [
+        ("CSV", cfg.CSV_PATH),
+        ("Modelo único", cfg.SINGLE_MODEL_PATH),
+        ("Modelo general", cfg.MODEL_GENERAL_PATH),
+        ("Especialista A", cfg.MODEL_SPEC_A_PATH),
+        ("Especialista B", cfg.MODEL_SPEC_B_PATH)
+    ]:
+        if os.path.exists(path):
+            print(f"  ✓ {name} encontrado")
+        else:
+            print(f"  ✗ {name} NO encontrado en: {path}")
+            raise FileNotFoundError(f"No se encontró {name} en: {path}")
+    
+    # Crear directorio de salida
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
-
-    # === Datos ===
-    df = load_dataframe(cfg.CSV_PATH, cfg.FEATURE_COLS)
-    y_all, class_names = detect_classes(df, cfg.SUMMARY_ONEHOT_PREFIX, cfg.LABEL_COL_RAW, cfg.FORCE_TOPK)
-    df, y_all = filter_topk(df, y_all, cfg.FORCE_TOPK, cfg.FORCE_TOPK_DROP_OTHERS)
-
-    # features y split simple (no necesitamos entrenar; solo evaluar en "test")
-    # Split temporal por longitud del dataframe (las máscaras por features se aplican luego)
-    idx_tr, idx_va, idx_te = chronological_split(len(df))
-    y_te = y_all[idx_te]
-
-    # === Evaluaciones ===
-    print("[Eval] Enfoque A: modelo único 4 clases")
-    res_single = evaluate_single(df, idx_te, y_all, class_names, cfg, device)
-
-    print("[Eval] Enfoque B: 3-modelos (general + específicos)")
-    res_three = evaluate_three_models(df, idx_te, y_all, class_names, cfg, device)
-
-    # === Artefactos ===
-
-    # === Gráficos y matrices de confusión ===
-    # Guardamos artefactos por enfoque en subcarpetas separadas
-    cfg_single = copy.deepcopy(cfg); cfg_single.OUTPUT_DIR = os.path.join(cfg.OUTPUT_DIR, "single_model")
-    generate_artifacts_line_cls(cfg_single, {
-        "class_names": class_names,
-        "y_true": res_single.get("y_true", []),
-        "y_pred": res_single.get("y_pred", []),
-    })
-
-    cfg_three = copy.deepcopy(cfg); cfg_three.OUTPUT_DIR = os.path.join(cfg.OUTPUT_DIR, "three_models")
-    generate_artifacts_line_cls(cfg_three, {
-        "class_names": class_names,
-        "y_true": res_three.get("y_true", []),
-        "y_pred": res_three.get("y_pred", []),
-    })
-    out_dir = cfg.OUTPUT_DIR
-    plots_dir = os.path.join(out_dir, "plots")
-    os.makedirs(plots_dir, exist_ok=True)
-
-    # Guardar confusiones y reportes
-    headers = class_names
-    save_matrix_csv(os.path.join(plots_dir, "confusion_single_raw.csv"), res_single["cm"], headers)
-    save_matrix_csv(os.path.join(plots_dir, "confusion_three_raw.csv"), res_three["cm"], headers)
-
-    with open(os.path.join(out_dir, "report_single.json"), "w", encoding="utf-8") as f:
-        json.dump(res_single["report"], f, ensure_ascii=False, indent=2)
-    with open(os.path.join(out_dir, "report_three.json"), "w", encoding="utf-8") as f:
-        json.dump(res_three["report"], f, ensure_ascii=False, indent=2)
-
-    # Resumen comparativo
-    summary = {
-        "dataset": cfg.CSV_PATH,
-        "classes": class_names,
-        "single_model": {
-            "path": cfg.SINGLE_MODEL_PATH,
-            "accuracy": res_single["report"].get("accuracy", 0.0),
-            "f1_macro": res_single["report"].get("_macro",{}).get("f1", 0.0),
-        },
-        "three_models": {
-            "general": cfg.MODEL_GENERAL_PATH,
-            "spec_A": cfg.MODEL_SPEC_A_PATH,
-            "spec_B": cfg.MODEL_SPEC_B_PATH,
-            "accuracy": res_three["report"].get("accuracy", 0.0),
-            "f1_macro": res_three["report"].get("_macro",{}).get("f1", 0.0),
-        },
-        "timestamp": datetime.datetime.now().isoformat(timespec="seconds")
-    }
-    with open(os.path.join(out_dir, "compare_summary.json"), "w", encoding="utf-8") as f:
-        json.dump(summary, f, ensure_ascii=False, indent=2)
-
-    print("[OK] Resultados guardados en:", out_dir)
-    print("- report_single.json, report_three.json, compare_summary.json")
-    print("- confusion_single_raw.csv, confusion_three_raw.csv")
+    
+    # Cargar datos
+    print("\n[CARGANDO DATOS]")
+    df = pd.read_csv(cfg.CSV_PATH)
+    print(f"  - Forma del dataset: {df.shape}")
+    
+    # Preparar características y etiquetas
+    # Detectar si debemos usar 17 o 18 características
+    feature_cols_18 = [col for col in cfg.FEATURE_COLS if col in df.columns]
+    feature_cols_17 = [col for col in cfg.FEATURE_COLS_17 if col in df.columns]
+    
+    # Por defecto usar 18, pero verificar si algún modelo necesita 17
+    print(f"\n[DETECTANDO CONFIGURACIÓN DE CARACTERÍSTICAS]")
+    print(f"  - Features disponibles (18): {len(feature_cols_18)}")
+    print(f"  - Features disponibles (17): {len(feature_cols_17)}")
+    
+    # Comprobar rápidamente los modelos para ver cuántas features esperan
+    try:
+        # Cargar solo los metadatos
+        ckpt_single = torch.load(cfg.SINGLE_MODEL_PATH, map_location='cpu')
+        ckpt_general = torch.load(cfg.MODEL_GENERAL_PATH, map_location='cpu')
+        ckpt_spec_a = torch.load(cfg.MODEL_SPEC_A_PATH, map_location='cpu')
+        ckpt_spec_b = torch.load(cfg.MODEL_SPEC_B_PATH, map_location='cpu')
+        
+        features_needed = [
+            ckpt_single.get('in_features', 18),
+            ckpt_general.get('in_features', 18),
+            ckpt_spec_a.get('in_features', 18),
+            ckpt_spec_b.get('in_features', 18)
+        ]
+        
+        min_features = min(features_needed)
+        max_features = max(features_needed)
+        
+        print(f"  - Modelos esperan entre {min_features} y {max_features} features")
+        
+        # IMPORTANTE: Usar siempre 18 características para no degradar el rendimiento
+        # Los modelos que necesiten 17 harán el ajuste automáticamente
+        feature_cols = feature_cols_18
+        print(f"  - Usando configuración de 18 features (completa)")
+        print(f"  - Los modelos que necesiten menos features se ajustarán automáticamente")
+            
+    except Exception as e:
+        print(f"  - No se pudo detectar automáticamente, usando 18 features por defecto")
+        feature_cols = feature_cols_18
+    
+    X = df[feature_cols].values.astype(np.float32)
+    
+    # Detectar etiquetas
+    if cfg.SUMMARY_ONEHOT_PREFIX:
+        label_cols = [col for col in df.columns if col.startswith(cfg.SUMMARY_ONEHOT_PREFIX)]
+        y = df[label_cols].values.argmax(axis=1)
+        class_names = [col.replace(cfg.SUMMARY_ONEHOT_PREFIX, '') for col in label_cols]
+    else:
+        # Mapear etiquetas de texto a índices
+        y = pd.Categorical(df[cfg.LABEL_COL_RAW]).codes
+        class_names = pd.Categorical(df[cfg.LABEL_COL_RAW]).categories.tolist()
+    
+    print(f"  - Características: {len(feature_cols)}")
+    print(f"  - Clases: {class_names}")
+    print(f"  - Distribución: {np.bincount(y)}")
+    
+    # División temporal de datos
+    n_samples = len(X)
+    train_end = int(n_samples * (1 - cfg.VAL_RATIO - cfg.TEST_RATIO))
+    val_end = int(n_samples * (1 - cfg.TEST_RATIO))
+    
+    X_test = X[val_end:]
+    y_test = y[val_end:]
+    
+    print(f"\n[DIVISIÓN DE DATOS]")
+    print(f"  - Total: {n_samples}")
+    print(f"  - Test: {len(X_test)} ({len(X_test)/n_samples*100:.1f}%)")
+    
+    # Evaluar modelo único
+    results_single = evaluate_single_model(X_test, y_test, cfg.SINGLE_MODEL_PATH, device)
+    
+    # Evaluar arquitectura jerárquica
+    results_hier = evaluate_hierarchical_model(
+        X_test, y_test,
+        cfg.MODEL_GENERAL_PATH, cfg.MODEL_SPEC_A_PATH, cfg.MODEL_SPEC_B_PATH,
+        cfg.ROUTE_BY_GENERAL, cfg.FINAL_CLASS_MAP, device
+    )
+    
+    # Generar visualizaciones
+    print("\n[GENERANDO VISUALIZACIONES]")
+    plot_confusion_matrices(results_single, results_hier, cfg.OUTPUT_DIR)
+    plot_metrics_comparison(results_single, results_hier, cfg.OUTPUT_DIR)
+    plot_per_class_metrics(results_single, results_hier, cfg.OUTPUT_DIR)
+    plot_error_analysis(results_single, results_hier, y_test, cfg.OUTPUT_DIR)
+    
+    # Generar reporte
+    print("\n[GENERANDO REPORTE]")
+    generate_detailed_report(results_single, results_hier, cfg, cfg.OUTPUT_DIR)
+    
+    print(f"\n[COMPLETADO] Resultados guardados en: {cfg.OUTPUT_DIR}")
+    
+    # Resumen final
+    print("\n" + "="*60)
+    print("RESUMEN DE RESULTADOS")
+    print("="*60)
+    print(f"Modelo Único:         Accuracy={results_single['accuracy']:.4f}, F1={results_single['macro_f1']:.4f}")
+    print(f"Arquitectura Jerárquica: Accuracy={results_hier['accuracy']:.4f}, F1={results_hier['macro_f1']:.4f}")
+    
+    if results_hier['accuracy'] > results_single['accuracy']:
+        print(f"\n[GANADOR] La arquitectura jerárquica es SUPERIOR (+{(results_hier['accuracy']-results_single['accuracy'])*100:.2f}%)")
+    else:
+        print(f"\n[GANADOR] El modelo único es SUPERIOR (+{(results_single['accuracy']-results_hier['accuracy'])*100:.2f}%)")
+    
+    return results_single, results_hier
 
 if __name__ == "__main__":
     main()
